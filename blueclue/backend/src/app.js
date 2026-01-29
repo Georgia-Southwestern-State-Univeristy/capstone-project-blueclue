@@ -21,6 +21,14 @@ app.get('/', (req, res) => {
     res.send('Welcome to BlueClue Backend!');
 });
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    res.status(200).json({
+        status: "OK",
+        message: "BlueClue API is running"
+    });
+});
+
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
