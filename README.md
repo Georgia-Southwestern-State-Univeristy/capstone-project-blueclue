@@ -13,3 +13,6 @@ BlueClue is a next-generation IT ticketing system designed to deliver an outstan
 
 ## Project Description
 BlueClue is a next-generation IT ticketing system designed to deliver an outstanding user experience by leveraging advanced AI technology for automated ticket classification, real-time analytics, and intelligent support features.
+
+## Backend Setup
+Must run npm run setup before express will function
