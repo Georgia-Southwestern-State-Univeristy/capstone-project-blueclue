@@ -1,0 +1,16 @@
+{
+  "name": "blueclue-root",
+  "version": "1.0.0",
+  "description": "BlueClue Project - Root package for managing frontend and backend",
+  "scripts": {
+    "install:all": "npm install --prefix blueclue/frontend && npm install --prefix blueclue/backend",
+    "dev": "concurrently \"npm run dev --prefix blueclue/frontend\" \"npm run dev --prefix blueclue/backend\"",
+    "setup": "npm run install:all && npm run dev",
+    "frontend": "npm run dev --prefix blueclue/frontend",
+    "backend": "npm run dev --prefix blueclue/backend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "private": true
+}
