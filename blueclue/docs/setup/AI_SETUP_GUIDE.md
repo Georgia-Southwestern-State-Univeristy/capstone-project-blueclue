@@ -41,7 +41,7 @@ You should see Python 3.12 listed. Example output:
 
 ```powershell
 # Navigate to the project root (if not already there)
-cd C:\BlueClue\capstone-project-blueclue\capstone-project-blueclue
+capstone-project-blueclue
 
 # Navigate to the AI module
 cd blueclue\ai
