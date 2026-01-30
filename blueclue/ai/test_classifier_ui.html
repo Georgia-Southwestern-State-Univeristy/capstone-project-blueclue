@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BlueClue AI - Test Classifier</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 4px solid #007bff;
+            border-radius: 4px;
+        }
+        .result h3 {
+            margin-top: 0;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-right: 5px;
+        }
+        .category {
+            background: #17a2b8;
+            color: white;
+        }
+        .priority-high {
+            background: #dc3545;
+            color: white;
+        }
+        .priority-medium {
+            background: #ffc107;
+            color: #333;
+        }
+        .priority-low {
+            background: #28a745;
+            color: white;
+        }
+        .examples {
+            margin-top: 20px;
+        }
+        .example-btn {
+            background: #6c757d;
+            margin: 5px;
+            padding: 8px 12px;
+            font-size: 14px;
+        }
+        .example-btn:hover {
+            background: #545b62;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔵 BlueClue AI Classifier Test</h1>
+        <p>Enter a support ticket description to see how the AI classifies it.</p>
+        
+        <textarea id="ticketText" placeholder="Enter ticket description here..."></textarea>
+        
+        <button onclick="classify()">Classify Ticket</button>
+        
+        <div class="examples">
+            <strong>Quick Examples:</strong><br>
+            <button class="example-btn" onclick="setExample('My application keeps crashing when I try to login. This is urgent!')">Technical - High Priority</button>
+            <button class="example-btn" onclick="setExample('I was charged twice for my subscription. Can I get a refund?')">Billing - Medium</button>
+            <button class="example-btn" onclick="setExample('I forgot my password and cannot access my account.')">Account Issue</button>
+            <button class="example-btn" onclick="setExample('It would be great if you could add a dark mode feature.')">Feature Request</button>
+        </div>
+        
+        <div id="result" style="display: none;"></div>
+    </div>
+
+    <script>
+        function setExample(text) {
+            document.getElementById('ticketText').value = text;
+        }
+
+        async function classify() {
+            const text = document.getElementById('ticketText').value.trim();
+            
+            if (!text) {
+                alert('Please enter a ticket description');
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:5000/classify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text: text })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayResult(data);
+                } else {
+                    displayError(data.message);
+                }
+            } catch (error) {
+                displayError('Failed to connect to AI service: ' + error.message);
+            }
+        }
+
+        function displayResult(data) {
+            const classification = data.classification;
+            const priorityClass = `priority-${classification.priority}`;
+            
+            const html = `
+                <h3>Classification Result</h3>
+                <p><strong>Input:</strong> ${data.input}</p>
+                <p>
+                    <strong>Category:</strong> 
+                    <span class="badge category">${classification.category}</span>
+                </p>
+                <p>
+                    <strong>Priority:</strong> 
+                    <span class="badge ${priorityClass}">${classification.priority.toUpperCase()}</span>
+                </p>
+                <p><strong>Confidence:</strong> ${(classification.confidence * 100).toFixed(0)}%</p>
+                <p><strong>Keywords Matched:</strong></p>
+                <ul>
+                    <li>Category: ${classification.keywords_matched.category.join(', ') || 'none'}</li>
+                    <li>Priority: ${classification.keywords_matched.priority.join(', ') || 'none'}</li>
+                </ul>
+                <p><strong>Fallback Used:</strong> ${classification.fallback_used ? 'Yes' : 'No'}</p>
+                <details>
+                    <summary><strong>Full JSON Response</strong></summary>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                </details>
+            `;
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = html;
+            resultDiv.style.display = 'block';
+        }
+
+        function displayError(message) {
+            const html = `
+                <h3 style="color: #dc3545;">Error</h3>
+                <p>${message}</p>
+            `;
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = html;
+            resultDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
