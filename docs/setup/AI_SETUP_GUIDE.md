@@ -134,6 +134,8 @@ cd tests
 python test_classifier.py
 ```
 
+**Note:** If you see Pylance import warnings in VS Code, this is normal and won't affect functionality. The code uses dynamic path resolution which Pylance may not recognize immediately. The tests will still pass.
+
 **Expected output:**
 ```
 === Ticket Classification Test ===

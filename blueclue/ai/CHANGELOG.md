@@ -58,12 +58,19 @@ blueclue/ai/
 ├── CHANGELOG.md (NEW)
 ├── venv/ (NEW - not tracked)
 ├── src/
+│   ├── __init__.py (NEW - package marker)
 │   ├── classifier.py (NEW)
 │   ├── models/ (NEW)
 │   └── utils/ (NEW)
 └── tests/
     └── test_classifier.py (NEW)
 ```
+
+### Fixed
+- **Python Package Structure**
+  - Added `src/__init__.py` to make src a proper Python package
+  - Updated imports in test files to use `from src.classifier` format
+  - Resolved Pylance import warnings for better IDE support
 
 ### Next Steps
 - Integrate classifier with backend API

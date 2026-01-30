@@ -1,10 +1,10 @@
 import sys
 from pathlib import Path
 
-# Add parent directory to path to import classifier
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+# Add parent directory to path to import from src
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from classifier import TicketClassifier
+from src.classifier import TicketClassifier
 
 def test_classifier():
     """Test the ticket classifier with sample tickets."""
