@@ -1,0 +1,134 @@
+// BlueClue Database - Entity Relationship Diagram
+// Paste this code into https://dbdiagram.io to generate the ER diagram
+// Then export as PNG and save as er-diagram.png
+
+Table users {
+  id integer [primary key, increment]
+  email varchar(255) [unique, not null]
+  password_hash varchar(255) [not null]
+  first_name varchar(100) [not null]
+  last_name varchar(100) [not null]
+  role user_role [not null, default: 'customer', note: 'customer, technician, admin']
+  phone varchar(20)
+  company varchar(255)
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  last_login timestamp
+  
+  indexes {
+    email
+    role
+    is_active
+  }
+}
+
+Table categories {
+  id integer [primary key, increment]
+  name ticket_category [unique, not null, note: 'general, technical, billing, account, feature_request']
+  display_name varchar(100) [not null]
+  description text
+  color_code varchar(7) [note: 'Hex color for UI']
+  icon varchar(50)
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  
+  indexes {
+    is_active
+  }
+}
+
+Table tickets {
+  id integer [primary key, increment]
+  ticket_number varchar(20) [unique, not null, note: 'Auto-generated: TICK-2026-00001']
+  customer_id integer [not null, ref: > users.id]
+  assigned_to integer [ref: > users.id, note: 'Technician or admin']
+  
+  // Ticket content
+  subject varchar(500) [not null]
+  description text [not null]
+  
+  // Classification
+  category ticket_category [not null, default: 'general']
+  priority ticket_priority [not null, default: 'low', note: 'low, medium, high, critical']
+  status ticket_status [not null, default: 'open', note: 'open, in_progress, waiting_on_customer, resolved, closed']
+  
+  // AI classification metadata
+  ai_classified boolean [not null, default: false]
+  ai_confidence decimal(3,2) [note: '0.00 to 1.00']
+  ai_fallback_used boolean [default: false]
+  ai_keywords_matched jsonb [note: 'Matched keywords from AI']
+  
+  // Resolution tracking
+  resolution text
+  resolved_at timestamp
+  resolved_by integer [ref: > users.id]
+  
+  // SLA tracking
+  response_due_at timestamp [note: 'Auto-calculated by priority']
+  resolution_due_at timestamp [note: 'Auto-calculated by priority']
+  first_response_at timestamp
+  
+  // Timestamps
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  updated_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  closed_at timestamp
+  
+  indexes {
+    customer_id
+    assigned_to
+    status
+    priority
+    category
+    created_at
+    ticket_number
+    ai_classified
+    (assigned_to, status) [name: 'open_assigned']
+  }
+}
+
+Table ticket_assignments {
+  id integer [primary key, increment]
+  ticket_id integer [not null, ref: > tickets.id]
+  assigned_to integer [not null, ref: > users.id]
+  assigned_by integer [ref: > users.id]
+  assigned_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  unassigned_at timestamp
+  notes text
+  
+  indexes {
+    ticket_id
+    assigned_to
+    (ticket_id, assigned_to) [name: 'active_assignments']
+  }
+}
+
+Table ticket_history {
+  id integer [primary key, increment]
+  ticket_id integer [not null, ref: > tickets.id]
+  changed_by integer [ref: > users.id]
+  change_type varchar(50) [not null, note: 'status_change, priority_change, assignment, comment']
+  field_name varchar(100)
+  old_value text
+  new_value text
+  comment text
+  created_at timestamp [not null, default: `CURRENT_TIMESTAMP`]
+  change_details jsonb [note: 'Full change details']
+  
+  indexes {
+    ticket_id
+    created_at
+    change_type
+    changed_by
+  }
+}
+
+// Relationships Summary:
+// - users.id → tickets.customer_id (one-to-many: customer creates tickets)
+// - users.id → tickets.assigned_to (one-to-many: technician handles tickets)
+// - users.id → tickets.resolved_by (one-to-many: technician resolves tickets)
+// - tickets.id → ticket_assignments.ticket_id (one-to-many: assignment history)
+// - users.id → ticket_assignments.assigned_to (one-to-many: assignments)
+// - users.id → ticket_assignments.assigned_by (one-to-many: who assigned)
+// - tickets.id → ticket_history.ticket_id (one-to-many: audit trail)
+// - users.id → ticket_history.changed_by (one-to-many: who made changes)

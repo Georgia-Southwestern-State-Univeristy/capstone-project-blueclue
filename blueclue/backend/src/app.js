@@ -4,6 +4,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import pool from './config/database.js';
 
 dotenv.config();
 
@@ -27,6 +28,40 @@ app.get('/api/health', (req, res) => {
         status: "OK",
         message: "BlueClue API is running"
     });
+});
+
+// Database test endpoint
+app.get('/api/test-db', async (req, res) => {
+    try {
+        // Test basic query
+        const result = await pool.query('SELECT NOW() as current_time');
+        
+        // Get counts from database
+        const userCount = await pool.query('SELECT COUNT(*) FROM users');
+        const ticketCount = await pool.query('SELECT COUNT(*) FROM tickets');
+        const categoryCount = await pool.query('SELECT COUNT(*) FROM categories');
+        
+        res.status(200).json({
+            status: 'success',
+            message: 'Database connection is working!',
+            database: {
+                connected: true,
+                timestamp: result.rows[0].current_time,
+                tables: {
+                    users: parseInt(userCount.rows[0].count),
+                    tickets: parseInt(ticketCount.rows[0].count),
+                    categories: parseInt(categoryCount.rows[0].count)
+                }
+            }
+        });
+    } catch (err) {
+        console.error('Database test error:', err);
+        res.status(500).json({
+            status: 'error',
+            message: 'Database connection failed',
+            error: err.message
+        });
+    }
 });
 
 app.listen(PORT, () => {
