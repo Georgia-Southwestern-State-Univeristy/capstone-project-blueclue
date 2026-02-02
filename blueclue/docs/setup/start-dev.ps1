@@ -33,6 +33,18 @@ Write-Host ""
 Write-Host "All dependencies installed successfully!" -ForegroundColor Green
 Write-Host ""
 
+# Check for database configuration
+Write-Host "Checking database configuration..." -ForegroundColor Yellow
+$envPath = "blueclue\backend\.env"
+if (-Not (Test-Path $envPath)) {
+    Write-Host "   Warning: .env file not found in backend directory" -ForegroundColor Red
+    Write-Host "   Backend will need database configuration to connect to PostgreSQL" -ForegroundColor Yellow
+    Write-Host "   See blueclue/database/README.md for setup instructions" -ForegroundColor Cyan
+} else {
+    Write-Host "   ✓ .env file found" -ForegroundColor Green
+}
+Write-Host ""
+
 # Ask user if they want to start dev servers
 $response = Read-Host "Do you want to start the development servers? (Y/N)"
 if ($response -eq 'Y' -or $response -eq 'y') {
@@ -50,7 +62,12 @@ if ($response -eq 'Y' -or $response -eq 'y') {
     $backend = Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$backendPath'; npm run dev" -PassThru
 
     Write-Host "Development servers started!" -ForegroundColor Green
-    Write-Host "   Frontend and Backend are running in separate windows" -ForegroundColor Cyan
+    Write-Host "   Frontend: Running in separate window" -ForegroundColor Cyan
+    Write-Host "   Backend: Running in separate window (connects to PostgreSQL)" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Backend endpoints:" -ForegroundColor White
+    Write-Host "   http://localhost:3000/api/health - Health check" -ForegroundColor Gray
+    Write-Host "   http://localhost:3000/api/test-db - Database connection test" -ForegroundColor Gray
     Write-Host ""
     Write-Host "Press Ctrl+C to stop monitoring (servers will continue in their windows)" -ForegroundColor Gray
 
@@ -67,4 +84,5 @@ if ($response -eq 'Y' -or $response -eq 'y') {
 else {
     Write-Host ""
     Write-Host "Setup complete! Run 'npm run dev' from the root directory to start servers later." -ForegroundColor Cyan
+    Write-Host "Make sure to configure blueclue/backend/.env before starting the backend." -ForegroundColor Yellow
 }
