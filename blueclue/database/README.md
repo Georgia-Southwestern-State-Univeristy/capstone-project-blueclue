@@ -51,19 +51,69 @@ psql -U postgres -d blueclue -c "SELECT COUNT(*) FROM tickets;"
 
 ## Backend Configuration
 
-Create `blueclue/backend/.env`:
-
-```env
-DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/blueclue
-PORT=3000
-NODE_ENV=development
-```
-
-Install dependencies:
+### 1. Install Dependencies
 
 ```bash
 cd blueclue/backend
 npm install pg dotenv
+```
+
+### 2. Configure Environment Variables
+
+Create `blueclue/backend/.env`:
+
+```env
+# Database Configuration
+DB_USER=postgres
+DB_HOST=localhost
+DB_NAME=blueclue
+DB_PASSWORD=YOUR_POSTGRES_PASSWORD
+DB_PORT=5432
+
+# Server Configuration
+PORT=3000
+NODE_ENV=development
+
+# Security (generate these in production)
+JWT_SECRET=your_jwt_secret_key_here
+SESSION_SECRET=your_session_secret_here
+```
+
+**Important:** Replace `YOUR_POSTGRES_PASSWORD` with your actual PostgreSQL password.
+
+### 3. Start Backend Server
+
+```bash
+cd blueclue/backend
+npm run dev
+```
+
+You should see:
+```
+✓ Database connected successfully
+✓ Database connection test passed: [timestamp]
+Server is running on http://localhost:3000
+```
+
+### 4. Test Database Connection
+
+Open in browser: http://localhost:3000/api/test-db
+
+Expected response:
+```json
+{
+  "status": "success",
+  "message": "Database connection is working!",
+  "database": {
+    "connected": true,
+    "timestamp": "2026-02-02T21:14:58.223Z",
+    "tables": {
+      "users": 6,
+      "tickets": 10,
+      "categories": 5
+    }
+  }
+}
 ```
 
 ## Troubleshooting
