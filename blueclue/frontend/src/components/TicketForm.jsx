@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import LoadingSpinner from './LoadingSpinner'
 
 // Validation constants
@@ -32,6 +32,29 @@ function TicketForm() {
     title: false,
     description: false
   })
+
+  // Ref for title input (to focus after reset)
+  const titleRef = useRef(null)
+
+  // Reset form to initial state
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      description: '',
+      priority: 'medium'
+    })
+    setValidationErrors({
+      title: '',
+      description: ''
+    })
+    setTouched({
+      title: false,
+      description: false
+    })
+    setError(null)
+    // Focus the title field
+    titleRef.current?.focus()
+  }
 
   // Validate a single field
   const validateField = (name, value) => {
@@ -124,6 +147,9 @@ function TicketForm() {
     try {
       // TODO: API call will be implemented in a later part
       console.log('Form submitted:', formData)
+      
+      // Reset form after successful submission
+      resetForm()
     } catch (err) {
       setError(err.message || 'An error occurred while submitting the ticket')
     } finally {
@@ -152,6 +178,7 @@ function TicketForm() {
           Title <span className="text-red-500">*</span>
         </label>
         <input
+          ref={titleRef}
           type="text"
           id="title"
           name="title"
