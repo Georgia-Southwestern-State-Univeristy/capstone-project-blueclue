@@ -1,3 +1,5 @@
+import TicketForm from '../components/TicketForm'
+
 function CustomerPortal() {
   return (
     <div className="p-8">
@@ -6,10 +8,10 @@ function CustomerPortal() {
         Submit a new support ticket or check the status of existing tickets.
       </p>
       
-      {/* Placeholder for ticket submission form */}
+      {/* Ticket submission form */}
       <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
         <h2 className="text-xl font-semibold text-gray-700 mb-4">Submit a Ticket</h2>
-        <p className="text-gray-500 italic">Ticket submission form coming soon...</p>
+        <TicketForm />
       </div>
 
       {/* Placeholder for ticket list */}
