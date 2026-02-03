@@ -43,12 +43,12 @@ function TicketForm() {
     <form onSubmit={handleSubmit}>
       {/* Error display */}
       {error && (
-        <div>
+        <div role="alert">
           {error}
         </div>
       )}
 
-      {/* Title field placeholder */}
+      {/* Title field */}
       <div>
         <label htmlFor="title">Title</label>
         <input
@@ -57,10 +57,14 @@ function TicketForm() {
           name="title"
           value={formData.title}
           onChange={handleChange}
+          required
+          placeholder="Enter a brief title for your issue"
+          disabled={isLoading}
+          aria-required="true"
         />
       </div>
 
-      {/* Description field placeholder */}
+      {/* Description field */}
       <div>
         <label htmlFor="description">Description</label>
         <textarea
@@ -68,10 +72,15 @@ function TicketForm() {
           name="description"
           value={formData.description}
           onChange={handleChange}
+          required
+          rows={6}
+          placeholder="Describe your issue in detail..."
+          disabled={isLoading}
+          aria-required="true"
         />
       </div>
 
-      {/* Priority field placeholder */}
+      {/* Priority field */}
       <div>
         <label htmlFor="priority">Priority</label>
         <select
@@ -79,6 +88,7 @@ function TicketForm() {
           name="priority"
           value={formData.priority}
           onChange={handleChange}
+          disabled={isLoading}
         >
           <option value="low">Low</option>
           <option value="medium">Medium</option>
