@@ -131,17 +131,25 @@ function TicketForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className="space-y-6">
       {/* Error display */}
       {error && (
-        <div role="alert">
+        <div 
+          role="alert"
+          className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg"
+        >
           {error}
         </div>
       )}
 
       {/* Title field */}
       <div>
-        <label htmlFor="title">Title</label>
+        <label 
+          htmlFor="title"
+          className="block text-sm font-medium text-gray-700 mb-1"
+        >
+          Title <span className="text-red-500">*</span>
+        </label>
         <input
           type="text"
           id="title"
@@ -155,16 +163,33 @@ function TicketForm() {
           aria-invalid={touched.title && !!validationErrors.title}
           aria-describedby="title-error title-counter"
           maxLength={TITLE_MAX}
+          className={`
+            w-full px-4 py-2 border rounded-lg shadow-sm
+            focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+            disabled:bg-gray-100 disabled:cursor-not-allowed
+            transition-colors duration-200
+            ${touched.title && validationErrors.title 
+              ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+              : 'border-gray-300'
+            }
+          `}
         />
-        <div>
+        <div className="flex justify-end mt-1">
           {/* Character counter */}
-          <span id="title-counter">
+          <span 
+            id="title-counter"
+            className={`text-xs ${
+              formData.title.length > TITLE_MAX * 0.9 
+                ? 'text-orange-500' 
+                : 'text-gray-500'
+            }`}
+          >
             {formData.title.length}/{TITLE_MAX}
           </span>
         </div>
         {/* Inline error message */}
         {touched.title && validationErrors.title && (
-          <div id="title-error" role="alert">
+          <div id="title-error" role="alert" className="text-red-500 text-sm mt-1">
             {validationErrors.title}
           </div>
         )}
@@ -172,7 +197,12 @@ function TicketForm() {
 
       {/* Description field */}
       <div>
-        <label htmlFor="description">Description</label>
+        <label 
+          htmlFor="description"
+          className="block text-sm font-medium text-gray-700 mb-1"
+        >
+          Description <span className="text-red-500">*</span>
+        </label>
         <textarea
           id="description"
           name="description"
@@ -186,16 +216,33 @@ function TicketForm() {
           aria-invalid={touched.description && !!validationErrors.description}
           aria-describedby="description-error description-counter"
           maxLength={DESCRIPTION_MAX}
+          className={`
+            w-full px-4 py-2 border rounded-lg shadow-sm resize-y
+            focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+            disabled:bg-gray-100 disabled:cursor-not-allowed
+            transition-colors duration-200
+            ${touched.description && validationErrors.description 
+              ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+              : 'border-gray-300'
+            }
+          `}
         />
-        <div>
+        <div className="flex justify-end mt-1">
           {/* Character counter */}
-          <span id="description-counter">
+          <span 
+            id="description-counter"
+            className={`text-xs ${
+              formData.description.length > DESCRIPTION_MAX * 0.9 
+                ? 'text-orange-500' 
+                : 'text-gray-500'
+            }`}
+          >
             {formData.description.length}/{DESCRIPTION_MAX}
           </span>
         </div>
         {/* Inline error message */}
         {touched.description && validationErrors.description && (
-          <div id="description-error" role="alert">
+          <div id="description-error" role="alert" className="text-red-500 text-sm mt-1">
             {validationErrors.description}
           </div>
         )}
@@ -203,13 +250,25 @@ function TicketForm() {
 
       {/* Priority field */}
       <div>
-        <label htmlFor="priority">Priority</label>
+        <label 
+          htmlFor="priority"
+          className="block text-sm font-medium text-gray-700 mb-1"
+        >
+          Priority
+        </label>
         <select
           id="priority"
           name="priority"
           value={formData.priority}
           onChange={handleChange}
           disabled={isLoading}
+          className="
+            w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm
+            focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+            disabled:bg-gray-100 disabled:cursor-not-allowed
+            transition-colors duration-200
+            bg-white
+          "
         >
           <option value="low">Low</option>
           <option value="medium">Medium</option>
@@ -218,7 +277,16 @@ function TicketForm() {
       </div>
 
       {/* Submit button */}
-      <button type="submit" disabled={isLoading}>
+      <button 
+        type="submit" 
+        disabled={isLoading}
+        className="
+          w-full py-3 px-4 bg-blue-600 text-white font-semibold rounded-lg shadow-md
+          hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+          disabled:bg-blue-400 disabled:cursor-not-allowed
+          transition-colors duration-200
+        "
+      >
         {isLoading ? 'Submitting...' : 'Submit Ticket'}
       </button>
     </form>
