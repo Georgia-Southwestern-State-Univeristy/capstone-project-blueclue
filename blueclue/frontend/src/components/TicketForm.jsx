@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import LoadingSpinner from './LoadingSpinner'
 
 // Validation constants
 const TITLE_MIN = 5
@@ -285,9 +286,17 @@ function TicketForm() {
           hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
           disabled:bg-blue-400 disabled:cursor-not-allowed
           transition-colors duration-200
+          flex items-center justify-center gap-2
         "
       >
-        {isLoading ? 'Submitting...' : 'Submit Ticket'}
+        {isLoading ? (
+          <>
+            <LoadingSpinner size="sm" />
+            <span>Submitting...</span>
+          </>
+        ) : (
+          'Submit Ticket'
+        )}
       </button>
     </form>
   )
