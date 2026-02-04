@@ -7,7 +7,7 @@ const TITLE_MAX = 255
 const DESCRIPTION_MIN = 10
 const DESCRIPTION_MAX = 2000
 
-function TicketForm() {
+function TicketForm({ onSubmit }) {
   // Form data state
   const [formData, setFormData] = useState({
     title: '',
@@ -145,8 +145,10 @@ function TicketForm() {
     setError(null)
 
     try {
-      // TODO: API call will be implemented in a later part
-      console.log('Form submitted:', formData)
+      // Call the onSubmit callback if provided
+      if (onSubmit) {
+        await onSubmit(formData)
+      }
       
       // Reset form after successful submission
       resetForm()
