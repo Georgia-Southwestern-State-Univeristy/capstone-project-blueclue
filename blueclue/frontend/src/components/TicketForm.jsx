@@ -153,7 +153,10 @@ function TicketForm({ onSubmit }) {
       // Reset form after successful submission
       resetForm()
     } catch (err) {
-      setError(err.message || 'An error occurred while submitting the ticket')
+      // Only set local error if no onSubmit handler (parent handles the error display)
+      if (!onSubmit) {
+        setError(err.message || 'An error occurred while submitting the ticket')
+      }
     } finally {
       setIsLoading(false)
     }
