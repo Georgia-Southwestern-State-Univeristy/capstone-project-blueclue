@@ -7,7 +7,7 @@ Write-Host ""
 
 # Navigate to project root
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
-Set-Location (Join-Path $scriptPath "..\..\..")
+Set-Location "$scriptPath\..\..\..\"
 
 # Install dependencies for frontend
 Write-Host "Installing frontend dependencies..." -ForegroundColor Yellow
