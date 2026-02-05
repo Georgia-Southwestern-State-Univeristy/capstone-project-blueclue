@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Alert from '../components/Alert'
 import DonutChart from '../components/DonutChart'
+import PieChart from '../components/PieChart'
 import { getAllTickets } from '../services/ticketService'
 
 /**
@@ -149,6 +150,14 @@ function TechnicianDashboard() {
     { label: 'Closed', count: stats.closed, color: '#6b7280' },
   ]
 
+  // Priority pie chart data
+  const prioritySegments = [
+    { label: 'Low', count: tickets.filter(t => t.priority === 'low').length, color: '#3b82f6' },
+    { label: 'Medium', count: tickets.filter(t => t.priority === 'medium').length, color: '#eab308' },
+    { label: 'High', count: tickets.filter(t => t.priority === 'high').length, color: '#f97316' },
+    { label: 'Critical', count: tickets.filter(t => t.priority === 'critical').length, color: '#ef4444' },
+  ]
+
   // Get filtered and sorted tickets
   const filteredTickets = getFilteredTickets()
   const sortedTickets = [...filteredTickets].sort((a, b) => {
@@ -179,9 +188,10 @@ function TechnicianDashboard() {
         </div>
       )}
 
-      {/* Donut Chart */}
-      <div className="mb-8">
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <DonutChart segments={donutSegments} total={stats.total} />
+        <PieChart segments={prioritySegments} title="Priority Breakdown" />
       </div>
 
       {/* Ticket Queue with Filters */}
