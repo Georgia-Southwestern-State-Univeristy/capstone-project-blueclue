@@ -359,7 +359,7 @@ function TechnicianDashboard() {
                 return (
                   <div
                     key={ticket.id}
-                    className={`${statusColor.bg} border ${statusColor.border} rounded-lg p-4 hover:shadow-md transition-shadow`}
+                    className={`${statusColor.bg} border ${statusColor.border} rounded-lg p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-1 hover:border-blue-400`}
                   >
                     {/* Ticket Header */}
                     <div className="mb-3">
