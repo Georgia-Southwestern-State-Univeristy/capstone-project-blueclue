@@ -53,6 +53,7 @@ npm run dev
 cd blueclue/backend
 npm install
 npm run dev
+node test-ai-integration.js 
 ```
 
 ## Available npm Scripts
