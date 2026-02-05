@@ -42,7 +42,7 @@ function CustomerPortal() {
 
   return (
     <div className="p-8 bg-gray-950 min-h-screen">
-      <h1 className="text-3xl font-bold text-white mb-4">Customer Portal</h1>
+      <h1 className="text-3xl font-bold text-white mb-4">Ticket Submission</h1>
       <p className="text-gray-400 mb-6">
         Submit a new support ticket or check the status of existing tickets.
       </p>
