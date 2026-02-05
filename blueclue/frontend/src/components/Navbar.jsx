@@ -22,7 +22,7 @@ function Navbar() {
     <nav className="bg-gray-900 border-b border-gray-700 text-white p-4">
       <div className="flex gap-6 items-center justify-between">
         <div className="flex gap-6 items-center">
-          <Link to="/" className="hover:opacity-80 transition-opacity">
+          <Link to="/" className="hover:opacity-80 transition-opacity bg-gray-200 rounded-lg p-1">
             <img src={logo} alt="BlueClue Logo" className="h-16" />
           </Link>
           <Link to="/customer" className="text-gray-300 hover:text-white transition-colors">Ticket Submission</Link>
