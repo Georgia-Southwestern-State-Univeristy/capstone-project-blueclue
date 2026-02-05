@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Alert from '../components/Alert'
+import DonutChart from '../components/DonutChart'
 import { getAllTickets } from '../services/ticketService'
 
 /**
@@ -134,8 +135,19 @@ function TechnicianDashboard() {
     open: tickets.filter(t => t.status === 'open').length,
     in_progress: tickets.filter(t => t.status === 'in_progress').length,
     resolved: tickets.filter(t => t.status === 'resolved').length,
+    closed: tickets.filter(t => t.status === 'closed').length,
+    waiting: tickets.filter(t => t.status === 'waiting_on_customer').length,
     total: tickets.length
   }
+
+  // Donut chart segment data
+  const donutSegments = [
+    { label: 'Open', count: stats.open, color: '#60a5fa' },
+    { label: 'In Progress', count: stats.in_progress, color: '#93c5fd' },
+    { label: 'Waiting', count: stats.waiting, color: '#a78bfa' },
+    { label: 'Resolved', count: stats.resolved, color: '#3b82f6' },
+    { label: 'Closed', count: stats.closed, color: '#6b7280' },
+  ]
 
   // Get filtered and sorted tickets
   const filteredTickets = getFilteredTickets()
@@ -167,47 +179,9 @@ function TechnicianDashboard() {
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-sm font-medium">Total Tickets</p>
-              <p className="text-3xl font-bold text-white mt-2">{stats.total}</p>
-            </div>
-            <div className="text-4xl text-gray-600">📋</div>
-          </div>
-        </div>
-
-        <div className="bg-gray-900 p-6 rounded-lg border border-blue-800 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-blue-400 text-sm font-medium">Open</p>
-              <p className="text-3xl font-bold text-blue-400 mt-2">{stats.open}</p>
-            </div>
-            <div className="text-4xl">⭐</div>
-          </div>
-        </div>
-
-        <div className="bg-gray-900 p-6 rounded-lg border border-blue-600 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-blue-300 text-sm font-medium">In Progress</p>
-              <p className="text-3xl font-bold text-blue-300 mt-2">{stats.in_progress}</p>
-            </div>
-            <div className="text-4xl">⚙️</div>
-          </div>
-        </div>
-
-        <div className="bg-gray-900 p-6 rounded-lg border border-blue-900 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-blue-500 text-sm font-medium">Resolved</p>
-              <p className="text-3xl font-bold text-blue-500 mt-2">{stats.resolved}</p>
-            </div>
-            <div className="text-4xl">✅</div>
-          </div>
-        </div>
+      {/* Donut Chart */}
+      <div className="mb-8">
+        <DonutChart segments={donutSegments} total={stats.total} />
       </div>
 
       {/* Ticket Queue with Filters */}
