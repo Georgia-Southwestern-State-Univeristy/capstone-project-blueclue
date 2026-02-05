@@ -1,5 +1,7 @@
 // src/controllers/ticketController.js
 import Ticket from '../models/Ticket.js';
+import AIClassification from '../models/AIClassification.js';
+import { classifyTicketWithFallback } from '../services/aiService.js';
 
 /**
  * Create a new ticket
@@ -31,20 +33,70 @@ export const createTicket = async (req, res) => {
             });
         }
 
-        // Create ticket
+        // Combine subject and description for AI classification
+        const ticketText = `${subject.trim()}. ${description.trim()}`;
+
+        // Get AI classification with fallback to manual or default values
+        const aiResult = await classifyTicketWithFallback(ticketText, {
+            category: category || 'general',
+            priority: priority || 'low'
+        });
+
+        // Use AI classification if available, otherwise use provided or default values
+        const finalCategory = category || aiResult.category;
+        const finalPriority = priority || aiResult.priority;
+
+        // Create ticket with AI classification metadata
         const ticket = await Ticket.create({
             subject: subject.trim(),
             description: description.trim(),
             customer_id,
-            priority: priority || 'low',
-            category: category || 'general'
+            priority: finalPriority,
+            category: finalCategory,
+            ai_classified: aiResult.aiClassified,
+            ai_confidence: aiResult.confidence,
+            ai_fallback_used: aiResult.fallbackUsed,
+            ai_keywords_matched: aiResult.aiClassified ? {
+                category_keywords: aiResult.category_keywords || [],
+                priority_keywords: aiResult.priority_keywords || []
+            } : null
         });
 
-        res.status(201).json({
+        // Save AI classification to ai_classifications table
+        if (aiResult.aiClassified) {
+            await AIClassification.create({
+                ticket_id: ticket.id,
+                predicted_category: aiResult.category,
+                predicted_priority: aiResult.priority,
+                confidence: aiResult.confidence,
+                keywords_matched: {
+                    category_keywords: aiResult.category_keywords || [],
+                    priority_keywords: aiResult.priority_keywords || []
+                },
+                fallback_used: aiResult.fallbackUsed
+            });
+        }
+
+        // Add AI classification info to response
+        const response = {
             status: 'success',
             message: 'Ticket created successfully',
-            data: ticket
-        });
+            data: ticket,
+            ai_classification: {
+                used: aiResult.aiClassified,
+                confidence: aiResult.confidence,
+                fallback_used: aiResult.fallbackUsed,
+                category: finalCategory,
+                priority: finalPriority
+            }
+        };
+
+        // Include warning if AI service failed
+        if (!aiResult.aiClassified && aiResult.error) {
+            response.ai_classification.warning = `AI service unavailable: ${aiResult.error}`;
+        }
+
+        res.status(201).json(response);
 
     } catch (error) {
         console.error('Create ticket error:', error);
