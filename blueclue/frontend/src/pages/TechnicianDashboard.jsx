@@ -143,11 +143,7 @@ function TechnicianDashboard() {
 
   // Get filtered and sorted tickets
   const filteredTickets = getFilteredTickets()
-  const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 }
   const sortedTickets = [...filteredTickets].sort((a, b) => {
-    if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
-      return priorityOrder[a.priority] - priorityOrder[b.priority]
-    }
     return new Date(b.created_at) - new Date(a.created_at)
   })
 
@@ -238,9 +234,12 @@ function TechnicianDashboard() {
               <button
                 onClick={fetchTickets}
                 disabled={loading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                title={loading ? 'Refreshing...' : 'Refresh tickets'}
+                className={`w-10 h-10 flex items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all ${loading ? 'animate-spin' : ''}`}
               >
-                {loading ? 'Refreshing...' : 'Refresh'}
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
               </button>
             </div>
           </div>
