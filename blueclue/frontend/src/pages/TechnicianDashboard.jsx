@@ -83,16 +83,12 @@ function TechnicianDashboard() {
   // Handle filter checkbox changes
   const handleFilterChange = (filterType, value) => {
     setFilters(prev => {
-      const newFilters = { ...prev }
-      const index = newFilters[filterType].indexOf(value)
-      
-      if (index > -1) {
-        newFilters[filterType].splice(index, 1)
-      } else {
-        newFilters[filterType].push(value)
-      }
-      
-      return newFilters
+      const currentValues = prev[filterType]
+      const newValues = currentValues.includes(value)
+        ? currentValues.filter(v => v !== value)
+        : [...currentValues, value]
+
+      return { ...prev, [filterType]: newValues }
     })
   }
 
