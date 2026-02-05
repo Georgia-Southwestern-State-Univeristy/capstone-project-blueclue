@@ -168,7 +168,7 @@ function TicketForm({ onSubmit }) {
       {error && (
         <div 
           role="alert"
-          className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg"
+          className="bg-red-950 border border-red-700 text-red-300 px-4 py-3 rounded-lg"
         >
           {error}
         </div>
@@ -178,9 +178,9 @@ function TicketForm({ onSubmit }) {
       <div>
         <label 
           htmlFor="title"
-          className="block text-sm font-medium text-gray-700 mb-1"
+          className="block text-sm font-medium text-gray-300 mb-1"
         >
-          Title <span className="text-red-500">*</span>
+          Title <span className="text-red-400">*</span>
         </label>
         <input
           ref={titleRef}
@@ -198,12 +198,13 @@ function TicketForm({ onSubmit }) {
           maxLength={TITLE_MAX}
           className={`
             w-full px-4 py-2 border rounded-lg shadow-sm
+            bg-gray-800 text-white placeholder-gray-500
             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-            disabled:bg-gray-100 disabled:cursor-not-allowed
+            disabled:bg-gray-700 disabled:cursor-not-allowed disabled:text-gray-500
             transition-colors duration-200
             ${touched.title && validationErrors.title 
               ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-              : 'border-gray-300'
+              : 'border-gray-600'
             }
           `}
         />
@@ -232,9 +233,9 @@ function TicketForm({ onSubmit }) {
       <div>
         <label 
           htmlFor="description"
-          className="block text-sm font-medium text-gray-700 mb-1"
+          className="block text-sm font-medium text-gray-300 mb-1"
         >
-          Description <span className="text-red-500">*</span>
+          Description <span className="text-red-400">*</span>
         </label>
         <textarea
           id="description"
@@ -251,12 +252,13 @@ function TicketForm({ onSubmit }) {
           maxLength={DESCRIPTION_MAX}
           className={`
             w-full px-4 py-2 border rounded-lg shadow-sm resize-y
+            bg-gray-800 text-white placeholder-gray-500
             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-            disabled:bg-gray-100 disabled:cursor-not-allowed
+            disabled:bg-gray-700 disabled:cursor-not-allowed disabled:text-gray-500
             transition-colors duration-200
             ${touched.description && validationErrors.description 
               ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
-              : 'border-gray-300'
+              : 'border-gray-600'
             }
           `}
         />
@@ -285,7 +287,7 @@ function TicketForm({ onSubmit }) {
       <div>
         <label 
           htmlFor="priority"
-          className="block text-sm font-medium text-gray-700 mb-1"
+          className="block text-sm font-medium text-gray-300 mb-1"
         >
           Priority
         </label>
@@ -296,11 +298,11 @@ function TicketForm({ onSubmit }) {
           onChange={handleChange}
           disabled={isLoading}
           className="
-            w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm
+            w-full px-4 py-2 border border-gray-600 rounded-lg shadow-sm
+            bg-gray-800 text-white
             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-            disabled:bg-gray-100 disabled:cursor-not-allowed
+            disabled:bg-gray-700 disabled:cursor-not-allowed disabled:text-gray-500
             transition-colors duration-200
-            bg-white
           "
         >
           <option value="low">Low</option>
