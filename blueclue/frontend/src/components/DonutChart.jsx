@@ -31,17 +31,6 @@ function DonutChart({ segments = defaultSegments, total }) {
     return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`
   }
 
-  // Get midpoint angle for tooltip positioning
-  const getMidpoint = (percent, offset) => {
-    const midAngle = ((offset + percent / 2) * 3.6 - 90) * Math.PI / 180
-    const r = 40
-    const cx = 50, cy = 50
-    return {
-      x: cx + r * Math.cos(midAngle),
-      y: cy + r * Math.sin(midAngle),
-    }
-  }
-
   // Center display: show hovered segment or total
   const centerLabel = hoveredIndex !== null ? segments[hoveredIndex].label : 'Total'
   const centerValue = hoveredIndex !== null ? segments[hoveredIndex].count : chartTotal
