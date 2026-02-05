@@ -40,7 +40,7 @@ function DonutChart({ segments = defaultSegments, total }) {
       <div className="flex flex-col md:flex-row items-center gap-8">
         {/* SVG Donut */}
         <div className="relative w-52 h-52 flex-shrink-0">
-          <svg viewBox="0 0 100 100" className="w-full h-full">
+          <svg viewBox="0 0 100 100" className="w-full h-full" style={{ overflow: 'visible' }}>
             {chartTotal === 0 ? (
               <circle cx="50" cy="50" r="40" fill="none" stroke="#374151" strokeWidth="12" />
             ) : (

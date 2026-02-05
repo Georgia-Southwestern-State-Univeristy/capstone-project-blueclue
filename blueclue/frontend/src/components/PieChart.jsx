@@ -50,7 +50,7 @@ function PieChart({ segments = defaultSegments, title = 'Assignment Overview' })
       <div className="flex flex-col items-center gap-6">
         {/* SVG Pie */}
         <div className="relative w-52 h-52 flex-shrink-0">
-          <svg viewBox="0 0 100 100" className="w-full h-full">
+          <svg viewBox="0 0 100 100" className="w-full h-full" style={{ overflow: 'visible' }}>
             {total === 0 ? (
               <circle cx="50" cy="50" r="40" fill="#374151" />
             ) : (
