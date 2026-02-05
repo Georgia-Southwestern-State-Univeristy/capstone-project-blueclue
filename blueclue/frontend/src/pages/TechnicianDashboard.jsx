@@ -363,10 +363,12 @@ function TechnicianDashboard() {
                   >
                     {/* Ticket Header */}
                     <div className="mb-3">
-                      <div className="flex justify-between items-start mb-2">
-                        <h3 className="font-bold text-white text-sm leading-tight flex-1 pr-2">
-                          {ticket.subject}
-                        </h3>
+                      <div className="flex items-start gap-2 mb-2">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-bold text-white text-sm leading-tight whitespace-normal break-words">
+                            {ticket.subject}
+                          </h3>
+                        </div>
                         <span className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap flex-shrink-0 ${getPriorityColor(ticket.priority)}`}>
                           {ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1)}
                         </span>
@@ -375,7 +377,7 @@ function TechnicianDashboard() {
                     </div>
 
                     {/* Description Preview */}
-                    <p className="text-gray-300 text-sm mb-4 line-clamp-2">
+                    <p className="text-gray-300 text-sm mb-4 whitespace-normal break-words">
                       {ticket.description}
                     </p>
 
