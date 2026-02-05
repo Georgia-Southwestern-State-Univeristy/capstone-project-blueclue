@@ -321,7 +321,11 @@ function TechnicianDashboard() {
         </div>
 
         {/* Loading State */}
-        {loading && <LoadingSpinner message="Loading tickets..." />}
+        {loading && (
+          <div className="flex justify-center items-center py-12">
+            <LoadingSpinner message="Loading tickets..." />
+          </div>
+        )}
 
         {/* Empty State */}
         {!loading && tickets.length === 0 && (
