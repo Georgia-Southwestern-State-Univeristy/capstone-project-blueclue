@@ -4,17 +4,40 @@ import pool from '../config/database.js';
 class Ticket {
     /**
      * Create a new ticket
-     * @param {Object} ticketData - { subject, description, customer_id, priority, category }
+     * @param {Object} ticketData - { subject, description, customer_id, priority, category, ai_classified, ai_confidence, ai_fallback_used, ai_keywords_matched }
      * @returns {Promise<Object>} Created ticket
      */
-    static async create({ subject, description, customer_id, priority = 'low', category }) {
+    static async create({ 
+        subject, 
+        description, 
+        customer_id, 
+        priority = 'low', 
+        category,
+        ai_classified = false,
+        ai_confidence = null,
+        ai_fallback_used = false,
+        ai_keywords_matched = null
+    }) {
         const query = `
-            INSERT INTO tickets (subject, description, customer_id, priority, category)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO tickets (
+                subject, description, customer_id, priority, category,
+                ai_classified, ai_confidence, ai_fallback_used, ai_keywords_matched
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING *
         `;
         
-        const values = [subject, description, customer_id, priority, category || 'general'];
+        const values = [
+            subject, 
+            description, 
+            customer_id, 
+            priority, 
+            category || 'general',
+            ai_classified,
+            ai_confidence,
+            ai_fallback_used,
+            ai_keywords_matched ? JSON.stringify(ai_keywords_matched) : null
+        ];
         const result = await pool.query(query, values);
         return result.rows[0];
     }
