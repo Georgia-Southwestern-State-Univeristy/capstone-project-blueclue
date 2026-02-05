@@ -360,9 +360,12 @@ function TechnicianDashboard() {
                             {ticket.subject}
                           </h3>
                         </div>
-                        <span className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap flex-shrink-0 ${getPriorityColor(ticket.priority)}`}>
-                          {ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1)}
-                        </span>
+                        <div className="flex flex-col items-end flex-shrink-0">
+                          <span className="text-[10px] text-gray-400 mb-0.5">Client Selected</span>
+                          <span className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap ${getPriorityColor(ticket.priority)}`}>
+                            {ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1)}
+                          </span>
+                        </div>
                       </div>
                       <p className="text-xs text-gray-400">ID: {ticket.id} | {formatDate(ticket.created_at)}</p>
                     </div>
@@ -379,17 +382,52 @@ function TechnicianDashboard() {
                       </span>
                     </div>
 
-                    {/* AI Classification (Placeholder for future enhancement) */}
+                    {/* AI Classification */}
                     {ticket.ai_classified && (
-                      <div className="mb-3 p-2 bg-gray-900 bg-opacity-50 rounded text-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-400">
-                            <strong className="text-gray-300">AI Category:</strong> {ticket.category}
-                          </span>
-                          {ticket.ai_confidence && (
-                            <span className="text-gray-500">
-                              ({Math.round(ticket.ai_confidence * 100)}%)
+                      <div className="mb-3 p-2 bg-indigo-950 bg-opacity-60 border border-indigo-800 rounded text-xs">
+                        <div className="flex items-center gap-1 mb-2">
+                          <svg className="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                          <span className="font-semibold text-indigo-300">AI Classification</span>
+                          {ticket.ai_fallback_used && (
+                            <span className="ml-auto text-yellow-500 text-[10px]" title="Fallback classification used">⚠ Fallback</span>
+                          )}
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400">Category:</span>
+                            <span className="text-indigo-200 font-medium capitalize">{ticket.category}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400">Priority:</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${getPriorityColor(ticket.priority)}`}>
+                              {ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1)}
                             </span>
+                          </div>
+                          {ticket.ai_confidence != null && (
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-gray-400">Confidence:</span>
+                                <span className={`font-medium ${
+                                  ticket.ai_confidence >= 0.7 ? 'text-green-400' :
+                                  ticket.ai_confidence >= 0.4 ? 'text-yellow-400' :
+                                  'text-red-400'
+                                }`}>
+                                  {Math.round(ticket.ai_confidence * 100)}%
+                                </span>
+                              </div>
+                              <div className="w-full bg-gray-700 rounded-full h-1.5">
+                                <div
+                                  className={`h-1.5 rounded-full ${
+                                    ticket.ai_confidence >= 0.7 ? 'bg-green-500' :
+                                    ticket.ai_confidence >= 0.4 ? 'bg-yellow-500' :
+                                    'bg-red-500'
+                                  }`}
+                                  style={{ width: `${Math.round(ticket.ai_confidence * 100)}%` }}
+                                />
+                              </div>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -435,17 +473,6 @@ function TechnicianDashboard() {
             </div>
           </div>
         )}
-      </div>
-
-      {/* Note for future development */}
-      <div className="mt-8 p-4 bg-gray-900 border border-blue-800 rounded-lg text-sm text-blue-300">
-        <strong>Note:</strong> When authentication is implemented, this dashboard will automatically filter tickets assigned to the logged-in technician and show only their queue. Users will also be able to:
-        <ul className="list-disc list-inside ml-2 mt-2">
-          <li>Claim unassigned tickets</li>
-          <li>Update ticket status and priority</li>
-          <li>Add notes and resolution details</li>
-          <li>View ticket history and AI classification details</li>
-        </ul>
       </div>
     </div>
   )
