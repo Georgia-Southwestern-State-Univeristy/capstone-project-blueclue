@@ -8,11 +8,11 @@ import { getAllTickets } from '../services/ticketService'
  */
 const getStatusColor = (status) => {
   const statusColors = {
-    open: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700', badge: 'bg-yellow-100 text-yellow-800' },
-    in_progress: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', badge: 'bg-blue-100 text-blue-800' },
-    waiting_on_customer: { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', badge: 'bg-purple-100 text-purple-800' },
-    resolved: { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', badge: 'bg-green-100 text-green-800' },
-    closed: { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700', badge: 'bg-gray-100 text-gray-800' }
+    open: { bg: 'bg-yellow-950', border: 'border-yellow-700', text: 'text-yellow-400', badge: 'bg-yellow-900 text-yellow-300' },
+    in_progress: { bg: 'bg-blue-950', border: 'border-blue-700', text: 'text-blue-400', badge: 'bg-blue-900 text-blue-300' },
+    waiting_on_customer: { bg: 'bg-purple-950', border: 'border-purple-700', text: 'text-purple-400', badge: 'bg-purple-900 text-purple-300' },
+    resolved: { bg: 'bg-green-950', border: 'border-green-700', text: 'text-green-400', badge: 'bg-green-900 text-green-300' },
+    closed: { bg: 'bg-gray-800', border: 'border-gray-600', text: 'text-gray-400', badge: 'bg-gray-700 text-gray-300' }
   }
   return statusColors[status] || statusColors.open
 }
@@ -22,12 +22,12 @@ const getStatusColor = (status) => {
  */
 const getPriorityColor = (priority) => {
   const priorityColors = {
-    low: 'bg-blue-100 text-blue-800',
-    medium: 'bg-yellow-100 text-yellow-800',
-    high: 'bg-orange-100 text-orange-800',
-    critical: 'bg-red-100 text-red-800'
+    low: 'bg-blue-900 text-blue-300',
+    medium: 'bg-yellow-900 text-yellow-300',
+    high: 'bg-orange-900 text-orange-300',
+    critical: 'bg-red-900 text-red-300'
   }
-  return priorityColors[priority] || 'bg-gray-100 text-gray-800'
+  return priorityColors[priority] || 'bg-gray-700 text-gray-300'
 }
 
 /**
@@ -147,11 +147,11 @@ function TechnicianDashboard() {
   const hasActiveFilters = filters.status.length > 0 || filters.priority.length > 0 || filters.assignmentStatus.length > 0
 
   return (
-    <div className="p-4 md:p-8 bg-gray-50 min-h-screen">
+    <div className="p-4 md:p-8 bg-gray-950 min-h-screen">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-gray-800 mb-2">Technician Dashboard</h1>
-        <p className="text-gray-600">
+        <h1 className="text-4xl font-bold text-white mb-2">Technician Dashboard</h1>
+        <p className="text-gray-400">
           View and manage all support tickets. Ready to filter by assigned technician when authentication is implemented.
         </p>
       </div>
@@ -169,41 +169,41 @@ function TechnicianDashboard() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+        <div className="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-500 text-sm font-medium">Total Tickets</p>
-              <p className="text-3xl font-bold text-gray-800 mt-2">{stats.total}</p>
+              <p className="text-gray-400 text-sm font-medium">Total Tickets</p>
+              <p className="text-3xl font-bold text-white mt-2">{stats.total}</p>
             </div>
-            <div className="text-4xl text-gray-300">📋</div>
+            <div className="text-4xl text-gray-600">📋</div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg border border-yellow-200 shadow-sm">
+        <div className="bg-gray-900 p-6 rounded-lg border border-blue-800 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-yellow-600 text-sm font-medium">Open</p>
-              <p className="text-3xl font-bold text-yellow-600 mt-2">{stats.open}</p>
+              <p className="text-blue-400 text-sm font-medium">Open</p>
+              <p className="text-3xl font-bold text-blue-400 mt-2">{stats.open}</p>
             </div>
             <div className="text-4xl">⭐</div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg border border-blue-200 shadow-sm">
+        <div className="bg-gray-900 p-6 rounded-lg border border-blue-600 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-blue-600 text-sm font-medium">In Progress</p>
-              <p className="text-3xl font-bold text-blue-600 mt-2">{stats.in_progress}</p>
+              <p className="text-blue-300 text-sm font-medium">In Progress</p>
+              <p className="text-3xl font-bold text-blue-300 mt-2">{stats.in_progress}</p>
             </div>
             <div className="text-4xl">⚙️</div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg border border-green-200 shadow-sm">
+        <div className="bg-gray-900 p-6 rounded-lg border border-blue-900 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-green-600 text-sm font-medium">Resolved</p>
-              <p className="text-3xl font-bold text-green-600 mt-2">{stats.resolved}</p>
+              <p className="text-blue-500 text-sm font-medium">Resolved</p>
+              <p className="text-3xl font-bold text-blue-500 mt-2">{stats.resolved}</p>
             </div>
             <div className="text-4xl">✅</div>
           </div>
@@ -211,14 +211,14 @@ function TechnicianDashboard() {
       </div>
 
       {/* Ticket Queue with Filters */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div className="p-6 border-b border-gray-200">
+      <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">
+        <div className="p-6 border-b border-gray-700">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-gray-800">Ticket Queue</h2>
+            <h2 className="text-2xl font-bold text-white">Ticket Queue</h2>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowFilters(!showFilters)}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-gray-700 text-gray-200 rounded-lg hover:bg-gray-600 transition-colors flex items-center gap-2"
               >
                 🔍 {showFilters ? 'Hide' : 'Show'} Filters
                 {hasActiveFilters && (
@@ -242,23 +242,23 @@ function TechnicianDashboard() {
 
           {/* Filter Panel */}
           {showFilters && (
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <div className="bg-gray-800 p-4 rounded-lg border border-gray-600">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Status Filter */}
                 <div>
-                  <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <h3 className="font-semibold text-blue-400 mb-3 flex items-center gap-2">
                     📊 Status
                   </h3>
                   <div className="space-y-2">
                     {['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed'].map(status => (
-                      <label key={status} className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-2 rounded">
+                      <label key={status} className="flex items-center gap-2 cursor-pointer hover:bg-gray-700 p-2 rounded">
                         <input
                           type="checkbox"
                           checked={filters.status.includes(status)}
                           onChange={() => handleFilterChange('status', status)}
-                          className="w-4 h-4 rounded cursor-pointer"
+                          className="w-4 h-4 accent-blue-500 cursor-pointer"
                         />
-                        <span className="text-sm text-gray-700">{formatStatus(status)}</span>
+                        <span className="text-sm text-gray-300">{formatStatus(status)}</span>
                       </label>
                     ))}
                   </div>
@@ -266,19 +266,19 @@ function TechnicianDashboard() {
 
                 {/* Priority Filter */}
                 <div>
-                  <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <h3 className="font-semibold text-blue-400 mb-3 flex items-center gap-2">
                     ⚡ Priority
                   </h3>
                   <div className="space-y-2">
                     {['low', 'medium', 'high', 'critical'].map(priority => (
-                      <label key={priority} className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-2 rounded">
+                      <label key={priority} className="flex items-center gap-2 cursor-pointer hover:bg-gray-700 p-2 rounded">
                         <input
                           type="checkbox"
                           checked={filters.priority.includes(priority)}
                           onChange={() => handleFilterChange('priority', priority)}
-                          className="w-4 h-4 rounded cursor-pointer"
+                          className="w-4 h-4 accent-blue-500 cursor-pointer"
                         />
-                        <span className="text-sm text-gray-700">{priority.charAt(0).toUpperCase() + priority.slice(1)}</span>
+                        <span className="text-sm text-gray-300">{priority.charAt(0).toUpperCase() + priority.slice(1)}</span>
                       </label>
                     ))}
                   </div>
@@ -286,19 +286,19 @@ function TechnicianDashboard() {
 
                 {/* Assignment Filter */}
                 <div>
-                  <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <h3 className="font-semibold text-blue-400 mb-3 flex items-center gap-2">
                     👤 Assignment
                   </h3>
                   <div className="space-y-2">
                     {['assigned', 'unassigned'].map(status => (
-                      <label key={status} className="flex items-center gap-2 cursor-pointer hover:bg-gray-100 p-2 rounded">
+                      <label key={status} className="flex items-center gap-2 cursor-pointer hover:bg-gray-700 p-2 rounded">
                         <input
                           type="checkbox"
                           checked={filters.assignmentStatus.includes(status)}
                           onChange={() => handleFilterChange('assignmentStatus', status)}
-                          className="w-4 h-4 rounded cursor-pointer"
+                          className="w-4 h-4 accent-blue-500 cursor-pointer"
                         />
-                        <span className="text-sm text-gray-700">
+                        <span className="text-sm text-gray-300">
                           {status === 'assigned' ? 'Assigned to Someone' : 'Unassigned'}
                         </span>
                       </label>
@@ -311,7 +311,7 @@ function TechnicianDashboard() {
               <div className="mt-4 flex justify-end">
                 <button
                   onClick={resetFilters}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded transition-colors text-sm font-medium"
+                  className="px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors text-sm font-medium"
                 >
                   Clear All Filters
                 </button>
@@ -326,20 +326,20 @@ function TechnicianDashboard() {
         {/* Empty State */}
         {!loading && tickets.length === 0 && (
           <div className="p-12 text-center">
-            <p className="text-2xl text-gray-400 mb-2">📭</p>
-            <p className="text-gray-500 text-lg">No tickets found</p>
-            <p className="text-gray-400 text-sm mt-2">All tickets have been resolved and closed!</p>
+            <p className="text-2xl text-gray-500 mb-2">📭</p>
+            <p className="text-gray-400 text-lg">No tickets found</p>
+            <p className="text-gray-500 text-sm mt-2">All tickets have been resolved and closed!</p>
           </div>
         )}
 
         {/* No Results for Filters */}
         {!loading && tickets.length > 0 && filteredTickets.length === 0 && (
           <div className="p-12 text-center">
-            <p className="text-2xl text-gray-400 mb-2">🔍</p>
-            <p className="text-gray-500 text-lg">No tickets match your filters</p>
+            <p className="text-2xl text-gray-500 mb-2">🔍</p>
+            <p className="text-gray-400 text-lg">No tickets match your filters</p>
             <button
               onClick={resetFilters}
-              className="mt-4 px-4 py-2 text-blue-600 hover:text-blue-700 font-medium"
+              className="mt-4 px-4 py-2 text-blue-400 hover:text-blue-300 font-medium"
             >
               Clear Filters
             </button>
@@ -349,8 +349,8 @@ function TechnicianDashboard() {
         {/* Tickets Grid */}
         {!loading && filteredTickets.length > 0 && (
           <div className="p-6">
-            <p className="text-sm text-gray-600 mb-4">
-              Showing <strong>{filteredTickets.length}</strong> of <strong>{tickets.length}</strong> ticket{tickets.length !== 1 ? 's' : ''}
+            <p className="text-sm text-gray-400 mb-4">
+              Showing <strong className="text-gray-200">{filteredTickets.length}</strong> of <strong className="text-gray-200">{tickets.length}</strong> ticket{tickets.length !== 1 ? 's' : ''}
               {hasActiveFilters && ' (filtered)'}
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -364,18 +364,18 @@ function TechnicianDashboard() {
                     {/* Ticket Header */}
                     <div className="mb-3">
                       <div className="flex justify-between items-start mb-2">
-                        <h3 className="font-bold text-gray-800 text-sm leading-tight flex-1 pr-2">
+                        <h3 className="font-bold text-white text-sm leading-tight flex-1 pr-2">
                           {ticket.subject}
                         </h3>
                         <span className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap flex-shrink-0 ${getPriorityColor(ticket.priority)}`}>
                           {ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1)}
                         </span>
                       </div>
-                      <p className="text-xs text-gray-600">ID: {ticket.id} | {formatDate(ticket.created_at)}</p>
+                      <p className="text-xs text-gray-400">ID: {ticket.id} | {formatDate(ticket.created_at)}</p>
                     </div>
 
                     {/* Description Preview */}
-                    <p className="text-gray-700 text-sm mb-4 line-clamp-2">
+                    <p className="text-gray-300 text-sm mb-4 line-clamp-2">
                       {ticket.description}
                     </p>
 
@@ -388,10 +388,10 @@ function TechnicianDashboard() {
 
                     {/* AI Classification (Placeholder for future enhancement) */}
                     {ticket.ai_classified && (
-                      <div className="mb-3 p-2 bg-white bg-opacity-50 rounded text-xs">
+                      <div className="mb-3 p-2 bg-gray-900 bg-opacity-50 rounded text-xs">
                         <div className="flex items-center justify-between">
-                          <span className="text-gray-600">
-                            <strong>AI Category:</strong> {ticket.category}
+                          <span className="text-gray-400">
+                            <strong className="text-gray-300">AI Category:</strong> {ticket.category}
                           </span>
                           {ticket.ai_confidence && (
                             <span className="text-gray-500">
@@ -403,33 +403,33 @@ function TechnicianDashboard() {
                     )}
 
                     {/* Customer Info - Who Requested */}
-                    <div className="mb-3 p-2 bg-white bg-opacity-50 rounded text-xs">
-                      <p className="text-gray-600">
-                        <strong>Requested by:</strong>
+                    <div className="mb-3 p-2 bg-gray-900 bg-opacity-50 rounded text-xs">
+                      <p className="text-gray-400">
+                        <strong className="text-gray-300">Requested by:</strong>
                       </p>
-                      <p className="text-gray-700">
+                      <p className="text-gray-200">
                         {ticket.customer_name || 'Unknown'}
                         {ticket.customer_email && (
-                          <span className="text-gray-500 block text-xs">{ticket.customer_email}</span>
+                          <span className="text-gray-400 block text-xs">{ticket.customer_email}</span>
                         )}
                       </p>
                     </div>
 
                     {/* Assignment Info - Who it's Assigned To */}
-                    <div className="p-2 bg-white bg-opacity-50 rounded text-xs">
-                      <p className="text-gray-600">
-                        <strong>Assigned to:</strong>
+                    <div className="p-2 bg-gray-900 bg-opacity-50 rounded text-xs">
+                      <p className="text-gray-400">
+                        <strong className="text-gray-300">Assigned to:</strong>
                       </p>
-                      <p className="text-gray-700">
+                      <p className="text-gray-200">
                         {ticket.assigned_to_name ? (
                           <>
                             {ticket.assigned_to_name}
                             {ticket.assigned_to_email && (
-                              <span className="text-gray-500 block text-xs">{ticket.assigned_to_email}</span>
+                              <span className="text-gray-400 block text-xs">{ticket.assigned_to_email}</span>
                             )}
                           </>
                         ) : (
-                          <span className="text-orange-600 font-medium">Unassigned</span>
+                          <span className="text-blue-400 font-medium">Unassigned</span>
                         )}
                       </p>
                     </div>
@@ -445,7 +445,7 @@ function TechnicianDashboard() {
       </div>
 
       {/* Note for future development */}
-      <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+      <div className="mt-8 p-4 bg-gray-900 border border-blue-800 rounded-lg text-sm text-blue-300">
         <strong>Note:</strong> When authentication is implemented, this dashboard will automatically filter tickets assigned to the logged-in technician and show only their queue. Users will also be able to:
         <ul className="list-disc list-inside ml-2 mt-2">
           <li>Claim unassigned tickets</li>
