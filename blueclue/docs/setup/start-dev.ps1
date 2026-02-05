@@ -41,7 +41,11 @@ if (-Not (Test-Path $envPath)) {
     Write-Host "   Backend will need database configuration to connect to PostgreSQL" -ForegroundColor Yellow
     Write-Host "   See blueclue/database/README.md for setup instructions" -ForegroundColor Cyan
 } else {
+<<<<<<< HEAD
     Write-Host "   .env file found" -ForegroundColor Green
+=======
+    Write-Host "    .env file found" -ForegroundColor Green
+>>>>>>> d27300709ba8a957f8b951d4f8e6ee93239b2a59
 }
 Write-Host ""
 
