@@ -19,14 +19,17 @@ function Navbar() {
   }, [])
 
   return (
-    <nav className="bg-gray-900 border-b border-gray-700 text-white p-4">
-      <div className="flex gap-6 items-center justify-between">
-        <div className="flex gap-6 items-center">
+    <nav className="bg-gray-900 border-b border-gray-700 text-white px-6 py-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-10">
           <Link to="/" className="hover:opacity-80 transition-opacity bg-gray-200 rounded-lg p-1">
             <img src={logo} alt="BlueClue Logo" className="h-16" />
           </Link>
-          <Link to="/customer" className="text-gray-300 hover:text-white transition-colors">Ticket Submission</Link>
-          <Link to="/technician" className="text-gray-300 hover:text-white transition-colors">Technician Dashboard</Link>
+          <div className="h-8 w-px bg-gray-700"></div>
+          <div className="flex items-center gap-8">
+            <Link to="/customer" className="text-gray-300 hover:text-white transition-colors">Ticket Submission</Link>
+            <Link to="/technician" className="text-gray-300 hover:text-white transition-colors">Technician Dashboard</Link>
+          </div>
         </div>
 
         {/* Account Dropdown */}
