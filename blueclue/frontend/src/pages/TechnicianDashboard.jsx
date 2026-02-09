@@ -445,7 +445,7 @@ function TechnicianDashboard() {
                       <select
                         value={ticket.status}
                         onChange={(e) => handleStatusChange(ticket.id, e.target.value)}
-                        disabled={updatingTicketId === ticket.id}
+                        disabled={updatingTicketId === ticket.id || ticket.status === 'closed'}
                         className={`w-full px-3 py-2 rounded-md text-sm font-medium cursor-pointer transition-colors ${statusColor.badge} border border-gray-600 hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
                         <option value="open">{updatingTicketId === ticket.id && ticket.status === 'open' ? '⏳ ' : ''}Open</option>
@@ -454,6 +454,9 @@ function TechnicianDashboard() {
                         <option value="resolved">{updatingTicketId === ticket.id && ticket.status === 'resolved' ? '⏳ ' : ''}Resolved</option>
                         <option value="closed">{updatingTicketId === ticket.id && ticket.status === 'closed' ? '⏳ ' : ''}Closed</option>
                       </select>
+                      {ticket.status === 'closed' && (
+                        <p className="text-xs text-gray-500 mt-1">Closed tickets cannot be modified</p>
+                      )}
                     </div>
 
                     {/* AI Classification */}
