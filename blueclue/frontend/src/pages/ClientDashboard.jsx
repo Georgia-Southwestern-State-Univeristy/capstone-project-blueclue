@@ -41,12 +41,11 @@ function ClientDashboard() {
   const handleSubmit = async (formData) => {
     try {
       const response = await createTicket(formData)
-      
       // Show success alert
-      const ticketId = response.ticket?.ticket_id
+      const ticketId = response.ticket?.id || response.ticket?.ticket_id || response.data?.id || response.data?.ticket_id
       setAlert({
         type: 'success',
-        message: ticketId 
+        message: ticketId
           ? `Ticket #${ticketId} created successfully!`
           : 'Ticket submitted successfully!'
       })
@@ -178,8 +177,8 @@ function ClientDashboard() {
               </thead>
               <tbody>
                 {tickets.map((ticket) => (
-                  <tr key={ticket.ticket_id} className="border-b border-gray-800 hover:bg-gray-800 transition-colors">
-                    <td className="py-3 px-4 text-white font-medium">#{ticket.ticket_id}</td>
+                  <tr key={ticket.id} className="border-b border-gray-800 hover:bg-gray-800 transition-colors">
+                    <td className="py-3 px-4 text-white font-medium">#{ticket.id}</td>
                     <td className="py-3 px-4 text-gray-300">{ticket.subject || 'N/A'}</td>
                     <td className="py-3 px-4">
                       <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(ticket.status)}`}>
