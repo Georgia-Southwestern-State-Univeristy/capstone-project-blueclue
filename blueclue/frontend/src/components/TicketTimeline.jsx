@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef, useEffect, useCallback } from 'react'
 
 /**
  * Hourly timeline bar chart showing ticket submissions over the last 3 days.
@@ -6,6 +6,22 @@ import { useMemo, useState } from 'react'
  */
 function TicketTimeline({ tickets = [] }) {
   const [hoveredIndex, setHoveredIndex] = useState(null)
+  const scrollRef = useRef(null)
+
+  // Scroll to rightmost position on mobile
+  const scrollToEnd = useCallback(() => {
+    const el = scrollRef.current
+    if (el) {
+      el.scrollLeft = el.scrollWidth
+    }
+  }, [])
+
+  useEffect(() => {
+    scrollToEnd()
+    // Also scroll on resize in case orientation changes
+    window.addEventListener('resize', scrollToEnd)
+    return () => window.removeEventListener('resize', scrollToEnd)
+  }, [scrollToEnd, tickets])
 
   // Build 72 hourly buckets (3 days * 24 hours), ending at current hour
   const buckets = useMemo(() => {
@@ -51,15 +67,15 @@ function TicketTimeline({ tickets = [] }) {
   }
 
   return (
-    <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-6 h-full flex flex-col">
+    <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-4 md:p-6 h-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-white">Submission Timeline</h3>
+        <h3 className="text-base md:text-lg font-semibold text-white">Submission Timeline</h3>
         <span className="text-xs text-gray-500">Last 3 days &middot; {total} tickets</span>
       </div>
 
-      {/* Chart area */}
-      <div className="flex-1 flex flex-col justify-end min-h-0">
-        <div className="flex items-end gap-px h-36 w-full">
+      {/* Chart area — scrollable on mobile only */}
+      <div ref={scrollRef} className="flex-1 flex flex-col justify-end min-h-0 overflow-x-auto md:overflow-x-visible overflow-y-hidden pt-16">
+        <div className="flex items-end gap-px h-36 md:min-w-0" style={{ minWidth: '500px' }}>
           {buckets.map((bucket, i) => {
             const heightPct = bucket.count > 0 ? Math.max((bucket.count / maxCount) * 100, 4) : 0
             const isHovered = hoveredIndex === i
@@ -84,9 +100,9 @@ function TicketTimeline({ tickets = [] }) {
                   />
                 </div>
 
-                {/* Tooltip */}
+                {/* Tooltip — positioned inside the clipped area */}
                 {isHovered && (
-                  <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-gray-800 border border-gray-600 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10 pointer-events-none">
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full bg-gray-800 border border-gray-600 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10 pointer-events-none">
                     <p className="font-medium">{formatHour(bucket.hourStart)}</p>
                     <p className="text-gray-400">
                       {bucket.hourStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
@@ -100,11 +116,11 @@ function TicketTimeline({ tickets = [] }) {
         </div>
 
         {/* Day labels below chart */}
-        <div className="relative h-5 mt-2 border-t border-gray-800">
+        <div className="relative h-5 mt-2 border-t border-gray-800 md:min-w-0" style={{ minWidth: '500px' }}>
           {dayLabels.map((d, i) => (
             <span
               key={i}
-              className="absolute text-xs text-gray-500 top-1"
+              className="absolute text-xs text-gray-500 top-1 whitespace-nowrap"
               style={{ left: `${(d.index / buckets.length) * 100}%` }}
             >
               {d.label}
