@@ -75,7 +75,7 @@ function TicketTimeline({ tickets = [] }) {
 
       {/* Chart area — scrollable on mobile only */}
       <div ref={scrollRef} className="flex-1 flex flex-col justify-end min-h-0 overflow-x-auto md:overflow-x-visible overflow-y-hidden pt-16">
-        <div className="flex items-end gap-px h-36 md:min-w-0" style={{ minWidth: '500px' }}>
+        <div className="flex items-end gap-1 h-36 md:min-w-0" style={{ minWidth: '500px' }}>
           {buckets.map((bucket, i) => {
             const heightPct = bucket.count > 0 ? Math.max((bucket.count / maxCount) * 100, 4) : 0
             const isHovered = hoveredIndex === i
@@ -83,7 +83,7 @@ function TicketTimeline({ tickets = [] }) {
             return (
               <div
                 key={i}
-                className="flex-1 relative group cursor-pointer"
+                className="flex-1 min-w-[6px] max-w-[16px] relative group cursor-pointer"
                 style={{ height: '100%' }}
                 onMouseEnter={() => setHoveredIndex(i)}
                 onMouseLeave={() => setHoveredIndex(null)}
