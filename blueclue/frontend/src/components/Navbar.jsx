@@ -27,7 +27,6 @@ function Navbar() {
           </Link>
           <div className="h-8 w-px bg-gray-700"></div>
           <div className="flex items-center gap-8">
-            <Link to="/customer" className="text-gray-300 hover:text-white transition-colors">Ticket Submission</Link>
             <Link to="/client-dashboard" className="text-gray-300 hover:text-white transition-colors">Client Dashboard</Link>
             <Link to="/technician" className="text-gray-300 hover:text-white transition-colors">Technician Dashboard</Link>
           </div>

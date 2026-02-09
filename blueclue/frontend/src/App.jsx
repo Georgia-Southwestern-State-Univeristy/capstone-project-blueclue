@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Home from './pages/Home'
-import CustomerPortal from './pages/CustomerPortal'
 import ClientDashboard from './pages/ClientDashboard'
 import TechnicianDashboard from './pages/TechnicianDashboard'
 import Navbar from './components/Navbar'
@@ -11,7 +10,6 @@ function App() {
       <Navbar />
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/customer" element={<CustomerPortal />} />
         <Route path="/client-dashboard" element={<ClientDashboard />} />
         <Route path="/technician" element={<TechnicianDashboard />} />
       </Routes>
