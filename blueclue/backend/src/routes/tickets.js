@@ -5,7 +5,8 @@ import {
     getAllTickets,
     getTicketById,
     updateTicket,
-    deleteTicket
+    deleteTicket,
+    updateTicketStatus
 } from '../controllers/ticketController.js';
 
 const router = express.Router();
@@ -30,6 +31,13 @@ router.get('/:id', getTicketById);
  * @access  Public
  */
 router.post('/', createTicket);
+
+/**
+ * @route   PATCH /api/tickets/:id/status
+ * @desc    Update a ticket's status
+ * @access  Public
+ */
+router.patch('/:id/status', updateTicketStatus);
 
 /**
  * @route   PUT /api/tickets/:id
