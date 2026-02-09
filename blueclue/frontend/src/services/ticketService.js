@@ -199,10 +199,34 @@ export const deleteTicket = async (id) => {
   }
 };
 
+/**
+ * Update ticket status
+ * @param {number|string} id - The ticket ID
+ * @param {string} status - The new status value
+ * @returns {Promise<Object>} The updated ticket
+ */
+export const updateTicketStatus = async (id, status) => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${id}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status }),
+    });
+    return await handleResponse(response, 'Failed to update ticket status');
+  } catch (error) {
+    console.error('Update ticket status error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to update ticket status. Please try again.');
+    throw new Error(message);
+  }
+};
+
 export default {
   createTicket,
   getAllTickets,
   getTicketById,
   updateTicket,
   deleteTicket,
+  updateTicketStatus,
 };
