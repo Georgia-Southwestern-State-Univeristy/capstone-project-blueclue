@@ -3,7 +3,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import Alert from '../components/Alert'
 import DonutChart from '../components/DonutChart'
 import PieChart from '../components/PieChart'
-import { getAllTickets } from '../services/ticketService'
+import { getAllTickets, updateTicketStatus } from '../services/ticketService'
 
 /**
  * Status badge styling map
@@ -55,6 +55,8 @@ function TechnicianDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [updatingTicketId, setUpdatingTicketId] = useState(null)
+  const [ticketErrors, setTicketErrors] = useState({}) // Per-ticket errors
 
   // Filter state
   const [filters, setFilters] = useState({
@@ -79,6 +81,61 @@ function TechnicianDashboard() {
       console.error('Error fetching tickets:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Handle status change for a ticket
+  const handleStatusChange = async (ticketId, newStatus) => {
+    const ticket = tickets.find(t => t.id === ticketId)
+    if (!ticket || ticket.status === newStatus) return
+
+    const previousStatus = ticket.status
+
+    // Optimistic update - immediately update UI
+    setTickets(prevTickets =>
+      prevTickets.map(t =>
+        t.id === ticketId ? { ...t, status: newStatus } : t
+      )
+    )
+    setUpdatingTicketId(ticketId)
+    
+    // Clear any existing error for this ticket
+    setTicketErrors(prev => {
+      const newErrors = { ...prev }
+      delete newErrors[ticketId]
+      return newErrors
+    })
+
+    try {
+      // Call API to update status
+      await updateTicketStatus(ticketId, newStatus)
+      
+      // Success! Refresh to get latest data
+      await fetchTickets()
+    } catch (err) {
+      // Error occurred - revert to previous status
+      setTickets(prevTickets =>
+        prevTickets.map(t =>
+          t.id === ticketId ? { ...t, status: previousStatus } : t
+        )
+      )
+      
+      // Set ticket-specific error
+      setTicketErrors(prev => ({
+        ...prev,
+        [ticketId]: err.message || 'Failed to update status'
+      }))
+      
+      // Auto-hide error after 5 seconds
+      setTimeout(() => {
+        setTicketErrors(prev => {
+          const newErrors = { ...prev }
+          delete newErrors[ticketId]
+          return newErrors
+        })
+      }, 5000)
+    } finally {
+      setUpdatingTicketId(null)
     }
   }
 
@@ -352,6 +409,13 @@ function TechnicianDashboard() {
                     key={ticket.id}
                     className={`${statusColor.bg} border ${statusColor.border} rounded-lg p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-1 hover:border-blue-400`}
                   >
+                    {/* Ticket-Specific Error Message */}
+                    {ticketErrors[ticket.id] && (
+                      <div className="mb-3 p-2 bg-red-900 bg-opacity-50 border border-red-600 rounded text-xs text-red-200">
+                        <strong>Error:</strong> {ticketErrors[ticket.id]}
+                      </div>
+                    )}
+
                     {/* Ticket Header */}
                     <div className="mb-3">
                       <div className="flex items-start gap-2 mb-2">
@@ -375,11 +439,21 @@ function TechnicianDashboard() {
                       {ticket.description}
                     </p>
 
-                    {/* Status Badge */}
+                    {/* Status Dropdown */}
                     <div className="mb-3">
-                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${statusColor.badge}`}>
-                        {formatStatus(ticket.status)}
-                      </span>
+                      <label className="block text-xs text-gray-400 mb-1">Status:</label>
+                      <select
+                        value={ticket.status}
+                        onChange={(e) => handleStatusChange(ticket.id, e.target.value)}
+                        disabled={updatingTicketId === ticket.id}
+                        className={`w-full px-3 py-2 rounded-md text-sm font-medium cursor-pointer transition-colors ${statusColor.badge} border border-gray-600 hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed`}
+                      >
+                        <option value="open">{updatingTicketId === ticket.id && ticket.status === 'open' ? '⏳ ' : ''}Open</option>
+                        <option value="in_progress">{updatingTicketId === ticket.id && ticket.status === 'in_progress' ? '⏳ ' : ''}In Progress</option>
+                        <option value="waiting_on_customer">{updatingTicketId === ticket.id && ticket.status === 'waiting_on_customer' ? '⏳ ' : ''}Waiting on Customer</option>
+                        <option value="resolved">{updatingTicketId === ticket.id && ticket.status === 'resolved' ? '⏳ ' : ''}Resolved</option>
+                        <option value="closed">{updatingTicketId === ticket.id && ticket.status === 'closed' ? '⏳ ' : ''}Closed</option>
+                      </select>
                     </div>
 
                     {/* AI Classification */}
