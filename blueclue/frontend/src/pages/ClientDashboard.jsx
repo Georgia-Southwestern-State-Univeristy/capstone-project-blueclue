@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import TicketSubmissionModal from '../components/TicketSubmissionModal'
 import Alert from '../components/Alert'
 import LoadingSpinner from '../components/LoadingSpinner'
+import TicketTimeline from '../components/TicketTimeline'
 import { createTicket, getAllTickets } from '../services/ticketService'
 
 function ClientDashboard() {
@@ -23,7 +24,7 @@ function ClientDashboard() {
       const data = await getAllTickets()
       // Filter tickets to show only those from current user
       // TODO: This filtering should be done on the backend once authentication is implemented
-      const userTickets = Array.isArray(data) ? data : (data.tickets || [])
+      const userTickets = Array.isArray(data) ? data : (data.data || data.tickets || [])
       setTickets(userTickets)
     } catch (error) {
       console.error('Failed to fetch tickets:', error)
@@ -122,17 +123,22 @@ function ClientDashboard() {
         </div>
       )}
 
-      {/* Submit Ticket Button */}
-      <div className="mb-8">
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors shadow-sm"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Submit Ticket
-        </button>
+      {/* Submit Ticket Button + Timeline */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8 items-stretch">
+        <div className="flex">
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors shadow-sm w-full lg:w-auto"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Submit Ticket
+          </button>
+        </div>
+        <div className="lg:col-span-3">
+          <TicketTimeline tickets={tickets} />
+        </div>
       </div>
 
       {/* Ticket Submission Modal */}
