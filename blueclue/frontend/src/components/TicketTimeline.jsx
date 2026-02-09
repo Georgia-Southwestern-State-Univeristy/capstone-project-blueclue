@@ -73,8 +73,12 @@ function TicketTimeline({ tickets = [] }) {
         <span className="text-xs text-gray-500">Last 3 days &middot; {total} tickets</span>
       </div>
 
-      {/* Chart area — scrollable on mobile only */}
-      <div ref={scrollRef} className="flex-1 flex flex-col justify-end min-h-0 overflow-x-auto md:overflow-x-visible overflow-y-hidden pt-16">
+      {/* Chart area — scrollable on mobile only, allow tooltips to overflow */}
+      <div
+        ref={scrollRef}
+        className="flex-1 flex flex-col justify-end min-h-0 overflow-x-auto md:overflow-x-visible overflow-y-hidden pt-16 scrollbar-hide md:scrollbar-default overflow-visible"
+        style={{ WebkitOverflowScrolling: 'touch', position: 'relative', zIndex: 1 }}
+      >
         <div className="flex items-end gap-1 h-36 md:min-w-0" style={{ minWidth: '500px' }}>
           {buckets.map((bucket, i) => {
             const heightPct = bucket.count > 0 ? Math.max((bucket.count / maxCount) * 100, 4) : 0
@@ -102,7 +106,7 @@ function TicketTimeline({ tickets = [] }) {
 
                 {/* Tooltip — positioned inside the clipped area */}
                 {isHovered && (
-                  <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full bg-gray-800 border border-gray-600 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10 pointer-events-none">
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full bg-gray-800 border border-gray-600 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-20 pointer-events-none">
                     <p className="font-medium">{formatHour(bucket.hourStart)}</p>
                     <p className="text-gray-400">
                       {bucket.hourStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
