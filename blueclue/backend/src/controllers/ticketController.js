@@ -12,7 +12,7 @@ const VALID_TRANSITIONS = {
     'in_progress': ['waiting_on_customer', 'resolved', 'open'],
     'waiting_on_customer': ['in_progress', 'resolved', 'open'],
     'resolved': ['closed', 'in_progress'], // Allow reopening if needed
-    'closed': ['open', 'in_progress'] // Allow reopening from closed for testing/edge cases
+    'closed': [] // Cannot transition from closed - final state
 };
 
 /**
