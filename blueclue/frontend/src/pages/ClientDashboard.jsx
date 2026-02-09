@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import TicketForm from '../components/TicketForm'
+import TicketSubmissionModal from '../components/TicketSubmissionModal'
 import Alert from '../components/Alert'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { createTicket, getAllTickets } from '../services/ticketService'
@@ -9,6 +9,7 @@ function ClientDashboard() {
   const [alert, setAlert] = useState(null)
   const [tickets, setTickets] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   // Fetch tickets on component mount
   useEffect(() => {
@@ -48,6 +49,9 @@ function ClientDashboard() {
           ? `Ticket #${ticketId} created successfully!`
           : 'Ticket submitted successfully!'
       })
+
+      // Close modal
+      setIsModalOpen(false)
 
       // Refresh ticket list
       await fetchTickets()
@@ -118,11 +122,25 @@ function ClientDashboard() {
         </div>
       )}
 
-      {/* Ticket submission form section */}
-      <div className="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-sm mb-8">
-        <h2 className="text-xl font-semibold text-white mb-4">Submit a New Ticket</h2>
-        <TicketForm onSubmit={handleSubmit} />
+      {/* Submit Ticket Button */}
+      <div className="mb-8">
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors shadow-sm"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Submit Ticket
+        </button>
       </div>
+
+      {/* Ticket Submission Modal */}
+      <TicketSubmissionModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleSubmit}
+      />
 
       {/* Tickets list section */}
       <div className="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-sm">
