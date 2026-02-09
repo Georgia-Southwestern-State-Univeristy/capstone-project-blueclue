@@ -61,7 +61,7 @@ function DonutChart({ segments = defaultSegments, total }) {
                     fill="none"
                     stroke={segment.color}
                     strokeWidth={isHovered ? 15 : 12}
-                    strokeLinecap="round"
+                    strokeLinecap="butt"
                     className="transition-all duration-200 cursor-pointer"
                     style={{
                       filter: isHovered ? `drop-shadow(0 0 6px ${segment.color})` : 'none',
