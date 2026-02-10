@@ -58,6 +58,7 @@ function TechnicianDashboard() {
   const [showFilters, setShowFilters] = useState(false)
   const [updatingTicketId, setUpdatingTicketId] = useState(null)
   const [ticketErrors, setTicketErrors] = useState({}) // Per-ticket errors
+  const [searchQuery, setSearchQuery] = useState('')
 
   // Filter state
   const [filters, setFilters] = useState({
@@ -159,11 +160,33 @@ function TechnicianDashboard() {
       priority: [],
       assignmentStatus: []
     })
+    setSearchQuery('')
   }
 
   // Apply filters to tickets
   const getFilteredTickets = () => {
     return tickets.filter(ticket => {
+      // Search filter
+      if (searchQuery.trim() !== '') {
+        const query = searchQuery.toLowerCase()
+        const searchableFields = [
+          ticket.id?.toString(),
+          ticket.subject,
+          ticket.description,
+          ticket.customer_name,
+          ticket.customer_email,
+          ticket.assigned_to_name,
+          ticket.assigned_to_email,
+          ticket.category,
+          ticket.priority,
+          ticket.status
+        ].filter(Boolean).join(' ').toLowerCase()
+        
+        if (!searchableFields.includes(query)) {
+          return false
+        }
+      }
+
       // Status filter
       if (filters.status.length > 0 && !filters.status.includes(ticket.status)) {
         return false
@@ -223,7 +246,7 @@ function TechnicianDashboard() {
   })
 
   // Check if any filters are active
-  const hasActiveFilters = filters.status.length > 0 || filters.priority.length > 0 || filters.assignmentStatus.length > 0
+  const hasActiveFilters = filters.status.length > 0 || filters.priority.length > 0 || filters.assignmentStatus.length > 0 || searchQuery.trim() !== ''
 
   return (
     <div className="p-4 md:p-8 bg-gray-950 min-h-screen">
@@ -260,8 +283,36 @@ function TechnicianDashboard() {
       {/* Ticket Queue with Filters */}
       <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">
         <div className="p-6 border-b border-gray-700">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-4">
             <h2 className="text-2xl font-bold text-white">Ticket Queue</h2>
+            
+            {/* Search Bar */}
+            <div className="flex-1 max-w-md">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search tickets by ID, subject, customer, etc..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-4 py-2 pl-10 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <svg className="w-5 h-5 text-gray-500 absolute left-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                    title="Clear search"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="flex gap-2">
               <button
                 onClick={() => setShowFilters(!showFilters)}
@@ -273,7 +324,7 @@ function TechnicianDashboard() {
                 {showFilters ? 'Hide' : 'Show'} Filters
                 {hasActiveFilters && (
                   <span className="bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {filters.status.length + filters.priority.length + filters.assignmentStatus.length}
+                    {filters.status.length + filters.priority.length + filters.assignmentStatus.length + (searchQuery.trim() !== '' ? 1 : 0)}
                   </span>
                 )}
               </button>
