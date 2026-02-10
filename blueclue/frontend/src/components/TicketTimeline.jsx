@@ -4,7 +4,7 @@ import { useMemo, useState, useRef, useEffect, useCallback } from 'react'
  * Hourly timeline bar chart showing ticket submissions over the last 3 days.
  * Each bar = 1 hour, rightmost bar = current hour.
  */
-function TicketTimeline({ tickets = [] }) {
+function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false }) {
   const [hoveredIndex, setHoveredIndex] = useState(null)
   const scrollRef = useRef(null)
 
@@ -70,7 +70,21 @@ function TicketTimeline({ tickets = [] }) {
     <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-4 md:p-6 h-full flex flex-col">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base md:text-lg font-semibold text-white">Submission Timeline</h3>
-        <span className="text-xs text-gray-500">Last 3 days &middot; {total} tickets</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500">Last 3 days &middot; {total} tickets</span>
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              title={isRefreshing ? 'Refreshing...' : 'Refresh timeline'}
+              className={`w-8 h-8 flex items-center justify-center rounded-full bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed transition-all ${isRefreshing ? 'animate-spin' : ''}`}
+            >
+              <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Chart area — scrollable on mobile only, allow tooltips to overflow */}

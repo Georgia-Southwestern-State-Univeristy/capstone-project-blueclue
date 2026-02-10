@@ -11,6 +11,7 @@ function ClientDashboard() {
   const [tickets, setTickets] = useState([])
   const [timelineTickets, setTimelineTickets] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isTimelineLoading, setIsTimelineLoading] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   // Fetch tickets on component mount
@@ -41,6 +42,7 @@ function ClientDashboard() {
   // Fetch all tickets for timeline (no filtering)
   const fetchTimelineTickets = async () => {
     try {
+      setIsTimelineLoading(true)
       const data = await getAllTicketsForTimeline()
       const allTickets = Array.isArray(data) ? data : (data.data || data.tickets || [])
       setTimelineTickets(allTickets)
@@ -48,6 +50,8 @@ function ClientDashboard() {
       console.error('Failed to fetch timeline tickets:', error)
       // Don't show error alert for timeline - just use empty array
       setTimelineTickets([])
+    } finally {
+      setIsTimelineLoading(false)
     }
   }
 
@@ -153,7 +157,7 @@ function ClientDashboard() {
 
       {/* Timeline section */}
       <div className="mb-8">
-        <TicketTimeline tickets={timelineTickets} />
+        <TicketTimeline tickets={timelineTickets} onRefresh={fetchTimelineTickets} isRefreshing={isTimelineLoading} />
       </div>
 
       {/* Ticket Submission Modal */}

@@ -271,7 +271,7 @@ function TechnicianDashboard() {
 
       {/* Bar Chart (TicketTimeline) above Pie Charts */}
       <div className="mb-8">
-        <TicketTimeline tickets={tickets} />
+        <TicketTimeline tickets={tickets} onRefresh={fetchTickets} isRefreshing={loading} />
       </div>
 
       {/* Charts */}
