@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Alert from '../components/Alert'
 import DonutChart from '../components/DonutChart'
+import TicketTimeline from '../components/TicketTimeline'
 import PieChart from '../components/PieChart'
 import { getAllTickets, updateTicketStatus } from '../services/ticketService'
 
@@ -244,6 +245,11 @@ function TechnicianDashboard() {
           />
         </div>
       )}
+
+      {/* Bar Chart (TicketTimeline) above Pie Charts */}
+      <div className="mb-8">
+        <TicketTimeline tickets={tickets} />
+      </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
