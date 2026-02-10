@@ -239,6 +239,14 @@ function TechnicianDashboard() {
     { label: 'Critical', count: tickets.filter(t => t.priority === 'critical').length, color: '#ef4444' },
   ]
 
+  // Assignment status data for mini pie chart
+  const assignedCount = tickets.filter(t => t.assigned_to_name && t.assigned_to_name !== 'null').length
+  const unassignedCount = tickets.length - assignedCount
+  const assignmentSegments = [
+    { label: 'Assigned', count: assignedCount, color: '#3b82f6' },
+    { label: 'Unassigned', count: unassignedCount, color: '#6b7280' },
+  ]
+
   // Get filtered and sorted tickets
   const filteredTickets = getFilteredTickets()
   const sortedTickets = [...filteredTickets].sort((a, b) => {
@@ -283,8 +291,64 @@ function TechnicianDashboard() {
       {/* Ticket Queue with Filters */}
       <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">
         <div className="p-6 border-b border-gray-700">
-          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-4">
-            <h2 className="text-2xl font-bold text-white">Ticket Queue</h2>
+          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-4">
+            {/* Title with Mini Pie Chart */}
+            <div className="flex items-center gap-4">
+              <h2 className="text-2xl font-bold text-white">Ticket Queue</h2>
+              
+              {/* Mini Assignment Pie Chart */}
+              <div className="flex items-center gap-2 bg-gray-800 px-3 py-2 rounded-lg border border-gray-600">
+                <svg viewBox="0 0 40 40" className="w-10 h-10">
+                  {tickets.length === 0 ? (
+                    <circle cx="20" cy="20" r="16" fill="#374151" />
+                  ) : (
+                    assignmentSegments.map((segment, i) => {
+                      const total = tickets.length || 1
+                      const percent = (segment.count / total) * 100
+                      if (percent === 0) return null
+                      const offset = assignmentSegments.slice(0, i).reduce(
+                        (sum, s) => sum + (s.count / total) * 100, 0
+                      )
+                      
+                      // Calculate arc path
+                      const startAngle = offset * 3.6
+                      const endAngle = (offset + percent) * 3.6
+                      const startRad = ((startAngle - 90) * Math.PI) / 180
+                      const endRad = ((endAngle - 90) * Math.PI) / 180
+                      const largeArc = percent > 50 ? 1 : 0
+                      const r = 16
+                      const x1 = 20 + r * Math.cos(startRad)
+                      const y1 = 20 + r * Math.sin(startRad)
+                      const x2 = 20 + r * Math.cos(endRad)
+                      const y2 = 20 + r * Math.sin(endRad)
+                      
+                      return (
+                        <path
+                          key={segment.label}
+                          d={percent >= 100 
+                            ? `M 20 4 A 16 16 0 1 1 20 36 A 16 16 0 1 1 20 4 Z`
+                            : `M 20 20 L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`
+                          }
+                          fill={segment.color}
+                        />
+                      )
+                    })
+                  )}
+                  {/* Inner circle for donut effect */}
+                  <circle cx="20" cy="20" r="10" fill="#111827" />
+                </svg>
+                <div className="text-xs">
+                  <div className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                    <span className="text-gray-300">{assignedCount} Assigned</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-gray-500"></span>
+                    <span className="text-gray-300">{unassignedCount} Unassigned</span>
+                  </div>
+                </div>
+              </div>
+            </div>
             
             {/* Search Bar */}
             <div className="flex-1 max-w-md">
