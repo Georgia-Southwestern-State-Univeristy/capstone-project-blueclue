@@ -87,13 +87,26 @@ function ClientDashboard() {
     }
   }
 
+  // Format status text for display
+  const formatStatus = (status) => {
+    if (!status) return 'Unknown'
+    return status
+      .replace(/_/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
+  }
+
   // Get status badge color
   const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
+    const normalizedStatus = status?.toLowerCase().replace(/_/g, ' ')
+    switch (normalizedStatus) {
       case 'open':
         return 'bg-blue-900 text-blue-100'
       case 'in progress':
         return 'bg-yellow-900 text-yellow-100'
+      case 'waiting on customer':
+        return 'bg-purple-900 text-purple-100'
       case 'resolved':
         return 'bg-green-900 text-green-100'
       case 'closed':
@@ -182,7 +195,7 @@ function ClientDashboard() {
                     <td className="py-3 px-4 text-gray-300">{ticket.subject || 'N/A'}</td>
                     <td className="py-3 px-4">
                       <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(ticket.status)}`}>
-                        {ticket.status || 'Unknown'}
+                        {formatStatus(ticket.status)}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-gray-400">{formatDate(ticket.created_at)}</td>
