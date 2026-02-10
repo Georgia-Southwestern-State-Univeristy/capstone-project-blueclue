@@ -344,15 +344,15 @@ function TechnicianDashboard() {
           {/* Filter Panel */}
           {showFilters && (
             <div className="bg-gray-800 p-4 rounded-lg border border-gray-600">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Status Filter */}
                 <div>
-                  <h3 className="font-semibold text-blue-400 mb-3 flex items-center gap-2">
-                    📊 Status
+                  <h3 className="font-semibold text-white mb-2">
+                    Status
                   </h3>
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     {['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed'].map(status => (
-                      <label key={status} className="flex items-center gap-2 cursor-pointer hover:bg-gray-700 p-2 rounded">
+                      <label key={status} className="flex items-center gap-2 cursor-pointer hover:bg-gray-700 px-2 py-1.5 rounded">
                         <input
                           type="checkbox"
                           checked={filters.status.includes(status)}
@@ -367,12 +367,12 @@ function TechnicianDashboard() {
 
                 {/* Priority Filter */}
                 <div>
-                  <h3 className="font-semibold text-blue-400 mb-3 flex items-center gap-2">
-                    ⚡ Priority
+                  <h3 className="font-semibold text-white mb-2">
+                    Priority
                   </h3>
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     {['low', 'medium', 'high', 'critical'].map(priority => (
-                      <label key={priority} className="flex items-center gap-2 cursor-pointer hover:bg-gray-700 p-2 rounded">
+                      <label key={priority} className="flex items-center gap-2 cursor-pointer hover:bg-gray-700 px-2 py-1.5 rounded">
                         <input
                           type="checkbox"
                           checked={filters.priority.includes(priority)}
@@ -387,12 +387,12 @@ function TechnicianDashboard() {
 
                 {/* Assignment Filter */}
                 <div>
-                  <h3 className="font-semibold text-blue-400 mb-3 flex items-center gap-2">
-                    👤 Assignment
+                  <h3 className="font-semibold text-white mb-2">
+                    Assignment
                   </h3>
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     {['assigned', 'unassigned'].map(status => (
-                      <label key={status} className="flex items-center gap-2 cursor-pointer hover:bg-gray-700 p-2 rounded">
+                      <label key={status} className="flex items-center gap-2 cursor-pointer hover:bg-gray-700 px-2 py-1.5 rounded">
                         <input
                           type="checkbox"
                           checked={filters.assignmentStatus.includes(status)}
@@ -409,7 +409,7 @@ function TechnicianDashboard() {
               </div>
 
               {/* Filter Actions */}
-              <div className="mt-4 flex justify-end">
+              <div className="mt-3 flex justify-end">
                 <button
                   onClick={resetFilters}
                   className="px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors text-sm font-medium"
