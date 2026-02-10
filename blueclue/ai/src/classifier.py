@@ -1,36 +1,63 @@
-import spacy
+try:
+    import spacy
+    SPACY_AVAILABLE = True
+except Exception:
+    SPACY_AVAILABLE = False
+    
 from typing import Dict, List, Tuple
 
 class TicketClassifier:
-    def __init__(self):
+    def __init__(self, use_spacy=True):
         """Initialize the keyword-based ticket classifier."""
-        self.nlp = spacy.load("en_core_web_sm")
+        self.use_spacy = use_spacy and SPACY_AVAILABLE
+        if self.use_spacy:
+            try:
+                self.nlp = spacy.load("en_core_web_sm")
+            except:
+                print("Warning: spaCy model not available, using simple preprocessing")
+                self.use_spacy = False
+                self.nlp = None
+        else:
+            self.nlp = None
         
         # Define keyword patterns for categories
         self.category_keywords = {
-            "technical": ["error", "bug", "crash", "not working", "broken", "issue", "problem", 
-                         "fails", "failure", "down", "offline", "timeout", "slow", "performance"],
-            "billing": ["payment", "charge", "invoice", "refund", "subscription", "credit card",
-                       "price", "cost", "billing", "account", "receipt"],
-            "account": ["login", "password", "access", "username", "sign in", "authentication",
-                       "locked out", "reset", "profile", "settings"],
-            "feature_request": ["add", "new feature", "enhancement", "improve", "suggestion",
-                               "would like", "can you", "request", "wish"]
+            "hardware": ["laptop", "computer", "screen", "monitor", "keyboard", "mouse", "printer",
+                        "device", "hardware", "broken", "damaged", "physical", "cable", "port",
+                        "battery", "power", "charger", "display"],
+            "software": ["application", "app", "program", "software", "install", "update", "upgrade",
+                        "microsoft", "office", "windows", "excel", "word", "outlook", "adobe",
+                        "chrome", "browser", "antivirus"],
+            "network": ["wifi", "internet", "connection", "network", "ethernet", "vpn", "router",
+                       "disconnect", "slow internet", "can't connect", "connectivity", "bandwidth",
+                       "dns", "ip address"],
+            "login": ["login", "password", "access", "username", "sign in", "authentication",
+                     "locked out", "reset password", "can't login", "account locked", "credentials",
+                     "email account"],
+            "other": ["question", "policy", "policies", "general", "inquiry", "information",
+                     "help", "guidance", "wondering", "clarification"]
         }
         
         # Define keyword patterns for priority
         self.priority_keywords = {
-            "high": ["urgent", "critical", "emergency", "asap", "immediately", "production"],
-            "medium": ["issue", "problem", "help", "need", "important", "refund", "charge", "payment"],
-            "low": ["question", "how to", "wondering", "feature", "suggestion", "enhance"]
+            "high": ["urgent", "urgently", "critical", "emergency", "asap", "immediately", 
+                    "production", "down", "broken", "can't work", "need help", "important"],
+            "medium": ["issue", "problem", "help", "need", "soon", "can't", "unable", "not working",
+                      "disconnecting", "keeps", "won't"],
+            "low": ["question", "when you get a chance", "wondering", "general", "policy",
+                   "policies", "information", "sometime", "eventually", "curious"]
         }
     
     def preprocess_text(self, text: str) -> str:
         """Normalize and clean the input text."""
-        doc = self.nlp(text.lower())
-        # Remove stopwords and lemmatize
-        tokens = [token.lemma_ for token in doc if not token.is_stop and not token.is_punct]
-        return " ".join(tokens)
+        if self.use_spacy and self.nlp:
+            doc = self.nlp(text.lower())
+            # Remove stopwords and lemmatize
+            tokens = [token.lemma_ for token in doc if not token.is_stop and not token.is_punct]
+            return " ".join(tokens)
+        else:
+            # Simple preprocessing without spacy
+            return text.lower()
     
     def classify_category(self, text: str) -> Tuple[str, float, bool, List[str]]:
         """
@@ -63,7 +90,7 @@ class TicketClassifier:
             return best_category, confidence, False, matched_keywords[best_category]
         
         # Fallback
-        return "general", 0.3, True, []
+        return "other", 0.3, True, []
     
     def classify_priority(self, text: str) -> Tuple[str, List[str]]:
         """
