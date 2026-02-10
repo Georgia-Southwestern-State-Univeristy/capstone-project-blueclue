@@ -262,7 +262,7 @@ function TechnicianDashboard() {
       <div className="mb-8">
         <h1 className="text-4xl font-bold text-white mb-2">Technician Dashboard</h1>
         <p className="text-gray-400">
-          View and manage all support tickets. Ready to filter by assigned technician when authentication is implemented.
+          View and manage all support tickets across the organization.
         </p>
       </div>
 
