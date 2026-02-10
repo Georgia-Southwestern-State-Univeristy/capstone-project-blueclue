@@ -102,17 +102,17 @@ function ClientDashboard() {
     const normalizedStatus = status?.toLowerCase().replace(/_/g, ' ')
     switch (normalizedStatus) {
       case 'open':
-        return 'bg-blue-900 text-blue-100'
+        return 'bg-yellow-900 text-yellow-300'
       case 'in progress':
-        return 'bg-yellow-900 text-yellow-100'
+        return 'bg-blue-900 text-blue-300'
       case 'waiting on customer':
-        return 'bg-purple-900 text-purple-100'
+        return 'bg-purple-900 text-purple-300'
       case 'resolved':
-        return 'bg-green-900 text-green-100'
+        return 'bg-green-900 text-green-300'
       case 'closed':
-        return 'bg-gray-700 text-gray-100'
+        return 'bg-gray-700 text-gray-300'
       default:
-        return 'bg-gray-700 text-gray-100'
+        return 'bg-gray-700 text-gray-300'
     }
   }
 
