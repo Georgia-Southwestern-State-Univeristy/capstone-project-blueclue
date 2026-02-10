@@ -1,175 +1,270 @@
-# BlueClue AI Classification Test Results
+# BlueClue AI Classification Test Results (Enhanced)
 
 **Test Date:** February 10, 2026
-**Total Tests:** 15
+**Total Tests:** 57
 
 ## Overall Metrics
 
-- **Category Accuracy:** 93.3%
-- **Priority Accuracy:** 73.3%
-- **Overall Accuracy:** 83.3%
-- **Average Confidence:** 0.64
-- **Fallback Rate:** 0.0%
+- **Category Accuracy:** 93.0%
+- **Priority Accuracy:** 66.7%
+- **Overall Accuracy:** 79.8%
+- **Average Confidence:** 0.80
+- **Average Category Confidence:** 0.79
+- **Average Priority Confidence:** 0.81
+- **Fallback Rate:** 1.8%
+- **Multi-Category Detection Rate:** 15.8%
 
 ## Performance by Category
 
-| Category | Tests | Correct | Accuracy |
-|----------|-------|---------|----------|
-| Hardware | 4 | 4 | 100.0% |
-| Software | 3 | 3 | 100.0% |
-| Network | 3 | 3 | 100.0% |
-| Login | 3 | 2 | 66.7% |
-| Other | 2 | 2 | 100.0% |
+| Category | Tests | Correct | Category Accuracy | Priority Accuracy |
+|----------|-------|---------|-------------------|-------------------|
+| Hardware | 18 | 15 | 83.3% | 66.7% |
+| Software | 12 | 11 | 91.7% | 58.3% |
+| Network | 12 | 12 | 100.0% | 75.0% |
+| Login | 11 | 11 | 100.0% | 72.7% |
+| Other | 4 | 4 | 100.0% | 50.0% |
 
-## Detailed Results
+## Performance by Subcategory
 
-### Test 1: Hardware - Broken Screen (Urgent) ✅
+| Subcategory | Tests | Correct | Accuracy |
+|-------------|-------|---------|----------|
+| connectivity | 8 | 7 | 87.5% |
+| printer | 5 | 4 | 80.0% |
+| damage | 3 | 3 | 100.0% |
+| display | 3 | 3 | 100.0% |
+| office | 3 | 3 | 100.0% |
+| error | 3 | 3 | 100.0% |
+| authentication | 3 | 3 | 100.0% |
+| password | 3 | 3 | 100.0% |
+| account | 3 | 3 | 100.0% |
+| wireless | 3 | 2 | 66.7% |
+| general | 3 | 2 | 66.7% |
+| vpn | 2 | 2 | 100.0% |
+| os | 2 | 2 | 100.0% |
+| computer | 2 | 2 | 100.0% |
+| peripheral | 1 | 1 | 100.0% |
+| policy | 1 | 1 | 100.0% |
+| inquiry | 1 | 1 | 100.0% |
+| power | 1 | 1 | 100.0% |
+| application | 1 | 1 | 100.0% |
+| browser | 1 | 1 | 100.0% |
+| security | 1 | 1 | 100.0% |
+| performance | 1 | 1 | 100.0% |
+| configuration | 1 | 1 | 100.0% |
+| mfa | 1 | 1 | 100.0% |
+| credentials | 1 | 1 | 100.0% |
 
-**Description:** "My laptop screen is broken and I need help urgently"
+## Failed Tests (21 failures)
 
-- **Category:** Expected `hardware`, Got `hardware` ✅
-- **Priority:** Expected `high`, Got `high` ✅
-- **Confidence:** 1.00
-- **Fallback:** No
-- **Keywords Matched:** laptop, screen, broken
-
-### Test 2: Hardware - Printer Issue ✅
-
-**Description:** "The printer is not working properly"
-
-- **Category:** Expected `hardware`, Got `hardware` ✅
-- **Priority:** Expected `medium`, Got `medium` ✅
-- **Confidence:** 0.33
-- **Fallback:** No
-- **Keywords Matched:** printer
-
-### Test 3: Hardware - Keyboard ✅
+### Hardware - Keyboard
 
 **Description:** "My keyboard keys are stuck"
 
-- **Category:** Expected `hardware`, Got `hardware` ✅
-- **Priority:** Expected `low`, Got `low` ✅
-- **Confidence:** 0.33
-- **Fallback:** No
+- **Category ✅:** Expected `hardware`, Got `hardware`
+- **Priority ❌:** Expected `low`, Got `medium`
+- **Confidence:** 0.36
+- **Subcategory:** peripheral
 - **Keywords Matched:** keyboard
 
-### Test 4: Hardware - Monitor ❌
-
-**Description:** "Monitor display is flickering badly"
-
-- **Category:** Expected `hardware`, Got `hardware` ✅
-- **Priority:** Expected `medium`, Got `low` ❌
-- **Confidence:** 0.67
-- **Fallback:** No
-- **Keywords Matched:** monitor, display
-
-### Test 5: Software - Office Install ❌
-
-**Description:** "Need Microsoft Office installed when you get a chance"
-
-- **Category:** Expected `software`, Got `software` ✅
-- **Priority:** Expected `low`, Got `medium` ❌
-- **Confidence:** 1.00
-- **Fallback:** No
-- **Keywords Matched:** install, microsoft, office
-
-### Test 6: Software - Excel Issue ❌
-
-**Description:** "Can't open Excel files, need help"
-
-- **Category:** Expected `software`, Got `software` ✅
-- **Priority:** Expected `medium`, Got `high` ❌
-- **Confidence:** 0.33
-- **Fallback:** No
-- **Keywords Matched:** excel
-
-### Test 7: Software - App Crash ✅
-
-**Description:** "Application keeps crashing immediately"
-
-- **Category:** Expected `software`, Got `software` ✅
-- **Priority:** Expected `high`, Got `high` ✅
-- **Confidence:** 0.67
-- **Fallback:** No
-- **Keywords Matched:** application, app
-
-### Test 8: Network - WiFi Disconnect ✅
-
-**Description:** "The wifi keeps disconnecting"
-
-- **Category:** Expected `network`, Got `network` ✅
-- **Priority:** Expected `medium`, Got `medium` ✅
-- **Confidence:** 0.67
-- **Fallback:** No
-- **Keywords Matched:** wifi, disconnect
-
-### Test 9: Network - Slow Internet ✅
+### Network - Slow Internet
 
 **Description:** "Internet connection is very slow"
 
-- **Category:** Expected `network`, Got `network` ✅
-- **Priority:** Expected `low`, Got `low` ✅
-- **Confidence:** 0.67
-- **Fallback:** No
+- **Category ✅:** Expected `network`, Got `network`
+- **Priority ❌:** Expected `low`, Got `medium`
+- **Confidence:** 0.60
+- **Subcategory:** connectivity
 - **Keywords Matched:** internet, connection
 
-### Test 10: Network - VPN Emergency ✅
-
-**Description:** "Can't connect to VPN urgently"
-
-- **Category:** Expected `network`, Got `network` ✅
-- **Priority:** Expected `high`, Got `high` ✅
-- **Confidence:** 0.67
-- **Fallback:** No
-- **Keywords Matched:** vpn, can't connect
-
-### Test 11: Login - Email Access ✅
-
-**Description:** "I can't login to my email account"
-
-- **Category:** Expected `login`, Got `login` ✅
-- **Priority:** Expected `medium`, Got `medium` ✅
-- **Confidence:** 1.00
-- **Fallback:** No
-- **Keywords Matched:** login, can't login, email account
-
-### Test 12: Login - Password Reset ❌
-
-**Description:** "Forgot my password, need to reset"
-
-- **Category:** Expected `login`, Got `software` ❌
-- **Priority:** Expected `medium`, Got `medium` ✅
-- **Confidence:** 0.33
-- **Fallback:** No
-- **Keywords Matched:** word
-
-### Test 13: Login - Locked Account ❌
+### Login - Locked Account
 
 **Description:** "Account is locked out, can't access anything"
 
-- **Category:** Expected `login`, Got `login` ✅
-- **Priority:** Expected `high`, Got `medium` ❌
-- **Confidence:** 0.67
-- **Fallback:** No
-- **Keywords Matched:** access, locked out
+- **Category ✅:** Expected `login`, Got `login`
+- **Priority ❌:** Expected `high`, Got `medium`
+- **Confidence:** 0.84
+- **Subcategory:** account
+- **Keywords Matched:** locked out, can't access, access
 
-### Test 14: Other - Policy Question ✅
+### Hardware - Power Issue
 
-**Description:** "General question about company policies"
+**Description:** "Battery not charging, power adapter might be defective"
 
-- **Category:** Expected `other`, Got `other` ✅
-- **Priority:** Expected `low`, Got `low` ✅
+- **Category ✅:** Expected `hardware`, Got `hardware`
+- **Priority ❌:** Expected `high`, Got `medium`
+- **Confidence:** 0.80
+- **Subcategory:** power
+- **Keywords Matched:** battery, power, charging, power adapter, not charging, defective
+
+### Hardware - Wireless Mouse
+
+**Description:** "Mouse keeps disconnecting from wireless receiver"
+
+- **Category ❌:** Expected `hardware`, Got `network`
+- **Priority ❌:** Expected `low`, Got `medium`
 - **Confidence:** 1.00
-- **Fallback:** No
-- **Keywords Matched:** question, policies, general
+- **Subcategory:** connectivity
+- **Keywords Matched:** wireless, disconnect, disconnecting, keeps disconnecting
 
-### Test 15: Other - General Inquiry ✅
+### Software - Excel Crashing
 
-**Description:** "Just wondering about something"
+**Description:** "Excel keeps crashing when opening large files"
 
-- **Category:** Expected `other`, Got `other` ✅
-- **Priority:** Expected `low`, Got `low` ✅
-- **Confidence:** 0.33
-- **Fallback:** No
-- **Keywords Matched:** wondering
+- **Category ✅:** Expected `software`, Got `software`
+- **Priority ❌:** Expected `high`, Got `medium`
+- **Confidence:** 1.00
+- **Subcategory:** error
+- **Keywords Matched:** excel, crash, crashing
+
+### Software - Outlook Frozen
+
+**Description:** "Outlook won't open, says not responding"
+
+- **Category ✅:** Expected `software`, Got `software`
+- **Priority ❌:** Expected `high`, Got `medium`
+- **Confidence:** 1.00
+- **Subcategory:** error
+- **Keywords Matched:** outlook, not responding, won't open
+
+### Software - Browser Performance
+
+**Description:** "Browser running slow, need help optimizing Chrome"
+
+- **Category ✅:** Expected `software`, Got `software`
+- **Priority ❌:** Expected `low`, Got `medium`
+- **Confidence:** 0.99
+- **Subcategory:** browser
+- **Keywords Matched:** chrome, browser, running slow
+
+### Software - Update Failure
+
+**Description:** "Windows update failed, system won't restart properly"
+
+- **Category ✅:** Expected `software`, Got `software`
+- **Priority ❌:** Expected `high`, Got `medium`
+- **Confidence:** 0.92
+- **Subcategory:** os
+- **Keywords Matched:** windows, windows update, update
+
+### Software - Security Software
+
+**Description:** "Antivirus keeps blocking legitimate applications"
+
+- **Category ✅:** Expected `software`, Got `software`
+- **Priority ❌:** Expected `medium`, Got `high`
+- **Confidence:** 0.84
+- **Subcategory:** security
+- **Keywords Matched:** application, app, antivirus, virus
+
+### Network - Bandwidth/Buffering
+
+**Description:** "Internet is buffering constantly, very slow bandwidth"
+
+- **Category ✅:** Expected `network`, Got `network`
+- **Priority ❌:** Expected `low`, Got `medium`
+- **Confidence:** 1.00
+- **Subcategory:** performance
+- **Keywords Matched:** internet, bandwidth, buffering
+
+### Network - Remote Access Down
+
+**Description:** "Remote access not working, can't connect to office network"
+
+- **Category ✅:** Expected `network`, Got `network`
+- **Priority ❌:** Expected `high`, Got `medium`
+- **Confidence:** 1.00
+- **Subcategory:** connectivity
+- **Keywords Matched:** network, can't connect, remote access
+
+### Login - Expired Password Email
+
+**Description:** "Can't login to email account, password expired"
+
+- **Category ✅:** Expected `login`, Got `login`
+- **Priority ❌:** Expected `high`, Got `medium`
+- **Confidence:** 1.00
+- **Subcategory:** authentication
+- **Multi-category detected:** login, software
+- **Keywords Matched:** login, can't login, password, password expired, email account
+
+### Login - MFA Issue
+
+**Description:** "Multi-factor authentication not sending verification code"
+
+- **Category ✅:** Expected `login`, Got `login`
+- **Priority ❌:** Expected `high`, Got `medium`
+- **Confidence:** 0.80
+- **Subcategory:** mfa
+- **Keywords Matched:** authentication, multi-factor, verification code
+
+### Edge - Multi-issue Hardware/Network
+
+**Description:** "Laptop won't connect to wifi and battery is dead"
+
+- **Category ❌:** Expected `hardware`, Got `network`
+- **Priority ❌:** Expected `high`, Got `medium`
+- **Confidence:** 0.90
+- **Subcategory:** wireless
+- **Multi-category detected:** network, hardware
+- **Keywords Matched:** wifi, won't connect
+
+### Edge - Software/Hardware Mix
+
+**Description:** "Printer software won't install on new computer"
+
+- **Category ❌:** Expected `software`, Got `hardware`
+- **Priority ✅:** Expected `medium`, Got `medium`
+- **Confidence:** 0.95
+- **Subcategory:** printer
+- **Multi-category detected:** hardware, software
+- **Keywords Matched:** computer, printer, print
+
+### Edge - Vague Description
+
+**Description:** "Something is wrong but I'm not sure what"
+
+- **Category ✅:** Expected `other`, Got `other`
+- **Priority ❌:** Expected `low`, Got `medium`
+- **Confidence:** 0.38
+- **Subcategory:** general
+
+### Edge - Generic Request
+
+**Description:** "Need help with IT stuff"
+
+- **Category ✅:** Expected `other`, Got `other`
+- **Priority ❌:** Expected `low`, Got `medium`
+- **Confidence:** 0.46
+- **Subcategory:** general
+- **Keywords Matched:** help
+
+### Urgency - Multiple High Priority Keywords
+
+**Description:** "Production server down EMERGENCY critical help needed NOW"
+
+- **Category ❌:** Expected `hardware`, Got `other`
+- **Priority ✅:** Expected `high`, Got `high`
+- **Confidence:** 0.41
+- **Subcategory:** general
+- **Keywords Matched:** help
+
+### Simple - Computer Slow (abbreviation)
+
+**Description:** "comp is slow"
+
+- **Category ✅:** Expected `hardware`, Got `hardware`
+- **Priority ❌:** Expected `low`, Got `medium`
+- **Confidence:** 0.39
+- **Subcategory:** computer
+- **Keywords Matched:** computer
+
+### Simple - Screen Broken
+
+**Description:** "screen broken"
+
+- **Category ✅:** Expected `hardware`, Got `hardware`
+- **Priority ❌:** Expected `medium`, Got `high`
+- **Confidence:** 0.83
+- **Subcategory:** damage
+- **Keywords Matched:** screen, broken
 
