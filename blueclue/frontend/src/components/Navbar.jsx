@@ -34,7 +34,7 @@ function Navbar() {
       <div className="flex items-center justify-between">
         {/* Logo + Desktop Nav */}
         <div className="flex items-center gap-4 md:gap-10">
-          <Link to="/" className="hover:opacity-80 transition-opacity bg-gray-200 rounded-lg p-1 flex-shrink-0">
+          <Link to="/login" className="hover:opacity-80 transition-opacity bg-gray-200 rounded-lg p-1 flex-shrink-0">
             <img src={logo} alt="BlueClue Logo" className="h-10 md:h-16" />
           </Link>
           <div className="hidden md:block h-8 w-px bg-gray-700"></div>
