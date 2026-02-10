@@ -96,7 +96,7 @@ class Ticket {
      * @returns {Promise<Object|null>} Updated ticket or null
      */
     static async update(id, updates) {
-        const allowedFields = ['subject', 'description', 'status', 'priority', 'category', 'assigned_to'];
+        const allowedFields = ['subject', 'description', 'status', 'priority', 'category', 'assigned_to', 'resolved_at'];
         const fields = [];
         const values = [];
         let paramCount = 1;

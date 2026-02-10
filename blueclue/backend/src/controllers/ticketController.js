@@ -3,6 +3,18 @@ import Ticket from '../models/Ticket.js';
 import AIClassification from '../models/AIClassification.js';
 import { classifyTicketWithFallback } from '../services/aiService.js';
 
+// Valid ticket statuses (must match database enum)
+const VALID_STATUSES = ['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed'];
+
+// Valid status transitions (business rules)
+const VALID_TRANSITIONS = {
+    'open': ['in_progress', 'waiting_on_customer'],
+    'in_progress': ['waiting_on_customer', 'resolved', 'open'],
+    'waiting_on_customer': ['in_progress', 'resolved', 'open'],
+    'resolved': ['closed', 'in_progress'], // Allow reopening if needed
+    'closed': [] // Cannot transition from closed - final state
+};
+
 /**
  * Create a new ticket
  * POST /api/tickets
@@ -294,6 +306,104 @@ export const deleteTicket = async (req, res) => {
         res.status(500).json({
             status: 'error',
             message: 'Failed to delete ticket',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Update ticket status
+ * PATCH /api/tickets/:id/status
+ */
+export const updateTicketStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        // Validate ticket ID
+        if (isNaN(id)) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Invalid ticket ID'
+            });
+        }
+
+        // Validate status is provided
+        if (!status) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Status is required'
+            });
+        }
+
+        // Validate status is a valid value
+        if (!VALID_STATUSES.includes(status)) {
+            return res.status(400).json({
+                status: 'error',
+                message: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
+                validStatuses: VALID_STATUSES
+            });
+        }
+
+        // Check if ticket exists
+        const existingTicket = await Ticket.getById(parseInt(id));
+        if (!existingTicket) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Ticket not found'
+            });
+        }
+
+        // Check if status is actually changing
+        if (existingTicket.status === status) {
+            return res.status(400).json({
+                status: 'error',
+                message: `Ticket is already in '${status}' status`
+            });
+        }
+
+        // Validate status transition
+        const currentStatus = existingTicket.status;
+        const allowedTransitions = VALID_TRANSITIONS[currentStatus];
+        
+        if (!allowedTransitions.includes(status)) {
+            return res.status(400).json({
+                status: 'error',
+                message: `Invalid status transition from '${currentStatus}' to '${status}'`,
+                currentStatus: currentStatus,
+                requestedStatus: status,
+                allowedTransitions: allowedTransitions
+            });
+        }
+
+        // Prepare update data
+        const updateData = { status };
+
+        // Handle resolved_at timestamp based on status
+        if (status === 'resolved' || status === 'closed') {
+            // Set resolved_at when moving to resolved/closed
+            updateData.resolved_at = new Date();
+        } else if (existingTicket.status === 'resolved' || existingTicket.status === 'closed') {
+            // Clear resolved_at when moving away from resolved/closed
+            updateData.resolved_at = null;
+        }
+
+        // Update the ticket status
+        const updatedTicket = await Ticket.update(parseInt(id), updateData);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Ticket status updated successfully',
+            data: updatedTicket,
+            previousStatus: existingTicket.status,
+            newStatus: status
+        });
+
+    } catch (error) {
+        console.error('Update ticket status error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to update ticket status',
             error: error.message
         });
     }
