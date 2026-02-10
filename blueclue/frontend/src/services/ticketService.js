@@ -6,6 +6,22 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 const REQUEST_TIMEOUT = 10000;
 
 /**
+ * Get authentication headers
+ */
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('blueclue_token');
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  return headers;
+};
+
+/**
  * Custom error class for API errors
  */
 class ApiError extends Error {
@@ -99,20 +115,22 @@ const handleResponse = async (response, errorMessage) => {
  * @returns {Promise<Object>} The created ticket
  */
 export const createTicket = async (ticketData) => {
+  // Get current user from localStorage
+  const userStr = localStorage.getItem('blueclue_user');
+  const user = userStr ? JSON.parse(userStr) : null;
+  
   // Map frontend fields to backend expected fields
   const payload = {
     subject: ticketData.title,
     description: ticketData.description,
     priority: ticketData.priority,
-    customer_id: 1, // TODO: Replace with actual user ID from authentication
+    customer_id: user?.id || 1, // Use authenticated user ID or fallback to 1
   };
 
   try {
     const response = await fetchWithTimeout(`${API_BASE_URL}/tickets`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify(payload),
     });
 
@@ -133,11 +151,28 @@ export const createTicket = async (ticketData) => {
  */
 export const getAllTickets = async () => {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets`);
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets`, {
+      headers: getAuthHeaders(),
+    });
     return await handleResponse(response, 'Failed to fetch tickets');
   } catch (error) {
     console.error('Get tickets error:', error);
     const message = getUserFriendlyMessage(error, 'Failed to load tickets. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
+ * Get all tickets for timeline (no filtering)
+ * @returns {Promise<Array>} Array of all tickets
+ */
+export const getAllTicketsForTimeline = async () => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/timeline`);
+    return await handleResponse(response, 'Failed to fetch timeline tickets');
+  } catch (error) {
+    console.error('Get timeline tickets error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to load timeline. Please try again.');
     throw new Error(message);
   }
 };
@@ -149,7 +184,9 @@ export const getAllTickets = async () => {
  */
 export const getTicketById = async (id) => {
   try {
-    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${id}`);
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${id}`, {
+      headers: getAuthHeaders(),
+    });
     return await handleResponse(response, 'Failed to fetch ticket');
   } catch (error) {
     console.error('Get ticket error:', error);
@@ -168,9 +205,7 @@ export const updateTicket = async (id, ticketData) => {
   try {
     const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${id}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify(ticketData),
     });
     return await handleResponse(response, 'Failed to update ticket');
@@ -190,6 +225,7 @@ export const deleteTicket = async (id) => {
   try {
     const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${id}`, {
       method: 'DELETE',
+      headers: getAuthHeaders(),
     });
     return await handleResponse(response, 'Failed to delete ticket');
   } catch (error) {
@@ -209,9 +245,7 @@ export const updateTicketStatus = async (id, status) => {
   try {
     const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${id}/status`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ status }),
     });
     return await handleResponse(response, 'Failed to update ticket status');
@@ -225,6 +259,7 @@ export const updateTicketStatus = async (id, status) => {
 export default {
   createTicket,
   getAllTickets,
+  getAllTicketsForTimeline,
   getTicketById,
   updateTicket,
   deleteTicket,

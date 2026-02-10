@@ -3,18 +3,20 @@ import TicketSubmissionModal from '../components/TicketSubmissionModal'
 import Alert from '../components/Alert'
 import LoadingSpinner from '../components/LoadingSpinner'
 import TicketTimeline from '../components/TicketTimeline'
-import { createTicket, getAllTickets } from '../services/ticketService'
+import { createTicket, getAllTickets, getAllTicketsForTimeline } from '../services/ticketService'
 
 function ClientDashboard() {
   // State management
   const [alert, setAlert] = useState(null)
   const [tickets, setTickets] = useState([])
+  const [timelineTickets, setTimelineTickets] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   // Fetch tickets on component mount
   useEffect(() => {
     fetchTickets()
+    fetchTimelineTickets()
   }, [])
 
   // Fetch all tickets from API
@@ -22,8 +24,7 @@ function ClientDashboard() {
     try {
       setIsLoading(true)
       const data = await getAllTickets()
-      // Filter tickets to show only those from current user
-      // TODO: This filtering should be done on the backend once authentication is implemented
+      // Tickets are now filtered by the backend based on user role
       const userTickets = Array.isArray(data) ? data : (data.data || data.tickets || [])
       setTickets(userTickets)
     } catch (error) {
@@ -34,6 +35,19 @@ function ClientDashboard() {
       })
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  // Fetch all tickets for timeline (no filtering)
+  const fetchTimelineTickets = async () => {
+    try {
+      const data = await getAllTicketsForTimeline()
+      const allTickets = Array.isArray(data) ? data : (data.data || data.tickets || [])
+      setTimelineTickets(allTickets)
+    } catch (error) {
+      console.error('Failed to fetch timeline tickets:', error)
+      // Don't show error alert for timeline - just use empty array
+      setTimelineTickets([])
     }
   }
 
@@ -55,6 +69,7 @@ function ClientDashboard() {
 
       // Refresh ticket list
       await fetchTickets()
+      await fetchTimelineTickets()
     } catch (error) {
       console.error('Failed to create ticket:', error)
       setAlert({
@@ -138,7 +153,7 @@ function ClientDashboard() {
 
       {/* Timeline section */}
       <div className="mb-8">
-        <TicketTimeline tickets={tickets} />
+        <TicketTimeline tickets={timelineTickets} />
       </div>
 
       {/* Ticket Submission Modal */}

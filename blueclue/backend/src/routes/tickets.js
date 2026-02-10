@@ -8,15 +8,41 @@ import {
     deleteTicket,
     updateTicketStatus
 } from '../controllers/ticketController.js';
+import { optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
 /**
  * @route   GET /api/tickets
- * @desc    Get all tickets
+ * @desc    Get all tickets (filtered by customer_id for customers/guests)
+ * @access  Public (optionalAuth - filters based on user role)
+ */
+router.get('/', optionalAuth, getAllTickets);
+
+/**
+ * @route   GET /api/tickets/timeline
+ * @desc    Get all tickets for timeline display (no filtering)
  * @access  Public
  */
-router.get('/', getAllTickets);
+router.get('/timeline', async (req, res) => {
+    try {
+        const Ticket = (await import('../models/Ticket.js')).default;
+        const tickets = await Ticket.getAll();
+        
+        res.status(200).json({
+            status: 'success',
+            count: tickets.length,
+            data: tickets
+        });
+    } catch (error) {
+        console.error('Get timeline tickets error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve timeline tickets',
+            error: error.message
+        });
+    }
+});
 
 /**
  * @route   GET /api/tickets/:id
