@@ -4,7 +4,8 @@ import Alert from '../components/Alert'
 import DonutChart from '../components/DonutChart'
 import TicketTimeline from '../components/TicketTimeline'
 import PieChart from '../components/PieChart'
-import { getAllTickets, updateTicketStatus } from '../services/ticketService'
+import { getAllTickets, updateTicketStatus, assignTicket } from '../services/ticketService'
+import { getTechnicians } from '../services/userService'
 
 /**
  * Status badge styling map
@@ -59,6 +60,8 @@ function TechnicianDashboard() {
   const [updatingTicketId, setUpdatingTicketId] = useState(null)
   const [ticketErrors, setTicketErrors] = useState({}) // Per-ticket errors
   const [searchQuery, setSearchQuery] = useState('')
+  const [technicians, setTechnicians] = useState([])
+  const [assigningTicketId, setAssigningTicketId] = useState(null)
 
   // Filter state
   const [filters, setFilters] = useState({
@@ -67,9 +70,10 @@ function TechnicianDashboard() {
     assignmentStatus: [] // 'assigned', 'unassigned'
   })
 
-  // Fetch tickets on component mount
+  // Fetch tickets and technicians on component mount
   useEffect(() => {
     fetchTickets()
+    fetchTechnicians()
   }, [])
 
   const fetchTickets = async () => {
@@ -83,6 +87,59 @@ function TechnicianDashboard() {
       console.error('Error fetching tickets:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchTechnicians = async () => {
+    try {
+      const techList = await getTechnicians()
+      setTechnicians(techList || [])
+    } catch (err) {
+      console.error('Error fetching technicians:', err)
+      // Don't show error to user, just log it
+    }
+  }
+
+  // Handle assignment change for a ticket
+  const handleAssignmentChange = async (ticketId, technicianId) => {
+    const ticket = tickets.find(t => t.id === ticketId)
+    if (!ticket) return
+
+    const previousAssignedTo = ticket.assigned_to
+
+    // Optimistic update
+    setTickets(prevTickets =>
+      prevTickets.map(t =>
+        t.id === ticketId ? { ...t, assigned_to: technicianId ? parseInt(technicianId) : null } : t
+      )
+    )
+    setAssigningTicketId(ticketId)
+
+    try {
+      await assignTicket(ticketId, technicianId ? parseInt(technicianId) : null)
+      await fetchTickets()
+    } catch (err) {
+      // Revert on error
+      setTickets(prevTickets =>
+        prevTickets.map(t =>
+          t.id === ticketId ? { ...t, assigned_to: previousAssignedTo } : t
+        )
+      )
+      
+      setTicketErrors(prev => ({
+        ...prev,
+        [ticketId]: err.message || 'Failed to assign ticket'
+      }))
+
+      setTimeout(() => {
+        setTicketErrors(prev => {
+          const newErrors = { ...prev }
+          delete newErrors[ticketId]
+          return newErrors
+        })
+      }, 5000)
+    } finally {
+      setAssigningTicketId(null)
     }
   }
 
@@ -667,23 +724,31 @@ function TechnicianDashboard() {
                       </p>
                     </div>
 
-                    {/* Assignment Info - Who it's Assigned To */}
+                    {/* Assignment Dropdown - Assign Technician */}
                     <div className="p-2 bg-gray-900 bg-opacity-50 rounded text-xs">
-                      <p className="text-gray-400">
-                        <strong className="text-gray-300">Assigned to:</strong>
-                      </p>
-                      <p className="text-gray-200">
-                        {ticket.assigned_to_name ? (
-                          <>
-                            {ticket.assigned_to_name}
-                            {ticket.assigned_to_email && (
-                              <span className="text-gray-400 block text-xs">{ticket.assigned_to_email}</span>
-                            )}
-                          </>
-                        ) : (
-                          <span className="text-blue-400 font-medium">Unassigned</span>
-                        )}
-                      </p>
+                      <label htmlFor={`assign-${ticket.id}`} className="block text-gray-400 mb-1">
+                        <strong className="text-gray-300">Assign to Technician:</strong>
+                      </label>
+                      <select
+                        id={`assign-${ticket.id}`}
+                        value={ticket.assigned_to || ''}
+                        onChange={(e) => handleAssignmentChange(ticket.id, e.target.value)}
+                        disabled={assigningTicketId === ticket.id || ticket.status === 'closed'}
+                        className="w-full px-2 py-1.5 rounded-md text-sm bg-gray-800 border border-gray-600 text-gray-200 hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <option value="">Unassigned</option>
+                        {technicians.map((tech) => (
+                          <option key={tech.id} value={tech.id}>
+                            {tech.full_name}
+                          </option>
+                        ))}
+                      </select>
+                      {assigningTicketId === ticket.id && (
+                        <p className="text-blue-400 text-[10px] mt-1">Updating...</p>
+                      )}
+                      {ticketErrors[ticket.id] && ticketErrors[ticket.id].includes('assign') && (
+                        <p className="text-red-400 text-[10px] mt-1">{ticketErrors[ticket.id]}</p>
+                      )}
                     </div>
 
                     {/* TODO: When authentication is implemented, add action buttons here */}
