@@ -27,8 +27,8 @@ ON users(force_password_change) WHERE force_password_change = true;
 INSERT INTO users (email, password_hash, first_name, last_name, role, force_password_change, is_active)
 VALUES 
     ('tnewc@blueclue.com', '$2b$10$lmfkmrGkF2XhKJqnfperu.bBG7CK3HpkXJ/KIullkzkNFGxewRATy', 'Thomas', 'Newcomb', 'technician', true, true),
-    ('cmcgo@blueclue.com', '$2b$10$Gqw9ytr7gzq7oTrfCYDuseBDakP2Ni/Yck2BdmpzEZ6Xn/3n1bDba', 'Connor', 'McGough', 'technician', true, true),
-    ('jwill@blueclue.com', '$2b$10$YtimdlARnlSE8MdpEQoZaemIXIWLwQGf5SZOJj7IfZ8wH9h1F8ngu', 'John', 'Williams', 'technician', true, true)
+    ('cmcgo@blueclue.com', '$2b$10$Gqw9ytr7gzq7oTrfCYDuseBDakP2Ni/Yck2BdmpzEZ6Xn/3n1bDba', 'Clayton', 'McGough', 'technician', true, true),
+    ('jwill@blueclue.com', '$2b$10$YtimdlARnlSE8MdpEQoZaemIXIWLwQGf5SZOJj7IfZ8wH9h1F8ngu', 'Jacob', 'Williams', 'technician', true, true)
 ON CONFLICT (email) DO UPDATE SET
     password_hash = EXCLUDED.password_hash,
     force_password_change = EXCLUDED.force_password_change,
