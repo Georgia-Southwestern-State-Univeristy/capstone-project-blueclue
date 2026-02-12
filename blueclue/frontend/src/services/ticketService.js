@@ -256,6 +256,27 @@ export const updateTicketStatus = async (id, status) => {
   }
 };
 
+/**
+ * Assign ticket to a technician
+ * @param {number|string} id - The ticket ID
+ * @param {number|null} technicianId - The technician user ID (null to unassign)
+ * @returns {Promise<Object>} The updated ticket
+ */
+export const assignTicket = async (id, technicianId) => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${id}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ assigned_to: technicianId }),
+    });
+    return await handleResponse(response, 'Failed to assign ticket');
+  } catch (error) {
+    console.error('Assign ticket error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to assign ticket. Please try again.');
+    throw new Error(message);
+  }
+};
+
 export default {
   createTicket,
   getAllTickets,
@@ -264,4 +285,5 @@ export default {
   updateTicket,
   deleteTicket,
   updateTicketStatus,
+  assignTicket,
 };
