@@ -3,18 +3,21 @@ import TicketSubmissionModal from '../components/TicketSubmissionModal'
 import Alert from '../components/Alert'
 import LoadingSpinner from '../components/LoadingSpinner'
 import TicketTimeline from '../components/TicketTimeline'
-import { createTicket, getAllTickets } from '../services/ticketService'
+import { createTicket, getAllTickets, getAllTicketsForTimeline } from '../services/ticketService'
 
 function ClientDashboard() {
   // State management
   const [alert, setAlert] = useState(null)
   const [tickets, setTickets] = useState([])
+  const [timelineTickets, setTimelineTickets] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isTimelineLoading, setIsTimelineLoading] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
   // Fetch tickets on component mount
   useEffect(() => {
     fetchTickets()
+    fetchTimelineTickets()
   }, [])
 
   // Fetch all tickets from API
@@ -22,8 +25,7 @@ function ClientDashboard() {
     try {
       setIsLoading(true)
       const data = await getAllTickets()
-      // Filter tickets to show only those from current user
-      // TODO: This filtering should be done on the backend once authentication is implemented
+      // Tickets are now filtered by the backend based on user role
       const userTickets = Array.isArray(data) ? data : (data.data || data.tickets || [])
       setTickets(userTickets)
     } catch (error) {
@@ -34,6 +36,22 @@ function ClientDashboard() {
       })
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  // Fetch all tickets for timeline (no filtering)
+  const fetchTimelineTickets = async () => {
+    try {
+      setIsTimelineLoading(true)
+      const data = await getAllTicketsForTimeline()
+      const allTickets = Array.isArray(data) ? data : (data.data || data.tickets || [])
+      setTimelineTickets(allTickets)
+    } catch (error) {
+      console.error('Failed to fetch timeline tickets:', error)
+      // Don't show error alert for timeline - just use empty array
+      setTimelineTickets([])
+    } finally {
+      setIsTimelineLoading(false)
     }
   }
 
@@ -55,6 +73,7 @@ function ClientDashboard() {
 
       // Refresh ticket list
       await fetchTickets()
+      await fetchTimelineTickets()
     } catch (error) {
       console.error('Failed to create ticket:', error)
       setAlert({
@@ -87,19 +106,32 @@ function ClientDashboard() {
     }
   }
 
+  // Format status text for display
+  const formatStatus = (status) => {
+    if (!status) return 'Unknown'
+    return status
+      .replace(/_/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
+  }
+
   // Get status badge color
   const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
+    const normalizedStatus = status?.toLowerCase().replace(/_/g, ' ')
+    switch (normalizedStatus) {
       case 'open':
-        return 'bg-blue-900 text-blue-100'
+        return 'bg-yellow-900 text-yellow-300'
       case 'in progress':
-        return 'bg-yellow-900 text-yellow-100'
+        return 'bg-blue-900 text-blue-300'
+      case 'waiting on customer':
+        return 'bg-purple-900 text-purple-300'
       case 'resolved':
-        return 'bg-green-900 text-green-100'
+        return 'bg-green-900 text-green-300'
       case 'closed':
-        return 'bg-gray-700 text-gray-100'
+        return 'bg-gray-700 text-gray-300'
       default:
-        return 'bg-gray-700 text-gray-100'
+        return 'bg-gray-700 text-gray-300'
     }
   }
 
@@ -125,7 +157,7 @@ function ClientDashboard() {
 
       {/* Timeline section */}
       <div className="mb-8">
-        <TicketTimeline tickets={tickets} />
+        <TicketTimeline tickets={timelineTickets} onRefresh={fetchTimelineTickets} isRefreshing={isTimelineLoading} />
       </div>
 
       {/* Ticket Submission Modal */}
@@ -182,7 +214,7 @@ function ClientDashboard() {
                     <td className="py-3 px-4 text-gray-300">{ticket.subject || 'N/A'}</td>
                     <td className="py-3 px-4">
                       <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(ticket.status)}`}>
-                        {ticket.status || 'Unknown'}
+                        {formatStatus(ticket.status)}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-gray-400">{formatDate(ticket.created_at)}</td>

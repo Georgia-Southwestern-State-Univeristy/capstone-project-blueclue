@@ -131,10 +131,21 @@ export const createTicket = async (req, res) => {
 /**
  * Get all tickets
  * GET /api/tickets
+ * For customers/guests: returns only their tickets
+ * For technicians/admins: returns all tickets
  */
 export const getAllTickets = async (req, res) => {
     try {
-        const tickets = await Ticket.getAll();
+        let tickets;
+        
+        // Check if user is authenticated and is a customer or guest
+        if (req.user && (req.user.role === 'customer' || req.user.role === 'guest')) {
+            // Filter tickets by customer_id for customers/guests
+            tickets = await Ticket.getByCustomerId(req.user.id);
+        } else {
+            // Return all tickets for technicians/admins or unauthenticated users
+            tickets = await Ticket.getAll();
+        }
 
         res.status(200).json({
             status: 'success',

@@ -4,8 +4,10 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
 import pool from './config/database.js';
 import ticketRoutes from './routes/tickets.js';
+import authRoutes from './routes/auth.js';
 
 dotenv.config();
 
@@ -17,8 +19,10 @@ app.use(helmet());
 app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
+app.use(cookieParser());
 
 // API Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/tickets', ticketRoutes);
 
 //test route 
