@@ -98,7 +98,8 @@ Write-Host ""
 Write-Host "Connection: postgresql://postgres:PASSWORD@localhost:5432/blueclue" -ForegroundColor White
 Write-Host ""
 Write-Host "Sample Users (Password: BlueClue2026!):" -ForegroundColor Yellow
-Write-Host "  Customer: sarah.johnson@techcorp.com" -ForegroundColor White
+Write-Host "  Customer: mike.chen@startupxyz.io" -ForegroundColor White
+Write-Host "  Customer: emily.rodriguez@freelance.net" -ForegroundColor White
 Write-Host "  Technician: david.park@blueclue.com" -ForegroundColor White
 Write-Host "  Admin: admin@blueclue.com" -ForegroundColor White
 Write-Host ""

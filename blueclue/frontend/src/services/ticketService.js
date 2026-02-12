@@ -119,12 +119,17 @@ export const createTicket = async (ticketData) => {
   const userStr = localStorage.getItem('blueclue_user');
   const user = userStr ? JSON.parse(userStr) : null;
   
+  // Require authenticated user for ticket creation
+  if (!user || !user.id) {
+    throw new Error('You must be logged in to create a ticket');
+  }
+  
   // Map frontend fields to backend expected fields
   const payload = {
     subject: ticketData.title,
     description: ticketData.description,
     priority: ticketData.priority,
-    customer_id: user?.id || 1, // Use authenticated user ID or fallback to 1
+    customer_id: user.id, // Use authenticated user ID
   };
 
   try {

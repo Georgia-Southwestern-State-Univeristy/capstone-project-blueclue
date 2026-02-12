@@ -38,16 +38,35 @@ psql -U postgres -d blueclue -c "SELECT COUNT(*) FROM tickets;"
 ## What You Get
 
 **Tables:**
-- `users` - 6 sample users (3 customers, 2 technicians, 1 admin)
+- `users` - 5 sample users (2 customers, 2 technicians, 1 admin)
 - `tickets` - 10 sample tickets with AI classifications
 - `categories` - 5 ticket categories
 - `ticket_assignments` - Assignment history
 - `ticket_history` - Audit log
 
 **Sample Login (Password: `BlueClue2026!`):**
-- Customer: `sarah.johnson@techcorp.com`
+- Customer: `mike.chen@startupxyz.io`
 - Technician: `david.park@blueclue.com`
 - Admin: `admin@blueclue.com`
+
+## Database Migrations
+
+If you already have the database set up and need to apply updates, run these migration scripts:
+
+### Remove Sara Johnson (DatabaseBugs branch)
+
+**For existing databases only** - removes deprecated test user and fixes ticket attribution:
+
+```powershell
+psql -U postgres -d blueclue -f remove_sara_johnson.sql
+```
+
+**What it does:**
+- Creates a "System/Unknown" user for orphaned tickets
+- Reassigns Sara Johnson's tickets to the System user
+- Removes Sara Johnson user record
+
+**Note:** New database setups automatically exclude Sara Johnson - no migration needed.
 
 ## Backend Configuration
 

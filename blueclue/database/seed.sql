@@ -19,7 +19,6 @@ TRUNCATE TABLE ticket_history, ticket_assignments, tickets, users RESTART IDENTI
 
 INSERT INTO users (email, password_hash, first_name, last_name, role, phone, company, is_active) VALUES
     -- Customers
-    ('sarah.johnson@techcorp.com', '$2b$10$rX8yQKZ5YxJqN7mP6LQ8.OXvFZH9GqWnR4sT2uVxK3lM5nP7oQ9aG', 'Sarah', 'Johnson', 'customer', '+1-555-0101', 'TechCorp Industries', true),
     ('mike.chen@startupxyz.io', '$2b$10$rX8yQKZ5YxJqN7mP6LQ8.OXvFZH9GqWnR4sT2uVxK3lM5nP7oQ9aG', 'Michael', 'Chen', 'customer', '+1-555-0102', 'StartupXYZ', true),
     ('emily.rodriguez@freelance.net', '$2b$10$rX8yQKZ5YxJqN7mP6LQ8.OXvFZH9GqWnR4sT2uVxK3lM5nP7oQ9aG', 'Emily', 'Rodriguez', 'customer', '+1-555-0103', NULL, true),
     
@@ -31,7 +30,6 @@ INSERT INTO users (email, password_hash, first_name, last_name, role, phone, com
     ('admin@blueclue.com', '$2b$10$rX8yQKZ5YxJqN7mP6LQ8.OXvFZH9GqWnR4sT2uVxK3lM5nP7oQ9aG', 'Admin', 'User', 'admin', '+1-555-0300', 'BlueClue Support', true);
 
 -- Update last login times to make data realistic
-UPDATE users SET last_login = CURRENT_TIMESTAMP - INTERVAL '2 hours' WHERE email = 'sarah.johnson@techcorp.com';
 UPDATE users SET last_login = CURRENT_TIMESTAMP - INTERVAL '1 day' WHERE email = 'mike.chen@startupxyz.io';
 UPDATE users SET last_login = CURRENT_TIMESTAMP - INTERVAL '5 hours' WHERE email = 'emily.rodriguez@freelance.net';
 UPDATE users SET last_login = CURRENT_TIMESTAMP - INTERVAL '30 minutes' WHERE email = 'david.park@blueclue.com';
@@ -59,8 +57,8 @@ INSERT INTO tickets (
     created_at,
     first_response_at
 ) VALUES (
-    1, -- Sarah Johnson
-    4, -- David Park (technician)
+    1, -- Mike Chen
+    3, -- David Park (technician)
     'URGENT: Application crashes on startup after latest update',
     'Our production application started crashing immediately after we deployed the latest update this morning. Multiple users are affected and cannot access the system. Error message shows "Runtime Exception: Null Pointer at line 247". This is blocking all our operations. Need immediate assistance!',
     'technical',
@@ -148,7 +146,7 @@ INSERT INTO tickets (
     ai_keywords_matched,
     created_at
 ) VALUES (
-    1, -- Sarah Johnson
+    2, -- Emily Rodriguez
     'Suggestion: Add dark mode to the dashboard',
     'I use the application extensively during evening hours and would really appreciate a dark mode option for the dashboard. Many team members have mentioned this would reduce eye strain. It would be great if this could toggle automatically based on system preferences or allow manual switching. Just a suggestion for future consideration!',
     'feature_request',
@@ -300,8 +298,8 @@ INSERT INTO tickets (
     ai_keywords_matched,
     created_at
 ) VALUES (
-    1, -- Sarah Johnson
-    4, -- David Park
+    1, -- Mike Chen
+    3, -- David Park
     'Unable to update profile information',
     'When I try to update my company information in my profile settings, I get an error message saying "Failed to save changes". All other fields update fine, just the company and phone number fields are not working.',
     'account',
@@ -398,7 +396,7 @@ INSERT INTO tickets (
     ai_keywords_matched,
     created_at
 ) VALUES (
-    1, -- Sarah Johnson
+    2, -- Emily Rodriguez
     'Integration documentation',
     'Looking for docs on webhooks',
     'general',
@@ -482,12 +480,11 @@ BEGIN
     RAISE NOTICE '============================================================================';
     RAISE NOTICE 'BlueClue Database Seed Completed Successfully!';
     RAISE NOTICE '============================================================================';
-    RAISE NOTICE 'Users Created: 6 (3 customers, 2 technicians, 1 admin)';
+    RAISE NOTICE 'Users Created: 5 (2 customers, 2 technicians, 1 admin)';
     RAISE NOTICE 'Tickets Created: 10 (diverse statuses, priorities, and categories)';
     RAISE NOTICE 'Default Password: BlueClue2026!';
     RAISE NOTICE ' ';
     RAISE NOTICE 'Sample User Logins:';
-    RAISE NOTICE '  Customer: sarah.johnson@techcorp.com';
     RAISE NOTICE '  Customer: mike.chen@startupxyz.io';
     RAISE NOTICE '  Customer: emily.rodriguez@freelance.net';
     RAISE NOTICE '  Technician: david.park@blueclue.com';
