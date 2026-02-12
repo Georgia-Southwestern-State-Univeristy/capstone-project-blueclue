@@ -164,6 +164,54 @@ export const getAllTickets = async (req, res) => {
 };
 
 /**
+ * Get tickets assigned to the logged-in technician
+ * GET /api/tickets/assigned/me
+ * For technicians: returns only their assigned tickets
+ * For other roles: returns all tickets
+ */
+export const getMyAssignedTickets = async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                status: 'error',
+                message: 'Authentication required'
+            });
+        }
+
+        let tickets;
+
+        // Check if user is a technician
+        if (req.user.role === 'technician') {
+            // Get only tickets assigned to this technician
+            tickets = await Ticket.getByTechnicianId(req.user.id);
+        } else if (req.user.role === 'admin') {
+            // Admins can see all tickets
+            tickets = await Ticket.getAll();
+        } else {
+            // Other roles cannot access this endpoint
+            return res.status(403).json({
+                status: 'error',
+                message: 'Access denied. Only technicians and admins can view assigned tickets.'
+            });
+        }
+
+        res.status(200).json({
+            status: 'success',
+            count: tickets.length,
+            data: tickets
+        });
+
+    } catch (error) {
+        console.error('Get assigned tickets error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve assigned tickets',
+            error: error.message
+        });
+    }
+};
+
+/**
  * Get a single ticket by ID
  * GET /api/tickets/:id
  */

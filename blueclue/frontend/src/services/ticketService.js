@@ -163,6 +163,23 @@ export const getAllTickets = async () => {
 };
 
 /**
+ * Get tickets assigned to the current technician
+ * @returns {Promise<Array>} Array of tickets assigned to the technician
+ */
+export const getMyAssignedTickets = async () => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/assigned/me`, {
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch assigned tickets');
+  } catch (error) {
+    console.error('Get assigned tickets error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to load assigned tickets. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
  * Get all tickets for timeline (no filtering)
  * @returns {Promise<Array>} Array of all tickets
  */
@@ -260,6 +277,7 @@ export default {
   createTicket,
   getAllTickets,
   getAllTicketsForTimeline,
+  getMyAssignedTickets,
   getTicketById,
   updateTicket,
   deleteTicket,
