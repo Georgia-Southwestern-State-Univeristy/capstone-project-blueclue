@@ -54,9 +54,17 @@ export const createTicket = async (req, res) => {
             priority: priority || 'low'
         });
 
-        // Use AI classification if available, otherwise use provided or default values
+        // Store user-selected priority (if provided)
+        const userPriority = priority || null;
+        
+        // Store AI-predicted priority (if AI was successful)
+        const aiPriority = aiResult.aiClassified ? aiResult.priority : null;
+
+        // Use AI classification for category if not provided by user
         const finalCategory = category || aiResult.category;
-        const finalPriority = priority || aiResult.priority;
+        
+        // Final priority: user selection takes precedence, then AI, then default
+        const finalPriority = userPriority || aiPriority || 'low';
 
         // Create ticket with AI classification metadata
         const ticket = await Ticket.create({
@@ -64,6 +72,8 @@ export const createTicket = async (req, res) => {
             description: description.trim(),
             customer_id,
             priority: finalPriority,
+            user_priority: userPriority,
+            ai_priority: aiPriority,
             category: finalCategory,
             ai_classified: aiResult.aiClassified,
             ai_confidence: aiResult.confidence,
@@ -99,7 +109,9 @@ export const createTicket = async (req, res) => {
                 confidence: aiResult.confidence,
                 fallback_used: aiResult.fallbackUsed,
                 category: finalCategory,
-                priority: finalPriority
+                user_priority: userPriority,
+                ai_priority: aiPriority,
+                final_priority: finalPriority
             }
         };
 
