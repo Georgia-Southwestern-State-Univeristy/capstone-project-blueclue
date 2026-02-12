@@ -8,6 +8,7 @@ import cookieParser from 'cookie-parser';
 import pool from './config/database.js';
 import ticketRoutes from './routes/tickets.js';
 import authRoutes from './routes/auth.js';
+import userRoutes from './routes/users.js';
 
 dotenv.config();
 
@@ -24,6 +25,7 @@ app.use(cookieParser());
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/tickets', ticketRoutes);
+app.use('/api/users', userRoutes);
 
 //test route 
 app.get('/', (req, res) => {
