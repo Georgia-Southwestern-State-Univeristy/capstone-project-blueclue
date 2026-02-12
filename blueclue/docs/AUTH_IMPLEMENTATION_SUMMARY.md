@@ -100,8 +100,8 @@ Full-featured login and account management system with role-based access control
 - Created `refresh_tokens` table for token management
 - Inserted 3 hardcoded technician accounts:
   - **tnewc** (Thomas Newcomb) - password: admin123
-  - **cmcgo** (Connor McGough) - password: admin123
-  - **jwill** (John Williams) - password: admin123
+  - **cmcgo** (Clayton McGough) - password: admin123
+  - **jwill** (Jacob Williams) - password: admin123
 - Created cleanup functions for expired sessions
 - All passwords encrypted with bcrypt
 
