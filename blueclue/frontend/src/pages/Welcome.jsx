@@ -1,14 +1,9 @@
 import { Link } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { getUser } from '../services/authService'
 
 function Welcome() {
-  const [user, setUser] = useState(null)
-
-  useEffect(() => {
-    const currentUser = getUser()
-    setUser(currentUser)
-  }, [])
+  const [user] = useState(() => getUser())
 
   if (!user) {
     return null
