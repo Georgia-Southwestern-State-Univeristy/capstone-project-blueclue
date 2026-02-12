@@ -49,6 +49,25 @@ psql -U postgres -d blueclue -c "SELECT COUNT(*) FROM tickets;"
 - Technician: `david.park@blueclue.com`
 - Admin: `admin@blueclue.com`
 
+## Database Migrations
+
+If you already have the database set up and need to apply updates, run these migration scripts:
+
+### Remove Sara Johnson (DatabaseBugs branch)
+
+**For existing databases only** - removes deprecated test user and fixes ticket attribution:
+
+```powershell
+psql -U postgres -d blueclue -f remove_sara_johnson.sql
+```
+
+**What it does:**
+- Creates a "System/Unknown" user for orphaned tickets
+- Reassigns Sara Johnson's tickets to the System user
+- Removes Sara Johnson user record
+
+**Note:** New database setups automatically exclude Sara Johnson - no migration needed.
+
 ## Backend Configuration
 
 ### 1. Install Dependencies
