@@ -4,6 +4,7 @@ import Register from './pages/Register'
 import ChangePassword from './pages/ChangePassword'
 import ClientDashboard from './pages/ClientDashboard'
 import TechnicianDashboard from './pages/TechnicianDashboard'
+import MyAssignedTickets from './pages/MyAssignedTickets'
 import Navbar from './components/Navbar'
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
         <Route path="/change-password" element={<ChangePassword />} />
         <Route path="/client-dashboard" element={<ClientDashboard />} />
         <Route path="/technician" element={<TechnicianDashboard />} />
+        <Route path="/my-tickets" element={<MyAssignedTickets />} />
       </Routes>
     </BrowserRouter>
   )

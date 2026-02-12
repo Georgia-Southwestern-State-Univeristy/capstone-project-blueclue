@@ -47,9 +47,14 @@ function Navbar() {
                   </Link>
                 )}
                 {user?.role === 'technician' && (
-                  <Link to="/technician" className="text-gray-300 hover:text-white transition-colors">
-                    Technician Dashboard
-                  </Link>
+                  <>
+                    <Link to="/technician" className="text-gray-300 hover:text-white transition-colors">
+                      All Tickets
+                    </Link>
+                    <Link to="/my-tickets" className="text-gray-300 hover:text-white transition-colors">
+                      My Tickets
+                    </Link>
+                  </>
                 )}
               </>
             )}
@@ -152,13 +157,22 @@ function Navbar() {
             </Link>
           )}
           {user?.role === 'technician' && (
-            <Link
-              to="/technician"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
-            >
-              Technician Dashboard
-            </Link>
+            <>
+              <Link
+                to="/technician"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+              >
+                All Tickets
+              </Link>
+              <Link
+                to="/my-tickets"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+              >
+                My Tickets
+              </Link>
+            </>
           )}
           
           {!user?.isGuest && (

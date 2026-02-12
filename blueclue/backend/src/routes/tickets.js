@@ -3,12 +3,13 @@ import express from 'express';
 import {
     createTicket,
     getAllTickets,
+    getMyAssignedTickets,
     getTicketById,
     updateTicket,
     deleteTicket,
     updateTicketStatus
 } from '../controllers/ticketController.js';
-import { optionalAuth } from '../middleware/auth.js';
+import { optionalAuth, authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -18,6 +19,13 @@ const router = express.Router();
  * @access  Public (optionalAuth - filters based on user role)
  */
 router.get('/', optionalAuth, getAllTickets);
+
+/**
+ * @route   GET /api/tickets/assigned/me
+ * @desc    Get tickets assigned to the logged-in technician
+ * @access  Private (technician/admin only)
+ */
+router.get('/assigned/me', authenticateToken, getMyAssignedTickets);
 
 /**
  * @route   GET /api/tickets/timeline

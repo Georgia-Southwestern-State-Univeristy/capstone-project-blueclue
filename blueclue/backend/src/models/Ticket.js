@@ -93,6 +93,30 @@ class Ticket {
     }
 
     /**
+     * Get tickets assigned to a specific technician
+     * @param {number} technicianId - Technician ID
+     * @returns {Promise<Array>} Array of tickets assigned to the technician
+     */
+    static async getByTechnicianId(technicianId) {
+        const query = `
+            SELECT 
+                t.*,
+                CONCAT(customer.first_name, ' ', customer.last_name) as customer_name,
+                customer.email as customer_email,
+                CONCAT(assigned.first_name, ' ', assigned.last_name) as assigned_to_name,
+                assigned.email as assigned_to_email
+            FROM tickets t
+            LEFT JOIN users customer ON t.customer_id = customer.id
+            LEFT JOIN users assigned ON t.assigned_to = assigned.id
+            WHERE t.assigned_to = $1
+            ORDER BY t.created_at DESC
+        `;
+        
+        const result = await pool.query(query, [technicianId]);
+        return result.rows;
+    }
+
+    /**
      * Get a single ticket by ID with all related information
      * @param {number} id - Ticket ID
      * @returns {Promise<Object|null>} Ticket object or null
