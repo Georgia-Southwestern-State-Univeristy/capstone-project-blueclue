@@ -94,7 +94,9 @@ CREATE TABLE tickets (
     
     -- Classification (from AI or manual)
     category ticket_category NOT NULL DEFAULT 'general',
-    priority ticket_priority NOT NULL DEFAULT 'low',
+    priority ticket_priority NOT NULL DEFAULT 'low', -- Final/active priority
+    user_priority ticket_priority, -- Priority selected by user
+    ai_priority ticket_priority, -- Priority predicted by AI based on content
     status ticket_status NOT NULL DEFAULT 'open',
     
     -- AI classification metadata
@@ -132,6 +134,8 @@ CREATE INDEX idx_tickets_customer ON tickets(customer_id);
 CREATE INDEX idx_tickets_assigned_to ON tickets(assigned_to);
 CREATE INDEX idx_tickets_status ON tickets(status);
 CREATE INDEX idx_tickets_priority ON tickets(priority);
+CREATE INDEX idx_tickets_user_priority ON tickets(user_priority) WHERE user_priority IS NOT NULL;
+CREATE INDEX idx_tickets_ai_priority ON tickets(ai_priority) WHERE ai_priority IS NOT NULL;
 CREATE INDEX idx_tickets_category ON tickets(category);
 CREATE INDEX idx_tickets_created_at ON tickets(created_at DESC);
 CREATE INDEX idx_tickets_number ON tickets(ticket_number);

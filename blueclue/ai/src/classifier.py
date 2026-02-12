@@ -596,21 +596,17 @@ class TicketClassifier:
         
         return score
     
-    def classify_priority(self, text: str, category: str = None, user_priority: str = None) -> Tuple[str, List[str], float]:
+    def classify_priority(self, text: str, category: str = None) -> Tuple[str, List[str], float]:
         """
         Classify ticket priority using weighted keywords and sentiment analysis.
         
         Args:
             text: Ticket description
             category: Detected category (can influence priority)
-            user_priority: User-selected priority ("high", "medium", "low") - takes precedence
             
         Returns:
             Tuple of (priority, keywords_matched, confidence)
         """
-        # If user explicitly selected priority, use it with high confidence
-        if user_priority and user_priority.lower() in ["high", "medium", "low"]:
-            return user_priority.lower(), ["user_selected"], 1.0
         original_lower = text.lower()
         
         priority_scores = {
@@ -665,35 +661,29 @@ class TicketClassifier:
         
         return best_priority, matched_keywords[best_priority], confidence
     
-    def classify(self, ticket_text: str, user_priority: str = None) -> Dict:
+    def classify(self, ticket_text: str) -> Dict:
         """
         Classify a ticket's category and priority with enhanced features.
         
         Args:
             ticket_text: The ticket description text
-            user_priority: Optional user-selected priority ("high", "medium", "low")
-                          If provided, this takes precedence over AI classification
             
         Returns:
             Dictionary with classification results including:
             - category: Primary category
-            - priority: Priority level (user-selected or AI-predicted)
+            - priority: AI-predicted priority level
             - confidence: Overall confidence score
             - subcategory: Specific subcategory within main category
             - all_categories: List of all matching categories with scores
             - keywords_matched: Keywords that triggered the classification
             - fallback_used: Whether fallback classification was used
-            - priority_source: "user" or "ai" indicating priority source
         """
         # Classify category with multi-category support
         category, cat_confidence, fallback_used, cat_keywords, subcategory, all_categories = \
             self.classify_category(ticket_text)
         
-        # Classify priority with category context and optional user input
-        priority, pri_keywords, pri_confidence = self.classify_priority(ticket_text, category, user_priority)
-        
-        # Determine priority source
-        priority_source = "user" if user_priority else "ai"
+        # Classify priority with category context based on content only
+        priority, pri_keywords, pri_confidence = self.classify_priority(ticket_text, category)
         
         # Calculate overall confidence (weighted average)
         overall_confidence = (cat_confidence * 0.6 + pri_confidence * 0.4)
@@ -712,7 +702,6 @@ class TicketClassifier:
             "fallback_used": fallback_used,
             "is_multi_category": is_multi_category,
             "all_categories": all_categories[:3],  # Return top 3 categories
-            "priority_source": priority_source,  # "user" or "ai"
             "keywords_matched": {
                 "category": cat_keywords,
                 "priority": pri_keywords
