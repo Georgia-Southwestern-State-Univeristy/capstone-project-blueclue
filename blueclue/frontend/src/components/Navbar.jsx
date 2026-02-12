@@ -29,14 +29,22 @@ function Navbar() {
     setDropdownOpen(false)
   }
 
+  const handleLogoClick = () => {
+    if (authenticated) {
+      navigate('/welcome')
+    } else {
+      navigate('/login')
+    }
+  }
+
   return (
     <nav className="bg-gray-900 border-b border-gray-700 text-white px-4 md:px-6 py-3 md:py-4">
       <div className="flex items-center justify-between">
         {/* Logo + Desktop Nav */}
         <div className="flex items-center gap-4 md:gap-10">
-          <Link to="/login" className="hover:opacity-80 transition-opacity bg-gray-200 rounded-lg p-1 flex-shrink-0">
+          <button onClick={handleLogoClick} className="hover:opacity-80 transition-opacity bg-gray-200 rounded-lg p-1 flex-shrink-0">
             <img src={logo} alt="BlueClue Logo" className="h-10 md:h-16" />
-          </Link>
+          </button>
           <div className="hidden md:block h-8 w-px bg-gray-700"></div>
           <div className="hidden md:flex items-center gap-8">
             {authenticated && (
