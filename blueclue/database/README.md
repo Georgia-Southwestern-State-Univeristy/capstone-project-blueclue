@@ -38,14 +38,14 @@ psql -U postgres -d blueclue -c "SELECT COUNT(*) FROM tickets;"
 ## What You Get
 
 **Tables:**
-- `users` - 6 sample users (3 customers, 2 technicians, 1 admin)
+- `users` - 5 sample users (2 customers, 2 technicians, 1 admin)
 - `tickets` - 10 sample tickets with AI classifications
 - `categories` - 5 ticket categories
 - `ticket_assignments` - Assignment history
 - `ticket_history` - Audit log
 
 **Sample Login (Password: `BlueClue2026!`):**
-- Customer: `sarah.johnson@techcorp.com`
+- Customer: `mike.chen@startupxyz.io`
 - Technician: `david.park@blueclue.com`
 - Admin: `admin@blueclue.com`
 
