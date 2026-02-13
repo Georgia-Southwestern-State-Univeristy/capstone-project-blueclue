@@ -91,13 +91,6 @@ function MyAssignedTickets() {
     if (!ticket || ticket.status === newStatus) return
 
     const previousStatus = ticket.status
-
-    // Optimistic update - immediately update UI
-    setTickets(prevTickets =>
-      prevTickets.map(t =>
-        t.id === ticketId ? { ...t, status: newStatus } : t
-      )
-    )
     setUpdatingTicketId(ticketId)
     
     // Clear any existing error for this ticket
@@ -109,12 +102,16 @@ function MyAssignedTickets() {
 
     try {
       // Call API to update status
-      await updateTicketStatus(ticketId, newStatus)
+      const response = await updateTicketStatus(ticketId, newStatus)
       
-      // Success! Refresh to get latest data
-      await fetchTickets()
+      // Update just this ticket with the response data
+      setTickets(prevTickets =>
+        prevTickets.map(t =>
+          t.id === ticketId ? { ...t, ...response.data } : t
+        )
+      )
     } catch (err) {
-      // Error occurred - revert to previous status
+      // Error occurred - show error message
       setTickets(prevTickets =>
         prevTickets.map(t =>
           t.id === ticketId ? { ...t, status: previousStatus } : t
