@@ -65,9 +65,7 @@ Write-Host ""
 
 Write-Host "Enter PostgreSQL 'postgres' user password:" -ForegroundColor Yellow
 $securePassword = Read-Host -AsSecureString
-$env:PGPASSWORD = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
-    [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
-)
+$env:PGPASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword))
 
 Write-Host ""
 
@@ -76,7 +74,7 @@ Write-Host "====================================================================
 Write-Host "Step 1: Dropping existing database (if exists)..." -ForegroundColor Yellow
 Write-Host "============================================================================" -ForegroundColor Cyan
 
-$dropResult = psql -U postgres -c "DROP DATABASE IF EXISTS blueclue;" 2>&1
+$null = psql -U postgres -c "DROP DATABASE IF EXISTS blueclue;" 2>&1
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Existing database dropped successfully" -ForegroundColor Green
@@ -94,10 +92,11 @@ Write-Host "====================================================================
 $createResult = psql -U postgres -c "CREATE DATABASE blueclue;" 2>&1
 
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "Database 'blueclue' created successfully" -ForegroundColor Green
+    Write-Host "Database created successfully" -ForegroundColor Green
 } else {
     Write-Host "ERROR: Failed to create database" -ForegroundColor Red
     Write-Host $createResult -ForegroundColor Red
+    Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
     exit 1
 }
 
@@ -109,12 +108,13 @@ Write-Host "Step 3: Creating database schema..." -ForegroundColor Yellow
 Write-Host "============================================================================" -ForegroundColor Cyan
 Write-Host "Creating tables, ENUMs, indexes, triggers, and views..." -ForegroundColor White
 
-psql -U postgres -d blueclue -f schema.sql -q
+$null = psql -U postgres -d blueclue -f schema.sql -q 2>&1
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Schema created successfully" -ForegroundColor Green
 } else {
     Write-Host "ERROR: Failed to create schema" -ForegroundColor Red
+    Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
     exit 1
 }
 
@@ -126,7 +126,7 @@ Write-Host "Step 4: Setting up authentication system..." -ForegroundColor Yellow
 Write-Host "============================================================================" -ForegroundColor Cyan
 Write-Host "Creating guest sessions table and technician accounts..." -ForegroundColor White
 
-psql -U postgres -d blueclue -f auth_setup.sql -q
+$null = psql -U postgres -d blueclue -f auth_setup.sql 2>&1
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Authentication system configured successfully" -ForegroundColor Green
@@ -138,6 +138,7 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "  Password: admin123 (must change on first login)" -ForegroundColor Yellow
 } else {
     Write-Host "ERROR: Failed to setup authentication" -ForegroundColor Red
+    Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
     exit 1
 }
 
@@ -151,7 +152,7 @@ if (-not $SkipSeed) {
     Write-Host "Creating sample customers and admin user..." -ForegroundColor White
     Write-Host "(No tickets will be created - submit via app to test AI classifier)" -ForegroundColor Yellow
 
-    psql -U postgres -d blueclue -f seed.sql
+    $null = psql -U postgres -d blueclue -f seed.sql -q 2>&1
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host ""
@@ -173,21 +174,20 @@ Write-Host "====================================================================
 Write-Host "Verifying setup..." -ForegroundColor Yellow
 Write-Host "============================================================================" -ForegroundColor Cyan
 
-$counts = psql -U postgres -d blueclue -t -A -c "
-    SELECT COUNT(*) FROM users WHERE role = 'technician';
-    SELECT COUNT(*) FROM users WHERE role = 'customer';
-    SELECT COUNT(*) FROM users WHERE role = 'admin';
-    SELECT COUNT(*) FROM categories;
-    SELECT COUNT(*) FROM tickets;
-"
+$techCount = (psql -U postgres -d blueclue -t -A -c "SELECT COUNT(*) FROM users WHERE role = 'technician';" 2>&1).Trim()
+$custCount = (psql -U postgres -d blueclue -t -A -c "SELECT COUNT(*) FROM users WHERE role = 'customer';" 2>&1).Trim()
+$adminCount = (psql -U postgres -d blueclue -t -A -c "SELECT COUNT(*) FROM users WHERE role = 'admin';" 2>&1).Trim()
+$catCount = (psql -U postgres -d blueclue -t -A -c "SELECT COUNT(*) FROM categories;" 2>&1).Trim()
+$ticketCount = (psql -U postgres -d blueclue -t -A -c "SELECT COUNT(*) FROM tickets;" 2>&1).Trim()
 
-if ($counts) {
-    $lines = $counts -split "`n"
-    Write-Host "  Technicians: $($lines[0].Trim())" -ForegroundColor White
-    Write-Host "  Customers: $($lines[1].Trim())" -ForegroundColor White
-    Write-Host "  Admins: $($lines[2].Trim())" -ForegroundColor White
-    Write-Host "  Categories: $($lines[3].Trim())" -ForegroundColor White
-    Write-Host "  Tickets: $($lines[4].Trim())" -ForegroundColor White
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "  Technicians: $techCount" -ForegroundColor White
+    Write-Host "  Customers: $custCount" -ForegroundColor White
+    Write-Host "  Admins: $adminCount" -ForegroundColor White
+    Write-Host "  Categories: $catCount" -ForegroundColor White
+    Write-Host "  Tickets: $ticketCount" -ForegroundColor White
+} else {
+    Write-Host "  WARNING: Could not verify counts" -ForegroundColor Yellow
 }
 
 Write-Host ""
@@ -215,11 +215,14 @@ if (-not $SkipSeed) {
 }
 
 Write-Host "Next Steps:" -ForegroundColor Yellow
-Write-Host "1. Start the backend server: cd blueclue/backend && npm run dev" -ForegroundColor White
-Write-Host "2. Start the frontend: cd blueclue/frontend && npm run dev" -ForegroundColor White
-Write-Host "3. Submit tickets via the app to test AI classification!" -ForegroundColor White
+Write-Host "1. Start backend: cd blueclue\backend; npm run dev" -ForegroundColor White
+Write-Host "2. Start frontend: cd blueclue\frontend; npm run dev" -ForegroundColor White
+Write-Host "3. Submit tickets via the app to test AI classification" -ForegroundColor White
 Write-Host ""
 Write-Host "Guest Cleanup:" -ForegroundColor Yellow
-Write-Host "  Run: cd blueclue/backend && npm run cleanup:guests:dry-run" -ForegroundColor White
-Write-Host "  See: blueclue/database/GUEST_CLEANUP_GUIDE.md" -ForegroundColor White
+Write-Host "  Dry run: cd blueclue\backend; npm run cleanup:guests:dry-run" -ForegroundColor White
+Write-Host "  Guide: blueclue\database\GUEST_CLEANUP_GUIDE.md" -ForegroundColor White
 Write-Host ""
+
+# Clean up password from environment
+Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
