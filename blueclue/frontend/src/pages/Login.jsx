@@ -62,14 +62,8 @@ function Login() {
         return
       }
 
-      // Redirect based on role
-      if (response.user?.role === 'technician') {
-        navigate('/technician')
-      } else if (response.user?.role === 'customer' || response.user?.role === 'guest') {
-        navigate('/client-dashboard')
-      } else {
-        navigate('/')
-      }
+      // Redirect all users to welcome page after login
+      navigate('/welcome')
 
     } catch (err) {
       setError(err.message || 'Login failed. Please try again.')
