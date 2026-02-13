@@ -340,6 +340,13 @@ export const updateTicket = async (req, res) => {
         if (updates.subject) updates.subject = updates.subject.trim();
         if (updates.description) updates.description = updates.description.trim();
 
+        // Automatically set resolved_at when status changes to resolved or closed
+        if (updates.status === 'resolved' || updates.status === 'closed') {
+            if (!updates.resolved_at) {
+                updates.resolved_at = new Date();
+            }
+        }
+
         const ticket = await Ticket.update(parseInt(id), updates);
 
         if (!ticket) {
