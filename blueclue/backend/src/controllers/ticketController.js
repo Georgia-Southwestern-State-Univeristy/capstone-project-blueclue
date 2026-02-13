@@ -151,9 +151,12 @@ export const getAllTickets = async (req, res) => {
         let tickets;
         
         // Check if user is authenticated and is a customer or guest
-        if (req.user && (req.user.role === 'customer' || req.user.role === 'guest')) {
-            // Filter tickets by customer_id for customers/guests
+        if (req.user && req.user.role === 'customer') {
+            // Filter tickets by customer_id for customers
             tickets = await Ticket.getByCustomerId(req.user.id);
+        } else if (req.user && req.user.role === 'guest') {
+            // Filter tickets by email for guests (they don't have customer_id)
+            tickets = await Ticket.getByEmail(req.user.email);
         } else {
             // Return all tickets for technicians/admins or unauthenticated users
             tickets = await Ticket.getAll();
