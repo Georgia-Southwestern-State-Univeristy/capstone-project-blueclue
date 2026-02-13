@@ -185,7 +185,7 @@ function ClientDashboard() {
                 ⚠️ <strong>Important:</strong> Closing this page will end your session. You will receive ticket updates via email.
               </p>
               <p className="text-blue-400 text-xs mt-1">
-                📧 Guest users have read-only access and cannot create new tickets.
+                📧 You can submit new tickets, but cannot modify existing ones. Guest sessions are temporary.
               </p>
             </div>
           </div>
@@ -220,20 +220,18 @@ function ClientDashboard() {
       {/* Tickets list section */}
       <div className="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-sm">
 
-        {/* Submit Ticket Button at top of Your Tickets - Only for non-guest users */}
-        {!isGuest && (
-          <div className="flex justify-end mb-4">
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors shadow-sm"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Submit Ticket
-            </button>
-          </div>
-        )}
+        {/* Submit Ticket Button at top of Your Tickets */}
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors shadow-sm"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Submit Ticket
+          </button>
+        </div>
         <h2 className="text-xl font-semibold text-white mb-4">Your Tickets</h2>
 
         {/* Loading state */}

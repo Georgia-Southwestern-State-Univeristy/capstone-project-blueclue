@@ -69,10 +69,11 @@ useEffect(() => {
 - Warns about session closure
 - Indicates read-only access
 
-#### Restricted Guest Access
-- **Hidden Submit Ticket button** for guests
-- Updated page description text
-- Modal doesn't open for guest users
+#### Guest Access Controls
+- Guests CAN submit new tickets via the Submit Ticket button
+- Guests CANNOT modify existing tickets (no edit/delete actions)
+- Session ends when page is closed
+- All ticket submissions associated with guest email
 
 ### 2. Login Page (Already Implemented)
 - Three login types: Customer, Technician, Guest
@@ -99,10 +100,11 @@ useEffect(() => {
 - Warning message includes their email address
 - Native browser confirmation dialog
 
-### ✅ Read-Only Access
-- Submit Ticket button hidden for guests
-- Can view ticket status, history, timeline
-- Cannot create, edit, or delete tickets
+### ✅ Limited Write Access
+- Guests CAN submit new tickets
+- Guests CAN view ticket status, history, timeline
+- Guests CANNOT modify or delete existing tickets
+- Session is temporary and ends on page close
 
 ### ✅ Email Notifications
 - Guest info banner reminds users about email updates
@@ -122,8 +124,9 @@ useEffect(() => {
 │ session. You will receive ticket updates via    │
 │ email.                                           │
 │                                                  │
-│ 📧 Guest users have read-only access and        │
-│ cannot create new tickets.                      │
+│ 📧 You can submit new tickets, but cannot       │
+│ modify existing ones. Guest sessions are        │
+│ temporary.                                       │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -154,10 +157,11 @@ You will receive ticket updates via email at guest@example.com.
    - Try to refresh page
    - Should see warning dialog
 
-4. **Verify Read-Only:**
-   - Submit Ticket button should not be visible
+4. **Verify Access Controls:**
+   - Submit Ticket button SHOULD be visible (guests can create)
+   - Ticket list should be visible with only guest's tickets
    - Timeline should be visible
-   - Ticket list should be visible
+   - Existing tickets should not have edit/delete buttons (if applicable)
 
 5. **Test Different Emails:**
    - Login with email A → See email A's tickets
@@ -196,7 +200,8 @@ You will receive ticket updates via email at guest@example.com.
 ✅ Warning displays when attempting to close page  
 ✅ Guests only see their own tickets  
 ✅ Session ends on page close (browser behavior)  
-✅ Guests cannot modify tickets  
+✅ Guests can submit new tickets  
+✅ Guests cannot modify existing tickets  
 
 ## Next Steps
 
