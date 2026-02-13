@@ -563,9 +563,6 @@ function MyAssignedTickets() {
                         )}
                       </p>
                     </div>
-
-                    {/* TODO: When authentication is implemented, add action buttons here */}
-                    {/* Examples: View Details, Update Status, Notes */}
                   </div>
                 )
               })}
