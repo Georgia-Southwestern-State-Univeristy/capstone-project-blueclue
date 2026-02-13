@@ -63,8 +63,8 @@ export const createTicket = async (req, res) => {
                 const lastName = nameParts.slice(1).join(' ') || 'User';
                 
                 const createUserQuery = `
-                    INSERT INTO users (email, first_name, last_name, username, role, password_hash, is_active)
-                    VALUES ($1, $2, $3, $4, 'customer', '', true)
+                    INSERT INTO users (email, first_name, last_name, username, role, password_hash, is_active, is_guest)
+                    VALUES ($1, $2, $3, $4, 'customer', '', true, true)
                     RETURNING id, email, first_name, last_name, role
                 `;
                 const username = `guest_${guest_email.split('@')[0]}_${Date.now()}`;
