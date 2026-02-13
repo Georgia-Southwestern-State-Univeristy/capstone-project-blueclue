@@ -9,10 +9,10 @@ const VALID_STATUSES = ['open', 'in_progress', 'waiting_on_customer', 'resolved'
 
 // Valid status transitions (business rules)
 const VALID_TRANSITIONS = {
-    'open': ['in_progress', 'waiting_on_customer'],
+    'open': ['in_progress', 'waiting_on_customer', 'resolved', 'closed'],
     'in_progress': ['waiting_on_customer', 'resolved', 'open'],
     'waiting_on_customer': ['in_progress', 'resolved', 'open'],
-    'resolved': ['closed', 'in_progress'], // Allow reopening if needed
+    'resolved': ['closed', 'in_progress', 'open', 'waiting_on_customer'], // Allow reopening and status changes
     'closed': [] // Cannot transition from closed - final state
 };
 
