@@ -102,10 +102,10 @@ psql -U postgres -d blueclue -c "SELECT COUNT(*) FROM categories;"
 ### Sample Customer Accounts (if seed.sql was run)
 
 **Email:** `mike.chen@startupxyz.io`  
-**Password:** `BlueClue2026!`
+**Password:** `test123`
 
 **Email:** `admin@blueclue.com` (Admin)  
-**Password:** `BlueClue2026!`
+**Password:** `test123`
 
 ## Backend Configuration
 
