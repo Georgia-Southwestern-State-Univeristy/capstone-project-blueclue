@@ -622,6 +622,9 @@ function TechnicianDashboard() {
                         <option value="resolved">{updatingTicketId === ticket.id && ticket.status === 'resolved' ? '⏳ ' : ''}Resolved</option>
                         <option value="closed">{updatingTicketId === ticket.id && ticket.status === 'closed' ? '⏳ ' : ''}Closed</option>
                       </select>
+                      {updatingTicketId === ticket.id && (
+                        <p className="text-blue-400 text-[10px] mt-1">Updating...</p>
+                      )}
                       {ticket.status === 'closed' && (
                         <p className="text-xs text-gray-500 mt-1">Closed tickets cannot be modified</p>
                       )}
@@ -740,9 +743,6 @@ function TechnicianDashboard() {
                         <p className="text-red-400 text-[10px] mt-1">{ticketErrors[ticket.id]}</p>
                       )}
                     </div>
-
-                    {/* TODO: When authentication is implemented, add action buttons here */}
-                    {/* Examples: Assign to Me, View Details, Update Status */}
                   </div>
                 )
               })}
