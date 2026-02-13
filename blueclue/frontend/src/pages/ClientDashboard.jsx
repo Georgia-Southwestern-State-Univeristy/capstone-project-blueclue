@@ -4,6 +4,7 @@ import Alert from '../components/Alert'
 import LoadingSpinner from '../components/LoadingSpinner'
 import TicketTimeline from '../components/TicketTimeline'
 import { createTicket, getAllTickets, getAllTicketsForTimeline } from '../services/ticketService'
+import { getCurrentUser } from '../services/authService'
 
 function ClientDashboard() {
   // State management
@@ -13,12 +14,38 @@ function ClientDashboard() {
   const [isLoading, setIsLoading] = useState(true)
   const [isTimelineLoading, setIsTimelineLoading] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [currentUser, setCurrentUser] = useState(null)
+  const [isGuest, setIsGuest] = useState(false)
 
   // Fetch tickets on component mount
   useEffect(() => {
+    // Get current user info
+    const user = getCurrentUser()
+    setCurrentUser(user)
+    setIsGuest(user?.role === 'guest' || user?.isGuest === true)
+
     fetchTickets()
     fetchTimelineTickets()
   }, [])
+
+  // Add beforeunload warning for guest users
+  useEffect(() => {
+    if (!isGuest) return
+
+    const handleBeforeUnload = (e) => {
+      const message = `Closing this page will end your session. You will receive ticket updates via email at ${currentUser?.email || 'your email'}.`
+      e.preventDefault()
+      e.returnValue = message // For older browsers
+      return message // For modern browsers
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [isGuest, currentUser])
 
   // Fetch all tickets from API
   const fetchTickets = async () => {
@@ -139,8 +166,31 @@ function ClientDashboard() {
     <div className="p-8 bg-gray-950 min-h-screen">
       <h1 className="text-3xl font-bold text-white mb-2">Client Dashboard</h1>
       <p className="text-gray-400 mb-6">
-        Submit support tickets and track their status
+        {isGuest ? 'View your support tickets' : 'Submit support tickets and track their status'}
       </p>
+
+      {/* Guest Session Info Banner */}
+      {isGuest && (
+        <div className="mb-6 bg-blue-950 border border-blue-700 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <svg className="w-6 h-6 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div className="flex-1">
+              <h3 className="text-blue-300 font-semibold mb-1">Guest Session Active</h3>
+              <p className="text-blue-200 text-sm mb-2">
+                You are viewing tickets associated with <strong>{currentUser?.email}</strong>
+              </p>
+              <p className="text-blue-300 text-xs">
+                ⚠️ <strong>Important:</strong> Closing this page will end your session. You will receive ticket updates via email.
+              </p>
+              <p className="text-blue-400 text-xs mt-1">
+                📧 Guest users have read-only access and cannot create new tickets.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Alert display */}
       {alert && (
@@ -170,18 +220,20 @@ function ClientDashboard() {
       {/* Tickets list section */}
       <div className="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-sm">
 
-        {/* Submit Ticket Button at top of Your Tickets */}
-        <div className="flex justify-end mb-4">
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors shadow-sm"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Submit Ticket
-          </button>
-        </div>
+        {/* Submit Ticket Button at top of Your Tickets - Only for non-guest users */}
+        {!isGuest && (
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors shadow-sm"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Submit Ticket
+            </button>
+          </div>
+        )}
         <h2 className="text-xl font-semibold text-white mb-4">Your Tickets</h2>
 
         {/* Loading state */}
