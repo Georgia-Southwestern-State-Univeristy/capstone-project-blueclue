@@ -5,14 +5,25 @@ Implemented a guest access system that allows users to view their tickets by ema
 
 ## Backend Changes
 
-### 1. Ticket Model ([Ticket.js](c:/BlueClue/capstone-project-blueclue/capstone-project-blueclue/blueclue/backend/src/models/Ticket.js))
-- **Added `getByEmail()` method** to filter tickets by customer email address
-- Used for guest users who don't have a customer_id
+### 1. Ticket Controller ([ticketController.js](c:/BlueClue/capstone-project-blueclue/capstone-project-blueclue/blueclue/backend/src/controllers/ticketController.js))
+- **Updated `createTicket()` endpoint** to accept guest submissions
+- Accepts either `customer_id` (authenticated users) OR `guest_email` + `guest_name` (guests)
+- **Automatically creates guest customer records** in the users table when needed
+- Guest users created with:
+  - Role: 'customer'
+  - Username: `guest_{email}_{timestamp}`
+  - No password required (empty password_hash)
+  - Active status for ticket submission
 
 ```javascript
-static async getByEmail(email) {
-    // Returns all tickets where customer.email matches
-    // Includes customer info and assigned technician details
+// Handle guest users: find or create a guest customer record
+if (!customer_id && guest_email) {
+    let guestUser = await User.getByEmail(guest_email);
+    if (!guestUser) {
+        // Create new guest user record in database
+        guestUser = await createGuestUser(guest_email, guest_name);
+    }
+    finalCustomerId = guestUser.id;
 }
 ```
 
