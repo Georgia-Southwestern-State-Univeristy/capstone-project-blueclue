@@ -6,7 +6,9 @@
   "scripts": {
     "setup": "npm install && npm run dev",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon src/app.js"
+    "dev": "nodemon src/app.js",
+    "cleanup:guests": "node scripts/cleanup-guest-users.js",
+    "cleanup:guests:dry-run": "node scripts/cleanup-guest-users.js --dry-run"
   },
   "keywords": [],
   "author": "",

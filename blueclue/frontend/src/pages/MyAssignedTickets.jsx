@@ -91,13 +91,6 @@ function MyAssignedTickets() {
     if (!ticket || ticket.status === newStatus) return
 
     const previousStatus = ticket.status
-
-    // Optimistic update - immediately update UI
-    setTickets(prevTickets =>
-      prevTickets.map(t =>
-        t.id === ticketId ? { ...t, status: newStatus } : t
-      )
-    )
     setUpdatingTicketId(ticketId)
     
     // Clear any existing error for this ticket
@@ -109,12 +102,16 @@ function MyAssignedTickets() {
 
     try {
       // Call API to update status
-      await updateTicketStatus(ticketId, newStatus)
+      const response = await updateTicketStatus(ticketId, newStatus)
       
-      // Success! Refresh to get latest data
-      await fetchTickets()
+      // Update just this ticket with the response data
+      setTickets(prevTickets =>
+        prevTickets.map(t =>
+          t.id === ticketId ? { ...t, ...response.data } : t
+        )
+      )
     } catch (err) {
-      // Error occurred - revert to previous status
+      // Error occurred - show error message
       setTickets(prevTickets =>
         prevTickets.map(t =>
           t.id === ticketId ? { ...t, status: previousStatus } : t
@@ -497,12 +494,35 @@ function MyAssignedTickets() {
                             <span className="text-gray-400">Category:</span>
                             <span className="text-indigo-200 font-medium capitalize">{ticket.category}</span>
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-400">Priority:</span>
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${getPriorityColor(ticket.priority)}`}>
-                              {ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1)}
-                            </span>
+                          
+                          {/* Priority Comparison */}
+                          <div className="border-t border-indigo-800 pt-1.5 mt-1.5">
+                            {ticket.user_priority && (
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-gray-400">User Priority:</span>
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${getPriorityColor(ticket.user_priority)}`}>
+                                  {ticket.user_priority.charAt(0).toUpperCase() + ticket.user_priority.slice(1)}
+                                </span>
+                              </div>
+                            )}
+                            {ticket.ai_priority && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-gray-400">AI Priority:</span>
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${getPriorityColor(ticket.ai_priority)}`}>
+                                  {ticket.ai_priority.charAt(0).toUpperCase() + ticket.ai_priority.slice(1)}
+                                </span>
+                              </div>
+                            )}
+                            {ticket.user_priority && ticket.ai_priority && ticket.user_priority !== ticket.ai_priority && (
+                              <div className="mt-1 text-[10px] text-yellow-400 flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Priority mismatch detected
+                              </div>
+                            )}
                           </div>
+                          
                           {ticket.ai_confidence != null && (
                             <div>
                               <div className="flex items-center justify-between mb-1">

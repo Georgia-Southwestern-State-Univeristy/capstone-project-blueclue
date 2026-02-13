@@ -1,72 +1,111 @@
 # BlueClue Database Setup
 
-Quick setup guide for the BlueClue PostgreSQL database.
+Complete setup guide for the BlueClue PostgreSQL database with AI classification support.
 
 ## Prerequisites
 
 - PostgreSQL 14+ installed ([Download](https://www.postgresql.org/download/))
 - Know your `postgres` user password
 
-## Quick Setup
+## Quick Setup (Recommended)
 
-### 1. Create Database
+### Automated Setup Script
+
+The easiest way to set up the database is using the automated PowerShell script:
+
+```powershell
+# Navigate to database folder
+cd blueclue/database
+
+# Run setup (drops existing database, creates fresh)
+.\SETUP.ps1
+
+# Or skip sample data
+.\SETUP.ps1 -SkipSeed
+
+# Or show help
+.\SETUP.ps1 -Help
+```
+
+**What the script does:**
+1. Drops existing `blueclue` database (if exists)
+2. Creates fresh `blueclue` database
+3. Creates complete schema (tables, ENUMs, indexes, triggers, views)
+4. Sets up authentication system (guest sessions, technician accounts)
+5. Loads sample data (optional)
+
+## Manual Setup
+
+If you prefer manual control:
 
 ```powershell
 # Navigate to this folder
 cd blueclue/database
 
+# Drop existing database (optional)
+psql -U postgres -c "DROP DATABASE IF EXISTS blueclue;"
+
 # Create database
 psql -U postgres -c "CREATE DATABASE blueclue;"
 
-# Run schema
+# Run schema (tables, ENUMs, triggers)
 psql -U postgres -d blueclue -f schema.sql
 
-# Add sample data
+# Run auth setup (guest sessions, technicians)
+psql -U postgres -d blueclue -f auth_setup.sql
+
+# Add sample data (optional)
 psql -U postgres -d blueclue -f seed.sql
 ```
 
-### 2. Verify
+## Verify Setup
 
 ```powershell
-psql -U postgres -d blueclue -c "SELECT COUNT(*) FROM users;"
-# Should show: 6
+# Check users
+psql -U postgres -d blueclue -c "SELECT COUNT(*) FROM users WHERE role = 'technician';"
+# Should show: 3
+
+psql -U postgres -d blueclue -c "SELECT COUNT(*) FROM users WHERE role = 'customer';"
+# Should show: 4 (if seed.sql was run)
 
 psql -U postgres -d blueclue -c "SELECT COUNT(*) FROM tickets;"
-# Should show: 10
+# Should show: 0 (tickets are created via app)
+
+psql -U postgres -d blueclue -c "SELECT COUNT(*) FROM categories;"
+# Should show: 10 (5 original + 5 AI categories)
 ```
 
 ## What You Get
 
-**Tables:**
-- `users` - 5 sample users (2 customers, 2 technicians, 1 admin)
-- `tickets` - 10 sample tickets with AI classifications
-- `categories` - 5 ticket categories
-- `ticket_assignments` - Assignment history
-- `ticket_history` - Audit log
+### Database Files
 
-**Sample Login (Password: `BlueClue2026!`):**
-- Customer: `mike.chen@startupxyz.io`
-- Technician: `david.park@blueclue.com`
-- Admin: `admin@blueclue.com`
+- **`schema.sql`** - Complete database schema
+  - All tables, ENUMs, indexes, triggers, views
+  - Includes: username, is_guest, force_password_change columns
+  - AI categories: hardware, software, network, login, other
+  
+- **`auth_setup.sql`** - Authentication system
+  - Guest sessions table
+  - Technician accounts (Thomas, Clayton, Jacob)
+  
+- **`seed.sql`** - Sample data (optional)
+  - 4 customer users
+  - 1 admin user
+  - NO pre-created tickets (create via app)
 
-## Database Migrations
+### Technician Accounts
 
-If you already have the database set up and need to apply updates, run these migration scripts:
+**Username:** `tnewc` / `cmcgo` / `jwill`  
+**Password:** `admin123` (must change on first login)  
+**Full Names:** Thomas Newcomb, Clayton McGough, Jacob Williams
 
-### Remove Sara Johnson (DatabaseBugs branch)
+### Sample Customer Accounts (if seed.sql was run)
 
-**For existing databases only** - removes deprecated test user and fixes ticket attribution:
+**Email:** `mike.chen@startupxyz.io`  
+**Password:** `test123`
 
-```powershell
-psql -U postgres -d blueclue -f remove_sara_johnson.sql
-```
-
-**What it does:**
-- Creates a "System/Unknown" user for orphaned tickets
-- Reassigns Sara Johnson's tickets to the System user
-- Removes Sara Johnson user record
-
-**Note:** New database setups automatically exclude Sara Johnson - no migration needed.
+**Email:** `admin@blueclue.com` (Admin)  
+**Password:** `test123`
 
 ## Backend Configuration
 
@@ -127,13 +166,70 @@ Expected response:
     "connected": true,
     "timestamp": "2026-02-02T21:14:58.223Z",
     "tables": {
-      "users": 6,
-      "tickets": 10,
-      "categories": 5
+      "users": 7,
+      "tickets": 0,
+      "categories": 10
     }
   }
 }
 ```
+
+## Guest User System
+
+BlueClue supports **guest users** who can submit tickets without creating full accounts.
+
+### Guest Features
+
+- Submit tickets by email + name (no password required)
+- Short session access (JWT token expires in 1 hour)
+- View their own tickets by email
+- Session warning when leaving page
+
+### Guest Cleanup
+
+Guest users are automatically cleaned up to prevent database bloat:
+
+```bash
+# Dry run (shows what would be deleted)
+cd blueclue/backend
+npm run cleanup:guests:dry-run
+
+# Execute cleanup (delete guests >30 days old with no tickets)
+npm run cleanup:guests
+
+# Force cleanup (delete all guests with no tickets regardless of age)
+npm run cleanup:guests:force
+```
+
+**Retention Policy:**
+- Guests with tickets: **Kept indefinitely**
+- Guests without tickets: **Deleted after 30 days**
+
+See [GUEST_CLEANUP_GUIDE.md](GUEST_CLEANUP_GUIDE.md) for full details.
+
+## AI Classification
+
+All new tickets are **automatically classified** by the AI system:
+
+**AI Categories:**
+- `hardware` - Physical equipment issues
+- `software` - Application/program problems
+- `network` - Connectivity and network issues
+- `login` - Authentication and access problems
+- `other` - General inquiries
+
+**Original Categories (still supported):**
+- `general` - General support
+- `technical` - Technical issues
+- `billing` - Billing and payment
+- `account` - Account management
+- `feature_request` - Feature requests
+
+**Testing AI Classification:**
+1. Start the backend: `cd blueclue/backend && npm run dev`
+2. Start the AI service: `cd blueclue/ai && python app.py`
+3. Submit a ticket via the frontend
+4. Check the `ai_classifications` table for results
 
 ## Troubleshooting
 
@@ -147,18 +243,32 @@ psql -U postgres -c "CREATE DATABASE blueclue;"
 
 **Need to reset database?**
 
+Use the automated script:
 ```powershell
-psql -U postgres -c "DROP DATABASE blueclue;"
+.\SETUP.ps1
+```
+
+Or manually:
+```powershell
+psql -U postgres -c "DROP DATABASE IF EXISTS blueclue;"
 psql -U postgres -c "CREATE DATABASE blueclue;"
 psql -U postgres -d blueclue -f schema.sql
+psql -U postgres -d blueclue -f auth_setup.sql
 psql -U postgres -d blueclue -f seed.sql
 ```
+
+**No tickets in database?**
+
+This is **intentional**! The new setup doesn't pre-create tickets. Submit tickets via the app to test AI classification with fresh data.
 
 ## Database Schema
 
 **Key Features:**
 - Automated ticket number generation (TICK-2026-00001)
-- AI classification metadata (confidence, keywords, fallback)
+- AI classification with dual priority system (user_priority + ai_priority)
+- Guest user support (is_guest flag)
+- Force password change on first login
+- Username-based authentication for technicians
 - SLA tracking with auto-calculated due dates
 - Complete audit trail via triggers
 - Performance indexes on all query columns
@@ -177,13 +287,18 @@ psql -U postgres -d blueclue
 -- List all tables
 \dt
 
--- View sample tickets
-SELECT ticket_number, subject, category, priority, status 
-FROM tickets 
-ORDER BY created_at DESC 
-LIMIT 5;
+-- View sample users
+SELECT email, first_name, last_name, role, is_guest 
+FROM users 
+ORDER BY role, created_at;
 
--- Check AI classification stats
+-- Check categories (should show 10 total)
+SELECT id, name FROM categories ORDER BY id;
+
+-- Check guest sessions
+SELECT * FROM guest_sessions WHERE expires_at > NOW();
+
+-- View AI classification stats (after submitting tickets)
 SELECT 
     ai_classified,
     COUNT(*) as count,
@@ -197,11 +312,13 @@ GROUP BY ai_classified;
 
 ## Files
 
-- `schema.sql` - Complete database structure (tables, indexes, triggers, views)
-- `seed.sql` - Sample data for testing and demos
-- `README.md` - This file
-- `SETUP.ps1` - Automated setup script (Windows)
+- **`schema.sql`** - Complete database structure (tables, indexes, triggers, views)
+- **`auth_setup.sql`** - Authentication system (guest sessions, technician accounts)
+- **`seed.sql`** - Sample data for testing (customers, admin - NO tickets)
+- **`SETUP.ps1`** - Automated setup script (Windows) - **Use this!**
+- **`GUEST_CLEANUP_GUIDE.md`** - Guest user cleanup documentation
+- **`README.md`** - This file
 
 ---
 
-**Questions?** See the full documentation in `docs/database/` or ask your team lead.
+**Questions?** See the full documentation in `docs/` or ask your team lead.

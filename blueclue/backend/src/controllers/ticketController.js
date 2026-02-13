@@ -2,16 +2,17 @@
 import Ticket from '../models/Ticket.js';
 import AIClassification from '../models/AIClassification.js';
 import { classifyTicketWithFallback } from '../services/aiService.js';
+import pool from '../config/database.js';
 
 // Valid ticket statuses (must match database enum)
 const VALID_STATUSES = ['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed'];
 
 // Valid status transitions (business rules)
 const VALID_TRANSITIONS = {
-    'open': ['in_progress', 'waiting_on_customer'],
+    'open': ['in_progress', 'waiting_on_customer', 'resolved', 'closed'],
     'in_progress': ['waiting_on_customer', 'resolved', 'open'],
     'waiting_on_customer': ['in_progress', 'resolved', 'open'],
-    'resolved': ['closed', 'in_progress'], // Allow reopening if needed
+    'resolved': ['closed', 'in_progress', 'open', 'waiting_on_customer'], // Allow reopening and status changes
     'closed': [] // Cannot transition from closed - final state
 };
 
@@ -21,7 +22,7 @@ const VALID_TRANSITIONS = {
  */
 export const createTicket = async (req, res) => {
     try {
-        const { subject, description, customer_id, priority, category } = req.body;
+        const { subject, description, customer_id, guest_email, guest_name, priority, category } = req.body;
 
         // Validation
         if (!subject || subject.trim() === '') {
@@ -38,11 +39,45 @@ export const createTicket = async (req, res) => {
             });
         }
 
-        if (!customer_id) {
+        // Require either customer_id (authenticated) OR guest_email + guest_name
+        if (!customer_id && (!guest_email || !guest_name)) {
             return res.status(400).json({
                 status: 'error',
-                message: 'customer_id (user ID) is required'
+                message: 'Either customer_id or guest information (email and name) is required'
             });
+        }
+
+        // Handle guest users: find or create a guest customer record
+        let finalCustomerId = customer_id;
+        if (!customer_id && guest_email) {
+            // Import User model for guest user lookup/creation
+            const User = (await import('../models/User.js')).default;
+            
+            // Check if guest user already exists
+            let guestUser = await User.getByEmail(guest_email);
+            
+            if (!guestUser) {
+                // Create a new guest user record
+                const nameParts = guest_name.trim().split(' ');
+                const firstName = nameParts[0] || 'Guest';
+                const lastName = nameParts.slice(1).join(' ') || 'User';
+                
+                const createUserQuery = `
+                    INSERT INTO users (email, first_name, last_name, username, role, password_hash, is_active, is_guest)
+                    VALUES ($1, $2, $3, $4, 'customer', '', true, true)
+                    RETURNING id, email, first_name, last_name, role
+                `;
+                const username = `guest_${guest_email.split('@')[0]}_${Date.now()}`;
+                const createResult = await pool.query(createUserQuery, [
+                    guest_email,
+                    firstName,
+                    lastName,
+                    username
+                ]);
+                guestUser = createResult.rows[0];
+            }
+            
+            finalCustomerId = guestUser.id;
         }
 
         // Combine subject and description for AI classification
@@ -70,7 +105,7 @@ export const createTicket = async (req, res) => {
         const ticket = await Ticket.create({
             subject: subject.trim(),
             description: description.trim(),
-            customer_id,
+            customer_id: finalCustomerId,
             priority: finalPriority,
             user_priority: userPriority,
             ai_priority: aiPriority,
@@ -151,9 +186,12 @@ export const getAllTickets = async (req, res) => {
         let tickets;
         
         // Check if user is authenticated and is a customer or guest
-        if (req.user && (req.user.role === 'customer' || req.user.role === 'guest')) {
-            // Filter tickets by customer_id for customers/guests
+        if (req.user && req.user.role === 'customer') {
+            // Filter tickets by customer_id for customers
             tickets = await Ticket.getByCustomerId(req.user.id);
+        } else if (req.user && req.user.role === 'guest') {
+            // Filter tickets by email for guests (they don't have customer_id)
+            tickets = await Ticket.getByEmail(req.user.email);
         } else {
             // Return all tickets for technicians/admins or unauthenticated users
             tickets = await Ticket.getAll();
@@ -301,6 +339,13 @@ export const updateTicket = async (req, res) => {
 
         if (updates.subject) updates.subject = updates.subject.trim();
         if (updates.description) updates.description = updates.description.trim();
+
+        // Automatically set resolved_at when status changes to resolved or closed
+        if (updates.status === 'resolved' || updates.status === 'closed') {
+            if (!updates.resolved_at) {
+                updates.resolved_at = new Date();
+            }
+        }
 
         const ticket = await Ticket.update(parseInt(id), updates);
 

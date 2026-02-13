@@ -12,7 +12,7 @@ function TicketForm({ onSubmit }) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    priority: 'medium'
+    priority: '' // Empty allows AI to classify
   })
 
   // Loading state
@@ -41,7 +41,7 @@ function TicketForm({ onSubmit }) {
     setFormData({
       title: '',
       description: '',
-      priority: 'medium'
+      priority: '' // Empty allows AI to classify
     })
     setValidationErrors({
       title: '',
@@ -289,7 +289,7 @@ function TicketForm({ onSubmit }) {
           htmlFor="priority"
           className="block text-sm font-medium text-gray-300 mb-1"
         >
-          Priority
+          Priority <span className="text-gray-500 text-xs">(optional - AI will suggest if not selected)</span>
         </label>
         <select
           id="priority"
@@ -305,6 +305,7 @@ function TicketForm({ onSubmit }) {
             transition-colors duration-200
           "
         >
+          <option value="">Let AI determine priority</option>
           <option value="low">Low</option>
           <option value="medium">Medium</option>
           <option value="high">High</option>
