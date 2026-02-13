@@ -107,25 +107,17 @@ function TechnicianDashboard() {
 
     const previousAssignedTo = ticket.assigned_to
 
-    // Optimistic update
-    setTickets(prevTickets =>
-      prevTickets.map(t =>
-        t.id === ticketId ? { ...t, assigned_to: technicianId ? parseInt(technicianId) : null } : t
-      )
-    )
     setAssigningTicketId(ticketId)
 
     try {
-      await assignTicket(ticketId, technicianId ? parseInt(technicianId) : null)
-      await fetchTickets()
-    } catch (err) {
-      // Revert on error
+      const response = await assignTicket(ticketId, technicianId ? parseInt(technicianId) : null)
+      // Update just this ticket with the response data
       setTickets(prevTickets =>
         prevTickets.map(t =>
-          t.id === ticketId ? { ...t, assigned_to: previousAssignedTo } : t
+          t.id === ticketId ? { ...t, ...response.data } : t
         )
       )
-      
+    } catch (err) {
       setTicketErrors(prev => ({
         ...prev,
         [ticketId]: err.message || 'Failed to assign ticket'
@@ -150,12 +142,6 @@ function TechnicianDashboard() {
 
     const previousStatus = ticket.status
 
-    // Optimistic update - immediately update UI
-    setTickets(prevTickets =>
-      prevTickets.map(t =>
-        t.id === ticketId ? { ...t, status: newStatus } : t
-      )
-    )
     setUpdatingTicketId(ticketId)
     
     // Clear any existing error for this ticket
@@ -167,12 +153,16 @@ function TechnicianDashboard() {
 
     try {
       // Call API to update status
-      await updateTicketStatus(ticketId, newStatus)
+      const response = await updateTicketStatus(ticketId, newStatus)
       
-      // Success! Refresh to get latest data
-      await fetchTickets()
+      // Update just this ticket with the response data
+      setTickets(prevTickets =>
+        prevTickets.map(t =>
+          t.id === ticketId ? { ...t, ...response.data } : t
+        )
+      )
     } catch (err) {
-      // Error occurred - revert to previous status
+      // Error occurred - show error message
       setTickets(prevTickets =>
         prevTickets.map(t =>
           t.id === ticketId ? { ...t, status: previousStatus } : t
