@@ -119,8 +119,8 @@ export const createTicket = async (ticketData) => {
   const userStr = localStorage.getItem('blueclue_user');
   const user = userStr ? JSON.parse(userStr) : null;
   
-  // Require authenticated user for ticket creation
-  if (!user || !user.id) {
+  // Require some form of user identification
+  if (!user) {
     throw new Error('You must be logged in to create a ticket');
   }
   
@@ -129,8 +129,15 @@ export const createTicket = async (ticketData) => {
     subject: ticketData.title,
     description: ticketData.description,
     priority: ticketData.priority,
-    customer_id: user.id, // Use authenticated user ID
   };
+  
+  // Add customer_id for authenticated users, or guest info for guests
+  if (user.role === 'guest' || user.isGuest) {
+    payload.guest_email = user.email;
+    payload.guest_name = user.name || user.first_name + ' ' + user.last_name;
+  } else {
+    payload.customer_id = user.id;
+  }
 
   try {
     const response = await fetchWithTimeout(`${API_BASE_URL}/tickets`, {
