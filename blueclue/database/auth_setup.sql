@@ -1,18 +1,11 @@
 -- ============================================================================
 -- BlueClue Authentication System - Database Setup
 -- ============================================================================
--- Description: Sets up authentication tables and hardcoded technician accounts
--- Version: 1.0.0
--- Created: 2026-02-10
+-- Description: Sets up guest sessions table and hardcoded technician accounts  
+-- Version: 2.0.0
+-- Updated: 2026-02-13
+-- Note: username, force_password_change, is_guest columns are in schema.sql
 -- ============================================================================
-
--- Add force_password_change column to users table
-ALTER TABLE users 
-ADD COLUMN IF NOT EXISTS force_password_change BOOLEAN NOT NULL DEFAULT false;
-
--- Add index for password change tracking
-CREATE INDEX IF NOT EXISTS idx_users_force_password_change 
-ON users(force_password_change) WHERE force_password_change = true;
 
 -- ============================================================================
 -- HARDCODED TECHNICIAN ACCOUNTS
@@ -20,32 +13,20 @@ ON users(force_password_change) WHERE force_password_change = true;
 -- Password: admin123 (bcrypt hash generated with salt rounds = 10)
 -- All technicians must change password on first login
 
--- Note: The password hash below is for 'admin123'
--- Generated using: bcrypt.hashSync('admin123', 10)
-
 -- Insert hardcoded technicians (username: tnewc, cmcgo, jwill)
-INSERT INTO users (email, password_hash, first_name, last_name, role, force_password_change, is_active)
+INSERT INTO users (email, password_hash, first_name, last_name, username, role, force_password_change, is_active)
 VALUES 
-    ('tnewc@blueclue.com', '$2b$10$lmfkmrGkF2XhKJqnfperu.bBG7CK3HpkXJ/KIullkzkNFGxewRATy', 'Thomas', 'Newcomb', 'technician', true, true),
-    ('cmcgo@blueclue.com', '$2b$10$Gqw9ytr7gzq7oTrfCYDuseBDakP2Ni/Yck2BdmpzEZ6Xn/3n1bDba', 'Clayton', 'McGough', 'technician', true, true),
-    ('jwill@blueclue.com', '$2b$10$YtimdlARnlSE8MdpEQoZaemIXIWLwQGf5SZOJj7IfZ8wH9h1F8ngu', 'Jacob', 'Williams', 'technician', true, true)
+    ('tnewc@blueclue.com', '$2b$10$lmfkmrGkF2XhKJqnfperu.bBG7CK3HpkXJ/KIullkzkNFGxewRATy', 'Thomas', 'Newcomb', 'tnewc', 'technician', true, true),
+    ('cmcgo@blueclue.com', '$2b$10$Gqw9ytr7gzq7oTrfCYDuseBDakP2Ni/Yck2BdmpzEZ6Xn/3n1bDba', 'Clayton', 'McGough', 'cmcgo', 'technician', true, true),
+    ('jwill@blueclue.com', '$2b$10$YtimdlARnlSE8MdpEQoZaemIXIWLwQGf5SZOJj7IfZ8wH9h1F8ngu', 'Jacob', 'Williams', 'jwill', 'technician', true, true)
 ON CONFLICT (email) DO UPDATE SET
     password_hash = EXCLUDED.password_hash,
+    first_name = EXCLUDED.first_name,
+    last_name = EXCLUDED.last_name,
+    username = EXCLUDED.username,
     force_password_change = EXCLUDED.force_password_change,
     role = EXCLUDED.role,
     is_active = EXCLUDED.is_active;
-
--- Add username field to users table for technician login
-ALTER TABLE users 
-ADD COLUMN IF NOT EXISTS username VARCHAR(50) UNIQUE;
-
--- Create index for username lookups
-CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
-
--- Update technician usernames
-UPDATE users SET username = 'tnewc' WHERE email = 'tnewc@blueclue.com';
-UPDATE users SET username = 'cmcgo' WHERE email = 'cmcgo@blueclue.com';
-UPDATE users SET username = 'jwill' WHERE email = 'jwill@blueclue.com';
 
 -- ============================================================================
 -- GUEST SESSIONS TABLE

@@ -24,7 +24,7 @@ DROP TABLE IF EXISTS ticket_priorities CASCADE;
 CREATE TYPE user_role AS ENUM ('customer', 'technician', 'admin');
 CREATE TYPE ticket_status AS ENUM ('open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed');
 CREATE TYPE ticket_priority AS ENUM ('low', 'medium', 'high', 'critical');
-CREATE TYPE ticket_category AS ENUM ('general', 'technical', 'billing', 'account', 'feature_request');
+CREATE TYPE ticket_category AS ENUM ('general', 'technical', 'billing', 'account', 'feature_request', 'hardware', 'software', 'network', 'login', 'other');
 
 -- ============================================================================
 -- TABLE: users
@@ -37,10 +37,13 @@ CREATE TABLE users (
     password_hash VARCHAR(255) NOT NULL,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
+    username VARCHAR(50) UNIQUE,
     role user_role NOT NULL DEFAULT 'customer',
     phone VARCHAR(20),
     company VARCHAR(255),
     is_active BOOLEAN NOT NULL DEFAULT true,
+    is_guest BOOLEAN NOT NULL DEFAULT false,
+    force_password_change BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login TIMESTAMP WITH TIME ZONE,
@@ -52,9 +55,12 @@ CREATE TABLE users (
 
 -- Indexes for users table
 CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_username ON users(username);
 CREATE INDEX idx_users_role ON users(role);
 CREATE INDEX idx_users_active ON users(is_active) WHERE is_active = true;
 CREATE INDEX idx_users_created_at ON users(created_at);
+CREATE INDEX idx_users_force_password_change ON users(force_password_change) WHERE force_password_change = true;
+CREATE INDEX idx_users_is_guest_created_at ON users(is_guest, created_at) WHERE is_guest = true;
 
 -- ============================================================================
 -- TABLE: categories
@@ -349,11 +355,18 @@ CREATE TRIGGER set_ticket_sla_dates_trigger
 -- Insert default categories that match the AI classifier
 
 INSERT INTO categories (name, display_name, description, color_code, icon) VALUES
+    -- Original categories
     ('general', 'General', 'General inquiries and uncategorized tickets', '#6B7280', 'help-circle'),
     ('technical', 'Technical', 'Technical issues, bugs, errors, and system problems', '#EF4444', 'alert-triangle'),
     ('billing', 'Billing', 'Payment, invoicing, subscriptions, and refund requests', '#10B981', 'dollar-sign'),
     ('account', 'Account', 'Login, password, access, and profile management', '#3B82F6', 'user'),
-    ('feature_request', 'Feature Request', 'New feature suggestions and enhancements', '#8B5CF6', 'lightbulb');
+    ('feature_request', 'Feature Request', 'New feature suggestions and enhancements', '#8B5CF6', 'lightbulb'),
+    -- AI Classifier categories
+    ('hardware', 'Hardware', 'Computer hardware issues (laptops, monitors, printers, etc.)', '#F59E0B', 'computer'),
+    ('software', 'Software', 'Software and application issues (OS, Office, browsers, etc.)', '#3B82F6', 'application'),
+    ('network', 'Network', 'Network connectivity and WiFi issues', '#10B981', 'network'),
+    ('login', 'Login & Access', 'Login, password, and account access issues', '#EF4444', 'lock'),
+    ('other', 'Other', 'General inquiries and other issues', '#9CA3AF', 'help');
 
 -- ============================================================================
 -- VIEWS FOR COMMON QUERIES
