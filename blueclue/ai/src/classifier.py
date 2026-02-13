@@ -647,8 +647,21 @@ class TicketClassifier:
         max_score = max(priority_scores.values())
         
         if max_score == 0:
-            # No priority keywords found, default to medium
-            return "medium", [], 0.5
+            # No priority keywords found - use smart defaults based on issue type
+            # Default to LOW for routine/common issues without urgency indicators
+            default_priority = "low"
+            
+            # Certain phrases indicate MEDIUM priority (actual work-blocking issues)
+            medium_default_indicators = [
+                "not working", "doesn't work", "won't work", "can't access",
+                "unable to", "failed to", "keeps failing", "constantly", "repeatedly"
+            ]
+            
+            # Check for medium indicators - must be phrases, not just "error"
+            if any(indicator in original_lower for indicator in medium_default_indicators):
+                default_priority = "medium"
+            
+            return default_priority, [], 0.5
         
         best_priority = max(priority_scores, key=priority_scores.get)
         
