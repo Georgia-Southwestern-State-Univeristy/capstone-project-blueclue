@@ -1,4 +1,53 @@
-# Ticket API Testing Guide
+# BlueClue Postman API Collection
+
+This folder contains Postman collection for testing the BlueClue API endpoints.
+
+## Collections
+
+### BlueClue-Tickets-API.postman_collection.json
+
+**Current Version:** Basic ticket CRUD operations  
+**Status:** Functional - Covers core ticket endpoints
+
+**Included Endpoints:**
+- Create Ticket (Valid)
+- Create Ticket (Missing Subject)
+- Create Ticket (Missing Description)
+- Get All Tickets
+- Get Single Ticket
+- Get Non-Existent Ticket
+- Update Ticket
+- Delete Ticket
+
+## Import Instructions
+
+1. Open Postman
+2. Click **File** → **Import**
+3. Select `BlueClue-Tickets-API.postman_collection.json`
+4. Collection will be imported with all ticket testing requests
+
+## Complete API Documentation
+
+For comprehensive API documentation including authentication, users, and AI classification endpoints, see:
+
+**Documentation Location:** `docs/api/endpoints.md`
+
+This includes:
+- All authentication endpoints (login, register, refresh, logout)
+- Ticket management endpoints
+- User endpoints
+- AI classification service endpoints
+- Request/response examples
+- Error codes
+- Authentication flows
+
+## Testing Report
+
+For detailed testing results and metrics, see:
+
+**Report Location:** `docs/testing/preliminary-testing-report.md`
+
+---
 
 ## Postman Collection
 
