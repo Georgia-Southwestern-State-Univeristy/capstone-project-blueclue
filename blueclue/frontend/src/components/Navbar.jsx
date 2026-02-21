@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { logout, isAuthenticated, getUser } from '../services/authService'
 import NotificationBell from './NotificationBell'
 import NotificationDropdown from './NotificationDropdown'
+import NotificationPreferences from './NotificationPreferences'
 import logo from '../assets/EditedBlueClueLogo.png'
 
 function Navbar() {
@@ -10,6 +11,7 @@ function Navbar() {
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [notificationDropdownOpen, setNotificationDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [preferencesOpen, setPreferencesOpen] = useState(false)
   const dropdownRef = useRef(null)
   const notificationDropdownRef = useRef(null)
   const notificationBellRef = useRef(null)
@@ -121,10 +123,19 @@ function Navbar() {
                   <div className="absolute right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-50">
                     {!user?.isGuest && (
                       <>
+                        <button
+                          onClick={() => {
+                            setPreferencesOpen(true)
+                            setDropdownOpen(false)
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                        >
+                          🔔 Notification Preferences
+                        </button>
                         <Link
                           to="/change-password"
                           onClick={() => setDropdownOpen(false)}
-                          className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors rounded-t-lg"
+                          className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
                         >
                           🔒 Change Password
                         </Link>
@@ -227,8 +238,31 @@ function Navbar() {
           </button>
         </div>
       )}
+
+      {/* Notification Preferences Modal */}
+      {preferencesOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4">
+          <div className="bg-gray-900 rounded-lg max-w-2xl w-full max-h-96 overflow-y-auto">
+            <div className="sticky top-0 flex items-center justify-between p-6 border-b border-gray-700 bg-gray-800">
+              <h2 className="text-2xl font-bold text-white">Notification Preferences</h2>
+              <button
+                onClick={() => setPreferencesOpen(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6">
+              <NotificationPreferences />
+            </div>
+          </div>
+        </div>
+      )}
     </nav>
   )
 }
 
 export default Navbar
+

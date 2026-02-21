@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { getUnreadCount, normalizeNotification } from '../services/notificationService';
+import { isNotificationTypeEnabled, areBrowserNotificationsEnabled } from '../services/preferencesService';
 import { useNotificationSocket } from '../hooks/useNotificationSocket';
 import { 
   showNotificationAlert, 
-  getBrowserNotificationPreference,
   requestNotificationPermission 
 } from '../utils/browserNotifications';
 
@@ -29,12 +29,19 @@ const NotificationBell = forwardRef(({ onClick, onNewNotification }, ref) => {
   const handleNewNotification = useCallback((notification) => {
     // Normalize notification data from WebSocket (snake_case to camelCase)
     const normalized = normalizeNotification(notification);
+    
+    // Check if this notification type is enabled in preferences
+    if (!isNotificationTypeEnabled(normalized.type)) {
+      console.log(`Notification type "${normalized.type}" is disabled, skipping`);
+      return;
+    }
+    
     console.log('Bell received new notification:', normalized);
     setHasNewNotification(true);
     // Don't call fetchUnreadCount() here - the backend sends unread_count_update event
     
     // Show browser notification if enabled
-    if (getBrowserNotificationPreference()) {
+    if (areBrowserNotificationsEnabled()) {
       showNotificationAlert(normalized);
     }
     
@@ -59,7 +66,7 @@ const NotificationBell = forwardRef(({ onClick, onNewNotification }, ref) => {
     fetchUnreadCount();
 
     // Request notification permission on mount if preference is enabled
-    if (getBrowserNotificationPreference()) {
+    if (areBrowserNotificationsEnabled()) {
       requestNotificationPermission();
     }
 
