@@ -25,13 +25,18 @@ if ($Help) {
     Write-Host "  1. Drops existing 'blueclue' database (if exists)" -ForegroundColor White
     Write-Host "  2. Creates fresh 'blueclue' database" -ForegroundColor White
     Write-Host "  3. Creates schema (tables, ENUMs, functions, triggers)" -ForegroundColor White
-    Write-Host "  4. Sets up authentication (guest sessions, technicians)" -ForegroundColor White
-    Write-Host "  5. Loads sample data (unless -SkipSeed is used)" -ForegroundColor White
+    Write-Host "  4. Sets up RBAC system (privileges, role-based defaults)" -ForegroundColor White
+    Write-Host "  5. Sets up authentication (guest sessions, technicians)" -ForegroundColor White
+    Write-Host "  6. Loads sample data (unless -SkipSeed is used)" -ForegroundColor White
     Write-Host ""
     Write-Host "Technician Accounts Created:" -ForegroundColor Yellow
-    Write-Host "  tnewc@blueclue.com (Thomas Newcomb)" -ForegroundColor White
-    Write-Host "  cmcgo@blueclue.com (Clayton McGough)" -ForegroundColor White
-    Write-Host "  jwill@blueclue.com (Jacob Williams)" -ForegroundColor White
+    Write-Host "  tnewc@blueclue.com (Thomas Newcomb) - Technician" -ForegroundColor White
+    Write-Host "  cmcgo@blueclue.com (Clayton McGough) - Technician" -ForegroundColor White
+    Write-Host "  jwill@blueclue.com (Jacob Williams) - Technician" -ForegroundColor White
+    Write-Host "  mjohnson@blueclue.com (Maria Johnson) - Senior Technician" -ForegroundColor White
+    Write-Host "  ebrown@blueclue.com (Eric Brown) - Senior Technician" -ForegroundColor White
+    Write-Host "  jdoe@blueclue.com (Jane Doe) - Management" -ForegroundColor White
+    Write-Host "  ssmith@blueclue.com (Sarah Smith) - Management" -ForegroundColor White
     Write-Host "  Password: admin123 (must change on first login)" -ForegroundColor Yellow
     Write-Host ""
     exit 0
@@ -107,11 +112,15 @@ Write-Host "====================================================================
 Write-Host "Step 3: Creating database schema..." -ForegroundColor Yellow
 Write-Host "============================================================================" -ForegroundColor Cyan
 Write-Host "Creating tables, ENUMs, indexes, triggers, and views..." -ForegroundColor White
+Write-Host "Includes RBAC system with role-based default category access..." -ForegroundColor White
 
 $null = psql -U postgres -d blueclue -f schema.sql -q 2>&1
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Schema created successfully" -ForegroundColor Green
+    Write-Host "  [OK] Core tables (users, tickets, categories)" -ForegroundColor Green
+    Write-Host "  [OK] RBAC tables (privilege_types, user_privileges, category_access)" -ForegroundColor Green
+    Write-Host "  [OK] Role defaults (admin, technician default category access)" -ForegroundColor Green
 } else {
     Write-Host "ERROR: Failed to create schema" -ForegroundColor Red
     Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
@@ -131,10 +140,10 @@ $null = psql -U postgres -d blueclue -f auth_setup.sql 2>&1
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Authentication system configured successfully" -ForegroundColor Green
     Write-Host ""
-    Write-Host "Technician accounts created:" -ForegroundColor Yellow
-    Write-Host "  tnewc@blueclue.com (Thomas Newcomb)" -ForegroundColor White
-    Write-Host "  cmcgo@blueclue.com (Clayton McGough)" -ForegroundColor White
-    Write-Host "  jwill@blueclue.com (Jacob Williams)" -ForegroundColor White
+    Write-Host "Technician accounts created (all levels):" -ForegroundColor Yellow
+    Write-Host "  tnewc, cmcgo, jwill (Technicians)" -ForegroundColor White
+    Write-Host "  mjohnson, ebrown (Senior Technicians)" -ForegroundColor White
+    Write-Host "  jdoe, ssmith (Management)" -ForegroundColor White
     Write-Host "  Password: admin123 (must change on first login)" -ForegroundColor Yellow
 } else {
     Write-Host "ERROR: Failed to setup authentication" -ForegroundColor Red
@@ -174,18 +183,25 @@ Write-Host "====================================================================
 Write-Host "Verifying setup..." -ForegroundColor Yellow
 Write-Host "============================================================================" -ForegroundColor Cyan
 
-$techCount = (psql -U postgres -d blueclue -t -A -c "SELECT COUNT(*) FROM users WHERE role = 'technician';" 2>&1).Trim()
+$techCount = (psql -U postgres -d blueclue -t -A -c "SELECT COUNT(*) FROM users WHERE role IN ('technician', 'senior_technician', 'management');" 2>&1).Trim()
 $custCount = (psql -U postgres -d blueclue -t -A -c "SELECT COUNT(*) FROM users WHERE role = 'customer';" 2>&1).Trim()
 $adminCount = (psql -U postgres -d blueclue -t -A -c "SELECT COUNT(*) FROM users WHERE role = 'admin';" 2>&1).Trim()
 $catCount = (psql -U postgres -d blueclue -t -A -c "SELECT COUNT(*) FROM categories;" 2>&1).Trim()
 $ticketCount = (psql -U postgres -d blueclue -t -A -c "SELECT COUNT(*) FROM tickets;" 2>&1).Trim()
+$privTypeCount = (psql -U postgres -d blueclue -t -A -c "SELECT COUNT(*) FROM privilege_types WHERE is_active = true;" 2>&1).Trim()
+$roleDefaultsCount = (psql -U postgres -d blueclue -t -A -c "SELECT COUNT(*) FROM role_category_defaults WHERE is_active = true;" 2>&1).Trim()
 
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "  Technicians: $techCount" -ForegroundColor White
+    Write-Host "Database Objects:" -ForegroundColor Yellow
+    Write-Host "  Technicians (All Levels): $techCount" -ForegroundColor White
     Write-Host "  Customers: $custCount" -ForegroundColor White
     Write-Host "  Admins: $adminCount" -ForegroundColor White
     Write-Host "  Categories: $catCount" -ForegroundColor White
     Write-Host "  Tickets: $ticketCount" -ForegroundColor White
+    Write-Host ""
+    Write-Host "RBAC System:" -ForegroundColor Yellow
+    Write-Host "  Privilege Types: $privTypeCount" -ForegroundColor White
+    Write-Host "  Role Default Access Rules: $roleDefaultsCount" -ForegroundColor White
 } else {
     Write-Host "  WARNING: Could not verify counts" -ForegroundColor Yellow
 }
@@ -195,11 +211,21 @@ Write-Host "====================================================================
 Write-Host "Setup Complete!" -ForegroundColor Green
 Write-Host "============================================================================" -ForegroundColor Cyan
 Write-Host ""
+Write-Host "RBAC System Enabled:" -ForegroundColor Yellow
+Write-Host "  [OK] 5 Privilege types configured" -ForegroundColor Green
+Write-Host "  [OK] Role-based default category access active" -ForegroundColor Green
+Write-Host "  [OK] Admins: Full access to all categories" -ForegroundColor Green
+Write-Host "  [OK] Management: Full assign access to all categories" -ForegroundColor Green
+Write-Host "  [OK] Senior Technicians: Assign access to critical, edit to general" -ForegroundColor Green
+Write-Host "  [OK] Technicians: Edit access to technical categories" -ForegroundColor Green
+Write-Host ""
 Write-Host "Connection String:" -ForegroundColor Yellow
 Write-Host "postgresql://postgres:PASSWORD@localhost:5432/blueclue" -ForegroundColor White
 Write-Host ""
 Write-Host "Technician Login:" -ForegroundColor Yellow
-Write-Host "  Username: tnewc / cmcgo / jwill" -ForegroundColor White
+Write-Host "  Technician: tnewc / cmcgo / jwill" -ForegroundColor White
+Write-Host "  Senior Tech: mjohnson / ebrown" -ForegroundColor White
+Write-Host "  Management: jdoe / ssmith" -ForegroundColor White
 Write-Host "  Password: admin123 (must change on first login)" -ForegroundColor White
 Write-Host ""
 
@@ -218,6 +244,10 @@ Write-Host "Next Steps:" -ForegroundColor Yellow
 Write-Host "1. Start backend: cd blueclue\backend; npm run dev" -ForegroundColor White
 Write-Host "2. Start frontend: cd blueclue\frontend; npm run dev" -ForegroundColor White
 Write-Host "3. Submit tickets via the app to test AI classification" -ForegroundColor White
+Write-Host ""
+Write-Host "RBAC Documentation:" -ForegroundColor Yellow
+Write-Host "  API Guide: docs\api\rbac-default-access.md" -ForegroundColor White
+Write-Host "  Implementation: docs\api\rbac-default-access-implementation.md" -ForegroundColor White
 Write-Host ""
 Write-Host "Guest Cleanup:" -ForegroundColor Yellow
 Write-Host "  Dry run: cd blueclue\backend; npm run cleanup:guests:dry-run" -ForegroundColor White
