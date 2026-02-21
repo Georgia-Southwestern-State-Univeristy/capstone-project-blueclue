@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useState, useRef, useEffect } from 'react'
 import { logout, isAuthenticated, getUser } from '../services/authService'
+import NotificationBell from './NotificationBell'
 import logo from '../assets/EditedBlueClueLogo.png'
 
 function Navbar() {
@@ -78,6 +79,9 @@ function Navbar() {
                 <span className="text-gray-600">|</span>
                 <span className="text-gray-400 capitalize">{user?.role || 'Guest'}</span>
               </div>
+
+              {/* Notification Bell */}
+              <NotificationBell onClick={() => {/* TODO: Open dropdown in next component */}} />
 
               {/* Account Dropdown */}
               <div className="relative" ref={dropdownRef}>
