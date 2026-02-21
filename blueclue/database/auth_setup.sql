@@ -18,7 +18,11 @@ INSERT INTO users (email, password_hash, first_name, last_name, username, role, 
 VALUES 
     ('tnewc@blueclue.com', '$2b$10$lmfkmrGkF2XhKJqnfperu.bBG7CK3HpkXJ/KIullkzkNFGxewRATy', 'Thomas', 'Newcomb', 'tnewc', 'technician', true, true),
     ('cmcgo@blueclue.com', '$2b$10$Gqw9ytr7gzq7oTrfCYDuseBDakP2Ni/Yck2BdmpzEZ6Xn/3n1bDba', 'Clayton', 'McGough', 'cmcgo', 'technician', true, true),
-    ('jwill@blueclue.com', '$2b$10$YtimdlARnlSE8MdpEQoZaemIXIWLwQGf5SZOJj7IfZ8wH9h1F8ngu', 'Jacob', 'Williams', 'jwill', 'technician', true, true)
+    ('jwill@blueclue.com', '$2b$10$YtimdlARnlSE8MdpEQoZaemIXIWLwQGf5SZOJj7IfZ8wH9h1F8ngu', 'Jacob', 'Williams', 'jwill', 'technician', true, true),
+    ('mjohnson@blueclue.com', '$2b$10$lmfkmrGkF2XhKJqnfperu.bBG7CK3HpkXJ/KIullkzkNFGxewRATy', 'Maria', 'Johnson', 'mjohnson', 'senior_technician', true, true),
+    ('ebrown@blueclue.com', '$2b$10$lmfkmrGkF2XhKJqnfperu.bBG7CK3HpkXJ/KIullkzkNFGxewRATy', 'Eric', 'Brown', 'ebrown', 'senior_technician', true, true),
+    ('jdoe@blueclue.com', '$2b$10$lmfkmrGkF2XhKJqnfperu.bBG7CK3HpkXJ/KIullkzkNFGxewRATy', 'Jane', 'Doe', 'jdoe', 'management', true, true),
+    ('ssmith@blueclue.com', '$2b$10$lmfkmrGkF2XhKJqnfperu.bBG7CK3HpkXJ/KIullkzkNFGxewRATy', 'Sarah', 'Smith', 'ssmith', 'management', true, true)
 ON CONFLICT (email) DO UPDATE SET
     password_hash = EXCLUDED.password_hash,
     first_name = EXCLUDED.first_name,
