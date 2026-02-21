@@ -35,7 +35,7 @@ UPDATE users SET last_login = CURRENT_TIMESTAMP - INTERVAL '30 minutes' WHERE em
 -- Admin account for system administration
 
 INSERT INTO users (email, password_hash, first_name, last_name, username, role, phone, company, is_active)
-VALUES ('admin@blueclue.com', '$2b$10$rX8yQKZ5YxJqN7mP6LQ8.OXvFZH9GqWnR4sT2uVxK3lM5nP7oQ9aG', 'Admin', 'User', 'admin', 'admin', '+1-555-0300', 'BlueClue Support', true);
+VALUES ('admin@blueclue.com', '$2b$10$5z/sNzB2ijopeHYQMrBDfegPTuvlV1Xt8iF9moVQjSaOFxgGYBWim', 'Admin', 'User', 'admin', 'admin', '+1-555-0300', 'BlueClue Support', true);
 
 UPDATE users SET last_login = CURRENT_TIMESTAMP - INTERVAL '1 hour' WHERE email = 'admin@blueclue.com';
 
