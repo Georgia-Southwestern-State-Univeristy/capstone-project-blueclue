@@ -2,21 +2,28 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useState, useRef, useEffect } from 'react'
 import { logout, isAuthenticated, getUser } from '../services/authService'
 import NotificationBell from './NotificationBell'
+import NotificationDropdown from './NotificationDropdown'
 import logo from '../assets/EditedBlueClueLogo.png'
 
 function Navbar() {
   const navigate = useNavigate()
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [notificationDropdownOpen, setNotificationDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const dropdownRef = useRef(null)
+  const notificationDropdownRef = useRef(null)
+  const notificationBellRef = useRef(null)
   const authenticated = isAuthenticated()
   const user = getUser()
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setDropdownOpen(false)
+      }
+      if (notificationDropdownRef.current && !notificationDropdownRef.current.contains(event.target)) {
+        setNotificationDropdownOpen(false)
       }
     }
 
@@ -80,8 +87,23 @@ function Navbar() {
                 <span className="text-gray-400 capitalize">{user?.role || 'Guest'}</span>
               </div>
 
-              {/* Notification Bell */}
-              <NotificationBell onClick={() => {/* TODO: Open dropdown in next component */}} />
+              {/* Notification Bell & Dropdown */}
+              <div className="relative" ref={notificationDropdownRef}>
+                <NotificationBell 
+                  ref={notificationBellRef}
+                  onClick={() => setNotificationDropdownOpen(!notificationDropdownOpen)} 
+                />
+                <NotificationDropdown 
+                  isOpen={notificationDropdownOpen}
+                  onClose={() => setNotificationDropdownOpen(false)}
+                  onNotificationUpdate={() => {
+                    // Refresh the bell's unread count
+                    if (notificationBellRef.current?.refresh) {
+                      notificationBellRef.current.refresh();
+                    }
+                  }}
+                />
+              </div>
 
               {/* Account Dropdown */}
               <div className="relative" ref={dropdownRef}>

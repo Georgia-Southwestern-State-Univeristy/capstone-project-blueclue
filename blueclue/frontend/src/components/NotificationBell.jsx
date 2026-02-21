@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { getUnreadCount } from '../services/notificationService';
 
-function NotificationBell({ onClick }) {
+const NotificationBell = forwardRef(({ onClick }, ref) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -28,12 +28,10 @@ function NotificationBell({ onClick }) {
     return () => clearInterval(interval);
   }, []);
 
-  // Expose refresh method to parent via callback
-  useEffect(() => {
-    if (onClick && onClick.refresh) {
-      onClick.refresh = fetchUnreadCount;
-    }
-  }, [onClick]);
+  // Expose refresh method to parent via ref
+  useImperativeHandle(ref, () => ({
+    refresh: fetchUnreadCount
+  }));
 
   return (
     <button
@@ -70,6 +68,8 @@ function NotificationBell({ onClick }) {
       )}
     </button>
   );
-}
+});
+
+NotificationBell.displayName = 'NotificationBell';
 
 export default NotificationBell;
