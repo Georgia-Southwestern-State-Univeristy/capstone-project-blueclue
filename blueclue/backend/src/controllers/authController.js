@@ -92,12 +92,12 @@ export const login = async (req, res) => {
                 });
             }
 
-            // Find technician by username
+            // Find technician by username (any technician level)
             const result = await pool.query(
                 `SELECT id, email, username, password_hash, first_name, last_name, role, 
                         force_password_change, is_active 
                  FROM users 
-                 WHERE username = $1 AND role = 'technician'`,
+                 WHERE username = $1 AND role IN ('technician', 'senior_technician', 'management')`,
                 [username]
             );
 
@@ -183,6 +183,8 @@ export const login = async (req, res) => {
         // CUSTOMER LOGIN (email + password)
         // ========================================
         if (email) {
+            console.log('🔐 Email login attempt:', { email });
+            
             if (!password) {
                 return res.status(400).json({
                     success: false,
@@ -190,15 +192,18 @@ export const login = async (req, res) => {
                 });
             }
 
-            // Find customer by email
+            // Find customer or admin by email
             const result = await pool.query(
                 `SELECT id, email, password_hash, first_name, last_name, role, is_active 
                  FROM users 
-                 WHERE email = $1 AND role = 'customer'`,
+                 WHERE email = $1 AND role IN ('customer', 'admin')`,
                 [email]
             );
 
+            console.log('📊 Query result:', { found: result.rows.length > 0, role: result.rows[0]?.role });
+
             if (result.rows.length === 0) {
+                console.log('❌ User not found in database');
                 return res.status(401).json({
                     success: false,
                     message: 'Invalid email or password.'
@@ -209,6 +214,7 @@ export const login = async (req, res) => {
 
             // Check if account is active
             if (!user.is_active) {
+                console.log('❌ Account is not active');
                 return res.status(403).json({
                     success: false,
                     message: 'Account is disabled. Contact support.'
@@ -216,8 +222,12 @@ export const login = async (req, res) => {
             }
 
             // Verify password
+            console.log('🔑 Comparing password...');
             const passwordMatch = await bcrypt.compare(password, user.password_hash);
+            console.log('🔑 Password match result:', { passwordMatch });
+            
             if (!passwordMatch) {
+                console.log('❌ Password does not match');
                 return res.status(401).json({
                     success: false,
                     message: 'Invalid email or password.'
