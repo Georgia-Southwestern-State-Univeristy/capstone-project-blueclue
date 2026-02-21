@@ -64,6 +64,11 @@ function Navbar() {
                     </Link>
                   </>
                 )}
+                {user?.role === 'management' && (
+                  <Link to="/management-dashboard" className="text-gray-300 hover:text-white transition-colors">
+                    Management Dashboard
+                  </Link>
+                )}
               </>
             )}
           </div>
@@ -181,6 +186,15 @@ function Navbar() {
                 My Tickets
               </Link>
             </>
+          )}
+          {user?.role === 'management' && (
+            <Link
+              to="/management-dashboard"
+              onClick={() => setMobileMenuOpen(false)}
+              className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+            >
+              Management Dashboard
+            </Link>
           )}
           
           {!user?.isGuest && (
