@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { getPreferences, savePreferences } from '../services/preferencesService';
 
 /**
@@ -13,6 +13,14 @@ function NotificationPreferences() {
     const updated = {
       ...preferences,
       browserNotifications: e.target.checked,
+    };
+    setPreferences(updated);
+  };
+
+  const handleEmailNotificationToggle = (e) => {
+    const updated = {
+      ...preferences,
+      emailNotifications: e.target.checked,
     };
     setPreferences(updated);
   };
@@ -77,6 +85,35 @@ function NotificationPreferences() {
           />
           <span className="text-gray-200">
             {preferences.browserNotifications ? 'Enabled' : 'Disabled'}
+          </span>
+        </label>
+      </div>
+
+      {/* Email Notifications Section */}
+      <div className="mb-8">
+        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+            />
+          </svg>
+          Email Notifications
+        </h3>
+        <p className="text-gray-400 text-sm mb-4">
+          Receive email notifications for important updates
+        </p>
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={preferences.emailNotifications}
+            onChange={handleEmailNotificationToggle}
+            className="w-4 h-4 rounded bg-gray-700 border-gray-600 checked:bg-blue-600 cursor-pointer"
+          />
+          <span className="text-gray-200">
+            {preferences.emailNotifications ? 'Enabled' : 'Disabled'}
           </span>
         </label>
       </div>

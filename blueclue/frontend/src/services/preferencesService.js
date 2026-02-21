@@ -7,6 +7,7 @@ const PREFERENCES_KEY = 'blueclue_notification_preferences';
 
 const DEFAULT_PREFERENCES = {
   browserNotifications: true,
+  emailNotifications: true,
   types: {
     assignment: true,
     overdue: true,
@@ -71,8 +72,8 @@ export const areBrowserNotificationsEnabled = () => {
 export const getEnabledNotificationTypes = () => {
   const preferences = getPreferences();
   return Object.entries(preferences.types || {})
-    .filter(([_, enabled]) => enabled)
-    .map(([type, _]) => type);
+    .filter(([, enabled]) => enabled)
+    .map(([type]) => type);
 };
 
 /**
@@ -102,6 +103,27 @@ export const toggleBrowserNotifications = () => {
 };
 
 /**
+ * Check if email notifications are enabled
+ * @returns {boolean} Whether email notifications are enabled
+ */
+export const areEmailNotificationsEnabled = () => {
+  const preferences = getPreferences();
+  return preferences.emailNotifications ?? true;
+};
+
+/**
+ * Toggle email notifications
+ * @returns {boolean} New enabled state
+ */
+export const toggleEmailNotifications = () => {
+  const preferences = getPreferences();
+  const newState = !preferences.emailNotifications;
+  preferences.emailNotifications = newState;
+  savePreferences(preferences);
+  return newState;
+};
+
+/**
  * Reset preferences to default
  */
 export const resetPreferences = () => {
@@ -113,8 +135,10 @@ export default {
   savePreferences,
   isNotificationTypeEnabled,
   areBrowserNotificationsEnabled,
+  areEmailNotificationsEnabled,
   getEnabledNotificationTypes,
   toggleNotificationType,
   toggleBrowserNotifications,
+  toggleEmailNotifications,
   resetPreferences,
 };
