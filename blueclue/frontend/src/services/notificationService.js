@@ -95,6 +95,18 @@ const handleResponse = async (response, errorMessage) => {
 };
 
 /**
+ * Normalize notification data from API (snake_case to camelCase)
+ */
+export const normalizeNotification = (notification) => ({
+  ...notification,
+  isRead: notification.is_read,
+  createdAt: notification.created_at,
+  // Keep original snake_case for backend operations
+  is_read: notification.is_read,
+  created_at: notification.created_at,
+});
+
+/**
  * Get user notifications
  * @param {Object} params - Query parameters
  * @param {number} params.page - Page number (default: 1)
@@ -121,7 +133,17 @@ export const getUserNotifications = async ({ page = 1, limit = 20, unreadOnly = 
       }
     );
     
-    return await handleResponse(response, 'Failed to fetch notifications');
+    const apiResponse = await handleResponse(response, 'Failed to fetch notifications');
+    
+    // Extract the data object from the API response
+    const data = apiResponse.data || apiResponse;
+    
+    // Normalize notification data
+    if (data.notifications && Array.isArray(data.notifications)) {
+      data.notifications = data.notifications.map(normalizeNotification);
+    }
+    
+    return data;
   } catch (error) {
     const message = getUserFriendlyMessage(error, 'Failed to load notifications');
     throw new ApiError(message, error.type || 'unknown', error.status);

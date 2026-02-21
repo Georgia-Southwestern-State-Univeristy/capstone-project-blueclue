@@ -1,5 +1,6 @@
 // src/controllers/notificationController.js
 import Notification from '../models/Notification.js';
+import { emitNotificationToUser, emitUnreadCountToUser } from '../services/socketService.js';
 
 // Valid notification types (must match database enum)
 const VALID_TYPES = ['assignment', 'overdue', 'update_request', 'mention'];
@@ -54,6 +55,16 @@ export const createNotification = async (req, res) => {
             message: message.trim(),
             ticket_id: ticket_id || null
         });
+
+        // Emit real-time notification via WebSocket
+        const io = req.app.get('io');
+        if (io) {
+            emitNotificationToUser(io, user_id, notification);
+            
+            // Get updated unread count and emit it
+            const unreadCount = await Notification.getUnreadCount(user_id);
+            emitUnreadCountToUser(io, user_id, unreadCount);
+        }
 
         res.status(201).json({
             status: 'success',
@@ -156,6 +167,13 @@ export const markNotificationAsRead = async (req, res) => {
             });
         }
 
+        // Emit real-time update via WebSocket
+        const io = req.app.get('io');
+        if (io) {
+            const unreadCount = await Notification.getUnreadCount(userId);
+            emitUnreadCountToUser(io, userId, unreadCount);
+        }
+
         res.json({
             status: 'success',
             message: 'Notification marked as read',
@@ -195,6 +213,13 @@ export const deleteNotification = async (req, res) => {
             });
         }
 
+        // Emit real-time update via WebSocket
+        const io = req.app.get('io');
+        if (io) {
+            const unreadCount = await Notification.getUnreadCount(userId);
+            emitUnreadCountToUser(io, userId, unreadCount);
+        }
+
         res.json({
             status: 'success',
             message: 'Notification deleted successfully',
@@ -218,6 +243,12 @@ export const markAllNotificationsAsRead = async (req, res) => {
         const userId = req.user.id;
         const count = await Notification.markAllAsRead(userId);
 
+        // Emit real-time update via WebSocket
+        const io = req.app.get('io');
+        if (io) {
+            emitUnreadCountToUser(io, userId, 0); // All marked as read, so count is 0
+        }
+
         res.json({
             status: 'success',
             message: `${count} notification(s) marked as read`,
@@ -240,6 +271,13 @@ export const deleteAllReadNotifications = async (req, res) => {
     try {
         const userId = req.user.id;
         const count = await Notification.deleteAllRead(userId);
+
+        // Emit real-time update via WebSocket (unread count shouldn't change, but refresh list)
+        const io = req.app.get('io');
+        if (io) {
+            const unreadCount = await Notification.getUnreadCount(userId);
+            emitUnreadCountToUser(io, userId, unreadCount);
+        }
 
         res.json({
             status: 'success',

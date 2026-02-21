@@ -132,6 +132,22 @@ class Notification {
         const result = await pool.query(query, [userId]);
         return result.rowCount;
     }
+
+    /**
+     * Get unread notification count for a user
+     * @param {Number} userId - User ID
+     * @returns {Promise<Number>} Unread notification count
+     */
+    static async getUnreadCount(userId) {
+        const query = `
+            SELECT COUNT(*) as count
+            FROM notifications
+            WHERE user_id = $1 AND is_read = false
+        `;
+        
+        const result = await pool.query(query, [userId]);
+        return parseInt(result.rows[0].count);
+    }
 }
 
 export default Notification;

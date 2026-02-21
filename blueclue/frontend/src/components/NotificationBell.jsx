@@ -1,12 +1,19 @@
-import { useState, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { getUnreadCount } from '../services/notificationService';
+import { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { getUnreadCount, normalizeNotification } from '../services/notificationService';
+import { useNotificationSocket } from '../hooks/useNotificationSocket';
+import { 
+  showNotificationAlert, 
+  getBrowserNotificationPreference,
+  requestNotificationPermission 
+} from '../utils/browserNotifications';
 
-const NotificationBell = forwardRef(({ onClick }, ref) => {
+const NotificationBell = forwardRef(({ onClick, onNewNotification }, ref) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasNewNotification, setHasNewNotification] = useState(false);
 
   // Fetch unread count
-  const fetchUnreadCount = async () => {
+  const fetchUnreadCount = useCallback(async () => {
     try {
       setIsLoading(true);
       const count = await getUnreadCount();
@@ -16,17 +23,51 @@ const NotificationBell = forwardRef(({ onClick }, ref) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  // Initial fetch and polling
+  // WebSocket real-time updates
+  const handleNewNotification = useCallback((notification) => {
+    // Normalize notification data from WebSocket (snake_case to camelCase)
+    const normalized = normalizeNotification(notification);
+    console.log('Bell received new notification:', normalized);
+    setHasNewNotification(true);
+    // Don't call fetchUnreadCount() here - the backend sends unread_count_update event
+    
+    // Show browser notification if enabled
+    if (getBrowserNotificationPreference()) {
+      showNotificationAlert(normalized);
+    }
+    
+    // Pass to parent if callback provided
+    if (onNewNotification) {
+      onNewNotification(normalized);
+    }
+    
+    // Reset animation after 3 seconds
+    setTimeout(() => setHasNewNotification(false), 3000);
+  }, [onNewNotification]);
+
+  const handleUnreadCountUpdate = useCallback((count) => {
+    console.log('Bell received unread count update:', count);
+    setUnreadCount(count);
+  }, []);
+
+  useNotificationSocket(handleNewNotification, handleUnreadCountUpdate);
+
+  // Initial fetch and polling (as backup for WebSocket)
   useEffect(() => {
     fetchUnreadCount();
 
-    // Poll every 30 seconds for new notifications
-    const interval = setInterval(fetchUnreadCount, 30000);
+    // Request notification permission on mount if preference is enabled
+    if (getBrowserNotificationPreference()) {
+      requestNotificationPermission();
+    }
+
+    // Poll every 60 seconds as backup (WebSocket should handle real-time updates)
+    const interval = setInterval(fetchUnreadCount, 60000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchUnreadCount]);
 
   // Expose refresh method to parent via ref
   useImperativeHandle(ref, () => ({
@@ -36,12 +77,16 @@ const NotificationBell = forwardRef(({ onClick }, ref) => {
   return (
     <button
       onClick={onClick}
-      className="relative w-10 h-10 flex items-center justify-center rounded-full bg-gray-800 hover:bg-gray-700 transition-colors"
+      className={`relative w-10 h-10 flex items-center justify-center rounded-full bg-gray-800 hover:bg-gray-700 transition-colors ${
+        hasNewNotification ? 'animate-pulse' : ''
+      }`}
       aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
     >
       {/* Bell Icon */}
       <svg
-        className="w-6 h-6 text-gray-300"
+        className={`w-6 h-6 transition-colors ${
+          hasNewNotification ? 'text-blue-400' : 'text-gray-300'
+        }`}
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -57,7 +102,9 @@ const NotificationBell = forwardRef(({ onClick }, ref) => {
 
       {/* Unread Badge */}
       {unreadCount > 0 && (
-        <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-red-600 rounded-full min-w-[1.25rem]">
+        <span className={`absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white rounded-full min-w-[1.25rem] ${
+          hasNewNotification ? 'bg-blue-500 animate-bounce' : 'bg-red-600'
+        }`}>
           {unreadCount > 99 ? '99+' : unreadCount}
         </span>
       )}
