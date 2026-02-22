@@ -7,12 +7,12 @@ import {
     resetConfiguration,
     getConfigurationHistory
 } from '../controllers/configController.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // All config routes require authentication
-router.use(authenticate);
+router.use(authenticateToken);
 
 /**
  * @route   GET /api/config/ai
