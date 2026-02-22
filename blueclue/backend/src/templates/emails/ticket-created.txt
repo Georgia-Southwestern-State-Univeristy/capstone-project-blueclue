@@ -1,0 +1,29 @@
+✅ Ticket Submitted - BlueClue Support
+
+Your support ticket has been created
+
+Thank you for contacting BlueClue Support. We've received your request and our team will review it shortly.
+
+TICKET DETAILS:
+Ticket ID: #{{ticketId}}
+Subject: {{subject}}
+Priority: {{priority}}
+Category: {{category}}
+Description: {{description}}
+
+View Ticket: {{ticketUrl}}
+
+What happens next?
+1. Our team will review your ticket based on priority
+2. A technician will be assigned to your case
+3. You'll receive email updates when there are changes
+4. You can track progress anytime in your dashboard
+
+💡 Tip: Keep your ticket ID #{{ticketId}} handy for reference in future communications.
+
+---
+BlueClue Support Portal
+Dashboard: {{frontendUrl}}
+Contact Support: support@blueclue.com
+
+© 2026 BlueClue. All rights reserved.
