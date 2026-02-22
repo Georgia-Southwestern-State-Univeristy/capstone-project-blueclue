@@ -1,0 +1,32 @@
+🔄 Ticket Status Update - BlueClue Support
+
+Your ticket status has been updated
+
+Good news! There's been progress on your support ticket.
+
+STATUS CHANGE:
+{{oldStatus}} → {{newStatus}}
+
+TICKET DETAILS:
+Ticket ID: #{{ticketId}}
+Subject: {{subject}}
+{{#assignedTechnician}}
+Assigned To: {{assignedTechnician}}
+{{/assignedTechnician}}
+Updated: {{updatedAt}}
+
+{{#updateComment}}
+Update from Support Team:
+{{updateComment}}
+{{/updateComment}}
+
+View Ticket: {{ticketUrl}}
+
+You can view the full ticket history and add comments in your dashboard.
+
+---
+BlueClue Support Portal
+Dashboard: {{frontendUrl}}
+Contact Support: support@blueclue.com
+
+© 2026 BlueClue. All rights reserved.

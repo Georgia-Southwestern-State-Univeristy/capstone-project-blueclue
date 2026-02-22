@@ -73,12 +73,24 @@ function Register() {
         company: formData.company || undefined
       }
 
-      await registerService(userData)
+      const response = await registerService(userData)
 
-      // Registration successful - redirect to dashboard
-      navigate('/client-dashboard', {
-        state: { message: 'Account created successfully! Welcome to BlueClue.' }
-      })
+      // Check if email verification is required
+      if (response.requiresVerification) {
+        // Registration successful but requires email verification
+        navigate('/login', {
+          state: { 
+            message: 'Account created! Please check your email to verify your account before logging in.',
+            email: formData.email,
+            type: 'verification-required'
+          }
+        })
+      } else {
+        // Registration successful - old flow (shouldn't happen with new backend)
+        navigate('/client-dashboard', {
+          state: { message: 'Account created successfully! Welcome to BlueClue.' }
+        })
+      }
 
     } catch (err) {
       setError(err.message || 'Registration failed. Please try again.')

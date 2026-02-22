@@ -33,30 +33,6 @@ ON CONFLICT (email) DO UPDATE SET
     is_active = EXCLUDED.is_active;
 
 -- ============================================================================
--- GUEST SESSIONS TABLE
--- ============================================================================
--- Stores temporary guest sessions (no password, email + name only)
-
-CREATE TABLE IF NOT EXISTS guest_sessions (
-    id SERIAL PRIMARY KEY,
-    session_token VARCHAR(255) NOT NULL UNIQUE,
-    email VARCHAR(255) NOT NULL,
-    full_name VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '24 hours'),
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    
-    -- Constraints
-    CONSTRAINT guest_email_format CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
-);
-
--- Indexes for guest sessions
-CREATE INDEX IF NOT EXISTS idx_guest_sessions_token ON guest_sessions(session_token);
-CREATE INDEX IF NOT EXISTS idx_guest_sessions_email ON guest_sessions(email);
-CREATE INDEX IF NOT EXISTS idx_guest_sessions_expires_at ON guest_sessions(expires_at);
-CREATE INDEX IF NOT EXISTS idx_guest_sessions_active ON guest_sessions(is_active) WHERE is_active = true;
-
--- ============================================================================
 -- REFRESH TOKENS TABLE
 -- ============================================================================
 -- Stores refresh tokens for secure authentication
@@ -81,16 +57,6 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at ON refresh_tokens(expir
 -- CLEANUP FUNCTION FOR EXPIRED SESSIONS
 -- ============================================================================
 
--- Function to clean up expired guest sessions
-CREATE OR REPLACE FUNCTION cleanup_expired_guest_sessions()
-RETURNS void AS $$
-BEGIN
-    UPDATE guest_sessions 
-    SET is_active = false 
-    WHERE expires_at < CURRENT_TIMESTAMP AND is_active = true;
-END;
-$$ LANGUAGE plpgsql;
-
 -- Function to clean up expired refresh tokens
 CREATE OR REPLACE FUNCTION cleanup_expired_refresh_tokens()
 RETURNS void AS $$
@@ -114,5 +80,5 @@ ORDER BY username;
 SELECT table_name 
 FROM information_schema.tables 
 WHERE table_schema = 'public' 
-  AND table_name IN ('guest_sessions', 'refresh_tokens')
+  AND table_name = 'refresh_tokens'
 ORDER BY table_name;

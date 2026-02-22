@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticket Assigned - BlueClue</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px 8px 0 0;
+            margin: -30px -30px 30px -30px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .ticket-info {
+            background-color: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .ticket-info h3 {
+            margin-top: 0;
+            color: #667eea;
+        }
+        .info-row {
+            margin: 10px 0;
+            padding: 5px 0;
+        }
+        .label {
+            font-weight: bold;
+            color: #555;
+            display: inline-block;
+            min-width: 100px;
+        }
+        .value {
+            color: #333;
+        }
+        .priority {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .priority-high { background-color: #fee; color: #c33; }
+        .priority-medium { background-color: #fff3cd; color: #856404; }
+        .priority-low { background-color: #d1ecf1; color: #0c5460; }
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎫 Ticket Assigned to You</h1>
+        </div>
+        
+        <p>Hi {{technicianName}},</p>
+        
+        <p>A new ticket has been assigned to you. Please review the details below and take necessary action.</p>
+        
+        <div class="ticket-info">
+            <h3>Ticket Details</h3>
+            <div class="info-row">
+                <span class="label">Ticket ID:</span>
+                <span class="value">#{{ticketId}}</span>
+            </div>
+            <div class="info-row">
+                <span class="label">Subject:</span>
+                <span class="value">{{subject}}</span>
+            </div>
+            <div class="info-row">
+                <span class="label">Priority:</span>
+                <span class="priority priority-{{priority}}">{{priority}}</span>
+            </div>
+            <div class="info-row">
+                <span class="label">Category:</span>
+                <span class="value">{{category}}</span>
+            </div>
+            <div class="info-row">
+                <span class="label">Status:</span>
+                <span class="value">{{status}}</span>
+            </div>
+            <div class="info-row">
+                <span class="label">Requester:</span>
+                <span class="value">{{requesterName}}</span>
+            </div>
+            <div class="info-row">
+                <span class="label">Created:</span>
+                <span class="value">{{createdAt}}</span>
+            </div>
+        </div>
+        
+        <p><strong>Description:</strong></p>
+        <p style="background-color: #f8f9fa; padding: 15px; border-radius: 4px;">{{description}}</p>
+        
+        <center>
+            <a href="{{dashboardUrl}}" class="cta-button">View Ticket in Dashboard</a>
+        </center>
+        
+        <p style="margin-top: 30px; font-size: 14px; color: #666;">
+            Please respond to this ticket as soon as possible. The customer is waiting for your assistance.
+        </p>
+        
+        <div class="footer">
+            <p><strong>BlueClue Support</strong><br>
+            This is an automated notification from your ticket management system.</p>
+            <p style="font-size: 11px; margin-top: 10px;">
+                You are receiving this email because a ticket was assigned to you. 
+                To manage your email preferences, visit your account settings.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

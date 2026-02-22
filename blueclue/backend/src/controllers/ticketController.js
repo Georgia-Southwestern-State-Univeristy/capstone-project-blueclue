@@ -5,6 +5,7 @@ import UserPrivilege from '../models/UserPrivilege.js';
 import CategoryAccess from '../models/CategoryAccess.js';
 import { classifyTicketWithFallback } from '../services/aiService.js';
 import pool from '../config/database.js';
+import { sendTicketConfirmation, sendTicketStatusUpdate, sendTicketAssignment } from '../services/emailService.js';
 
 // Helper function to check if user is a technician (any level)
 const isTechnician = (role) => {
@@ -29,7 +30,7 @@ const VALID_TRANSITIONS = {
  */
 export const createTicket = async (req, res) => {
     try {
-        const { subject, description, customer_id, guest_email, guest_name, priority, category } = req.body;
+        const { subject, description, customer_id, priority, category } = req.body;
 
         // Validation
         if (!subject || subject.trim() === '') {
@@ -46,45 +47,12 @@ export const createTicket = async (req, res) => {
             });
         }
 
-        // Require either customer_id (authenticated) OR guest_email + guest_name
-        if (!customer_id && (!guest_email || !guest_name)) {
+        // Require customer_id (authenticated users only)
+        if (!customer_id) {
             return res.status(400).json({
                 status: 'error',
-                message: 'Either customer_id or guest information (email and name) is required'
+                message: 'Customer ID is required. Please log in to create a ticket.'
             });
-        }
-
-        // Handle guest users: find or create a guest customer record
-        let finalCustomerId = customer_id;
-        if (!customer_id && guest_email) {
-            // Import User model for guest user lookup/creation
-            const User = (await import('../models/User.js')).default;
-            
-            // Check if guest user already exists
-            let guestUser = await User.getByEmail(guest_email);
-            
-            if (!guestUser) {
-                // Create a new guest user record
-                const nameParts = guest_name.trim().split(' ');
-                const firstName = nameParts[0] || 'Guest';
-                const lastName = nameParts.slice(1).join(' ') || 'User';
-                
-                const createUserQuery = `
-                    INSERT INTO users (email, first_name, last_name, username, role, password_hash, is_active, is_guest)
-                    VALUES ($1, $2, $3, $4, 'customer', '', true, true)
-                    RETURNING id, email, first_name, last_name, role
-                `;
-                const username = `guest_${guest_email.split('@')[0]}_${Date.now()}`;
-                const createResult = await pool.query(createUserQuery, [
-                    guest_email,
-                    firstName,
-                    lastName,
-                    username
-                ]);
-                guestUser = createResult.rows[0];
-            }
-            
-            finalCustomerId = guestUser.id;
         }
 
         // Combine subject and description for AI classification
@@ -112,7 +80,7 @@ export const createTicket = async (req, res) => {
         const ticket = await Ticket.create({
             subject: subject.trim(),
             description: description.trim(),
-            customer_id: finalCustomerId,
+            customer_id: customer_id,
             priority: finalPriority,
             user_priority: userPriority,
             ai_priority: aiPriority,
@@ -160,6 +128,27 @@ export const createTicket = async (req, res) => {
         // Include warning if AI service failed
         if (!aiResult.aiClassified && aiResult.error) {
             response.ai_classification.warning = `AI service unavailable: ${aiResult.error}`;
+        }
+
+        // Send ticket confirmation email if user has notifications enabled
+        try {
+            const customerResult = await pool.query(
+                'SELECT email, first_name, email_notifications FROM users WHERE id = $1',
+                [customer_id]
+            );
+            
+            if (customerResult.rows[0] && customerResult.rows[0].email_notifications) {
+                await sendTicketConfirmation(
+                    customerResult.rows[0].email,
+                    customerResult.rows[0].first_name,
+                    ticket,
+                    customer_id
+                );
+                console.log(`✅ Ticket confirmation email sent to ${customerResult.rows[0].email}`);
+            }
+        } catch (emailError) {
+            // Log email error but don't fail the ticket creation
+            console.error('Failed to send ticket confirmation email:', emailError.message);
         }
 
         res.status(201).json(response);
@@ -506,6 +495,42 @@ export const updateTicket = async (req, res) => {
             });
         }
 
+        // Send assignment notification if ticket was assigned to a technician
+        if (updates.assigned_to !== undefined && updates.assigned_to !== existingTicket.assigned_to) {
+            try {
+                // Fetch technician email and notification preference
+                const techResult = await pool.query(
+                    'SELECT email, first_name, last_name, email_notifications FROM users WHERE id = $1',
+                    [updates.assigned_to]
+                );
+                
+                if (techResult.rows[0] && techResult.rows[0].email_notifications) {
+                    // Fetch requester name
+                    const requesterResult = await pool.query(
+                        'SELECT first_name, last_name FROM users WHERE id = $1',
+                        [ticket.customer_id]
+                    );
+                    
+                    const techName = `${techResult.rows[0].first_name} ${techResult.rows[0].last_name}`;
+                    const requesterName = requesterResult.rows[0] 
+                        ? `${requesterResult.rows[0].first_name} ${requesterResult.rows[0].last_name}`
+                        : 'Unknown';
+                    
+                    await sendTicketAssignment(
+                        techResult.rows[0].email,
+                        techName,
+                        ticket,
+                        requesterName,
+                        updates.assigned_to
+                    );
+                    console.log(`✅ Assignment notification sent to ${techResult.rows[0].email}`);
+                }
+            } catch (emailError) {
+                // Log email error but don't fail the assignment
+                console.error('Failed to send assignment notification:', emailError.message);
+            }
+        }
+
         res.status(200).json({
             status: 'success',
             message: 'Ticket updated successfully',
@@ -656,6 +681,29 @@ export const updateTicketStatus = async (req, res) => {
 
         // Update the ticket status
         const updatedTicket = await Ticket.update(parseInt(id), updateData);
+
+        // Send status change notification email if user has notifications enabled
+        try {
+            const customerResult = await pool.query(
+                'SELECT email, first_name, email_notifications FROM users WHERE id = $1',
+                [updatedTicket.customer_id]
+            );
+            
+            if (customerResult.rows[0] && customerResult.rows[0].email_notifications) {
+                await sendTicketStatusUpdate(
+                    customerResult.rows[0].email,
+                    customerResult.rows[0].first_name,
+                    updatedTicket,
+                    existingTicket.status,
+                    status,
+                    updatedTicket.customer_id
+                );
+                console.log(`✅ Status update email sent to ${customerResult.rows[0].email}`);
+            }
+        } catch (emailError) {
+            // Log email error but don't fail the status update
+            console.error('Failed to send status update email:', emailError.message);
+        }
 
         res.status(200).json({
             status: 'success',

@@ -51,8 +51,11 @@ CREATE TABLE users (
     phone VARCHAR(20),
     company VARCHAR(255),
     is_active BOOLEAN NOT NULL DEFAULT true,
-    is_guest BOOLEAN NOT NULL DEFAULT false,
     force_password_change BOOLEAN NOT NULL DEFAULT false,
+    email_verified BOOLEAN NOT NULL DEFAULT false,
+    email_verification_token VARCHAR(255),
+    email_verification_expires TIMESTAMP WITH TIME ZONE,
+    email_notifications BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login TIMESTAMP WITH TIME ZONE,
@@ -69,7 +72,8 @@ CREATE INDEX idx_users_role ON users(role);
 CREATE INDEX idx_users_active ON users(is_active) WHERE is_active = true;
 CREATE INDEX idx_users_created_at ON users(created_at);
 CREATE INDEX idx_users_force_password_change ON users(force_password_change) WHERE force_password_change = true;
-CREATE INDEX idx_users_is_guest_created_at ON users(is_guest, created_at) WHERE is_guest = true;
+CREATE INDEX idx_users_email_verified ON users(email_verified) WHERE email_verified = false;
+CREATE INDEX idx_users_email_verification_token ON users(email_verification_token) WHERE email_verification_token IS NOT NULL;
 
 -- ============================================================================
 -- TABLE: categories
@@ -851,6 +855,74 @@ COMMENT ON COLUMN tickets.ai_keywords_matched IS 'JSON object containing matched
 -- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO blueclue_app;
 
 -- ============================================================================
+-- TABLE: email_logs
+-- ============================================================================
+-- Comprehensive logging for all email send attempts
+
+CREATE TABLE email_logs (
+    id SERIAL PRIMARY KEY,
+    recipient_email VARCHAR(255) NOT NULL,
+    recipient_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    email_type VARCHAR(50) NOT NULL,
+    subject TEXT NOT NULL,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('success', 'failed', 'pending')),
+    message_id TEXT,
+    error_message TEXT,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    sent_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    metadata JSONB,
+    
+    CONSTRAINT valid_email_type CHECK (email_type IN (
+        'verification',
+        'welcome',
+        'ticket-created',
+        'ticket-status-changed',
+        'ticket-assigned',
+        'password-reset',
+        'unknown'
+    ))
+);
+
+-- Indexes for email_logs table
+CREATE INDEX idx_email_logs_recipient ON email_logs(recipient_email);
+CREATE INDEX idx_email_logs_user_id ON email_logs(recipient_user_id);
+CREATE INDEX idx_email_logs_type ON email_logs(email_type);
+CREATE INDEX idx_email_logs_status ON email_logs(status);
+CREATE INDEX idx_email_logs_sent_at ON email_logs(sent_at);
+CREATE INDEX idx_email_logs_created_at ON email_logs(created_at);
+
+-- Comments for email_logs table
+COMMENT ON TABLE email_logs IS 'Logs all email send attempts with delivery status and error tracking';
+COMMENT ON COLUMN email_logs.recipient_email IS 'Email address of recipient';
+COMMENT ON COLUMN email_logs.recipient_user_id IS 'Foreign key to users table if recipient is a system user';
+COMMENT ON COLUMN email_logs.email_type IS 'Type of email sent (verification, ticket-created, etc.)';
+COMMENT ON COLUMN email_logs.status IS 'Delivery status: success, failed, or pending';
+COMMENT ON COLUMN email_logs.message_id IS 'SMTP message ID for successful sends';
+COMMENT ON COLUMN email_logs.error_message IS 'Error details if send failed';
+COMMENT ON COLUMN email_logs.retry_count IS 'Number of retry attempts made';
+COMMENT ON COLUMN email_logs.sent_at IS 'Timestamp when email was successfully sent';
+COMMENT ON COLUMN email_logs.metadata IS 'Additional context (ticket_id, tokens, etc.) stored as JSON';
+
+-- Automatic cleanup function for old successful email logs
+CREATE OR REPLACE FUNCTION cleanup_old_email_logs()
+RETURNS INTEGER AS $$
+DECLARE
+    deleted_count INTEGER;
+BEGIN
+    -- Delete successful email logs older than 90 days
+    DELETE FROM email_logs
+    WHERE status = 'success'
+    AND created_at < NOW() - INTERVAL '90 days';
+    
+    GET DIAGNOSTICS deleted_count = ROW_COUNT;
+    RETURN deleted_count;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION cleanup_old_email_logs() IS 'Removes successful email logs older than 90 days to manage database size';
+
+-- ============================================================================
 -- SCHEMA VERSION INFO
 -- ============================================================================
 
@@ -861,7 +933,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 INSERT INTO schema_version (version, description) 
-VALUES ('2.0.0', 'Added ticket_comments, updated ticket_assignments for multi-tech support, added ticket_templates, enhanced tickets table with reopen tracking');
+VALUES ('2.1.0', 'Complete email system: verification, notifications, monitoring, and admin management with email_logs table and automatic cleanup');
 
 -- ============================================================================
 -- END OF SCHEMA

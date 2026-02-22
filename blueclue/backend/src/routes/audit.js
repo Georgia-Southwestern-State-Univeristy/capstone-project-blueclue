@@ -4,7 +4,7 @@
 // Routes for querying privilege and category access audit logs
 
 import express from 'express';
-import authenticateToken from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/auth.js';
 import * as auditController from '../controllers/auditController.js';
 
 const router = express.Router();

@@ -4,13 +4,15 @@
 // Handles login, registration, password changes, and logout
 
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import pool from '../config/database.js';
 import { generateToken, generateRefreshToken, verifyRefreshToken } from '../middleware/auth.js';
+import { sendWelcomeEmail, sendVerificationEmail } from '../services/emailService.js';
 
 const SALT_ROUNDS = 10;
 
 /**
- * Login - handles technicians (username), customers (email), and guests
+ * Login - handles technicians (username) and customers (email)
  * POST /api/auth/login
  * 
  * Body (Technician):
@@ -20,64 +22,10 @@ const SALT_ROUNDS = 10;
  * Body (Customer):
  *   - email: string
  *   - password: string
- * 
- * Body (Guest):
- *   - email: string
- *   - fullName: string
- *   - isGuest: true
  */
 export const login = async (req, res) => {
     try {
-        const { username, email, password, fullName, isGuest } = req.body;
-
-        // ========================================
-        // GUEST LOGIN (no password required)
-        // ========================================
-        if (isGuest) {
-            if (!email || !fullName) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Email and full name are required for guest access.'
-                });
-            }
-
-            // Validate email format
-            const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
-            if (!emailRegex.test(email)) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Invalid email format.'
-                });
-            }
-
-            // Generate guest session token
-            const guestToken = generateToken({
-                email,
-                fullName,
-                role: 'guest',
-                isGuest: true
-            });
-
-            // Store guest session in database
-            const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-            await pool.query(
-                `INSERT INTO guest_sessions (session_token, email, full_name, expires_at)
-                 VALUES ($1, $2, $3, $4)`,
-                [guestToken, email, fullName, expiresAt]
-            );
-
-            return res.status(200).json({
-                success: true,
-                message: 'Guest session created successfully.',
-                token: guestToken,
-                user: {
-                    email,
-                    fullName,
-                    role: 'guest',
-                    isGuest: true
-                }
-            });
-        }
+        const { username, email, password } = req.body;
 
         // ========================================
         // TECHNICIAN LOGIN (username + password)
@@ -194,7 +142,7 @@ export const login = async (req, res) => {
 
             // Find customer or admin by email
             const result = await pool.query(
-                `SELECT id, email, password_hash, first_name, last_name, role, is_active 
+                `SELECT id, email, password_hash, first_name, last_name, role, is_active, email_verified 
                  FROM users 
                  WHERE email = $1 AND role IN ('customer', 'admin')`,
                 [email]
@@ -231,6 +179,17 @@ export const login = async (req, res) => {
                 return res.status(401).json({
                     success: false,
                     message: 'Invalid email or password.'
+                });
+            }
+
+            // Check if email is verified (only for customers, not admins)
+            if (user.role === 'customer' && !user.email_verified) {
+                console.log('❌ Email not verified');
+                return res.status(403).json({
+                    success: false,
+                    message: 'Please verify your email address before logging in. Check your inbox for the verification link.',
+                    code: 'EMAIL_NOT_VERIFIED',
+                    email: user.email
                 });
             }
 
@@ -349,52 +308,48 @@ export const register = async (req, res) => {
         // Hash password
         const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-        // Insert new customer
+        // Generate email verification token (32 bytes = 64 character hex string)
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        
+        // Token expires in 24 hours
+        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        // Insert new customer with unverified email
         const result = await pool.query(
-            `INSERT INTO users (email, password_hash, first_name, last_name, role, phone, company, is_active)
-             VALUES ($1, $2, $3, $4, 'customer', $5, $6, true)
+            `INSERT INTO users (
+                email, password_hash, first_name, last_name, role, phone, company, 
+                is_active, email_verified, email_verification_token, email_verification_expires
+             )
+             VALUES ($1, $2, $3, $4, 'customer', $5, $6, true, false, $7, $8)
              RETURNING id, email, first_name, last_name, role, phone, company, created_at`,
-            [email, passwordHash, firstName, lastName, phone || null, company || null]
+            [email, passwordHash, firstName, lastName, phone || null, company || null, verificationToken, verificationExpires]
         );
 
         const newUser = result.rows[0];
 
-        // Generate tokens
-        const token = generateToken({
-            id: newUser.id,
-            email: newUser.email,
-            role: newUser.role,
-            firstName: newUser.first_name,
-            lastName: newUser.last_name
-        });
-
-        const refreshToken = generateRefreshToken({
-            id: newUser.id,
-            role: newUser.role
-        });
-
-        // Store refresh token
-        const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-        await pool.query(
-            `INSERT INTO refresh_tokens (user_id, token, expires_at)
-             VALUES ($1, $2, $3)`,
-            [newUser.id, refreshToken, refreshExpiresAt]
-        );
+        // Send verification email
+        try {
+            await sendVerificationEmail(
+                newUser.email,
+                newUser.first_name,
+                verificationToken,
+                newUser.id
+            );
+        } catch (emailError) {
+            console.error('Failed to send verification email:', emailError);
+            // Continue anyway - user can request resend
+        }
 
         return res.status(201).json({
             success: true,
-            message: 'Account created successfully.',
-            token,
-            refreshToken,
+            message: 'Account created successfully! Please check your email to verify your account.',
+            requiresVerification: true,
             user: {
                 id: newUser.id,
                 email: newUser.email,
                 firstName: newUser.first_name,
                 lastName: newUser.last_name,
-                role: newUser.role,
-                phone: newUser.phone,
-                company: newUser.company,
-                createdAt: newUser.created_at
+                emailVerified: false
             }
         });
 
@@ -656,11 +611,185 @@ export const getCurrentUser = async (req, res) => {
     }
 };
 
+/**
+ * Verify email address with token
+ * GET /api/auth/verify-email/:token
+ * Public route
+ */
+export const verifyEmail = async (req, res) => {
+    try {
+        const { token } = req.params;
+
+        if (!token) {
+            return res.status(400).json({
+                success: false,
+                message: 'Verification token is required.'
+            });
+        }
+
+        // Find user with this verification token
+        const result = await pool.query(
+            `SELECT id, email, first_name, last_name, email_verified, 
+                    email_verification_token, email_verification_expires
+             FROM users
+             WHERE email_verification_token = $1`,
+            [token]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Invalid or expired verification token.',
+                code: 'INVALID_TOKEN'
+            });
+        }
+
+        const user = result.rows[0];
+
+        // Check if already verified
+        if (user.email_verified) {
+            return res.status(200).json({
+                success: true,
+                message: 'Email is already verified. You can now login.',
+                code: 'ALREADY_VERIFIED'
+            });
+        }
+
+        // Check if token is expired
+        if (new Date() > new Date(user.email_verification_expires)) {
+            return res.status(410).json({
+                success: false,
+                message: 'Verification token has expired. Please request a new one.',
+                code: 'TOKEN_EXPIRED'
+            });
+        }
+
+        // Mark email as verified and clear verification token
+        await pool.query(
+            `UPDATE users 
+             SET email_verified = true,
+                 email_verification_token = NULL,
+                 email_verification_expires = NULL
+             WHERE id = $1`,
+            [user.id]
+        );
+
+        // Send welcome email now that they're verified
+        try {
+            await sendWelcomeEmail(user.email, user.first_name, null, user.id);
+        } catch (emailError) {
+            console.error('Failed to send welcome email:', emailError);
+            // Continue anyway - verification succeeded
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Email verified successfully! You can now login.',
+            code: 'VERIFIED'
+        });
+
+    } catch (error) {
+        console.error('Email verification error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error during email verification.'
+        });
+    }
+};
+
+/**
+ * Resend verification email
+ * POST /api/auth/resend-verification
+ * Public route
+ * Body: { email: "user@example.com" }
+ */
+export const resendVerification = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email is required.'
+            });
+        }
+
+        // Find user by email
+        const result = await pool.query(
+            `SELECT id, email, first_name, email_verified, email_verification_token
+             FROM users
+             WHERE email = $1`,
+            [email]
+        );
+
+        if (result.rows.length === 0) {
+            // Don't reveal if email exists or not (security)
+            return res.status(200).json({
+                success: true,
+                message: 'If an unverified account exists with this email, a verification email has been sent.'
+            });
+        }
+
+        const user = result.rows[0];
+
+        // If already verified, don't send anything but return success
+        if (user.email_verified) {
+            return res.status(200).json({
+                success: true,
+                message: 'If an unverified account exists with this email, a verification email has been sent.'
+            });
+        }
+
+        // Generate new verification token
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+        // Update user with new token
+        await pool.query(
+            `UPDATE users
+             SET email_verification_token = $1,
+                 email_verification_expires = $2
+             WHERE id = $3`,
+            [verificationToken, verificationExpires, user.id]
+        );
+
+        // Send verification email
+        try {
+            await sendVerificationEmail(
+                user.email,
+                user.first_name,
+                verificationToken,
+                user.id
+            );
+        } catch (emailError) {
+            console.error('Failed to resend verification email:', emailError);
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to send verification email. Please try again later.'
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'If an unverified account exists with this email, a verification email has been sent.'
+        });
+
+    } catch (error) {
+        console.error('Resend verification error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error while resending verification email.'
+        });
+    }
+};
+
 export default {
     login,
     register,
     changePassword,
     logout,
     refreshAccessToken,
-    getCurrentUser
+    getCurrentUser,
+    verifyEmail,
+    resendVerification
 };
