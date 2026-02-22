@@ -18,6 +18,8 @@ import auditRoutes from './routes/audit.js';
 import notificationRoutes from './routes/notifications.js';
 import devRoutes from './routes/dev.js';
 import adminRoutes from './routes/admin.js';
+import analyticsRoutes from './routes/analytics.js';
+import configRoutes from './routes/config.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 
 dotenv.config();
@@ -56,6 +58,8 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/config', configRoutes);
 app.use('/api/dev', devRoutes);
 app.use('/api/admin', adminRoutes);
 
