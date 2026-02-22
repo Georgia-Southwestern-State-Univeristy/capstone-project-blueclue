@@ -1,9 +1,17 @@
-import { Link } from 'react-router-dom'
-import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import { getUser } from '../services/authService'
 
 function Welcome() {
+  const navigate = useNavigate()
   const [user] = useState(() => getUser())
+
+  // Redirect management users to management dashboard
+  useEffect(() => {
+    if (user?.role === 'management') {
+      navigate('/management-dashboard', { replace: true })
+    }
+  }, [user, navigate])
 
   if (!user) {
     return null
@@ -11,6 +19,7 @@ function Welcome() {
 
   const isCustomer = user?.role === 'customer' || user?.role === 'guest'
   const isTechnician = user?.role === 'technician'
+  const isManagement = user?.role === 'management'
 
   const userName = user?.firstName || user?.fullName || user?.username || 'User'
 
@@ -23,6 +32,7 @@ function Welcome() {
           <p className="text-blue-100 text-lg">
             {isCustomer && "Manage your support tickets and track their progress in real-time"}
             {isTechnician && "View and manage assigned tickets to keep things running smoothly"}
+            {isManagement && "Oversee operations and drive organizational efficiency"}
           </p>
         </div>
       </div>
@@ -65,6 +75,17 @@ function Welcome() {
                   <span>My Assigned Tickets</span>
                 </Link>
               </>
+            )}
+            {isManagement && (
+              <Link
+                to="/management-dashboard"
+                className="bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-6 rounded-lg font-semibold transition-all transform hover:scale-105 shadow-lg flex items-center gap-3"
+              >
+                <svg className="w-6 h-6 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span>Management Dashboard</span>
+              </Link>
             )}
           </div>
         </div>
@@ -125,6 +146,7 @@ function Welcome() {
           <p className="text-gray-300 mb-6">
             {isCustomer && "Create a new support ticket or check the status of your existing requests to get the help you need."}
             {isTechnician && "Access your ticket queue to stay on top of pending issues and provide excellent customer support."}
+            {isManagement && "Access your management dashboard to oversee operations, manage teams, and drive organizational efficiency."}
           </p>
           {isCustomer && (
             <Link
@@ -140,6 +162,14 @@ function Welcome() {
               className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
             >
               View My Tickets →
+            </Link>
+          )}
+          {isManagement && (
+            <Link
+              to="/management-dashboard"
+              className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
+            >
+              Go to Management Dashboard →
             </Link>
           )}
         </div>
