@@ -603,6 +603,115 @@ export const deleteTicket = async (req, res) => {
 };
 
 /**
+ * Bulk assign tickets to a technician
+ * POST /api/tickets/bulk-assign
+ */
+export const bulkAssignTickets = async (req, res) => {
+    try {
+        const { ticket_ids, technician_id } = req.body;
+
+        // Validation
+        if (!ticket_ids || !Array.isArray(ticket_ids) || ticket_ids.length === 0) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'ticket_ids must be a non-empty array'
+            });
+        }
+
+        if (!technician_id) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'technician_id is required'
+            });
+        }
+
+        // Verify technician exists and is active
+        const techResult = await pool.query(
+            `SELECT id, first_name, last_name, email, role, email_notifications
+             FROM users WHERE id = $1 AND role IN ('technician', 'senior_technician') AND is_active = true`,
+            [technician_id]
+        );
+
+        if (techResult.rows.length === 0) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Invalid technician. User does not exist or is not an active technician.'
+            });
+        }
+
+        const technician = techResult.rows[0];
+        const techName = `${technician.first_name} ${technician.last_name}`;
+
+        // Check permission: management and admin can bulk-assign
+        if (req.user && !['management', 'admin'].includes(req.user.role)) {
+            const canAssign = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_ASSIGN_TICKETS');
+            if (!canAssign) {
+                return res.status(403).json({
+                    status: 'error',
+                    message: 'Access denied. You do not have permission to assign tickets.'
+                });
+            }
+        }
+
+        // Bulk update all tickets
+        const updateQuery = `
+            UPDATE tickets
+            SET assigned_to = $1, 
+                status = CASE WHEN status = 'open' THEN 'in_progress' ELSE status END,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ANY($2::int[])
+            RETURNING *
+        `;
+        const updateResult = await pool.query(updateQuery, [technician_id, ticket_ids]);
+
+        const updatedCount = updateResult.rows.length;
+
+        // Send assignment notification email for each ticket (non-blocking)
+        if (technician.email_notifications) {
+            for (const ticket of updateResult.rows) {
+                try {
+                    const requesterResult = await pool.query(
+                        'SELECT first_name, last_name FROM users WHERE id = $1',
+                        [ticket.customer_id]
+                    );
+                    const requesterName = requesterResult.rows[0]
+                        ? `${requesterResult.rows[0].first_name} ${requesterResult.rows[0].last_name}`
+                        : 'Unknown';
+
+                    await sendTicketAssignment(
+                        technician.email,
+                        techName,
+                        ticket,
+                        requesterName,
+                        technician_id
+                    );
+                } catch (emailError) {
+                    console.error(`Failed to send assignment email for ticket ${ticket.id}:`, emailError.message);
+                }
+            }
+        }
+
+        res.status(200).json({
+            status: 'success',
+            message: `${updatedCount} ticket(s) assigned to ${techName}`,
+            data: {
+                assigned_count: updatedCount,
+                technician: { id: technician.id, name: techName },
+                ticket_ids: updateResult.rows.map(t => t.id)
+            }
+        });
+
+    } catch (error) {
+        console.error('Bulk assign tickets error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to assign tickets',
+            error: error.message
+        });
+    }
+};
+
+/**
  * Update ticket status
  * PATCH /api/tickets/:id/status
  */

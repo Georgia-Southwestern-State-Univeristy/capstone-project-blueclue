@@ -306,6 +306,44 @@ export const assignTicket = async (id, technicianId) => {
   }
 };
 
+/**
+ * Bulk assign multiple tickets to a technician
+ * @param {Array<number>} ticketIds - Array of ticket IDs
+ * @param {number} technicianId - The technician user ID
+ * @returns {Promise<Object>} The assignment result
+ */
+export const bulkAssignTickets = async (ticketIds, technicianId) => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/bulk-assign`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ ticket_ids: ticketIds, technician_id: technicianId }),
+    });
+    return await handleResponse(response, 'Failed to assign tickets');
+  } catch (error) {
+    console.error('Bulk assign tickets error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to assign tickets. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
+ * Get list of active technicians for assignment dropdowns
+ * @returns {Promise<Object>} Object with data array of technicians
+ */
+export const getTechnicians = async () => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/users/technicians`, {
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch technicians');
+  } catch (error) {
+    console.error('Get technicians error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to load technicians. Please try again.');
+    throw new Error(message);
+  }
+};
+
 export default {
   createTicket,
   getAllTickets,
@@ -316,4 +354,6 @@ export default {
   deleteTicket,
   updateTicketStatus,
   assignTicket,
+  bulkAssignTickets,
+  getTechnicians,
 };

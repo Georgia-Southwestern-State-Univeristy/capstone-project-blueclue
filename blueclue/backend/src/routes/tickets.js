@@ -7,7 +7,8 @@ import {
     getTicketById,
     updateTicket,
     deleteTicket,
-    updateTicketStatus
+    updateTicketStatus,
+    bulkAssignTickets
 } from '../controllers/ticketController.js';
 import { optionalAuth, authenticateToken } from '../middleware/auth.js';
 import { checkPrivilege } from '../middleware/rbac.js';
@@ -27,6 +28,13 @@ router.get('/', optionalAuth, getAllTickets);
  * @access  Private (technician/admin only)
  */
 router.get('/assigned/me', authenticateToken, getMyAssignedTickets);
+
+/**
+ * @route   POST /api/tickets/bulk-assign
+ * @desc    Bulk assign tickets to a technician
+ * @access  Private (management/admin only)
+ */
+router.post('/bulk-assign', authenticateToken, bulkAssignTickets);
 
 /**
  * @route   GET /api/tickets/timeline

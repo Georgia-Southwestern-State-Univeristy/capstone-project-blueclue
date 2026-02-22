@@ -16,7 +16,7 @@ class User {
                 username,
                 CONCAT(first_name, ' ', last_name) as full_name
             FROM users
-            WHERE role = 'technician' AND is_active = true
+            WHERE role IN ('technician', 'senior_technician') AND is_active = true
             ORDER BY first_name, last_name
         `;
         

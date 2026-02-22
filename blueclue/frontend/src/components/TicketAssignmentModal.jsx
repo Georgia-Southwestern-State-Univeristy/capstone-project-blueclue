@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { getTechnicians } from '../services/ticketService'
 
 /**
  * TicketAssignmentModal
@@ -11,6 +12,22 @@ function TicketAssignmentModal({ isOpen, onClose, tickets = [], onAssign }) {
   const [filterPriority, setFilterPriority] = useState('all')
   const [filterCategory, setFilterCategory] = useState('all')
   const [filterAge, setFilterAge] = useState('all')
+  const [selectedTechnician, setSelectedTechnician] = useState('')
+  const [technicians, setTechnicians] = useState([])
+  const [techLoading, setTechLoading] = useState(false)
+  const [assigning, setAssigning] = useState(false)
+  const [assignError, setAssignError] = useState(null)
+
+  // Fetch technicians when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setTechLoading(true)
+      getTechnicians()
+        .then(res => setTechnicians(res.data || []))
+        .catch(err => console.error('Failed to load technicians:', err))
+        .finally(() => setTechLoading(false))
+    }
+  }, [isOpen])
 
   // Reset filters when modal closes
   useEffect(() => {
@@ -21,6 +38,9 @@ function TicketAssignmentModal({ isOpen, onClose, tickets = [], onAssign }) {
         setFilterPriority('all')
         setFilterCategory('all')
         setFilterAge('all')
+        setSelectedTechnician('')
+        setAssignError(null)
+        setAssigning(false)
       }, 0)
       return () => clearTimeout(timer)
     }
@@ -53,7 +73,7 @@ function TicketAssignmentModal({ isOpen, onClose, tickets = [], onAssign }) {
       if (searchQuery) {
         const query = searchQuery.toLowerCase()
         const matchesSearch = 
-          ticket.ticket_id?.toString().includes(query) ||
+          ticket.id?.toString().includes(query) ||
           ticket.ticket_number?.toLowerCase().includes(query) ||
           ticket.subject?.toLowerCase().includes(query) ||
           ticket.description?.toLowerCase().includes(query) ||
@@ -101,9 +121,17 @@ function TicketAssignmentModal({ isOpen, onClose, tickets = [], onAssign }) {
   }
 
   // Handle assignment
-  const handleAssign = () => {
-    if (selectedTickets.length > 0 && onAssign) {
-      onAssign(selectedTickets)
+  const handleAssign = async () => {
+    if (selectedTickets.length > 0 && selectedTechnician && onAssign) {
+      setAssigning(true)
+      setAssignError(null)
+      try {
+        await onAssign(selectedTickets, parseInt(selectedTechnician))
+      } catch (err) {
+        setAssignError(err.message || 'Failed to assign tickets')
+      } finally {
+        setAssigning(false)
+      }
     }
   }
 
@@ -255,24 +283,24 @@ function TicketAssignmentModal({ isOpen, onClose, tickets = [], onAssign }) {
                 <tbody className="divide-y divide-gray-800">
                   {filteredTickets.map(ticket => {
                     const age = calculateAge(ticket.created_at)
-                    const isSelected = selectedTickets.includes(ticket.ticket_id)
+                    const isSelected = selectedTickets.includes(ticket.id)
                   
                   return (
                     <tr
-                      key={ticket.ticket_id}
+                      key={ticket.id}
                       className={`hover:bg-gray-800 transition-colors ${isSelected ? 'bg-gray-800/50' : ''}`}
                     >
                       <td className="py-3 pr-4">
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          onChange={() => handleSelectTicket(ticket.ticket_id)}
+                          onChange={() => handleSelectTicket(ticket.id)}
                           className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-900"
                         />
                       </td>
                       <td className="py-3 pr-4">
                         <span className="text-white font-medium">
-                          {ticket.ticket_number || `#${ticket.ticket_id}`}
+                          {ticket.ticket_number || `#${ticket.id}`}
                         </span>
                       </td>
                       <td className="py-3 pr-4">
@@ -298,25 +326,59 @@ function TicketAssignmentModal({ isOpen, onClose, tickets = [], onAssign }) {
           </>
         )}
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-700 flex items-center justify-between">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleAssign}
-            disabled={selectedTickets.length === 0}
-            className={`px-6 py-2 rounded-lg font-semibold transition-colors ${
-              selectedTickets.length > 0
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-gray-800 text-gray-500 cursor-not-allowed'
-            }`}
-          >
-            Assign {selectedTickets.length > 0 ? `(${selectedTickets.length})` : ''}
-          </button>
+        {/* Footer - Technician selector and assign button */}
+        <div className="px-6 py-4 border-t border-gray-700 space-y-3">
+          {assignError && (
+            <div className="text-red-400 text-sm bg-red-900/30 border border-red-700 rounded px-3 py-2">
+              {assignError}
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-4">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            >
+              Cancel
+            </button>
+
+            <div className="flex items-center gap-3 flex-1 justify-end">
+              {/* Technician Dropdown */}
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-400 whitespace-nowrap">Assign to:</label>
+                <select
+                  value={selectedTechnician}
+                  onChange={(e) => setSelectedTechnician(e.target.value)}
+                  disabled={techLoading}
+                  className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
+                >
+                  <option value="">
+                    {techLoading ? 'Loading...' : 'Select Technician'}
+                  </option>
+                  {technicians.map(tech => (
+                    <option key={tech.id} value={tech.id}>
+                      {tech.full_name || `${tech.first_name} ${tech.last_name}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Assign Button */}
+              <button
+                onClick={handleAssign}
+                disabled={selectedTickets.length === 0 || !selectedTechnician || assigning}
+                className={`px-6 py-2 rounded-lg font-semibold transition-colors ${
+                  selectedTickets.length > 0 && selectedTechnician && !assigning
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-gray-800 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {assigning
+                  ? 'Assigning...'
+                  : `Assign ${selectedTickets.length > 0 ? `(${selectedTickets.length})` : ''}`
+                }
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

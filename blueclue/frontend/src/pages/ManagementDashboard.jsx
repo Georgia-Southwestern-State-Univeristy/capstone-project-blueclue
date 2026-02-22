@@ -4,7 +4,7 @@ import Alert from '../components/Alert'
 import ManagementNav from '../components/ManagementNav'
 import TicketAssignmentWidget from '../components/TicketAssignmentWidget'
 import TicketAssignmentModal from '../components/TicketAssignmentModal'
-import { getAllTickets } from '../services/ticketService'
+import { getAllTickets, bulkAssignTickets } from '../services/ticketService'
 
 /**
  * Management Dashboard
@@ -76,9 +76,9 @@ function ManagementDashboard() {
   }, [tickets, calculateStats])
 
   // Handle ticket assignment from modal
-  const handleAssignTickets = (ticketIds) => {
-    // TODO: Implement backend API call for bulk assignment
-    console.log('Assigning tickets:', ticketIds)
+  const handleAssignTickets = async (ticketIds, technicianId) => {
+    const result = await bulkAssignTickets(ticketIds, technicianId)
+    console.log('Assignment result:', result)
     setIsAssignmentModalOpen(false)
     // Refresh tickets after assignment
     fetchTickets()
