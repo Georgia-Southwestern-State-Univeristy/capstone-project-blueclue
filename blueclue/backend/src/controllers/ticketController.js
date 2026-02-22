@@ -712,6 +712,222 @@ export const bulkAssignTickets = async (req, res) => {
 };
 
 /**
+ * Assign a single ticket to a technician
+ * POST /api/tickets/:id/assign
+ */
+export const assignTicket = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { technician_id, note } = req.body;
+
+        if (isNaN(id)) {
+            return res.status(400).json({ status: 'error', message: 'Invalid ticket ID' });
+        }
+
+        if (!technician_id) {
+            return res.status(400).json({ status: 'error', message: 'technician_id is required' });
+        }
+
+        // Check assigner privileges
+        if (req.user && !['management', 'admin'].includes(req.user.role)) {
+            const canAssign = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_ASSIGN_TICKETS');
+            if (!canAssign) {
+                return res.status(403).json({ status: 'error', message: 'Access denied. You do not have permission to assign tickets.' });
+            }
+        }
+
+        // Get the ticket
+        const ticket = await Ticket.getById(parseInt(id));
+        if (!ticket) {
+            return res.status(404).json({ status: 'error', message: 'Ticket not found' });
+        }
+
+        // Check if already assigned (suggest reassign instead)
+        if (ticket.assigned_to) {
+            return res.status(409).json({
+                status: 'error',
+                message: 'Ticket is already assigned. Use PATCH /api/tickets/:id/reassign to reassign.',
+                current_assignee: ticket.assigned_to_name
+            });
+        }
+
+        // Verify technician exists and is active
+        const techResult = await pool.query(
+            `SELECT id, first_name, last_name, email, role, email_notifications
+             FROM users WHERE id = $1 AND role IN ('technician', 'senior_technician') AND is_active = true`,
+            [technician_id]
+        );
+        if (techResult.rows.length === 0) {
+            return res.status(400).json({ status: 'error', message: 'Invalid technician. User does not exist or is not an active technician.' });
+        }
+
+        const technician = techResult.rows[0];
+        const techName = `${technician.first_name} ${technician.last_name}`;
+
+        // Validate technician has access to this ticket's category
+        const categoryQuery = `SELECT id FROM categories WHERE name = $1`;
+        const categoryResult = await pool.query(categoryQuery, [ticket.category]);
+        if (categoryResult.rows.length > 0) {
+            const categoryId = categoryResult.rows[0].id;
+            const hasAccess = await CategoryAccess.hasAccess(technician_id, categoryId, 'view');
+            if (!hasAccess) {
+                return res.status(403).json({
+                    status: 'error',
+                    message: `Technician does not have access to the '${ticket.category}' category.`
+                });
+            }
+        }
+
+        // Assign the ticket
+        const updatedTicket = await Ticket.update(parseInt(id), {
+            assigned_to: technician_id,
+            status: ticket.status === 'open' ? 'in_progress' : ticket.status
+        });
+
+        // Send assignment notification
+        if (technician.email_notifications) {
+            try {
+                const requesterResult = await pool.query(
+                    'SELECT first_name, last_name FROM users WHERE id = $1',
+                    [ticket.customer_id]
+                );
+                const requesterName = requesterResult.rows[0]
+                    ? `${requesterResult.rows[0].first_name} ${requesterResult.rows[0].last_name}`
+                    : 'Unknown';
+                await sendTicketAssignment(technician.email, techName, updatedTicket, requesterName, technician_id);
+            } catch (emailError) {
+                console.error('Failed to send assignment notification:', emailError.message);
+            }
+        }
+
+        res.status(200).json({
+            status: 'success',
+            message: `Ticket #${id} assigned to ${techName}`,
+            data: updatedTicket,
+            assignment: {
+                technician: { id: technician.id, name: techName },
+                note: note || null,
+                assigned_by: req.user ? req.user.id : null
+            }
+        });
+
+    } catch (error) {
+        console.error('Assign ticket error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to assign ticket', error: error.message });
+    }
+};
+
+/**
+ * Reassign an already-assigned ticket to a different technician
+ * PATCH /api/tickets/:id/reassign
+ */
+export const reassignTicket = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { technician_id, note } = req.body;
+
+        if (isNaN(id)) {
+            return res.status(400).json({ status: 'error', message: 'Invalid ticket ID' });
+        }
+
+        if (!technician_id) {
+            return res.status(400).json({ status: 'error', message: 'technician_id is required' });
+        }
+
+        // Check assigner privileges
+        if (req.user && !['management', 'admin'].includes(req.user.role)) {
+            const canAssign = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_ASSIGN_TICKETS');
+            if (!canAssign) {
+                return res.status(403).json({ status: 'error', message: 'Access denied. You do not have permission to reassign tickets.' });
+            }
+        }
+
+        // Get the ticket
+        const ticket = await Ticket.getById(parseInt(id));
+        if (!ticket) {
+            return res.status(404).json({ status: 'error', message: 'Ticket not found' });
+        }
+
+        // Store previous assignee info for response
+        const previousAssignee = ticket.assigned_to
+            ? { id: ticket.assigned_to, name: ticket.assigned_to_name }
+            : null;
+
+        // Verify new technician exists and is active
+        const techResult = await pool.query(
+            `SELECT id, first_name, last_name, email, role, email_notifications
+             FROM users WHERE id = $1 AND role IN ('technician', 'senior_technician') AND is_active = true`,
+            [technician_id]
+        );
+        if (techResult.rows.length === 0) {
+            return res.status(400).json({ status: 'error', message: 'Invalid technician. User does not exist or is not an active technician.' });
+        }
+
+        const technician = techResult.rows[0];
+        const techName = `${technician.first_name} ${technician.last_name}`;
+
+        // Cannot reassign to the same person
+        if (ticket.assigned_to === technician_id) {
+            return res.status(400).json({
+                status: 'error',
+                message: `Ticket is already assigned to ${techName}.`
+            });
+        }
+
+        // Validate technician has access to this ticket's category
+        const categoryQuery = `SELECT id FROM categories WHERE name = $1`;
+        const categoryResult = await pool.query(categoryQuery, [ticket.category]);
+        if (categoryResult.rows.length > 0) {
+            const categoryId = categoryResult.rows[0].id;
+            const hasAccess = await CategoryAccess.hasAccess(technician_id, categoryId, 'view');
+            if (!hasAccess) {
+                return res.status(403).json({
+                    status: 'error',
+                    message: `Technician does not have access to the '${ticket.category}' category.`
+                });
+            }
+        }
+
+        // Reassign the ticket
+        const updatedTicket = await Ticket.update(parseInt(id), {
+            assigned_to: technician_id
+        });
+
+        // Send assignment notification to new technician
+        if (technician.email_notifications) {
+            try {
+                const requesterResult = await pool.query(
+                    'SELECT first_name, last_name FROM users WHERE id = $1',
+                    [ticket.customer_id]
+                );
+                const requesterName = requesterResult.rows[0]
+                    ? `${requesterResult.rows[0].first_name} ${requesterResult.rows[0].last_name}`
+                    : 'Unknown';
+                await sendTicketAssignment(technician.email, techName, updatedTicket, requesterName, technician_id);
+            } catch (emailError) {
+                console.error('Failed to send reassignment notification:', emailError.message);
+            }
+        }
+
+        res.status(200).json({
+            status: 'success',
+            message: `Ticket #${id} reassigned to ${techName}`,
+            data: updatedTicket,
+            reassignment: {
+                previous_assignee: previousAssignee,
+                new_assignee: { id: technician.id, name: techName },
+                note: note || null,
+                reassigned_by: req.user ? req.user.id : null
+            }
+        });
+
+    } catch (error) {
+        console.error('Reassign ticket error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to reassign ticket', error: error.message });
+    }
+};
+
+/**
  * Update ticket status
  * PATCH /api/tickets/:id/status
  */
