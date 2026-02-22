@@ -58,14 +58,12 @@ const getUser = () => {
 };
 
 /**
- * Login - supports technicians (username), customers (email), and guests
+ * Login - supports technicians (username) and customers (email)
  * 
  * @param {Object} credentials - Login credentials
  * @param {string} credentials.username - Technician username (optional)
- * @param {string} credentials.email - Customer/guest email (optional)
- * @param {string} credentials.password - Password (required for tech/customer)
- * @param {string} credentials.fullName - Full name (required for guest)
- * @param {boolean} credentials.isGuest - Guest login flag
+ * @param {string} credentials.email - Customer email (optional)
+ * @param {string} credentials.password - Password (required)
  * @returns {Promise<Object>} Response with token and user data
  */
 export const login = async (credentials) => {
@@ -130,8 +128,9 @@ export const register = async (userData) => {
             throw new Error(data.message || 'Registration failed');
         }
 
-        // Store token and user data
-        if (data.token) {
+        // Only store tokens if email verification is not required
+        // After email verification implementation, registration won't return tokens
+        if (data.token && !data.requiresVerification) {
             setToken(data.token);
             if (data.refreshToken) {
                 setRefreshToken(data.refreshToken);
@@ -144,6 +143,64 @@ export const register = async (userData) => {
         return data;
     } catch (error) {
         console.error('Registration error:', error);
+        throw error;
+    }
+};
+
+/**
+ * Verify email address with token from email link
+ * 
+ * @param {string} token - Verification token from email
+ * @returns {Promise<Object>} Response
+ */
+export const verifyEmail = async (token) => {
+    try {
+        const response = await fetch(`${API_URL}/auth/verify-email/${token}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || 'Email verification failed');
+        }
+
+        return data;
+    } catch (error) {
+        console.error('Email verification error:', error);
+        throw error;
+    }
+};
+
+/**
+ * Resend verification email
+ * Rate limited: Max 3 requests per hour
+ * 
+ * @param {string} email - Email address
+ * @returns {Promise<Object>} Response
+ */
+export const resendVerification = async (email) => {
+    try {
+        const response = await fetch(`${API_URL}/auth/resend-verification`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || 'Failed to resend verification email');
+        }
+
+        return data;
+    } catch (error) {
+        console.error('Resend verification error:', error);
         throw error;
     }
 };
