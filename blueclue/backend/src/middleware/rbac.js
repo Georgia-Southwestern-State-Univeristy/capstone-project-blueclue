@@ -322,3 +322,46 @@ export const checkAllPrivileges = (privilegeTypes, options = {}) => {
         }
     };
 };
+
+/**
+ * Check if user has a specific role
+ * Must be used AFTER authenticateToken middleware
+ * 
+ * @param {...string} allowedRoles - One or more allowed roles (e.g., 'admin', 'technician')
+ * @returns {Function} Middleware function
+ * 
+ * @example
+ * router.get('/admin/stats', authenticateToken, checkRole('admin'), getStats);
+ * router.get('/tickets/assigned', authenticateToken, checkRole('admin', 'technician'), getAssignedTickets);
+ */
+export const checkRole = (...allowedRoles) => {
+    return (req, res, next) => {
+        try {
+            // Require authentication
+            if (!req.user) {
+                return res.status(401).json({
+                    status: 'error',
+                    message: 'Authentication required'
+                });
+            }
+
+            // Check if user's role is in the allowed roles
+            if (!allowedRoles.includes(req.user.role)) {
+                return res.status(403).json({
+                    status: 'error',
+                    message: `Access denied. Required role(s): ${allowedRoles.join(', ')}`,
+                    required_roles: allowedRoles,
+                    current_role: req.user.role
+                });
+            }
+
+            next();
+        } catch (error) {
+            console.error('Role check error:', error);
+            return res.status(500).json({
+                status: 'error',
+                message: 'Error checking user role'
+            });
+        }
+    };
+};
