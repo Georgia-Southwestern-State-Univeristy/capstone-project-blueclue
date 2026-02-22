@@ -5,12 +5,12 @@ import {
     getAIPerformanceMetrics,
     getCategoryInsights 
 } from '../controllers/analyticsController.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // All analytics routes require authentication
-router.use(authenticate);
+router.use(authenticateToken);
 
 /**
  * @route   GET /api/analytics/ai-priority
