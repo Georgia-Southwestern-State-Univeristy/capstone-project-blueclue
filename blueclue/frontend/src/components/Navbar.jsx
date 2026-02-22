@@ -59,7 +59,7 @@ function Navbar() {
           <div className="hidden md:flex items-center gap-8">
             {authenticated && (
               <>
-                {(user?.role === 'customer' || user?.role === 'guest') && (
+                {user?.role === 'customer' && (
                   <Link to="/client-dashboard" className="text-gray-300 hover:text-white transition-colors">
                     Client Dashboard
                   </Link>
@@ -89,7 +89,7 @@ function Navbar() {
               <div className="hidden md:flex items-center gap-2 text-sm text-gray-300">
                 <span>{user?.firstName || user?.fullName || user?.username || 'User'}</span>
                 <span className="text-gray-600">|</span>
-                <span className="text-gray-400 capitalize">{user?.role || 'Guest'}</span>
+                <span className="text-gray-400 capitalize">{user?.role || 'User'}</span>
               </div>
 
               {/* Notification Bell & Dropdown */}
@@ -124,27 +124,23 @@ function Navbar() {
                 {/* Dropdown Menu */}
                 {dropdownOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-50">
-                    {!user?.isGuest && (
-                      <>
-                        <button
-                          onClick={() => {
-                            setPreferencesOpen(true)
-                            setDropdownOpen(false)
-                          }}
-                          className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap"
-                        >
-                          🔔 Notification Settings
-                        </button>
-                        <Link
-                          to="/change-password"
-                          onClick={() => setDropdownOpen(false)}
-                          className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
-                        >
-                          🔒 Change Password
-                        </Link>
-                        <hr className="border-gray-700" />
-                      </>
-                    )}
+                    <button
+                      onClick={() => {
+                        setPreferencesOpen(true)
+                        setDropdownOpen(false)
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap"
+                    >
+                      🔔 Notification Settings
+                    </button>
+                    <Link
+                      to="/change-password"
+                      onClick={() => setDropdownOpen(false)}
+                      className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                    >
+                      🔒 Change Password
+                    </Link>
+                    <hr className="border-gray-700" />
                     <button
                       onClick={handleLogout}
                       className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-950 transition-colors rounded-b-lg"
