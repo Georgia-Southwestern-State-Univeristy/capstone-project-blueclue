@@ -7,7 +7,6 @@
 -- ============================================================================
 
 -- Drop existing tables if they exist (for clean reinstalls)
-DROP TABLE IF EXISTS notifications CASCADE;
 DROP TABLE IF EXISTS ai_classifications CASCADE;
 DROP TABLE IF EXISTS ticket_history CASCADE;
 DROP TABLE IF EXISTS ticket_assignments CASCADE;
@@ -26,7 +25,6 @@ CREATE TYPE user_role AS ENUM ('customer', 'technician', 'admin');
 CREATE TYPE ticket_status AS ENUM ('open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed');
 CREATE TYPE ticket_priority AS ENUM ('low', 'medium', 'high', 'critical');
 CREATE TYPE ticket_category AS ENUM ('general', 'technical', 'billing', 'account', 'feature_request', 'hardware', 'software', 'network', 'login', 'other');
-CREATE TYPE notification_type AS ENUM ('assignment', 'overdue', 'update_request', 'mention');
 
 -- ============================================================================
 -- TABLE: users
@@ -237,33 +235,6 @@ CREATE INDEX idx_ai_classifications_fallback ON ai_classifications(fallback_used
 CREATE INDEX idx_ai_classifications_keywords ON ai_classifications USING GIN (keywords_matched);
 
 -- ============================================================================
--- TABLE: notifications
--- ============================================================================
--- Stores user notifications for ticket events and updates
-
-CREATE TABLE notifications (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    type notification_type NOT NULL,
-    message TEXT NOT NULL,
-    ticket_id INTEGER REFERENCES tickets(id) ON DELETE CASCADE,
-    is_read BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    
-    -- Constraints
-    CONSTRAINT notification_message_length CHECK (LENGTH(message) <= 1000)
-);
-
--- Indexes for notifications table
-CREATE INDEX idx_notifications_user ON notifications(user_id);
-CREATE INDEX idx_notifications_ticket ON notifications(ticket_id);
-CREATE INDEX idx_notifications_type ON notifications(type);
-CREATE INDEX idx_notifications_is_read ON notifications(is_read) WHERE is_read = false;
-CREATE INDEX idx_notifications_created_at ON notifications(created_at DESC);
-CREATE INDEX idx_notifications_user_unread ON notifications(user_id, is_read, created_at DESC) 
-    WHERE is_read = false;
-
--- ============================================================================
 -- FUNCTIONS AND TRIGGERS
 -- ============================================================================
 
@@ -462,7 +433,6 @@ COMMENT ON TABLE categories IS 'Predefined ticket categories synchronized with A
 COMMENT ON TABLE tickets IS 'Main table for support tickets with AI classification metadata';
 COMMENT ON TABLE ticket_assignments IS 'Assignment history tracking for tickets';
 COMMENT ON TABLE ticket_history IS 'Audit trail for all ticket changes and updates';
-COMMENT ON TABLE notifications IS 'User notifications for ticket assignments, updates, and mentions';
 
 COMMENT ON COLUMN tickets.ai_confidence IS 'AI classification confidence score (0.00 to 1.00)';
 COMMENT ON COLUMN tickets.ai_fallback_used IS 'Indicates if AI classifier used fallback behavior';
