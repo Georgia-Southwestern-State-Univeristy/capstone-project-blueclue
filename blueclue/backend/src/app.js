@@ -11,6 +11,10 @@ import pool from './config/database.js';
 import ticketRoutes from './routes/tickets.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
+import privilegeRoutes from './routes/privileges.js';
+import categoryRoutes from './routes/categories.js';
+import roleRoutes from './routes/roles.js';
+import auditRoutes from './routes/audit.js';
 import notificationRoutes from './routes/notifications.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 
@@ -45,6 +49,10 @@ app.use(cookieParser());
 app.use('/api/auth', authRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/privileges', privilegeRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/roles', roleRoutes);
+app.use('/api/audit', auditRoutes);
 app.use('/api/notifications', notificationRoutes);
 
 //test route 

@@ -1,8 +1,15 @@
 // src/controllers/ticketController.js
 import Ticket from '../models/Ticket.js';
 import AIClassification from '../models/AIClassification.js';
+import UserPrivilege from '../models/UserPrivilege.js';
+import CategoryAccess from '../models/CategoryAccess.js';
 import { classifyTicketWithFallback } from '../services/aiService.js';
 import pool from '../config/database.js';
+
+// Helper function to check if user is a technician (any level)
+const isTechnician = (role) => {
+    return ['technician', 'senior_technician', 'management'].includes(role);
+};
 
 // Valid ticket statuses (must match database enum)
 const VALID_STATUSES = ['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed'];
@@ -179,7 +186,7 @@ export const createTicket = async (req, res) => {
  * Get all tickets
  * GET /api/tickets
  * For customers/guests: returns only their tickets
- * For technicians/admins: returns all tickets
+ * For technicians/admins: returns tickets based on category access
  */
 export const getAllTickets = async (req, res) => {
     try {
@@ -192,9 +199,53 @@ export const getAllTickets = async (req, res) => {
         } else if (req.user && req.user.role === 'guest') {
             // Filter tickets by email for guests (they don't have customer_id)
             tickets = await Ticket.getByEmail(req.user.email);
-        } else {
-            // Return all tickets for technicians/admins or unauthenticated users
+        } else if (req.user && req.user.role === 'admin') {
+            // Admins can see all tickets
             tickets = await Ticket.getAll();
+        } else if (req.user && isTechnician(req.user.role)) {
+            // Check if technician has CAN_VIEW_ALL_TICKETS privilege
+            const canViewAll = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_VIEW_ALL_TICKETS');
+            
+            if (canViewAll) {
+                tickets = await Ticket.getAll();
+            } else {
+                // Filter by accessible categories
+                const accessibleCategories = await CategoryAccess.getUserAccessibleCategories(req.user.id, 'view');
+                
+                if (accessibleCategories.length === 0) {
+                    return res.status(200).json({
+                        status: 'success',
+                        count: 0,
+                        data: [],
+                        message: 'No category access. Contact administrator.'
+                    });
+                }
+                
+                // Get category names from IDs
+                const categoryQuery = `
+                    SELECT name FROM categories WHERE id = ANY($1::int[])
+                `;
+                const categoryResult = await pool.query(categoryQuery, [accessibleCategories]);
+                const categoryNames = categoryResult.rows.map(row => row.name);
+                
+                // Filter tickets by accessible categories
+                const ticketsQuery = `
+                    SELECT t.*, 
+                           c.first_name || ' ' || c.last_name as customer_name,
+                           c.email as customer_email,
+                           a.first_name || ' ' || a.last_name as assigned_to_name
+                    FROM tickets t
+                    JOIN users c ON t.customer_id = c.id
+                    LEFT JOIN users a ON t.assigned_to = a.id
+                    WHERE t.category = ANY($1::ticket_category[])
+                    ORDER BY t.created_at DESC
+                `;
+                const ticketsResult = await pool.query(ticketsQuery, [categoryNames]);
+                tickets = ticketsResult.rows;
+            }
+        } else {
+            // Unauthenticated users get no tickets
+            tickets = [];
         }
 
         res.status(200).json({
@@ -216,8 +267,8 @@ export const getAllTickets = async (req, res) => {
 /**
  * Get tickets assigned to the logged-in technician
  * GET /api/tickets/assigned/me
- * For technicians: returns only their assigned tickets
- * For other roles: returns all tickets
+ * For technicians: returns only their assigned tickets (filtered by category access)
+ * For admins: returns all tickets
  */
 export const getMyAssignedTickets = async (req, res) => {
     try {
@@ -231,9 +282,31 @@ export const getMyAssignedTickets = async (req, res) => {
         let tickets;
 
         // Check if user is a technician
-        if (req.user.role === 'technician') {
-            // Get only tickets assigned to this technician
-            tickets = await Ticket.getByTechnicianId(req.user.id);
+        if (isTechnician(req.user.role)) {
+            // Get tickets assigned to this technician
+            let assignedTickets = await Ticket.getByTechnicianId(req.user.id);
+            
+            // Check if technician has CAN_VIEW_ALL_TICKETS privilege
+            const canViewAll = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_VIEW_ALL_TICKETS');
+            
+            if (!canViewAll) {
+                // Filter by accessible categories
+                const accessibleCategories = await CategoryAccess.getUserAccessibleCategories(req.user.id, 'view');
+                
+                if (accessibleCategories.length > 0) {
+                    // Get category names from IDs
+                    const categoryQuery = `SELECT name FROM categories WHERE id = ANY($1::int[])`;
+                    const categoryResult = await pool.query(categoryQuery, [accessibleCategories]);
+                    const categoryNames = categoryResult.rows.map(row => row.name);
+                    
+                    // Filter assigned tickets by accessible categories
+                    tickets = assignedTickets.filter(ticket => categoryNames.includes(ticket.category));
+                } else {
+                    tickets = [];
+                }
+            } else {
+                tickets = assignedTickets;
+            }
         } else if (req.user.role === 'admin') {
             // Admins can see all tickets
             tickets = await Ticket.getAll();
@@ -282,6 +355,37 @@ export const getTicketById = async (req, res) => {
             return res.status(404).json({
                 status: 'error',
                 message: 'Ticket not found'
+            });
+        }
+
+        // Check category access for technicians
+        if (req.user && isTechnician(req.user.role)) {
+            const canViewAll = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_VIEW_ALL_TICKETS');
+            
+            if (!canViewAll) {
+                // Get category ID from ticket
+                const categoryQuery = `SELECT id FROM categories WHERE name = $1`;
+                const categoryResult = await pool.query(categoryQuery, [ticket.category]);
+                
+                if (categoryResult.rows.length > 0) {
+                    const categoryId = categoryResult.rows[0].id;
+                    const hasAccess = await CategoryAccess.hasAccess(req.user.id, categoryId, 'view');
+                    
+                    if (!hasAccess) {
+                        return res.status(403).json({
+                            status: 'error',
+                            message: 'Access denied. No permission to view this category.'
+                        });
+                    }
+                }
+            }
+        }
+        
+        // Customers can only view their own tickets
+        if (req.user && req.user.role === 'customer' && ticket.customer_id !== req.user.id) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Access denied. You can only view your own tickets.'
             });
         }
 
@@ -339,6 +443,52 @@ export const updateTicket = async (req, res) => {
 
         if (updates.subject) updates.subject = updates.subject.trim();
         if (updates.description) updates.description = updates.description.trim();
+
+        // Get existing ticket for permission checks
+        const existingTicket = await Ticket.getById(parseInt(id));
+        if (!existingTicket) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Ticket not found'
+            });
+        }
+
+        // Check if user is trying to change assignment
+        if (updates.assigned_to !== undefined && req.user) {
+            // Only admins or users with CAN_ASSIGN_TICKETS can change assignments
+            if (req.user.role !== 'admin') {
+                const canAssign = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_ASSIGN_TICKETS');
+                if (!canAssign) {
+                    return res.status(403).json({
+                        status: 'error',
+                        message: 'Access denied. You do not have permission to assign tickets.'
+                    });
+                }
+            }
+        }
+
+        // Check category access for technicians
+        if (req.user && isTechnician(req.user.role)) {
+            const canEditAny = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_EDIT_ANY_TICKET');
+            
+            if (!canEditAny) {
+                // Get category ID from ticket
+                const categoryQuery = `SELECT id FROM categories WHERE name = $1`;
+                const categoryResult = await pool.query(categoryQuery, [existingTicket.category]);
+                
+                if (categoryResult.rows.length > 0) {
+                    const categoryId = categoryResult.rows[0].id;
+                    const hasAccess = await CategoryAccess.hasAccess(req.user.id, categoryId, 'edit');
+                    
+                    if (!hasAccess) {
+                        return res.status(403).json({
+                            status: 'error',
+                            message: 'Access denied. No permission to edit tickets in this category.'
+                        });
+                    }
+                }
+            }
+        }
 
         // Automatically set resolved_at when status changes to resolved or closed
         if (updates.status === 'resolved' || updates.status === 'closed') {

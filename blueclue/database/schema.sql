@@ -7,6 +7,10 @@
 -- ============================================================================
 
 -- Drop existing tables if they exist (for clean reinstalls)
+DROP TABLE IF EXISTS role_category_defaults CASCADE;
+DROP TABLE IF EXISTS category_access CASCADE;
+DROP TABLE IF EXISTS user_privileges CASCADE;
+DROP TABLE IF EXISTS privilege_types CASCADE;
 DROP TABLE IF EXISTS notifications CASCADE;
 DROP TABLE IF EXISTS ai_classifications CASCADE;
 DROP TABLE IF EXISTS ticket_history CASCADE;
@@ -22,10 +26,11 @@ DROP TABLE IF EXISTS ticket_priorities CASCADE;
 -- ============================================================================
 
 -- Create custom types for better data integrity
-CREATE TYPE user_role AS ENUM ('customer', 'technician', 'admin');
+CREATE TYPE user_role AS ENUM ('customer', 'technician', 'senior_technician', 'management', 'admin');
 CREATE TYPE ticket_status AS ENUM ('open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed');
 CREATE TYPE ticket_priority AS ENUM ('low', 'medium', 'high', 'critical');
 CREATE TYPE ticket_category AS ENUM ('general', 'technical', 'billing', 'account', 'feature_request', 'hardware', 'software', 'network', 'login', 'other');
+CREATE TYPE access_level AS ENUM ('view', 'edit', 'assign');
 CREATE TYPE notification_type AS ENUM ('assignment', 'overdue', 'update_request', 'mention');
 
 -- ============================================================================
@@ -379,6 +384,98 @@ CREATE TRIGGER set_ticket_sla_dates_trigger
     EXECUTE FUNCTION set_ticket_sla_dates();
 
 -- ============================================================================
+-- AUDIT TRAIL FUNCTIONS AND TRIGGERS
+-- ============================================================================
+-- Automatically log all privilege and category access changes
+
+-- Function to audit user_privileges changes
+CREATE OR REPLACE FUNCTION audit_user_privileges_changes()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (TG_OP = 'INSERT') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, new_values)
+        VALUES ('user_privileges', NEW.id, 'INSERT', NEW.user_id, NEW.granted_by, 
+                row_to_json(NEW)::jsonb);
+        RETURN NEW;
+    ELSIF (TG_OP = 'UPDATE') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, old_values, new_values)
+        VALUES ('user_privileges', NEW.id, 'UPDATE', NEW.user_id, NEW.granted_by,
+                row_to_json(OLD)::jsonb, row_to_json(NEW)::jsonb);
+        RETURN NEW;
+    ELSIF (TG_OP = 'DELETE') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, old_values)
+        VALUES ('user_privileges', OLD.id, 'DELETE', OLD.user_id, NULL,
+                row_to_json(OLD)::jsonb);
+        RETURN OLD;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to audit category_access changes
+CREATE OR REPLACE FUNCTION audit_category_access_changes()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (TG_OP = 'INSERT') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, new_values)
+        VALUES ('category_access', NEW.id, 'INSERT', NEW.user_id, NEW.granted_by,
+                row_to_json(NEW)::jsonb);
+        RETURN NEW;
+    ELSIF (TG_OP = 'UPDATE') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, old_values, new_values)
+        VALUES ('category_access', NEW.id, 'UPDATE', NEW.user_id, NEW.granted_by,
+                row_to_json(OLD)::jsonb, row_to_json(NEW)::jsonb);
+        RETURN NEW;
+    ELSIF (TG_OP = 'DELETE') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, old_values)
+        VALUES ('category_access', OLD.id, 'DELETE', OLD.user_id, NULL,
+                row_to_json(OLD)::jsonb);
+        RETURN OLD;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to audit role_category_defaults changes
+CREATE OR REPLACE FUNCTION audit_role_defaults_changes()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (TG_OP = 'INSERT') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, new_values)
+        VALUES ('role_category_defaults', NEW.id, 'INSERT', NULL, NEW.created_by,
+                row_to_json(NEW)::jsonb);
+        RETURN NEW;
+    ELSIF (TG_OP = 'UPDATE') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, old_values, new_values)
+        VALUES ('role_category_defaults', NEW.id, 'UPDATE', NULL, NEW.created_by,
+                row_to_json(OLD)::jsonb, row_to_json(NEW)::jsonb);
+        RETURN NEW;
+    ELSIF (TG_OP = 'DELETE') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, old_values)
+        VALUES ('role_category_defaults', OLD.id, 'DELETE', NULL, OLD.created_by,
+                row_to_json(OLD)::jsonb);
+        RETURN OLD;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for user_privileges audit
+CREATE TRIGGER audit_user_privileges_trigger
+    AFTER INSERT OR UPDATE OR DELETE ON user_privileges
+    FOR EACH ROW
+    EXECUTE FUNCTION audit_user_privileges_changes();
+
+-- Trigger for category_access audit
+CREATE TRIGGER audit_category_access_trigger
+    AFTER INSERT OR UPDATE OR DELETE ON category_access
+    FOR EACH ROW
+    EXECUTE FUNCTION audit_category_access_changes();
+
+-- Trigger for role_category_defaults audit
+CREATE TRIGGER audit_role_defaults_trigger
+    AFTER INSERT OR UPDATE OR DELETE ON role_category_defaults
+    FOR EACH ROW
+    EXECUTE FUNCTION audit_role_defaults_changes();
+
+-- ============================================================================
 -- DEFAULT DATA - CATEGORIES
 -- ============================================================================
 -- Insert default categories that match the AI classifier
@@ -396,6 +493,190 @@ INSERT INTO categories (name, display_name, description, color_code, icon) VALUE
     ('network', 'Network', 'Network connectivity and WiFi issues', '#10B981', 'network'),
     ('login', 'Login & Access', 'Login, password, and account access issues', '#EF4444', 'lock'),
     ('other', 'Other', 'General inquiries and other issues', '#9CA3AF', 'help');
+
+-- ============================================================================
+-- TABLE: privilege_types
+-- ============================================================================
+-- Defines valid privilege types for the RBAC system
+
+CREATE TABLE privilege_types (
+    id SERIAL PRIMARY KEY,
+    privilege_code VARCHAR(100) NOT NULL UNIQUE,
+    display_name VARCHAR(200) NOT NULL,
+    description TEXT NOT NULL,
+    default_value TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Constraints
+    CONSTRAINT privilege_code_uppercase CHECK (privilege_code = UPPER(privilege_code)),
+    CONSTRAINT privilege_code_not_empty CHECK (LENGTH(privilege_code) > 0)
+);
+
+-- Index for privilege_types table
+CREATE INDEX idx_privilege_types_code ON privilege_types(privilege_code);
+CREATE INDEX idx_privilege_types_active ON privilege_types(is_active) WHERE is_active = true;
+
+-- Insert default privilege types
+INSERT INTO privilege_types (privilege_code, display_name, description, default_value) VALUES
+    ('CAN_ASSIGN_TICKETS', 'Can Assign Tickets', 'Allows user to assign tickets to other technicians', 'false'),
+    ('CAN_MANAGE_CATEGORIES', 'Can Manage Categories', 'Allows user to modify ticket categories and category settings', 'false'),
+    ('CAN_VIEW_ALL_TICKETS', 'Can View All Tickets', 'Override category restrictions to view all tickets in the system', 'false'),
+    ('CAN_DELETE_TICKETS', 'Can Delete Tickets', 'Allows user to delete any ticket regardless of assignment', 'false'),
+    ('CAN_EDIT_ANY_TICKET', 'Can Edit Any Ticket', 'Allows user to edit any ticket regardless of assignment or category access', 'false');
+
+-- ============================================================================
+-- TABLE: user_privileges
+-- ============================================================================
+-- Stores granular privileges for users (especially technicians)
+
+CREATE TABLE user_privileges (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    privilege_type VARCHAR(100) NOT NULL,
+    value TEXT NOT NULL,
+    granted_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    granted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    revoked_at TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    notes TEXT,
+    
+    -- Constraints
+    CONSTRAINT privilege_type_not_empty CHECK (LENGTH(privilege_type) > 0),
+    CONSTRAINT value_not_empty CHECK (LENGTH(value) > 0)
+);
+
+-- Indexes for user_privileges table
+CREATE INDEX idx_user_privileges_user ON user_privileges(user_id);
+CREATE INDEX idx_user_privileges_type ON user_privileges(privilege_type);
+CREATE INDEX idx_user_privileges_active ON user_privileges(user_id, is_active) WHERE is_active = true;
+CREATE INDEX idx_user_privileges_granted_by ON user_privileges(granted_by);
+CREATE INDEX idx_user_privileges_granted_at ON user_privileges(granted_at DESC);
+
+-- ============================================================================
+-- TABLE: category_access
+-- ============================================================================
+-- Stores category-based access control for technicians
+
+CREATE TABLE category_access (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    access_level access_level NOT NULL,
+    granted_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    granted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    revoked_at TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    notes TEXT,
+    
+    -- Constraints
+    CONSTRAINT unique_user_category_access UNIQUE (user_id, category_id, access_level)
+);
+
+-- Indexes for category_access table
+CREATE INDEX idx_category_access_user ON category_access(user_id);
+CREATE INDEX idx_category_access_category ON category_access(category_id);
+CREATE INDEX idx_category_access_level ON category_access(access_level);
+CREATE INDEX idx_category_access_active ON category_access(user_id, is_active) WHERE is_active = true;
+CREATE INDEX idx_category_access_granted_by ON category_access(granted_by);
+CREATE INDEX idx_category_access_user_category ON category_access(user_id, category_id, access_level) WHERE is_active = true;
+
+-- ============================================================================
+-- TABLE: role_category_defaults
+-- ============================================================================
+-- Defines default category access for roles (can be overridden by user_privileges)
+
+CREATE TABLE role_category_defaults (
+    id SERIAL PRIMARY KEY,
+    role user_role NOT NULL,
+    category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    access_level access_level NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    notes TEXT,
+    
+    -- Constraints
+    CONSTRAINT unique_role_category_access UNIQUE (role, category_id, access_level)
+);
+
+-- Indexes for role_category_defaults table
+CREATE INDEX idx_role_category_defaults_role ON role_category_defaults(role);
+CREATE INDEX idx_role_category_defaults_category ON role_category_defaults(category_id);
+CREATE INDEX idx_role_category_defaults_active ON role_category_defaults(role, is_active) WHERE is_active = true;
+CREATE INDEX idx_role_category_defaults_role_category ON role_category_defaults(role, category_id) WHERE is_active = true;
+
+-- ============================================================================
+-- TABLE: privilege_audit_log
+-- ============================================================================
+-- Complete audit trail for all privilege and category access changes
+
+CREATE TABLE privilege_audit_log (
+    id SERIAL PRIMARY KEY,
+    table_name VARCHAR(50) NOT NULL, -- 'user_privileges', 'category_access', 'role_category_defaults'
+    record_id INTEGER NOT NULL, -- ID of the record being changed
+    action VARCHAR(20) NOT NULL, -- 'INSERT', 'UPDATE', 'DELETE'
+    user_id INTEGER, -- User whose privileges are being changed
+    changed_by INTEGER REFERENCES users(id) ON DELETE SET NULL, -- Who made the change
+    changed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    old_values JSONB, -- Previous values (for UPDATE/DELETE)
+    new_values JSONB, -- New values (for INSERT/UPDATE)
+    notes TEXT,
+    
+    -- Constraints
+    CONSTRAINT valid_table_name CHECK (table_name IN ('user_privileges', 'category_access', 'role_category_defaults')),
+    CONSTRAINT valid_action CHECK (action IN ('INSERT', 'UPDATE', 'DELETE'))
+);
+
+-- Indexes for privilege_audit_log table
+CREATE INDEX idx_privilege_audit_table ON privilege_audit_log(table_name);
+CREATE INDEX idx_privilege_audit_record ON privilege_audit_log(record_id);
+CREATE INDEX idx_privilege_audit_user ON privilege_audit_log(user_id);
+CREATE INDEX idx_privilege_audit_changed_by ON privilege_audit_log(changed_by);
+CREATE INDEX idx_privilege_audit_changed_at ON privilege_audit_log(changed_at DESC);
+CREATE INDEX idx_privilege_audit_table_record ON privilege_audit_log(table_name, record_id);
+
+-- Insert default role-based category access
+-- Admins: Full access to all categories
+INSERT INTO role_category_defaults (role, category_id, access_level, notes)
+SELECT 'admin', c.id, 'assign', 'Full admin access to all categories'
+FROM categories c;
+
+-- Technicians: Edit access to technical, hardware, software, network categories by default
+INSERT INTO role_category_defaults (role, category_id, access_level, notes)
+SELECT 'technician', c.id, 'edit', 'Default technician access to technical categories'
+FROM categories c
+WHERE c.name IN ('technical', 'hardware', 'software', 'network');
+
+-- Technicians: View access to all other categories
+INSERT INTO role_category_defaults (role, category_id, access_level, notes)
+SELECT 'technician', c.id, 'view', 'Default technician view access'
+FROM categories c
+WHERE c.name NOT IN ('technical', 'hardware', 'software', 'network');
+
+-- Senior Technicians: Assign access to critical categories, edit access to technical categories
+INSERT INTO role_category_defaults (role, category_id, access_level, notes)
+SELECT 'senior_technician', c.id, 'assign', 'Senior tech assign access to critical categories'
+FROM categories c
+WHERE c.name IN ('network', 'login');
+
+INSERT INTO role_category_defaults (role, category_id, access_level, notes)
+SELECT 'senior_technician', c.id, 'edit', 'Senior tech edit access to general categories'
+FROM categories c
+WHERE c.name IN ('general', 'technical', 'hardware', 'software');
+
+INSERT INTO role_category_defaults (role, category_id, access_level, notes)
+SELECT 'senior_technician', c.id, 'view', 'Senior tech view access to remaining categories'
+FROM categories c
+WHERE c.name NOT IN ('network', 'login', 'general', 'technical', 'hardware', 'software');
+
+-- Management: Full assign access to all categories
+INSERT INTO role_category_defaults (role, category_id, access_level, notes)
+SELECT 'management', c.id, 'assign', 'Management full assign access to all categories'
+FROM categories c;
+
+-- Customers: View access to their own tickets (enforced at application level)
+-- No default category restrictions for customers as they only see their own tickets
 
 -- ============================================================================
 -- VIEWS FOR COMMON QUERIES

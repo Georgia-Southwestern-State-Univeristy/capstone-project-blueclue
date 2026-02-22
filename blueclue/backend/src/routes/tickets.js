@@ -10,6 +10,7 @@ import {
     updateTicketStatus
 } from '../controllers/ticketController.js';
 import { optionalAuth, authenticateToken } from '../middleware/auth.js';
+import { checkPrivilege } from '../middleware/rbac.js';
 
 const router = express.Router();
 
@@ -55,36 +56,36 @@ router.get('/timeline', async (req, res) => {
 /**
  * @route   GET /api/tickets/:id
  * @desc    Get a single ticket by ID
- * @access  Public
+ * @access  Private (authenticated, respects category access)
  */
-router.get('/:id', getTicketById);
+router.get('/:id', optionalAuth, getTicketById);
 
 /**
  * @route   POST /api/tickets
  * @desc    Create a new ticket
- * @access  Public
+ * @access  Public (allows guest submission)
  */
 router.post('/', createTicket);
 
 /**
  * @route   PATCH /api/tickets/:id/status
  * @desc    Update a ticket's status
- * @access  Public
+ * @access  Private (authenticated users, respects category access)
  */
-router.patch('/:id/status', updateTicketStatus);
+router.patch('/:id/status', authenticateToken, updateTicketStatus);
 
 /**
  * @route   PUT /api/tickets/:id
  * @desc    Update a ticket
- * @access  Public
+ * @access  Private (authenticated users, respects category access and assignment privileges)
  */
-router.put('/:id', updateTicket);
+router.put('/:id', authenticateToken, updateTicket);
 
 /**
  * @route   DELETE /api/tickets/:id
  * @desc    Delete a ticket (soft delete)
- * @access  Public
+ * @access  Private (requires CAN_DELETE_TICKETS privilege or admin)
  */
-router.delete('/:id', deleteTicket);
+router.delete('/:id', authenticateToken, checkPrivilege('CAN_DELETE_TICKETS'), deleteTicket);
 
 export default router;
