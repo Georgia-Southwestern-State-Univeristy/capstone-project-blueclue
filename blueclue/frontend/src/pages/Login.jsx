@@ -1,19 +1,37 @@
-import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
-import { login as loginService } from '../services/authService'
+import { useState, useEffect } from 'react'
+import { useNavigate, Link, useLocation } from 'react-router-dom'
+import { login as loginService, resendVerification } from '../services/authService'
 import logo from '../assets/EditedBlueClueLogo.png'
 
 function Login() {
   const navigate = useNavigate()
-  const [loginType, setLoginType] = useState('customer') // 'customer', 'technician', 'guest'
+  const location = useLocation()
+  const [loginType, setLoginType] = useState('customer') // 'customer', 'technician'
   const [formData, setFormData] = useState({
     email: '',
     username: '',
-    password: '',
-    fullName: ''
+    password: ''
   })
   const [error, setError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showResendVerification, setShowResendVerification] = useState(false)
+  const [resendingEmail, setResendingEmail] = useState(false)
+  const [unverifiedEmail, setUnverifiedEmail] = useState('')
+
+  // Check for messages from navigation state (e.g., from registration)
+  useEffect(() => {
+    if (location.state?.message) {
+      if (location.state.type === 'verification-required') {
+        setSuccessMessage(location.state.message)
+        setUnverifiedEmail(location.state.email || '')
+      } else {
+        setSuccessMessage(location.state.message)
+      }
+      // Clear the message after displaying
+      window.history.replaceState({}, document.title)
+    }
+  }, [location])
 
   const handleInputChange = (e) => {
     setFormData({
@@ -21,11 +39,31 @@ function Login() {
       [e.target.name]: e.target.value
     })
     setError('') // Clear error when user types
+    setSuccessMessage('') // Clear success message when user types
+    setShowResendVerification(false) // Hide resend button when user types
+  }
+
+  const handleResendVerification = async () => {
+    setResendingEmail(true)
+    setError('')
+    setSuccessMessage('')
+
+    try {
+      await resendVerification(unverifiedEmail)
+      setSuccessMessage('Verification email sent! Please check your inbox.')
+      setShowResendVerification(false)
+    } catch (err) {
+      setError(err.message || 'Failed to resend verification email.')
+    } finally {
+      setResendingEmail(false)
+    }
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+    setSuccessMessage('')
+    setShowResendVerification(false)
     setLoading(true)
 
     try {
@@ -40,12 +78,6 @@ function Login() {
         credentials = {
           email: formData.email,
           password: formData.password
-        }
-      } else if (loginType === 'guest') {
-        credentials = {
-          email: formData.email,
-          fullName: formData.fullName,
-          isGuest: true
         }
       }
 
@@ -66,7 +98,16 @@ function Login() {
       navigate('/welcome')
 
     } catch (err) {
-      setError(err.message || 'Login failed. Please try again.')
+      const errorMessage = err.message || 'Login failed. Please try again.'
+      
+      // Check if error is due to unverified email
+      if (errorMessage.includes('verify your email')) {
+        setError(errorMessage)
+        setShowResendVerification(true)
+        setUnverifiedEmail(formData.email)
+      } else {
+        setError(errorMessage)
+      }
     } finally {
       setLoading(false)
     }
@@ -106,26 +147,32 @@ function Login() {
           >
             Technician
           </button>
-          <button
-            type="button"
-            onClick={() => setLoginType('guest')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-              loginType === 'guest'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-400 hover:text-white hover:bg-gray-800'
-            }`}
-          >
-            Guest
-          </button>
         </div>
 
         {/* Login Form */}
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Success Message */}
+            {successMessage && (
+              <div className="bg-green-900/20 border border-green-500 text-green-400 px-4 py-3 rounded-lg">
+                {successMessage}
+              </div>
+            )}
+
             {/* Error Alert */}
             {error && (
               <div className="bg-red-900/20 border border-red-500 text-red-400 px-4 py-3 rounded-lg">
-                {error}
+                <p>{error}</p>
+                {showResendVerification && (
+                  <button
+                    type="button"
+                    onClick={handleResendVerification}
+                    disabled={resendingEmail}
+                    className="mt-3 w-full bg-red-700 hover:bg-red-600 text-white font-medium py-2 px-4 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {resendingEmail ? 'Sending...' : 'Resend Verification Email'}
+                  </button>
+                )}
               </div>
             )}
 
@@ -195,45 +242,6 @@ function Login() {
                     onChange={handleInputChange}
                     required
                     placeholder="Enter your password"
-                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </>
-            )}
-
-            {/* Guest Login Fields */}
-            {loginType === 'guest' && (
-              <>
-                <div className="bg-blue-900/20 border border-blue-500/50 text-blue-300 px-4 py-3 rounded-lg text-sm">
-                  <strong>Guest Access:</strong> Submit tickets without creating an account. Your session lasts 24 hours.
-                </div>
-                <div>
-                  <label htmlFor="fullName" className="block text-sm font-medium text-gray-300 mb-2">
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    id="fullName"
-                    name="fullName"
-                    value={formData.fullName}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="John Doe"
-                    className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    required
-                    placeholder="you@example.com"
                     className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
