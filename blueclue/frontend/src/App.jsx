@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import VerifyEmail from './pages/VerifyEmail'
 import ChangePassword from './pages/ChangePassword'
 import Welcome from './pages/Welcome'
 import ClientDashboard from './pages/ClientDashboard'
@@ -18,6 +19,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/welcome" element={<Welcome />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/verify-email/:token" element={<VerifyEmail />} />
         <Route path="/change-password" element={<ChangePassword />} />
         <Route path="/client-dashboard" element={<ClientDashboard />} />
         <Route path="/technician" element={<TechnicianDashboard />} />
