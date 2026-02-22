@@ -153,6 +153,45 @@ if ($LASTEXITCODE -eq 0) {
 
 Write-Host ""
 
+# Step 4.5: Apply email-to-ticket migrations
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Step 4.5: Applying email-to-ticket migrations..." -ForegroundColor Yellow
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Adding email tracking, thread management, and spam protection..." -ForegroundColor White
+
+$migrationFiles = @(
+    "migrations\004_add_email_created_flag.sql",
+    "migrations\005_add_email_thread_tracking.sql",
+    "migrations\006_add_spam_protection.sql",
+    "migrations\007_add_admin_management.sql"
+)
+
+$migrationsApplied = 0
+foreach ($migration in $migrationFiles) {
+    if (Test-Path $migration) {
+        Write-Host "  Applying $migration..." -ForegroundColor White
+        $null = psql -U postgres -d blueclue -f $migration -q 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $migrationsApplied++
+        } else {
+            Write-Host "  WARNING: Failed to apply $migration" -ForegroundColor Yellow
+        }
+    }
+}
+
+if ($migrationsApplied -eq $migrationFiles.Count) {
+    Write-Host "Email-to-ticket system configured successfully" -ForegroundColor Green
+    Write-Host "  [OK] Email creation tracking" -ForegroundColor Green
+    Write-Host "  [OK] Email thread management" -ForegroundColor Green
+    Write-Host "  [OK] Spam detection and filtering" -ForegroundColor Green
+    Write-Host "  [OK] Admin management features" -ForegroundColor Green
+} else {
+    Write-Host "WARNING: Some migrations failed to apply ($migrationsApplied/$($migrationFiles.Count))" -ForegroundColor Yellow
+    Write-Host "Email-to-ticket features may not work correctly" -ForegroundColor Yellow
+}
+
+Write-Host ""
+
 # Step 5: Load sample data (optional)
 if (-not $SkipSeed) {
     Write-Host "============================================================================" -ForegroundColor Cyan
@@ -219,6 +258,12 @@ Write-Host "  [OK] Management: Full assign access to all categories" -Foreground
 Write-Host "  [OK] Senior Technicians: Assign access to critical, edit to general" -ForegroundColor Green
 Write-Host "  [OK] Technicians: Edit access to technical categories" -ForegroundColor Green
 Write-Host ""
+Write-Host "Email-to-Ticket System Enabled:" -ForegroundColor Yellow
+Write-Host "  [OK] Mailgun webhook integration" -ForegroundColor Green
+Write-Host "  [OK] Email thread tracking and replies" -ForegroundColor Green
+Write-Host "  [OK] Spam detection and filtering" -ForegroundColor Green
+Write-Host "  [OK] Automatic priority classification" -ForegroundColor Green
+Write-Host ""
 Write-Host "Connection String:" -ForegroundColor Yellow
 Write-Host "postgresql://postgres:PASSWORD@localhost:5432/blueclue" -ForegroundColor White
 Write-Host ""
@@ -244,6 +289,7 @@ Write-Host "Next Steps:" -ForegroundColor Yellow
 Write-Host "1. Start backend: cd blueclue\backend; npm run dev" -ForegroundColor White
 Write-Host "2. Start frontend: cd blueclue\frontend; npm run dev" -ForegroundColor White
 Write-Host "3. Submit tickets via the app to test AI classification" -ForegroundColor White
+Write-Host "4. Configure email-to-ticket: docs\setup\INBOUND_EMAIL_SETUP_GUIDE.md" -ForegroundColor White
 Write-Host ""
 Write-Host "RBAC Documentation:" -ForegroundColor Yellow
 Write-Host "  API Guide: docs\api\rbac-default-access.md" -ForegroundColor White
