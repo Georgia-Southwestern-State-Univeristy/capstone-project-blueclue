@@ -1,9 +1,12 @@
 // src/controllers/ticketController.js
 import Ticket from '../models/Ticket.js';
 import AIClassification from '../models/AIClassification.js';
+import PriorityOverride from '../models/PriorityOverride.js';
+import AIConfiguration from '../models/AIConfiguration.js';
 import UserPrivilege from '../models/UserPrivilege.js';
 import CategoryAccess from '../models/CategoryAccess.js';
 import { classifyTicketWithFallback } from '../services/aiService.js';
+import { calculateFinalPriority, explainPriorityDecision } from '../services/priorityService.js';
 import pool from '../config/database.js';
 import { sendTicketConfirmation, sendTicketStatusUpdate, sendTicketAssignment } from '../services/emailService.js';
 
@@ -73,10 +76,25 @@ export const createTicket = async (req, res) => {
         // Use AI classification for category if not provided by user
         const finalCategory = category || aiResult.category;
         
-        // Final priority: user selection takes precedence, then AI, then default
-        const finalPriority = userPriority || aiPriority || 'low';
+        // Get AI configuration for priority calculation
+        const priorityConfig = await AIConfiguration.getPriorityWeights();
+        
+        // Calculate final priority using weighted algorithm
+        const priorityCalculation = calculateFinalPriority({
+            userPriority,
+            aiPriority: aiPriority || 'low',
+            aiConfidence: aiResult.confidence || 0,
+            config: priorityConfig
+        });
 
-        // Create ticket with AI classification metadata
+        const finalPriority = priorityCalculation.finalPriority;
+        const priorityExplanation = explainPriorityDecision(
+            priorityCalculation, 
+            userPriority, 
+            aiPriority
+        );
+
+        // Create ticket with AI classification metadata and priority tracking
         const ticket = await Ticket.create({
             subject: subject.trim(),
             description: description.trim(),
@@ -84,6 +102,9 @@ export const createTicket = async (req, res) => {
             priority: finalPriority,
             user_priority: userPriority,
             ai_priority: aiPriority,
+            ai_recommended_priority: aiPriority, // Store original AI recommendation
+            priority_overridden: userPriority && userPriority !== finalPriority,
+            priority_calculation_method: priorityCalculation.metadata.method,
             category: finalCategory,
             ai_classified: aiResult.aiClassified,
             ai_confidence: aiResult.confidence,
@@ -107,6 +128,20 @@ export const createTicket = async (req, res) => {
                 },
                 fallback_used: aiResult.fallbackUsed
             });
+
+            // Track priority override if it occurred
+            if (userPriority && priorityCalculation.metadata.method !== 'ai_direct') {
+                await PriorityOverride.create({
+                    ticket_id: ticket.id,
+                    user_id: customer_id,
+                    user_priority: userPriority,
+                    ai_recommended_priority: aiPriority,
+                    final_priority: finalPriority,
+                    ai_confidence: aiResult.confidence,
+                    confidence_level: priorityCalculation.metadata.confidenceLevel,
+                    significant_difference: priorityCalculation.metadata.significantDifference || false
+                });
+            }
         }
 
         // Add AI classification info to response
@@ -121,9 +156,16 @@ export const createTicket = async (req, res) => {
                 category: finalCategory,
                 user_priority: userPriority,
                 ai_priority: aiPriority,
-                final_priority: finalPriority
+                final_priority: finalPriority,
+                priority_explanation: priorityExplanation,
+                priority_calculation: priorityCalculation.metadata
             }
         };
+
+        // Include warning if priority confirmation needed
+        if (priorityCalculation.requiresConfirmation && priorityCalculation.warning) {
+            response.priority_warning = priorityCalculation.warning;
+        }
 
         // Include warning if AI service failed
         if (!aiResult.aiClassified && aiResult.error) {
