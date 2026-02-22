@@ -3,6 +3,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import Alert from '../components/Alert'
 import ManagementNav from '../components/ManagementNav'
 import TicketAssignmentWidget from '../components/TicketAssignmentWidget'
+import TicketAssignmentModal from '../components/TicketAssignmentModal'
 import { getAllTickets } from '../services/ticketService'
 
 /**
@@ -15,6 +16,7 @@ function ManagementDashboard() {
   const [error, setError] = useState(null)
   const [tickets, setTickets] = useState([])
   const [activeTab, setActiveTab] = useState('overview')
+  const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false)
 
   // Summary statistics
   const [stats, setStats] = useState({
@@ -72,6 +74,15 @@ function ManagementDashboard() {
       calculateStats()
     }
   }, [tickets, calculateStats])
+
+  // Handle ticket assignment from modal
+  const handleAssignTickets = (ticketIds) => {
+    // TODO: Implement backend API call for bulk assignment
+    console.log('Assigning tickets:', ticketIds)
+    setIsAssignmentModalOpen(false)
+    // Refresh tickets after assignment
+    fetchTickets()
+  }
 
   // Tab navigation items
   const tabs = [
@@ -153,7 +164,7 @@ function ManagementDashboard() {
         <TicketAssignmentWidget
           assignedCount={stats.assignedTickets}
           unassignedCount={stats.unassignedTickets}
-          onAssignTickets={() => setActiveTab('tickets')}
+          onAssignTickets={() => setIsAssignmentModalOpen(true)}
         />
       </div>
 
@@ -471,6 +482,14 @@ function ManagementDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Ticket Assignment Modal */}
+      <TicketAssignmentModal
+        isOpen={isAssignmentModalOpen}
+        onClose={() => setIsAssignmentModalOpen(false)}
+        tickets={tickets}
+        onAssign={handleAssignTickets}
+      />
     </div>
   )
 }
