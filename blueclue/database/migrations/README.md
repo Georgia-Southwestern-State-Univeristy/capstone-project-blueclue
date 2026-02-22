@@ -2,12 +2,59 @@
 
 This directory contains database migration scripts for the BlueClue ticket system.
 
-## Migration Files
+## 🎯 Quick Start Guide
+
+### For Fresh Database Setup
+**✅ Use `schema.sql` instead** - It includes everything (v2.1.0+)
+
+```bash
+# From database directory
+psql -U postgres -d blueclue -f schema.sql
+```
+
+The main `schema.sql` file includes all features:
+- ✅ Core tables (users, tickets, categories, etc.)
+- ✅ Ticket comments and templates (v2.0.0)
+- ✅ Email verification system (v2.1.0)
+- ✅ Email notifications (v2.1.0)
+- ✅ Email monitoring/logging (v2.1.0)
+
+### For Existing Database Upgrades
+**Use migration files** if you already have a database from an earlier version:
+
+```bash
+# Check your current version
+psql -U postgres -d blueclue -c "SELECT * FROM schema_version ORDER BY applied_at DESC LIMIT 1;"
+
+# Apply migrations you're missing (see below)
+```
+
+---
+
+## 📂 Migration Files
 
 Migrations are numbered sequentially and include both upgrade and rollback scripts:
 
-- `001_add_comments_templates_reopen_tracking.sql` - Adds ticket comments, templates, multi-tech assignments, and reopen tracking
+- `001_add_comments_templates_reopen_tracking_v2.sql` - Adds ticket comments, templates, multi-tech assignments, and reopen tracking (v1.0.0 → v2.0.0)
 - `001_rollback.sql` - Rolls back migration 001
+- `archive/` - Contains **archived migrations** that are now in schema.sql
+
+### Archived Migrations
+
+The following migrations were used during development but are **now consolidated into schema.sql v2.1.0**:
+
+- ~~`001_add_email_verification.sql`~~ → Moved to `archive/` 
+- ~~`002_add_email_notifications.sql`~~ → Moved to `archive/`
+- ~~`003_add_email_logs.sql`~~ → Moved to `archive/`
+
+**Why archived?** For fresh installations, it's simpler to have all email features in the main schema. The archived files are kept for:
+- Development history reference
+- Upgrading existing databases that don't have email features
+- Understanding incremental changes
+
+See `archive/README.md` for details on applying archived migrations to existing databases.
+
+---
 
 ## How to Apply Migrations
 
@@ -113,6 +160,45 @@ Rolling back migration 001 will:
 ## Schema Version Tracking
 
 The `schema_version` table tracks all applied migrations:
+
+```sql
+SELECT * FROM schema_version ORDER BY applied_at DESC;
+```
+
+### Version History
+
+| Version | Date | Description | Apply Method |
+|---------|------|-------------|--------------|
+| **2.1.0** | 2026-02-22 | Complete email system (verification, notifications, monitoring) | ✅ In `schema.sql` or archived migrations |
+| **2.0.0** | 2026-02-21 | Ticket comments, templates, multi-tech support, reopen tracking | Migration `001_add_comments...` |
+| **1.0.0** | 2026-02-02 | Initial BlueClue schema (users, tickets, categories, AI integration) | Original `schema.sql` |
+
+### What's Included in Each Version?
+
+**v2.1.0 (Current)** - Complete Email System
+- Email verification (token-based, 24hr expiration)
+- Email notification preferences per user
+- Email monitoring & logging system (email_logs table)
+- Admin email management APIs
+- Automatic log cleanup function
+
+**v2.0.0** - Enhanced Ticket Management
+- Multi-technician assignments
+- Ticket comments with threading
+- Ticket templates
+- Reopen tracking (count + timestamp)
+- Status enum additions (cancelled, reopened)
+
+**v1.0.0** - Core System
+- User management with RBAC
+- Ticket lifecycle management
+- AI classification integration
+- Category system
+- Notifications framework
+
+---
+
+Expected schema_version table after fresh install with schema.sql v2.1.0:
 
 ```sql
 SELECT * FROM schema_version ORDER BY applied_at DESC;
