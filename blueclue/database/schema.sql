@@ -13,8 +13,10 @@ DROP TABLE IF EXISTS user_privileges CASCADE;
 DROP TABLE IF EXISTS privilege_types CASCADE;
 DROP TABLE IF EXISTS notifications CASCADE;
 DROP TABLE IF EXISTS ai_classifications CASCADE;
+DROP TABLE IF EXISTS ticket_comments CASCADE;
 DROP TABLE IF EXISTS ticket_history CASCADE;
 DROP TABLE IF EXISTS ticket_assignments CASCADE;
+DROP TABLE IF EXISTS ticket_templates CASCADE;
 DROP TABLE IF EXISTS tickets CASCADE;
 DROP TABLE IF EXISTS categories CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
@@ -27,7 +29,7 @@ DROP TABLE IF EXISTS ticket_priorities CASCADE;
 
 -- Create custom types for better data integrity
 CREATE TYPE user_role AS ENUM ('customer', 'technician', 'senior_technician', 'management', 'admin');
-CREATE TYPE ticket_status AS ENUM ('open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed');
+CREATE TYPE ticket_status AS ENUM ('open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed', 'cancelled', 'reopened');
 CREATE TYPE ticket_priority AS ENUM ('low', 'medium', 'high', 'critical');
 CREATE TYPE ticket_category AS ENUM ('general', 'technical', 'billing', 'account', 'feature_request', 'hardware', 'software', 'network', 'login', 'other');
 CREATE TYPE access_level AS ENUM ('view', 'edit', 'assign');
@@ -133,12 +135,17 @@ CREATE TABLE tickets (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     closed_at TIMESTAMP WITH TIME ZONE,
     
+    -- Reopen tracking
+    reopen_count INTEGER NOT NULL DEFAULT 0,
+    last_reopened_at TIMESTAMP WITH TIME ZONE,
+    
     -- Constraints
     CONSTRAINT ai_confidence_range CHECK (ai_confidence IS NULL OR (ai_confidence >= 0 AND ai_confidence <= 1)),
     CONSTRAINT resolved_fields_consistency CHECK (
         (status IN ('resolved', 'closed') AND resolved_at IS NOT NULL) OR
         (status NOT IN ('resolved', 'closed') AND resolved_at IS NULL)
-    )
+    ),
+    CONSTRAINT reopen_count_positive CHECK (reopen_count >= 0)
     -- Note: assigned_to role validation will be enforced via foreign key and application logic
 );
 
@@ -162,28 +169,113 @@ CREATE INDEX idx_tickets_ai_keywords ON tickets USING GIN (ai_keywords_matched);
 -- ============================================================================
 -- TABLE: ticket_assignments
 -- ============================================================================
--- Track assignment history and reassignments
+-- Many-to-many relationship for multi-technician ticket assignments
+-- Supports primary and assisting technician roles
 
 CREATE TABLE ticket_assignments (
     id SERIAL PRIMARY KEY,
     ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
-    assigned_to INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    assigned_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(20) NOT NULL DEFAULT 'primary',
     assigned_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    assigned_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     unassigned_at TIMESTAMP WITH TIME ZONE,
     notes TEXT,
     
     -- Constraints
+    CONSTRAINT assignment_role CHECK (role IN ('primary', 'assisting')),
     CONSTRAINT assignment_dates_valid CHECK (
         unassigned_at IS NULL OR unassigned_at >= assigned_at
-    )
+    ),
+    CONSTRAINT unique_active_assignment UNIQUE (ticket_id, user_id)
 );
 
 -- Indexes for ticket_assignments
 CREATE INDEX idx_ticket_assignments_ticket ON ticket_assignments(ticket_id);
-CREATE INDEX idx_ticket_assignments_assigned_to ON ticket_assignments(assigned_to);
-CREATE INDEX idx_ticket_assignments_active ON ticket_assignments(ticket_id, assigned_to) 
+CREATE INDEX idx_ticket_assignments_user ON ticket_assignments(user_id);
+CREATE INDEX idx_ticket_assignments_role ON ticket_assignments(role);
+CREATE INDEX idx_ticket_assignments_assigned_by ON ticket_assignments(assigned_by);
+CREATE INDEX idx_ticket_assignments_active ON ticket_assignments(ticket_id, user_id) 
     WHERE unassigned_at IS NULL;
+
+-- ============================================================================
+-- TABLE: ticket_comments
+-- ============================================================================
+-- Stores comments/replies on tickets with support for threaded conversations
+
+CREATE TABLE ticket_comments (
+    id SERIAL PRIMARY KEY,
+    ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_type VARCHAR(20) NOT NULL,
+    content TEXT NOT NULL,
+    is_internal BOOLEAN NOT NULL DEFAULT false,
+    parent_comment_id INTEGER REFERENCES ticket_comments(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Constraints
+    CONSTRAINT user_type_valid CHECK (user_type IN ('client', 'tech', 'management')),
+    CONSTRAINT content_not_empty CHECK (LENGTH(TRIM(content)) > 0),
+    CONSTRAINT internal_comment_rules CHECK (
+        (is_internal = false) OR 
+        (is_internal = true AND user_type IN ('tech', 'management'))
+    )
+);
+
+-- Indexes for ticket_comments
+CREATE INDEX idx_ticket_comments_ticket ON ticket_comments(ticket_id);
+CREATE INDEX idx_ticket_comments_user ON ticket_comments(user_id);
+CREATE INDEX idx_ticket_comments_parent ON ticket_comments(parent_comment_id);
+CREATE INDEX idx_ticket_comments_created_at ON ticket_comments(created_at DESC);
+CREATE INDEX idx_ticket_comments_active ON ticket_comments(ticket_id, created_at DESC) 
+    WHERE deleted_at IS NULL;
+CREATE INDEX idx_ticket_comments_internal ON ticket_comments(ticket_id, is_internal)
+    WHERE deleted_at IS NULL;
+
+-- Trigger for ticket_comments updated_at
+CREATE TRIGGER update_ticket_comments_updated_at
+    BEFORE UPDATE ON ticket_comments
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================================
+-- TABLE: ticket_templates
+-- ============================================================================
+-- Predefined ticket templates for common issues and categories
+
+CREATE TABLE ticket_templates (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(200) NOT NULL,
+    category ticket_category NOT NULL,
+    description TEXT,
+    default_priority ticket_priority NOT NULL DEFAULT 'medium',
+    field_mappings JSONB,
+    created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    
+    -- Constraints
+    CONSTRAINT template_name_not_empty CHECK (LENGTH(TRIM(name)) > 0)
+);
+
+-- Indexes for ticket_templates
+CREATE INDEX idx_ticket_templates_category ON ticket_templates(category);
+CREATE INDEX idx_ticket_templates_active ON ticket_templates(is_active) 
+    WHERE is_active = true;
+CREATE INDEX idx_ticket_templates_created_by ON ticket_templates(created_by);
+CREATE INDEX idx_ticket_templates_name ON ticket_templates(name);
+
+-- GIN index for JSON field searching
+CREATE INDEX idx_ticket_templates_field_mappings ON ticket_templates USING GIN (field_mappings);
+
+-- Trigger for ticket_templates updated_at
+CREATE TRIGGER update_ticket_templates_updated_at
+    BEFORE UPDATE ON ticket_templates
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
 -- TABLE: ticket_history
@@ -769,7 +861,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 INSERT INTO schema_version (version, description) 
-VALUES ('1.0.0', 'Initial BlueClue database schema with AI classification support');
+VALUES ('2.0.0', 'Added ticket_comments, updated ticket_assignments for multi-tech support, added ticket_templates, enhanced tickets table with reopen tracking');
 
 -- ============================================================================
 -- END OF SCHEMA
