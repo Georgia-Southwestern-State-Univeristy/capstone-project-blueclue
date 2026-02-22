@@ -18,6 +18,7 @@ import auditRoutes from './routes/audit.js';
 import notificationRoutes from './routes/notifications.js';
 import devRoutes from './routes/dev.js';
 import adminRoutes from './routes/admin.js';
+import webhookRoutes from './routes/webhooks.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 
 dotenv.config();
@@ -45,6 +46,7 @@ app.use(helmet());
 app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // For parsing Mailgun webhook form data
 app.use(cookieParser());
 
 // API Routes
@@ -56,6 +58,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/webhooks', webhookRoutes); // Webhook endpoints for inbound email
 app.use('/api/dev', devRoutes);
 app.use('/api/admin', adminRoutes);
 
