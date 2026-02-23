@@ -6,10 +6,12 @@ import AIConfiguration from '../models/AIConfiguration.js';
 import UserPrivilege from '../models/UserPrivilege.js';
 import CategoryAccess from '../models/CategoryAccess.js';
 import TicketHistory from '../models/TicketHistory.js';
+import Notification from '../models/Notification.js';
 import { classifyTicketWithFallback } from '../services/aiService.js';
 import { calculateFinalPriority, explainPriorityDecision } from '../services/priorityService.js';
 import pool from '../config/database.js';
 import { sendTicketConfirmation, sendTicketStatusUpdate, sendTicketAssignment } from '../services/emailService.js';
+import { emitNotificationToUser, emitUnreadCountToUser, broadcastNotification } from '../services/socketService.js';
 
 // Helper function to check if user is a technician (any level)
 const isTechnician = (role) => {
@@ -26,6 +28,58 @@ const VALID_TRANSITIONS = {
     'waiting_on_customer': ['in_progress', 'resolved', 'open'],
     'resolved': ['closed', 'in_progress', 'open', 'waiting_on_customer'], // Allow reopening and status changes
     'closed': [] // Cannot transition from closed - final state
+};
+
+/**
+ * Auto-deny all pending assignment requests for a ticket.
+ * Called whenever a ticket gets assigned/reassigned through any code path.
+ * Notifies each affected technician via socket.
+ */
+const autoDenyPendingRequests = async (ticketId, reviewerId, reason, io) => {
+    try {
+        // Find all pending requests for this ticket
+        const pendingResult = await pool.query(
+            `SELECT ar.id, ar.requested_by, t.subject AS ticket_title
+             FROM ticket_assignment_requests ar
+             JOIN tickets t ON ar.ticket_id = t.id
+             WHERE ar.ticket_id = $1 AND ar.status = 'pending'`,
+            [ticketId]
+        );
+
+        if (pendingResult.rows.length === 0) return;
+
+        // Bulk-deny all pending requests
+        await pool.query(
+            `UPDATE ticket_assignment_requests
+             SET status = 'denied', reviewed_by = $1, reviewed_at = NOW()
+             WHERE ticket_id = $2 AND status = 'pending'`,
+            [reviewerId, ticketId]
+        );
+
+        // Notify each affected technician
+        for (const row of pendingResult.rows) {
+            try {
+                const ticketLabel = row.ticket_title || `#${ticketId}`;
+                const notification = await Notification.create({
+                    user_id: row.requested_by,
+                    type: 'assignment',
+                    message: `Your assignment request for "${ticketLabel}" was automatically denied: ${reason}`,
+                    ticket_id: ticketId
+                });
+                if (io) {
+                    emitNotificationToUser(io, row.requested_by, notification);
+                    const unreadCount = await Notification.getUnreadCount(row.requested_by);
+                    emitUnreadCountToUser(io, row.requested_by, unreadCount);
+                }
+            } catch (notifErr) {
+                console.error(`Failed to notify tech ${row.requested_by} about auto-deny:`, notifErr.message);
+            }
+        }
+
+        console.log(`Auto-denied ${pendingResult.rows.length} pending request(s) for ticket ${ticketId}`);
+    } catch (err) {
+        console.error('autoDenyPendingRequests error:', err.message);
+    }
 };
 
 /**
@@ -636,6 +690,17 @@ export const updateTicket = async (req, res) => {
             }
         }
 
+        // Auto-deny pending assignment requests if ticket was just assigned
+        if (updates.assigned_to !== undefined && updates.assigned_to !== existingTicket.assigned_to && updates.assigned_to !== null) {
+            const io = req.app.get('io');
+            await autoDenyPendingRequests(
+                parseInt(id),
+                req.user ? req.user.id : null,
+                'Ticket was assigned through another action',
+                io
+            );
+        }
+
         // Send assignment notification if ticket was assigned to a technician
         if (updates.assigned_to !== undefined && updates.assigned_to !== existingTicket.assigned_to) {
             try {
@@ -883,6 +948,17 @@ export const bulkAssignTickets = async (req, res) => {
             }
         }
 
+        // Auto-deny pending assignment requests for each ticket in the bulk
+        const io = req.app.get('io');
+        for (const ticket of updateResult.rows) {
+            await autoDenyPendingRequests(
+                ticket.id,
+                req.user ? req.user.id : null,
+                'Ticket was bulk-assigned to another technician',
+                io
+            );
+        }
+
         res.status(200).json({
             status: 'success',
             message: `${updatedCount} ticket(s) assigned to ${techName}`,
@@ -997,6 +1073,15 @@ export const assignTicket = async (req, res) => {
         } catch (histErr) {
             console.error('Failed to log assignment history:', histErr.message);
         }
+
+        // Auto-deny pending assignment requests for this ticket
+        const io = req.app.get('io');
+        await autoDenyPendingRequests(
+            parseInt(id),
+            req.user ? req.user.id : null,
+            'Ticket was directly assigned to another technician',
+            io
+        );
 
         // Send assignment notification
         if (technician.email_notifications) {
@@ -1129,6 +1214,15 @@ export const reassignTicket = async (req, res) => {
         } catch (histErr) {
             console.error('Failed to log reassignment history:', histErr.message);
         }
+
+        // Auto-deny pending assignment requests for this ticket
+        const io = req.app.get('io');
+        await autoDenyPendingRequests(
+            parseInt(id),
+            req.user ? req.user.id : null,
+            'Ticket was reassigned to another technician',
+            io
+        );
 
         // Send assignment notification to new technician
         if (technician.email_notifications) {
@@ -1312,6 +1406,237 @@ export const updateTicketStatus = async (req, res) => {
         res.status(500).json({
             status: 'error',
             message: 'Failed to update ticket status',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Get available (unassigned) tickets for a technician
+ * Only returns tickets in categories the technician has access to
+ * GET /api/tickets/available
+ */
+export const getAvailableTickets = async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                status: 'error',
+                message: 'Authentication required'
+            });
+        }
+
+        if (!isTechnician(req.user.role) && req.user.role !== 'admin') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Access denied. Only technicians and admins can view available tickets.'
+            });
+        }
+
+        let categoryFilter = '';
+        let queryParams = [];
+
+        if (req.user.role !== 'admin') {
+            // Check if technician has CAN_VIEW_ALL_TICKETS privilege
+            const canViewAll = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_VIEW_ALL_TICKETS');
+
+            if (!canViewAll) {
+                // Get accessible categories for this technician
+                const accessibleCategories = await CategoryAccess.getUserAccessibleCategories(req.user.id, 'view');
+
+                if (accessibleCategories.length === 0) {
+                    return res.status(200).json({
+                        status: 'success',
+                        count: 0,
+                        data: [],
+                        message: 'No category access. Contact administrator.'
+                    });
+                }
+
+                // Get category names from IDs
+                const categoryQuery = `SELECT name FROM categories WHERE id = ANY($1::int[])`;
+                const categoryResult = await pool.query(categoryQuery, [accessibleCategories]);
+                const categoryNames = categoryResult.rows.map(row => row.name);
+
+                categoryFilter = `AND t.category = ANY($1::ticket_category[])`;
+                queryParams = [categoryNames];
+            }
+        }
+
+        const ticketsQuery = `
+            SELECT t.*, 
+                   c.first_name || ' ' || c.last_name as customer_name,
+                   c.email as customer_email,
+                   EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 86400 as age_days
+            FROM tickets t
+            LEFT JOIN users c ON t.customer_id = c.id
+            WHERE t.assigned_to IS NULL
+              AND t.status NOT IN ('closed', 'cancelled', 'resolved')
+              ${categoryFilter}
+            ORDER BY 
+                CASE t.priority
+                    WHEN 'critical' THEN 1
+                    WHEN 'high' THEN 2
+                    WHEN 'medium' THEN 3
+                    WHEN 'low' THEN 4
+                END,
+                t.created_at ASC
+        `;
+
+        const result = await pool.query(ticketsQuery, queryParams);
+
+        res.status(200).json({
+            status: 'success',
+            count: result.rows.length,
+            data: result.rows
+        });
+
+    } catch (error) {
+        console.error('Get available tickets error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve available tickets',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Request assignment of a ticket to the current technician.
+ * Creates a pending entry in ticket_assignment_requests for management review.
+ * POST /api/tickets/:id/request-assignment
+ */
+export const requestTicketAssignment = async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                status: 'error',
+                message: 'Authentication required'
+            });
+        }
+
+        if (!isTechnician(req.user.role)) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Access denied. Only technicians can request ticket assignments.'
+            });
+        }
+
+        const { id } = req.params;
+        const { note } = req.body;
+
+        // Fetch the ticket
+        const ticket = await Ticket.getById(id);
+        if (!ticket) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Ticket not found'
+            });
+        }
+
+        // Ensure the ticket is unassigned
+        if (ticket.assigned_to) {
+            return res.status(409).json({
+                status: 'error',
+                message: 'This ticket is already assigned to another technician.'
+            });
+        }
+
+        // Ensure the ticket is not closed/cancelled/resolved
+        if (['closed', 'cancelled', 'resolved'].includes(ticket.status)) {
+            return res.status(400).json({
+                status: 'error',
+                message: `Cannot request assignment for a ticket with status: ${ticket.status}`
+            });
+        }
+
+        // Check if technician has access to this ticket's category
+        const canViewAll = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_VIEW_ALL_TICKETS');
+        if (!canViewAll) {
+            const categoryQuery = `SELECT id FROM categories WHERE name = $1`;
+            const categoryResult = await pool.query(categoryQuery, [ticket.category]);
+
+            if (categoryResult.rows.length > 0) {
+                const categoryId = categoryResult.rows[0].id;
+                const hasAccess = await CategoryAccess.hasAccess(req.user.id, categoryId, 'view');
+                if (!hasAccess) {
+                    return res.status(403).json({
+                        status: 'error',
+                        message: 'You do not have access to tickets in this category.'
+                    });
+                }
+            }
+        }
+
+        // Check for an existing pending request from this technician for this ticket
+        const existingCheck = await pool.query(
+            `SELECT id FROM ticket_assignment_requests
+             WHERE ticket_id = $1 AND requested_by = $2 AND status = 'pending'`,
+            [id, req.user.id]
+        );
+        if (existingCheck.rows.length > 0) {
+            return res.status(409).json({
+                status: 'error',
+                message: 'You already have a pending request for this ticket.'
+            });
+        }
+
+        // Insert a pending assignment request
+        const insertQuery = `
+            INSERT INTO ticket_assignment_requests (ticket_id, requested_by, note, status)
+            VALUES ($1, $2, $3, 'pending')
+            RETURNING *
+        `;
+        const result = await pool.query(insertQuery, [id, req.user.id, note || null]);
+        const request = result.rows[0];
+
+        // Record in ticket history
+        await TicketHistory.log(
+            id,
+            req.user.id,
+            'assignment_requested',
+            'assigned_to',
+            null,
+            req.user.id.toString(),
+            note || 'Technician requested assignment (pending approval)',
+            { assignment_type: 'request', request_id: request.id, technician_name: `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() }
+        );
+
+        // Notify all management/admin users about the new request
+        try {
+            const techName = `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'A technician';
+            const mgmtResult = await pool.query(
+                `SELECT id FROM users WHERE role IN ('management', 'admin', 'senior_technician') AND id != $1`,
+                [req.user.id]
+            );
+            const io = req.app.get('io');
+            for (const mgr of mgmtResult.rows) {
+                const notification = await Notification.create({
+                    user_id: mgr.id,
+                    type: 'assignment',
+                    message: `${techName} requested assignment to ticket #${ticket.ticket_number || id}: ${ticket.subject}`,
+                    ticket_id: parseInt(id)
+                });
+                if (io) {
+                    emitNotificationToUser(io, mgr.id, notification);
+                    const unreadCount = await Notification.getUnreadCount(mgr.id);
+                    emitUnreadCountToUser(io, mgr.id, unreadCount);
+                }
+            }
+        } catch (notifError) {
+            console.error('Failed to send assignment request notifications:', notifError);
+        }
+
+        res.status(201).json({
+            status: 'success',
+            message: 'Assignment request submitted. Awaiting management approval.',
+            data: request
+        });
+
+    } catch (error) {
+        console.error('Request ticket assignment error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to request ticket assignment',
             error: error.message
         });
     }

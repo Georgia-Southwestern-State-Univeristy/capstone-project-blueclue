@@ -415,6 +415,47 @@ export const getRecentAssignmentActivity = async (limit = 50) => {
 };
 
 /**
+ * Get available (unassigned) tickets for the current technician
+ * Returns tickets in categories the technician has access to
+ * @returns {Promise<Object>} Object with data array of available tickets
+ */
+export const getAvailableTickets = async () => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/available`, {
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch available tickets');
+  } catch (error) {
+    console.error('Get available tickets error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to load available tickets. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
+ * Request assignment of a ticket to the current technician
+ * @param {number|string} ticketId - The ticket ID
+ * @param {string} [note] - Optional note explaining why the technician wants the ticket
+ * @returns {Promise<Object>} The assignment result with updated ticket
+ */
+export const requestAssignment = async (ticketId, note = '') => {
+  try {
+    const body = {};
+    if (note) body.note = note;
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/request-assignment`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(body),
+    });
+    return await handleResponse(response, 'Failed to request ticket assignment');
+  } catch (error) {
+    console.error('Request ticket assignment error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to request ticket assignment. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
  * Get list of active technicians for assignment dropdowns
  * @returns {Promise<Object>} Object with data array of technicians
  */
@@ -431,11 +472,78 @@ export const getTechnicians = async () => {
   }
 };
 
+// ==========================================
+// Assignment Request Management (management/admin)
+// ==========================================
+
+/**
+ * Get assignment requests (defaults to pending)
+ * @param {Object} params - { status, page, limit }
+ * @returns {Promise<Object>} Paginated assignment requests
+ */
+export const getAssignmentRequests = async ({ status = 'pending', page = 1, limit = 25 } = {}) => {
+  try {
+    const params = new URLSearchParams({ status, page: String(page), limit: String(limit) });
+    const response = await fetchWithTimeout(`${API_BASE_URL}/assignment-requests?${params}`, {
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch assignment requests');
+  } catch (error) {
+    console.error('Get assignment requests error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to load assignment requests. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
+ * Approve an assignment request
+ * @param {number|string} requestId - The assignment request ID
+ * @returns {Promise<Object>} The approval result
+ */
+export const approveAssignmentRequest = async (requestId) => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/assignment-requests/${requestId}/approve`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to approve assignment request');
+  } catch (error) {
+    console.error('Approve assignment request error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to approve request. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
+ * Deny an assignment request
+ * @param {number|string} requestId - The assignment request ID
+ * @param {string} [reason] - Optional denial reason
+ * @returns {Promise<Object>} The denial result
+ */
+export const denyAssignmentRequest = async (requestId, reason = '') => {
+  try {
+    const body = {};
+    if (reason) body.reason = reason;
+    const response = await fetchWithTimeout(`${API_BASE_URL}/assignment-requests/${requestId}/deny`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(body),
+    });
+    return await handleResponse(response, 'Failed to deny assignment request');
+  } catch (error) {
+    console.error('Deny assignment request error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to deny request. Please try again.');
+    throw new Error(message);
+  }
+};
+
 export default {
   createTicket,
   getAllTickets,
   getAllTicketsForTimeline,
   getMyAssignedTickets,
+  getAvailableTickets,
+  requestAssignment,
   getTicketById,
   getTicketHistory,
   updateTicket,
@@ -447,4 +555,7 @@ export default {
   bulkAssignTickets,
   getRecentAssignmentActivity,
   getTechnicians,
+  getAssignmentRequests,
+  approveAssignmentRequest,
+  denyAssignmentRequest,
 };

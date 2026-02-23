@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Alert from '../components/Alert'
@@ -12,8 +13,10 @@ import TopRequestersWidget from '../components/TopRequestersWidget'
 import TechPerformanceWidget from '../components/TechPerformanceWidget'
 import TicketControlWidget from '../components/TicketControlWidget'
 import TicketTimeline from '../components/TicketTimeline'
+import PendingRequestsWidget from '../components/PendingRequestsWidget'
 import TicketDetailView from '../components/TicketDetailView'
 import { getAllTickets } from '../services/ticketService'
+import { useNotificationSocket } from '../hooks/useNotificationSocket'
 
 /**
  * Management Dashboard
@@ -25,6 +28,17 @@ function ManagementDashboard() {
   const [error, setError] = useState(null)
   const [tickets, setTickets] = useState([])
   const [activeTab, setActiveTab] = useState('overview')
+  const pendingRequestsRef = useRef(null)
+
+  // Real-time: refresh pending requests when a new notification arrives
+  const handleNewNotification = useCallback((notification) => {
+    // If the notification is assignment-related, auto-refresh the widget
+    if (notification?.type === 'assignment' || notification?.message?.includes('requested assignment')) {
+      pendingRequestsRef.current?.refresh()
+    }
+  }, [])
+
+  useNotificationSocket(handleNewNotification, null)
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
 
@@ -552,6 +566,67 @@ function ManagementDashboard() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Right Column - Pending Requests + Quick Actions Sidebar */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* Pending Assignment Requests Widget */}
+          <PendingRequestsWidget ref={pendingRequestsRef} onAction={() => fetchTickets()} />
+
+          <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-6 sticky top-20">
+            <h3 className="text-xl font-bold text-white mb-4">Quick Actions</h3>
+            
+            <div className="space-y-3 mb-8">
+              <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
+                <span>+</span>
+                <span>Assign Ticket</span>
+              </button>
+              
+              <button className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
+                <span>#</span>
+                <span>Add Technician</span>
+              </button>
+              
+              <button className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
+                <span>⬇</span>
+                <span>Generate Report</span>
+              </button>
+              
+              <button className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
+                <span>⚙</span>
+                <span>Settings</span>
+              </button>
+            </div>
+
+            {/* System Status Card */}
+            <div className="pt-6 border-t border-gray-700">
+              <h4 className="text-sm font-bold text-gray-400 mb-3">System Status</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between p-2 bg-gray-800 rounded border border-gray-700">
+                  <span className="text-gray-400">Backend</span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                    <span className="text-green-400">Online</span>
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-2 bg-gray-800 rounded border border-gray-700">
+                  <span className="text-gray-400">Database</span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                    <span className="text-green-400">Connected</span>
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-2 bg-gray-800 rounded border border-gray-700">
+                  <span className="text-gray-400">AI Service</span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                    <span className="text-green-400">Active</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Ticket Detail View Modal */}

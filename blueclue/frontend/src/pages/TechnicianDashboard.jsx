@@ -4,6 +4,7 @@ import Alert from '../components/Alert'
 import DonutChart from '../components/DonutChart'
 import TicketTimeline from '../components/TicketTimeline'
 import PieChart from '../components/PieChart'
+import AvailableTickets from '../components/AvailableTickets'
 import TicketDetailView from '../components/TicketDetailView'
 import { getAllTickets, updateTicketStatus, assignTicket } from '../services/ticketService'
 import { getTechnicians } from '../services/userService'
@@ -63,6 +64,7 @@ function TechnicianDashboard() {
   const [searchQuery, setSearchQuery] = useState('')
   const [technicians, setTechnicians] = useState([])
   const [assigningTicketId, setAssigningTicketId] = useState(null)
+  const [activeTab, setActiveTab] = useState('queue') // 'queue' | 'available'
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
 
@@ -338,7 +340,42 @@ function TechnicianDashboard() {
         <PieChart segments={prioritySegments} title="Priority Breakdown" />
       </div>
 
+      {/* Tab Navigation */}
+      <div className="flex border-b border-gray-700 mb-6">
+        <button
+          onClick={() => setActiveTab('queue')}
+          className={`px-6 py-3 text-sm font-medium transition-colors relative ${
+            activeTab === 'queue'
+              ? 'text-blue-400 border-b-2 border-blue-400'
+              : 'text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          Ticket Queue
+          <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
+            activeTab === 'queue' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'
+          }`}>
+            {tickets.length}
+          </span>
+        </button>
+        <button
+          onClick={() => setActiveTab('available')}
+          className={`px-6 py-3 text-sm font-medium transition-colors relative ${
+            activeTab === 'available'
+              ? 'text-blue-400 border-b-2 border-blue-400'
+              : 'text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          Available Tickets
+        </button>
+      </div>
+
+      {/* Available Tickets Tab */}
+      {activeTab === 'available' && (
+        <AvailableTickets />
+      )}
+
       {/* Ticket Queue with Filters */}
+      {activeTab === 'queue' && (
       <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">
         <div className="p-6 border-b border-gray-700">
           <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-4">
@@ -756,6 +793,7 @@ function TechnicianDashboard() {
           </div>
         )}
       </div>
+      )}
       {/* Ticket Detail View Modal */}
       <TicketDetailView
         ticketId={selectedTicketId}
