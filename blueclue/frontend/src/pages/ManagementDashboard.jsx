@@ -5,6 +5,7 @@ import ManagementNav from '../components/ManagementNav'
 import BaseWidget from '../components/BaseWidget'
 import UnassignedVsAssignedWidget from '../components/UnassignedVsAssignedWidget'
 import TicketCategoriesWidget from '../components/TicketCategoriesWidget'
+import OverdueTicketsWidget from '../components/OverdueTicketsWidget'
 import { getAllTickets } from '../services/ticketService'
 
 /**
@@ -201,6 +202,11 @@ function ManagementDashboard() {
               onCategorySelect={setCategoryFilter}
             />
           </div>
+
+          {/* Overdue Tickets Widget */}
+          <OverdueTicketsWidget
+            onRefresh={fetchTickets}
+          />
 
           {/* Filtered ticket list — shown when a donut segment is clicked */}
           {assignmentFilter && (
