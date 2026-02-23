@@ -1,0 +1,156 @@
+// ============================================================================
+// Webhook Validation Middleware
+// ============================================================================
+// Validates incoming webhooks to prevent spam and forgery
+
+import crypto from 'crypto';
+
+/**
+ * Validate Mailgun webhook signature
+ * 
+ * Mailgun signs all webhook requests. This middleware verifies the signature
+ * to ensure the request is legitimate and hasn't been tampered with.
+ * 
+ * Required environment variable: MAILGUN_WEBHOOK_SIGNING_KEY
+ * 
+ * @see https://documentation.mailgun.com/en/latest/user_manual.html#securing-webhooks
+ */
+export const validateMailgunSignature = (req, res, next) => {
+    // Skip validation in development if signing key not configured
+    if (process.env.NODE_ENV === 'development' && !process.env.MAILGUN_WEBHOOK_SIGNING_KEY) {
+        console.warn('⚠️  Mailgun signature validation SKIPPED (development mode, no signing key configured)');
+        return next();
+    }
+
+    const signingKey = process.env.MAILGUN_WEBHOOK_SIGNING_KEY;
+
+    if (!signingKey) {
+        console.error('❌ MAILGUN_WEBHOOK_SIGNING_KEY not configured');
+        return res.status(500).json({
+            status: 'error',
+            message: 'Webhook signing key not configured'
+        });
+    }
+
+    try {
+        // Mailgun sends signature data in the body
+        const timestamp = req.body.timestamp;
+        const token = req.body.token;
+        const signature = req.body.signature;
+
+        if (!timestamp || !token || !signature) {
+            console.error('❌ Missing signature fields in webhook');
+            return res.status(401).json({
+                status: 'error',
+                message: 'Invalid webhook signature format'
+            });
+        }
+
+        // Verify signature using HMAC-SHA256
+        // Mailgun signature = HMAC-SHA256(timestamp + token, signing_key)
+        const encodedData = timestamp + token;
+        const hmac = crypto.createHmac('sha256', signingKey);
+        hmac.update(encodedData);
+        const calculatedSignature = hmac.digest('hex');
+
+        if (calculatedSignature !== signature) {
+            console.error('❌ Invalid webhook signature');
+            console.error(`   Expected: ${calculatedSignature}`);
+            console.error(`   Received: ${signature}`);
+            return res.status(401).json({
+                status: 'error',
+                message: 'Invalid webhook signature'
+            });
+        }
+
+        // Check timestamp to prevent replay attacks (allow 5 minute window)
+        const currentTimestamp = Math.floor(Date.now() / 1000);
+        const timestampAge = currentTimestamp - parseInt(timestamp);
+        
+        if (timestampAge > 300) { // 5 minutes
+            console.error(`❌ Webhook timestamp too old: ${timestampAge}s`);
+            return res.status(401).json({
+                status: 'error',
+                message: 'Webhook timestamp expired'
+            });
+        }
+
+        console.log('✅ Mailgun webhook signature validated');
+        next();
+
+    } catch (error) {
+        console.error('❌ Signature validation error:', error);
+        return res.status(500).json({
+            status: 'error',
+            message: 'Failed to validate webhook signature'
+        });
+    }
+};
+
+/**
+ * Validate request has required webhook fields
+ * Basic validation before processing
+ */
+export const validateWebhookRequest = (req, res, next) => {
+    // Check content type
+    const contentType = req.headers['content-type'];
+    
+    if (!contentType || !contentType.includes('application/x-www-form-urlencoded')) {
+        console.warn(`⚠️  Unexpected content type: ${contentType}`);
+        // Don't block - Mailgun uses form-urlencoded but allow other formats for testing
+    }
+
+    // Check if body exists
+    if (!req.body || Object.keys(req.body).length === 0) {
+        console.error('❌ Empty webhook body');
+        return res.status(400).json({
+            status: 'error',
+            message: 'Webhook body is required'
+        });
+    }
+
+    next();
+};
+
+/**
+ * Rate limiting middleware for webhooks
+ * Prevents abuse even if signature validation is bypassed
+ */
+const requestCounts = new Map();
+
+export const rateLimitWebhook = (req, res, next) => {
+    const sender = req.body.sender || req.ip;
+    const now = Date.now();
+    const windowMs = 60000; // 1 minute window
+    const maxRequests = 10; // Max 10 requests per minute per sender
+
+    // Clean up old entries
+    for (const [key, value] of requestCounts.entries()) {
+        if (now - value.timestamp > windowMs) {
+            requestCounts.delete(key);
+        }
+    }
+
+    // Check rate limit
+    const requestData = requestCounts.get(sender);
+    
+    if (requestData) {
+        if (now - requestData.timestamp < windowMs) {
+            requestData.count++;
+            
+            if (requestData.count > maxRequests) {
+                console.warn(`⚠️  Rate limit exceeded for ${sender}`);
+                return res.status(429).json({
+                    status: 'error',
+                    message: 'Too many requests'
+                });
+            }
+        } else {
+            requestCounts.set(sender, { count: 1, timestamp: now });
+        }
+    } else {
+        requestCounts.set(sender, { count: 1, timestamp: now });
+    }
+
+    next();
+};

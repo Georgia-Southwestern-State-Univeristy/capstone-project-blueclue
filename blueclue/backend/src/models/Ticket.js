@@ -4,7 +4,7 @@ import pool from '../config/database.js';
 class Ticket {
     /**
      * Create a new ticket
-     * @param {Object} ticketData - { subject, description, customer_id, priority, user_priority, ai_priority, category, ai_classified, ai_confidence, ai_fallback_used, ai_keywords_matched }
+     * @param {Object} ticketData - Ticket data including AI priority fields
      * @returns {Promise<Object>} Created ticket
      */
     static async create({ 
@@ -14,6 +14,10 @@ class Ticket {
         priority = 'low',
         user_priority = null,
         ai_priority = null,
+        ai_recommended_priority = null,
+        priority_overridden = false,
+        priority_override_reason = null,
+        priority_calculation_method = null,
         category,
         ai_classified = false,
         ai_confidence = null,
@@ -22,10 +26,12 @@ class Ticket {
     }) {
         const query = `
             INSERT INTO tickets (
-                subject, description, customer_id, priority, user_priority, ai_priority, category,
-                ai_classified, ai_confidence, ai_fallback_used, ai_keywords_matched
+                subject, description, customer_id, priority, user_priority, ai_priority, 
+                ai_recommended_priority, priority_overridden, priority_override_reason,
+                priority_calculation_method, category, ai_classified, ai_confidence, 
+                ai_fallback_used, ai_keywords_matched
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             RETURNING *
         `;
         
@@ -36,6 +42,10 @@ class Ticket {
             priority, 
             user_priority,
             ai_priority,
+            ai_recommended_priority,
+            priority_overridden,
+            priority_override_reason,
+            priority_calculation_method,
             category || 'general',
             ai_classified,
             ai_confidence,
@@ -54,9 +64,9 @@ class Ticket {
         const query = `
             SELECT 
                 t.*,
-                CONCAT(customer.first_name, ' ', customer.last_name) as customer_name,
+                customer.first_name || ' ' || customer.last_name as customer_name,
                 customer.email as customer_email,
-                CONCAT(assigned.first_name, ' ', assigned.last_name) as assigned_to_name,
+                assigned.first_name || ' ' || assigned.last_name as assigned_to_name,
                 assigned.email as assigned_to_email
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
@@ -77,9 +87,9 @@ class Ticket {
         const query = `
             SELECT 
                 t.*,
-                CONCAT(customer.first_name, ' ', customer.last_name) as customer_name,
+                customer.first_name || ' ' || customer.last_name as customer_name,
                 customer.email as customer_email,
-                CONCAT(assigned.first_name, ' ', assigned.last_name) as assigned_to_name,
+                assigned.first_name || ' ' || assigned.last_name as assigned_to_name,
                 assigned.email as assigned_to_email
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
@@ -101,9 +111,9 @@ class Ticket {
         const query = `
             SELECT 
                 t.*,
-                CONCAT(customer.first_name, ' ', customer.last_name) as customer_name,
+                customer.first_name || ' ' || customer.last_name as customer_name,
                 customer.email as customer_email,
-                CONCAT(assigned.first_name, ' ', assigned.last_name) as assigned_to_name,
+                assigned.first_name || ' ' || assigned.last_name as assigned_to_name,
                 assigned.email as assigned_to_email
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
@@ -125,9 +135,9 @@ class Ticket {
         const query = `
             SELECT 
                 t.*,
-                CONCAT(customer.first_name, ' ', customer.last_name) as customer_name,
+                customer.first_name || ' ' || customer.last_name as customer_name,
                 customer.email as customer_email,
-                CONCAT(assigned.first_name, ' ', assigned.last_name) as assigned_to_name,
+                assigned.first_name || ' ' || assigned.last_name as assigned_to_name,
                 assigned.email as assigned_to_email
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
@@ -149,11 +159,11 @@ class Ticket {
         const query = `
             SELECT 
                 t.*,
-                CONCAT(customer.first_name, ' ', customer.last_name) as customer_name,
+                customer.first_name || ' ' || customer.last_name as customer_name,
                 customer.email as customer_email,
-                CONCAT(assigned.first_name, ' ', assigned.last_name) as assigned_to_name,
+                assigned.first_name || ' ' || assigned.last_name as assigned_to_name,
                 assigned.email as assigned_to_email,
-                CONCAT(resolver.first_name, ' ', resolver.last_name) as resolved_by_name
+                resolver.first_name || ' ' || resolver.last_name as resolved_by_name
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
             LEFT JOIN users assigned ON t.assigned_to = assigned.id

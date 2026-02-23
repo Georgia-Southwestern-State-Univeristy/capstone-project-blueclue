@@ -18,7 +18,11 @@ INSERT INTO users (email, password_hash, first_name, last_name, username, role, 
 VALUES 
     ('tnewc@blueclue.com', '$2b$10$lmfkmrGkF2XhKJqnfperu.bBG7CK3HpkXJ/KIullkzkNFGxewRATy', 'Thomas', 'Newcomb', 'tnewc', 'technician', true, true),
     ('cmcgo@blueclue.com', '$2b$10$Gqw9ytr7gzq7oTrfCYDuseBDakP2Ni/Yck2BdmpzEZ6Xn/3n1bDba', 'Clayton', 'McGough', 'cmcgo', 'technician', true, true),
-    ('jwill@blueclue.com', '$2b$10$YtimdlARnlSE8MdpEQoZaemIXIWLwQGf5SZOJj7IfZ8wH9h1F8ngu', 'Jacob', 'Williams', 'jwill', 'technician', true, true)
+    ('jwill@blueclue.com', '$2b$10$YtimdlARnlSE8MdpEQoZaemIXIWLwQGf5SZOJj7IfZ8wH9h1F8ngu', 'Jacob', 'Williams', 'jwill', 'technician', true, true),
+    ('mjohnson@blueclue.com', '$2b$10$lmfkmrGkF2XhKJqnfperu.bBG7CK3HpkXJ/KIullkzkNFGxewRATy', 'Maria', 'Johnson', 'mjohnson', 'senior_technician', true, true),
+    ('ebrown@blueclue.com', '$2b$10$lmfkmrGkF2XhKJqnfperu.bBG7CK3HpkXJ/KIullkzkNFGxewRATy', 'Eric', 'Brown', 'ebrown', 'senior_technician', true, true),
+    ('jdoe@blueclue.com', '$2b$10$lmfkmrGkF2XhKJqnfperu.bBG7CK3HpkXJ/KIullkzkNFGxewRATy', 'Jane', 'Doe', 'jdoe', 'management', true, true),
+    ('ssmith@blueclue.com', '$2b$10$lmfkmrGkF2XhKJqnfperu.bBG7CK3HpkXJ/KIullkzkNFGxewRATy', 'Sarah', 'Smith', 'ssmith', 'management', true, true)
 ON CONFLICT (email) DO UPDATE SET
     password_hash = EXCLUDED.password_hash,
     first_name = EXCLUDED.first_name,
@@ -27,30 +31,6 @@ ON CONFLICT (email) DO UPDATE SET
     force_password_change = EXCLUDED.force_password_change,
     role = EXCLUDED.role,
     is_active = EXCLUDED.is_active;
-
--- ============================================================================
--- GUEST SESSIONS TABLE
--- ============================================================================
--- Stores temporary guest sessions (no password, email + name only)
-
-CREATE TABLE IF NOT EXISTS guest_sessions (
-    id SERIAL PRIMARY KEY,
-    session_token VARCHAR(255) NOT NULL UNIQUE,
-    email VARCHAR(255) NOT NULL,
-    full_name VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (CURRENT_TIMESTAMP + INTERVAL '24 hours'),
-    is_active BOOLEAN NOT NULL DEFAULT true,
-    
-    -- Constraints
-    CONSTRAINT guest_email_format CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
-);
-
--- Indexes for guest sessions
-CREATE INDEX IF NOT EXISTS idx_guest_sessions_token ON guest_sessions(session_token);
-CREATE INDEX IF NOT EXISTS idx_guest_sessions_email ON guest_sessions(email);
-CREATE INDEX IF NOT EXISTS idx_guest_sessions_expires_at ON guest_sessions(expires_at);
-CREATE INDEX IF NOT EXISTS idx_guest_sessions_active ON guest_sessions(is_active) WHERE is_active = true;
 
 -- ============================================================================
 -- REFRESH TOKENS TABLE
@@ -77,16 +57,6 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at ON refresh_tokens(expir
 -- CLEANUP FUNCTION FOR EXPIRED SESSIONS
 -- ============================================================================
 
--- Function to clean up expired guest sessions
-CREATE OR REPLACE FUNCTION cleanup_expired_guest_sessions()
-RETURNS void AS $$
-BEGIN
-    UPDATE guest_sessions 
-    SET is_active = false 
-    WHERE expires_at < CURRENT_TIMESTAMP AND is_active = true;
-END;
-$$ LANGUAGE plpgsql;
-
 -- Function to clean up expired refresh tokens
 CREATE OR REPLACE FUNCTION cleanup_expired_refresh_tokens()
 RETURNS void AS $$
@@ -110,5 +80,5 @@ ORDER BY username;
 SELECT table_name 
 FROM information_schema.tables 
 WHERE table_schema = 'public' 
-  AND table_name IN ('guest_sessions', 'refresh_tokens')
+  AND table_name = 'refresh_tokens'
 ORDER BY table_name;

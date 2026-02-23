@@ -1,0 +1,570 @@
+// ============================================================================
+// Email Service
+// ============================================================================
+// Handles all email sending with Nodemailer, templates, and retry logic
+
+import nodemailer from 'nodemailer';
+import { readFile } from 'fs/promises';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import pool from '../config/database.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+const EMAIL_CONFIG = {
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.EMAIL_PORT || '587'),
+    secure: process.env.EMAIL_PORT === '465', // true for 465, false for other ports
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
+};
+
+const EMAIL_FROM = process.env.EMAIL_FROM || process.env.EMAIL_USER;
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const NODE_ENV = process.env.NODE_ENV || 'development';
+
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000; // 2 seconds
+
+// ============================================================================
+// TRANSPORTER SETUP
+// ============================================================================
+
+let transporter = null;
+let isConfigured = false;
+
+/**
+ * Initialize email transporter
+ * Validates configuration on startup
+ */
+const initializeTransporter = () => {
+    if (NODE_ENV === 'test') {
+        console.log('📧 Email service: TEST MODE - Emails will be mocked');
+        isConfigured = true;
+        return;
+    }
+
+    if (NODE_ENV === 'development' && !process.env.EMAIL_USER) {
+        console.log('📧 Email service: DEV MODE - Emails will be logged to console');
+        isConfigured = true;
+        return;
+    }
+
+    // Validate required environment variables
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        console.warn('⚠️  Email service: Missing EMAIL_USER or EMAIL_PASS - Email functionality disabled');
+        isConfigured = false;
+        return;
+    }
+
+    try {
+        transporter = nodemailer.createTransport(EMAIL_CONFIG);
+        isConfigured = true;
+        console.log('✅ Email service configured successfully');
+
+        // Verify connection
+        transporter.verify((error, success) => {
+            if (error) {
+                console.error('❌ Email service verification failed:', error.message);
+                isConfigured = false;
+            } else {
+                console.log('✅ Email service ready to send emails');
+            }
+        });
+    } catch (error) {
+        console.error('❌ Failed to initialize email service:', error.message);
+        isConfigured = false;
+    }
+};
+
+// Initialize on module load
+initializeTransporter();
+
+// ============================================================================
+// EMAIL LOGGING
+// ============================================================================
+
+/**
+ * Log email send attempt to database
+ * @param {string} recipientEmail - Email address
+ * @param {number|null} userId - User ID if registered user
+ * @param {string} emailType - Type (verification, welcome, ticket-created, etc.)
+ * @param {string} subject - Email subject
+ * @param {string} status - success/failed/pending
+ * @param {string|null} messageId - SMTP message ID
+ * @param {string|null} errorMessage - Error if failed
+ * @param {number} retryCount - Number of retry attempts
+ * @param {object} metadata - Additional data (ticket_id, etc.)
+ */
+const logEmailAttempt = async (recipientEmail, userId, emailType, subject, status, messageId = null, errorMessage = null, retryCount = 0, metadata = {}) => {
+    try {
+        await pool.query(
+            `INSERT INTO email_logs (recipient_email, recipient_user_id, email_type, subject, status, message_id, error_message, retry_count, metadata, sent_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CASE WHEN $5 = 'success' THEN NOW() ELSE NULL END)`,
+            [recipientEmail, userId, emailType, subject, status, messageId, errorMessage, retryCount, JSON.stringify(metadata)]
+        );
+    } catch (error) {
+        console.error('Failed to log email attempt:', error.message);
+    }
+};
+
+// ============================================================================
+// CORE SEND FUNCTIONS
+// ============================================================================
+
+/**
+ * Send email with retry logic
+ * @param {Object} mailOptions - Nodemailer mail options
+ * @param {number} retryCount - Current retry attempt
+ * @returns {Promise<Object>} Send result
+ */
+const sendEmailWithRetry = async (mailOptions, retryCount = 0) => {
+    // Extract logging metadata from mailOptions
+    const emailType = mailOptions.emailType || 'unknown';
+    const userId = mailOptions.userId || null;
+    const metadata = mailOptions.metadata || {};
+    
+    try {
+        // Log as pending on first attempt
+        if (retryCount === 0) {
+            await logEmailAttempt(
+                mailOptions.to,
+                userId,
+                emailType,
+                mailOptions.subject,
+                'pending',
+                null,
+                null,
+                0,
+                metadata
+            );
+        }
+        
+        // TEST MODE: Return mock success
+        if (NODE_ENV === 'test') {
+            await logEmailAttempt(
+                mailOptions.to,
+                userId,
+                emailType,
+                mailOptions.subject,
+                'success',
+                'test-message-id',
+                null,
+                retryCount,
+                metadata
+            );
+            return {
+                success: true,
+                messageId: 'test-message-id',
+                mode: 'test'
+            };
+        }
+
+        // DEV MODE or NOT CONFIGURED: Log to console instead of sending
+        if (NODE_ENV === 'development' || !isConfigured || !transporter) {
+            console.log('\n📧 ===== EMAIL (DEV MODE) =====');
+            console.log('From:', mailOptions.from);
+            console.log('To:', mailOptions.to);
+            console.log('Subject:', mailOptions.subject);
+            console.log('Text:', mailOptions.text);
+            if (mailOptions.html) {
+                console.log('HTML Length:', mailOptions.html.length, 'characters');
+            }
+            console.log('==============================\n');
+            
+            await logEmailAttempt(
+                mailOptions.to,
+                userId,
+                emailType,
+                mailOptions.subject,
+                'success',
+                'dev-mode-no-send',
+                null,
+                retryCount,
+                metadata
+            );
+            
+            return {
+                success: true,
+                messageId: 'dev-mode-no-send',
+                mode: 'development'
+            };
+        }
+
+        // PRODUCTION MODE: Actually send email
+        const info = await transporter.sendMail(mailOptions);
+        console.log('✅ Email sent successfully:', info.messageId);
+        
+        // Log success
+        await logEmailAttempt(
+            mailOptions.to,
+            userId,
+            emailType,
+            mailOptions.subject,
+            'success',
+            info.messageId,
+            null,
+            retryCount,
+            metadata
+        );
+        
+        return {
+            success: true,
+            messageId: info.messageId,
+            mode: 'production'
+        };
+
+    } catch (error) {
+        console.error(`❌ Email send failed (attempt ${retryCount + 1}/${MAX_RETRIES}):`, error.message);
+
+        // Retry logic
+        if (retryCount < MAX_RETRIES - 1) {
+            const delay = RETRY_DELAY * (retryCount + 1); // Exponential backoff
+            console.log(`🔄 Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return sendEmailWithRetry(mailOptions, retryCount + 1);
+        }
+
+        // All retries failed - log as failed
+        await logEmailAttempt(
+            mailOptions.to,
+            userId,
+            emailType,
+            mailOptions.subject,
+            'failed',
+            null,
+            error.message,
+            retryCount,
+            metadata
+        );
+        
+        throw new Error(`Failed to send email after ${MAX_RETRIES} attempts: ${error.message}`);
+    }
+};
+
+/**
+ * Send email (main public function)
+ * @param {string} to - Recipient email address
+ * @param {string} subject - Email subject
+ * @param {string} html - HTML content
+ * @param {string} text - Plain text fallback
+ * @param {string} emailType - Email type for logging (verification, welcome, etc.)
+ * @param {number|null} userId - User ID for logging
+ * @param {object} metadata - Additional metadata for logging
+ * @returns {Promise<Object>} Send result
+ */
+export const sendEmail = async (to, subject, html, text, emailType = 'unknown', userId = null, metadata = {}) => {
+    if (!to || !subject || (!html && !text)) {
+        throw new Error('Missing required email parameters: to, subject, and content are required');
+    }
+
+    const mailOptions = {
+        from: `"BlueClue Support" <${EMAIL_FROM}>`,
+        to,
+        subject,
+        text: text || 'Please view this email in an HTML-compatible email client.',
+        html: html || text,
+        emailType,
+        userId,
+        metadata
+    };
+
+    return sendEmailWithRetry(mailOptions);
+};
+
+/**
+ * Send templated email
+ * @param {string} to - Recipient email
+ * @param {string} templateName - Template file name (without .html)
+ * @param {Object} data - Data to inject into template
+ * @param {string} emailType - Email type for logging
+ * @param {number|null} userId - User ID for logging
+ * @param {object} metadata - Additional metadata for logging
+ * @returns {Promise<Object>} Send result
+ */
+export const sendTemplateEmail = async (to, templateName, data, emailType = 'unknown', userId = null, metadata = {}) => {
+    try {
+        // Load HTML template
+        const templatePath = join(__dirname, '../templates/emails', `${templateName}.html`);
+        let htmlContent = await readFile(templatePath, 'utf-8');
+
+        // Load text template (fallback)
+        let textContent = '';
+        try {
+            const textPath = join(__dirname, '../templates/emails', `${templateName}.txt`);
+            textContent = await readFile(textPath, 'utf-8');
+        } catch (error) {
+            // Text template is optional, use HTML stripped version as fallback
+            textContent = htmlContent.replace(/<[^>]*>/g, '');
+        }
+
+        // Replace placeholders with data
+        Object.keys(data).forEach(key => {
+            const placeholder = new RegExp(`{{${key}}}`, 'g');
+            htmlContent = htmlContent.replace(placeholder, data[key] || '');
+            textContent = textContent.replace(placeholder, data[key] || '');
+        });
+
+        // Extract subject from data or use default
+        const subject = data.subject || 'BlueClue Notification';
+
+        return sendEmail(to, subject, htmlContent, textContent, emailType, userId, metadata);
+
+    } catch (error) {
+        console.error('❌ Template email error:', error.message);
+        throw new Error(`Failed to send template email '${templateName}': ${error.message}`);
+    }
+};
+
+// ============================================================================
+// SPECIALIZED EMAIL FUNCTIONS
+// ============================================================================
+
+/**
+ * Send welcome email to new user
+ * @param {string} email - User email
+ * @param {string} firstName - User first name
+ * @param {string|null} verificationToken - Email verification token (null if already verified)
+ * @param {number|null} userId - User ID for logging
+ */
+export const sendWelcomeEmail = async (email, firstName, verificationToken = null, userId = null) => {
+    // If already verified, link to login page. Otherwise, verification link.
+    const verificationLink = verificationToken 
+        ? `${FRONTEND_URL}/verify-email/${verificationToken}`
+        : `${FRONTEND_URL}/login`;
+    
+    return sendTemplateEmail(
+        email,
+        'welcome',
+        {
+            subject: 'Welcome to BlueClue Support Portal',
+            firstName,
+            verificationLink,
+            frontendUrl: FRONTEND_URL
+        },
+        'welcome',
+        userId,
+        { verificationToken: verificationToken || 'already_verified' }
+    );
+};
+
+/**
+ * Send welcome email for accounts created via email submission
+ * @param {string} email - User email
+ * @param {string} firstName - User first name
+ * @param {string} verificationToken - Email verification token
+ * @param {number} ticketId - Ticket ID that triggered account creation
+ * @param {number|null} userId - User ID for logging
+ */
+export const sendEmailCreatedWelcome = async (email, firstName, verificationToken, ticketId, userId = null) => {
+    const verificationLink = `${FRONTEND_URL}/verify-email/${verificationToken}`;
+    
+    return sendTemplateEmail(
+        email,
+        'welcome-email-created',
+        {
+            subject: 'Your BlueClue Account is Ready - Verify Email',
+            firstName,
+            email,
+            verificationLink,
+            ticketId,
+            frontendUrl: FRONTEND_URL
+        },
+        'welcome-email-created',
+        userId,
+        { verificationToken, ticket_id: ticketId }
+    );
+};
+
+/**
+ * Send email verification
+ * @param {string} email - User email
+ * @param {string} firstName - User first name
+ * @param {string} verificationToken - Verification token
+ * @param {number|null} userId - User ID for logging
+ */
+export const sendVerificationEmail = async (email, firstName, verificationToken, userId = null) => {
+    const verificationLink = `${FRONTEND_URL}/verify-email/${verificationToken}`;
+    
+    return sendTemplateEmail(
+        email,
+        'verification',
+        {
+            subject: 'Verify Your Email Address - BlueClue',
+            firstName,
+            verificationLink,
+            frontendUrl: FRONTEND_URL
+        },
+        'verification',
+        userId,
+        { verificationToken }
+    );
+};
+
+/**
+ * Send ticket submission confirmation
+ * @param {string} email - Customer email
+ * @param {Object} ticket - Ticket data
+ * @param {number|null} userId - User ID for logging
+ */
+export const sendTicketConfirmation = async (email, ticket, userId = null) => {
+    return sendTemplateEmail(
+        email,
+        'ticket-created',
+        {
+            subject: `Ticket #${ticket.id} Submitted - BlueClue Support`,
+            ticketId: ticket.id,
+            ticketSubject: ticket.subject,
+            description: ticket.description || 'No description provided',
+            priority: ticket.priority || 'medium',
+            category: ticket.category || 'General',
+            ticketUrl: `${FRONTEND_URL}/tickets/${ticket.id}`,
+            frontendUrl: FRONTEND_URL
+        },
+        'ticket-created',
+        userId,
+        { ticket_id: ticket.id, priority: ticket.priority, category: ticket.category }
+    );
+};
+
+/**
+ * Send ticket status change notification
+ * @param {string} email - Customer email
+ * @param {Object} ticket - Ticket data
+ * @param {string} oldStatus - Previous status
+ * @param {string} newStatus - New status
+ * @param {number|null} userId - User ID for logging
+ */
+export const sendTicketStatusUpdate = async (email, ticket, oldStatus, newStatus, userId = null) => {
+    return sendTemplateEmail(
+        email,
+        'ticket-status-changed',
+        {
+            subject: `Ticket #${ticket.id} Status Update - BlueClue Support`,
+            ticketId: ticket.id,
+            ticketSubject: ticket.subject,
+            oldStatus,
+            newStatus,
+            ticketUrl: `${FRONTEND_URL}/tickets/${ticket.id}`,
+            frontendUrl: FRONTEND_URL
+        },
+        'ticket-status-changed',
+        userId,
+        { ticket_id: ticket.id, old_status: oldStatus, new_status: newStatus }
+    );
+};
+
+/**
+ * Send ticket assignment notification to technician
+ * @param {string} email - Technician email
+ * @param {string} technicianName - Technician name
+ * @param {Object} ticket - Ticket data
+ * @param {string} requesterName - Name of the person who created the ticket
+ * @param {number|null} userId - User ID for logging
+ */
+export const sendTicketAssignment = async (email, technicianName, ticket, requesterName, userId = null) => {
+    return sendTemplateEmail(
+        email,
+        'ticket-assigned',
+        {
+            subject: `Ticket #${ticket.id} Assigned to You - BlueClue Support`,
+            technicianName,
+            ticketId: ticket.id,
+            subject: ticket.subject,
+            description: ticket.description,
+            priority: ticket.priority,
+            category: ticket.category,
+            status: ticket.status,
+            requesterName,
+            createdAt: new Date(ticket.created_at).toLocaleString(),
+            dashboardUrl: `${FRONTEND_URL}/technician-dashboard`,
+            frontendUrl: FRONTEND_URL
+        },
+        'ticket-assigned',
+        userId,
+        { ticket_id: ticket.id, assigned_to_name: technicianName, priority: ticket.priority }
+    );
+};
+
+/**
+ * Send password reset email
+ * @param {string} email - User email
+ * @param {string} firstName - User first name
+ * @param {string} resetToken - Password reset token
+ * @param {number|null} userId - User ID for logging
+ */
+export const sendPasswordResetEmail = async (email, firstName, resetToken, userId = null) => {
+    const resetLink = `${FRONTEND_URL}/reset-password?token=${resetToken}`;
+    
+    return sendTemplateEmail(
+        email,
+        'password-reset',
+        {
+            subject: 'Password Reset Request - BlueClue',
+            firstName,
+            resetLink,
+            frontendUrl: FRONTEND_URL
+        },
+        'password-reset',
+        userId,
+        { resetToken }
+    );
+};
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+/**
+ * Check if email service is configured and ready
+ * @returns {boolean}
+ */
+export const isEmailServiceReady = () => {
+    return isConfigured;
+};
+
+/**
+ * Get email service status
+ * @returns {Object} Status information
+ */
+export const getEmailServiceStatus = () => {
+    return {
+        configured: isConfigured,
+        mode: NODE_ENV,
+        host: EMAIL_CONFIG.host,
+        port: EMAIL_CONFIG.port,
+        from: EMAIL_FROM,
+        hasCredentials: !!(process.env.EMAIL_USER && process.env.EMAIL_PASS)
+    };
+};
+
+/**
+ * Reinitialize email service (useful after env changes)
+ */
+export const reinitializeEmailService = () => {
+    transporter = null;
+    initializeTransporter();
+};
+
+export default {
+    sendEmail,
+    sendTemplateEmail,
+    sendWelcomeEmail,
+    sendEmailCreatedWelcome,
+    sendVerificationEmail,
+    sendTicketConfirmation,
+    sendTicketStatusUpdate,
+    sendTicketAssignment,
+    sendPasswordResetEmail,
+    isEmailServiceReady,
+    getEmailServiceStatus,
+    reinitializeEmailService
+};

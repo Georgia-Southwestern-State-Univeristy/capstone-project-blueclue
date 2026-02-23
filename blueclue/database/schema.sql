@@ -7,24 +7,34 @@
 -- ============================================================================
 
 -- Drop existing tables if they exist (for clean reinstalls)
+DROP TABLE IF EXISTS role_category_defaults CASCADE;
+DROP TABLE IF EXISTS category_access CASCADE;
+DROP TABLE IF EXISTS user_privileges CASCADE;
+DROP TABLE IF EXISTS privilege_types CASCADE;
+DROP TABLE IF EXISTS notifications CASCADE;
 DROP TABLE IF EXISTS ai_classifications CASCADE;
+DROP TABLE IF EXISTS ticket_comments CASCADE;
 DROP TABLE IF EXISTS ticket_history CASCADE;
 DROP TABLE IF EXISTS ticket_assignments CASCADE;
+DROP TABLE IF EXISTS ticket_templates CASCADE;
 DROP TABLE IF EXISTS tickets CASCADE;
 DROP TABLE IF EXISTS categories CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 DROP TABLE IF EXISTS ticket_statuses CASCADE;
 DROP TABLE IF EXISTS ticket_priorities CASCADE;
 
+
 -- ============================================================================
 -- ENUM TYPES
 -- ============================================================================
 
 -- Create custom types for better data integrity
-CREATE TYPE user_role AS ENUM ('customer', 'technician', 'admin');
-CREATE TYPE ticket_status AS ENUM ('open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed');
+CREATE TYPE user_role AS ENUM ('customer', 'technician', 'senior_technician', 'management', 'admin');
+CREATE TYPE ticket_status AS ENUM ('open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed', 'cancelled', 'reopened');
 CREATE TYPE ticket_priority AS ENUM ('low', 'medium', 'high', 'critical');
 CREATE TYPE ticket_category AS ENUM ('general', 'technical', 'billing', 'account', 'feature_request', 'hardware', 'software', 'network', 'login', 'other');
+CREATE TYPE access_level AS ENUM ('view', 'edit', 'assign');
+CREATE TYPE notification_type AS ENUM ('assignment', 'overdue', 'update_request', 'mention');
 
 -- ============================================================================
 -- TABLE: users
@@ -42,8 +52,11 @@ CREATE TABLE users (
     phone VARCHAR(20),
     company VARCHAR(255),
     is_active BOOLEAN NOT NULL DEFAULT true,
-    is_guest BOOLEAN NOT NULL DEFAULT false,
     force_password_change BOOLEAN NOT NULL DEFAULT false,
+    email_verified BOOLEAN NOT NULL DEFAULT false,
+    email_verification_token VARCHAR(255),
+    email_verification_expires TIMESTAMP WITH TIME ZONE,
+    email_notifications BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login TIMESTAMP WITH TIME ZONE,
@@ -60,7 +73,8 @@ CREATE INDEX idx_users_role ON users(role);
 CREATE INDEX idx_users_active ON users(is_active) WHERE is_active = true;
 CREATE INDEX idx_users_created_at ON users(created_at);
 CREATE INDEX idx_users_force_password_change ON users(force_password_change) WHERE force_password_change = true;
-CREATE INDEX idx_users_is_guest_created_at ON users(is_guest, created_at) WHERE is_guest = true;
+CREATE INDEX idx_users_email_verified ON users(email_verified) WHERE email_verified = false;
+CREATE INDEX idx_users_email_verification_token ON users(email_verification_token) WHERE email_verification_token IS NOT NULL;
 
 -- ============================================================================
 -- TABLE: categories
@@ -126,12 +140,17 @@ CREATE TABLE tickets (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     closed_at TIMESTAMP WITH TIME ZONE,
     
+    -- Reopen tracking
+    reopen_count INTEGER NOT NULL DEFAULT 0,
+    last_reopened_at TIMESTAMP WITH TIME ZONE,
+    
     -- Constraints
     CONSTRAINT ai_confidence_range CHECK (ai_confidence IS NULL OR (ai_confidence >= 0 AND ai_confidence <= 1)),
     CONSTRAINT resolved_fields_consistency CHECK (
         (status IN ('resolved', 'closed') AND resolved_at IS NOT NULL) OR
         (status NOT IN ('resolved', 'closed') AND resolved_at IS NULL)
-    )
+    ),
+    CONSTRAINT reopen_count_positive CHECK (reopen_count >= 0)
     -- Note: assigned_to role validation will be enforced via foreign key and application logic
 );
 
@@ -155,28 +174,113 @@ CREATE INDEX idx_tickets_ai_keywords ON tickets USING GIN (ai_keywords_matched);
 -- ============================================================================
 -- TABLE: ticket_assignments
 -- ============================================================================
--- Track assignment history and reassignments
+-- Many-to-many relationship for multi-technician ticket assignments
+-- Supports primary and assisting technician roles
 
 CREATE TABLE ticket_assignments (
     id SERIAL PRIMARY KEY,
     ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
-    assigned_to INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    assigned_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(20) NOT NULL DEFAULT 'primary',
     assigned_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    assigned_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     unassigned_at TIMESTAMP WITH TIME ZONE,
     notes TEXT,
     
     -- Constraints
+    CONSTRAINT assignment_role CHECK (role IN ('primary', 'assisting')),
     CONSTRAINT assignment_dates_valid CHECK (
         unassigned_at IS NULL OR unassigned_at >= assigned_at
-    )
+    ),
+    CONSTRAINT unique_active_assignment UNIQUE (ticket_id, user_id)
 );
 
 -- Indexes for ticket_assignments
 CREATE INDEX idx_ticket_assignments_ticket ON ticket_assignments(ticket_id);
-CREATE INDEX idx_ticket_assignments_assigned_to ON ticket_assignments(assigned_to);
-CREATE INDEX idx_ticket_assignments_active ON ticket_assignments(ticket_id, assigned_to) 
+CREATE INDEX idx_ticket_assignments_user ON ticket_assignments(user_id);
+CREATE INDEX idx_ticket_assignments_role ON ticket_assignments(role);
+CREATE INDEX idx_ticket_assignments_assigned_by ON ticket_assignments(assigned_by);
+CREATE INDEX idx_ticket_assignments_active ON ticket_assignments(ticket_id, user_id) 
     WHERE unassigned_at IS NULL;
+
+-- ============================================================================
+-- TABLE: ticket_comments
+-- ============================================================================
+-- Stores comments/replies on tickets with support for threaded conversations
+
+CREATE TABLE ticket_comments (
+    id SERIAL PRIMARY KEY,
+    ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_type VARCHAR(20) NOT NULL,
+    content TEXT NOT NULL,
+    is_internal BOOLEAN NOT NULL DEFAULT false,
+    parent_comment_id INTEGER REFERENCES ticket_comments(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    
+    -- Constraints
+    CONSTRAINT user_type_valid CHECK (user_type IN ('client', 'tech', 'management')),
+    CONSTRAINT content_not_empty CHECK (LENGTH(TRIM(content)) > 0),
+    CONSTRAINT internal_comment_rules CHECK (
+        (is_internal = false) OR 
+        (is_internal = true AND user_type IN ('tech', 'management'))
+    )
+);
+
+-- Indexes for ticket_comments
+CREATE INDEX idx_ticket_comments_ticket ON ticket_comments(ticket_id);
+CREATE INDEX idx_ticket_comments_user ON ticket_comments(user_id);
+CREATE INDEX idx_ticket_comments_parent ON ticket_comments(parent_comment_id);
+CREATE INDEX idx_ticket_comments_created_at ON ticket_comments(created_at DESC);
+CREATE INDEX idx_ticket_comments_active ON ticket_comments(ticket_id, created_at DESC) 
+    WHERE deleted_at IS NULL;
+CREATE INDEX idx_ticket_comments_internal ON ticket_comments(ticket_id, is_internal)
+    WHERE deleted_at IS NULL;
+
+-- Trigger for ticket_comments updated_at
+CREATE TRIGGER update_ticket_comments_updated_at
+    BEFORE UPDATE ON ticket_comments
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================================
+-- TABLE: ticket_templates
+-- ============================================================================
+-- Predefined ticket templates for common issues and categories
+
+CREATE TABLE ticket_templates (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(200) NOT NULL,
+    category ticket_category NOT NULL,
+    description TEXT,
+    default_priority ticket_priority NOT NULL DEFAULT 'medium',
+    field_mappings JSONB,
+    created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    
+    -- Constraints
+    CONSTRAINT template_name_not_empty CHECK (LENGTH(TRIM(name)) > 0)
+);
+
+-- Indexes for ticket_templates
+CREATE INDEX idx_ticket_templates_category ON ticket_templates(category);
+CREATE INDEX idx_ticket_templates_active ON ticket_templates(is_active) 
+    WHERE is_active = true;
+CREATE INDEX idx_ticket_templates_created_by ON ticket_templates(created_by);
+CREATE INDEX idx_ticket_templates_name ON ticket_templates(name);
+
+-- GIN index for JSON field searching
+CREATE INDEX idx_ticket_templates_field_mappings ON ticket_templates USING GIN (field_mappings);
+
+-- Trigger for ticket_templates updated_at
+CREATE TRIGGER update_ticket_templates_updated_at
+    BEFORE UPDATE ON ticket_templates
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
 -- TABLE: ticket_history
@@ -350,6 +454,98 @@ CREATE TRIGGER set_ticket_sla_dates_trigger
     EXECUTE FUNCTION set_ticket_sla_dates();
 
 -- ============================================================================
+-- AUDIT TRAIL FUNCTIONS AND TRIGGERS
+-- ============================================================================
+-- Automatically log all privilege and category access changes
+
+-- Function to audit user_privileges changes
+CREATE OR REPLACE FUNCTION audit_user_privileges_changes()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (TG_OP = 'INSERT') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, new_values)
+        VALUES ('user_privileges', NEW.id, 'INSERT', NEW.user_id, NEW.granted_by, 
+                row_to_json(NEW)::jsonb);
+        RETURN NEW;
+    ELSIF (TG_OP = 'UPDATE') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, old_values, new_values)
+        VALUES ('user_privileges', NEW.id, 'UPDATE', NEW.user_id, NEW.granted_by,
+                row_to_json(OLD)::jsonb, row_to_json(NEW)::jsonb);
+        RETURN NEW;
+    ELSIF (TG_OP = 'DELETE') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, old_values)
+        VALUES ('user_privileges', OLD.id, 'DELETE', OLD.user_id, NULL,
+                row_to_json(OLD)::jsonb);
+        RETURN OLD;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to audit category_access changes
+CREATE OR REPLACE FUNCTION audit_category_access_changes()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (TG_OP = 'INSERT') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, new_values)
+        VALUES ('category_access', NEW.id, 'INSERT', NEW.user_id, NEW.granted_by,
+                row_to_json(NEW)::jsonb);
+        RETURN NEW;
+    ELSIF (TG_OP = 'UPDATE') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, old_values, new_values)
+        VALUES ('category_access', NEW.id, 'UPDATE', NEW.user_id, NEW.granted_by,
+                row_to_json(OLD)::jsonb, row_to_json(NEW)::jsonb);
+        RETURN NEW;
+    ELSIF (TG_OP = 'DELETE') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, old_values)
+        VALUES ('category_access', OLD.id, 'DELETE', OLD.user_id, NULL,
+                row_to_json(OLD)::jsonb);
+        RETURN OLD;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to audit role_category_defaults changes
+CREATE OR REPLACE FUNCTION audit_role_defaults_changes()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF (TG_OP = 'INSERT') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, new_values)
+        VALUES ('role_category_defaults', NEW.id, 'INSERT', NULL, NEW.created_by,
+                row_to_json(NEW)::jsonb);
+        RETURN NEW;
+    ELSIF (TG_OP = 'UPDATE') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, old_values, new_values)
+        VALUES ('role_category_defaults', NEW.id, 'UPDATE', NULL, NEW.created_by,
+                row_to_json(OLD)::jsonb, row_to_json(NEW)::jsonb);
+        RETURN NEW;
+    ELSIF (TG_OP = 'DELETE') THEN
+        INSERT INTO privilege_audit_log (table_name, record_id, action, user_id, changed_by, old_values)
+        VALUES ('role_category_defaults', OLD.id, 'DELETE', NULL, OLD.created_by,
+                row_to_json(OLD)::jsonb);
+        RETURN OLD;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for user_privileges audit
+CREATE TRIGGER audit_user_privileges_trigger
+    AFTER INSERT OR UPDATE OR DELETE ON user_privileges
+    FOR EACH ROW
+    EXECUTE FUNCTION audit_user_privileges_changes();
+
+-- Trigger for category_access audit
+CREATE TRIGGER audit_category_access_trigger
+    AFTER INSERT OR UPDATE OR DELETE ON category_access
+    FOR EACH ROW
+    EXECUTE FUNCTION audit_category_access_changes();
+
+-- Trigger for role_category_defaults audit
+CREATE TRIGGER audit_role_defaults_trigger
+    AFTER INSERT OR UPDATE OR DELETE ON role_category_defaults
+    FOR EACH ROW
+    EXECUTE FUNCTION audit_role_defaults_changes();
+
+-- ============================================================================
 -- DEFAULT DATA - CATEGORIES
 -- ============================================================================
 -- Insert default categories that match the AI classifier
@@ -367,6 +563,190 @@ INSERT INTO categories (name, display_name, description, color_code, icon) VALUE
     ('network', 'Network', 'Network connectivity and WiFi issues', '#10B981', 'network'),
     ('login', 'Login & Access', 'Login, password, and account access issues', '#EF4444', 'lock'),
     ('other', 'Other', 'General inquiries and other issues', '#9CA3AF', 'help');
+
+-- ============================================================================
+-- TABLE: privilege_types
+-- ============================================================================
+-- Defines valid privilege types for the RBAC system
+
+CREATE TABLE privilege_types (
+    id SERIAL PRIMARY KEY,
+    privilege_code VARCHAR(100) NOT NULL UNIQUE,
+    display_name VARCHAR(200) NOT NULL,
+    description TEXT NOT NULL,
+    default_value TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Constraints
+    CONSTRAINT privilege_code_uppercase CHECK (privilege_code = UPPER(privilege_code)),
+    CONSTRAINT privilege_code_not_empty CHECK (LENGTH(privilege_code) > 0)
+);
+
+-- Index for privilege_types table
+CREATE INDEX idx_privilege_types_code ON privilege_types(privilege_code);
+CREATE INDEX idx_privilege_types_active ON privilege_types(is_active) WHERE is_active = true;
+
+-- Insert default privilege types
+INSERT INTO privilege_types (privilege_code, display_name, description, default_value) VALUES
+    ('CAN_ASSIGN_TICKETS', 'Can Assign Tickets', 'Allows user to assign tickets to other technicians', 'false'),
+    ('CAN_MANAGE_CATEGORIES', 'Can Manage Categories', 'Allows user to modify ticket categories and category settings', 'false'),
+    ('CAN_VIEW_ALL_TICKETS', 'Can View All Tickets', 'Override category restrictions to view all tickets in the system', 'false'),
+    ('CAN_DELETE_TICKETS', 'Can Delete Tickets', 'Allows user to delete any ticket regardless of assignment', 'false'),
+    ('CAN_EDIT_ANY_TICKET', 'Can Edit Any Ticket', 'Allows user to edit any ticket regardless of assignment or category access', 'false');
+
+-- ============================================================================
+-- TABLE: user_privileges
+-- ============================================================================
+-- Stores granular privileges for users (especially technicians)
+
+CREATE TABLE user_privileges (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    privilege_type VARCHAR(100) NOT NULL,
+    value TEXT NOT NULL,
+    granted_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    granted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    revoked_at TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    notes TEXT,
+    
+    -- Constraints
+    CONSTRAINT privilege_type_not_empty CHECK (LENGTH(privilege_type) > 0),
+    CONSTRAINT value_not_empty CHECK (LENGTH(value) > 0)
+);
+
+-- Indexes for user_privileges table
+CREATE INDEX idx_user_privileges_user ON user_privileges(user_id);
+CREATE INDEX idx_user_privileges_type ON user_privileges(privilege_type);
+CREATE INDEX idx_user_privileges_active ON user_privileges(user_id, is_active) WHERE is_active = true;
+CREATE INDEX idx_user_privileges_granted_by ON user_privileges(granted_by);
+CREATE INDEX idx_user_privileges_granted_at ON user_privileges(granted_at DESC);
+
+-- ============================================================================
+-- TABLE: category_access
+-- ============================================================================
+-- Stores category-based access control for technicians
+
+CREATE TABLE category_access (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    access_level access_level NOT NULL,
+    granted_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    granted_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    revoked_at TIMESTAMP WITH TIME ZONE,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    notes TEXT,
+    
+    -- Constraints
+    CONSTRAINT unique_user_category_access UNIQUE (user_id, category_id, access_level)
+);
+
+-- Indexes for category_access table
+CREATE INDEX idx_category_access_user ON category_access(user_id);
+CREATE INDEX idx_category_access_category ON category_access(category_id);
+CREATE INDEX idx_category_access_level ON category_access(access_level);
+CREATE INDEX idx_category_access_active ON category_access(user_id, is_active) WHERE is_active = true;
+CREATE INDEX idx_category_access_granted_by ON category_access(granted_by);
+CREATE INDEX idx_category_access_user_category ON category_access(user_id, category_id, access_level) WHERE is_active = true;
+
+-- ============================================================================
+-- TABLE: role_category_defaults
+-- ============================================================================
+-- Defines default category access for roles (can be overridden by user_privileges)
+
+CREATE TABLE role_category_defaults (
+    id SERIAL PRIMARY KEY,
+    role user_role NOT NULL,
+    category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    access_level access_level NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    notes TEXT,
+    
+    -- Constraints
+    CONSTRAINT unique_role_category_access UNIQUE (role, category_id, access_level)
+);
+
+-- Indexes for role_category_defaults table
+CREATE INDEX idx_role_category_defaults_role ON role_category_defaults(role);
+CREATE INDEX idx_role_category_defaults_category ON role_category_defaults(category_id);
+CREATE INDEX idx_role_category_defaults_active ON role_category_defaults(role, is_active) WHERE is_active = true;
+CREATE INDEX idx_role_category_defaults_role_category ON role_category_defaults(role, category_id) WHERE is_active = true;
+
+-- ============================================================================
+-- TABLE: privilege_audit_log
+-- ============================================================================
+-- Complete audit trail for all privilege and category access changes
+
+CREATE TABLE privilege_audit_log (
+    id SERIAL PRIMARY KEY,
+    table_name VARCHAR(50) NOT NULL, -- 'user_privileges', 'category_access', 'role_category_defaults'
+    record_id INTEGER NOT NULL, -- ID of the record being changed
+    action VARCHAR(20) NOT NULL, -- 'INSERT', 'UPDATE', 'DELETE'
+    user_id INTEGER, -- User whose privileges are being changed
+    changed_by INTEGER REFERENCES users(id) ON DELETE SET NULL, -- Who made the change
+    changed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    old_values JSONB, -- Previous values (for UPDATE/DELETE)
+    new_values JSONB, -- New values (for INSERT/UPDATE)
+    notes TEXT,
+    
+    -- Constraints
+    CONSTRAINT valid_table_name CHECK (table_name IN ('user_privileges', 'category_access', 'role_category_defaults')),
+    CONSTRAINT valid_action CHECK (action IN ('INSERT', 'UPDATE', 'DELETE'))
+);
+
+-- Indexes for privilege_audit_log table
+CREATE INDEX idx_privilege_audit_table ON privilege_audit_log(table_name);
+CREATE INDEX idx_privilege_audit_record ON privilege_audit_log(record_id);
+CREATE INDEX idx_privilege_audit_user ON privilege_audit_log(user_id);
+CREATE INDEX idx_privilege_audit_changed_by ON privilege_audit_log(changed_by);
+CREATE INDEX idx_privilege_audit_changed_at ON privilege_audit_log(changed_at DESC);
+CREATE INDEX idx_privilege_audit_table_record ON privilege_audit_log(table_name, record_id);
+
+-- Insert default role-based category access
+-- Admins: Full access to all categories
+INSERT INTO role_category_defaults (role, category_id, access_level, notes)
+SELECT 'admin', c.id, 'assign', 'Full admin access to all categories'
+FROM categories c;
+
+-- Technicians: Edit access to technical, hardware, software, network categories by default
+INSERT INTO role_category_defaults (role, category_id, access_level, notes)
+SELECT 'technician', c.id, 'edit', 'Default technician access to technical categories'
+FROM categories c
+WHERE c.name IN ('technical', 'hardware', 'software', 'network');
+
+-- Technicians: View access to all other categories
+INSERT INTO role_category_defaults (role, category_id, access_level, notes)
+SELECT 'technician', c.id, 'view', 'Default technician view access'
+FROM categories c
+WHERE c.name NOT IN ('technical', 'hardware', 'software', 'network');
+
+-- Senior Technicians: Assign access to critical categories, edit access to technical categories
+INSERT INTO role_category_defaults (role, category_id, access_level, notes)
+SELECT 'senior_technician', c.id, 'assign', 'Senior tech assign access to critical categories'
+FROM categories c
+WHERE c.name IN ('network', 'login');
+
+INSERT INTO role_category_defaults (role, category_id, access_level, notes)
+SELECT 'senior_technician', c.id, 'edit', 'Senior tech edit access to general categories'
+FROM categories c
+WHERE c.name IN ('general', 'technical', 'hardware', 'software');
+
+INSERT INTO role_category_defaults (role, category_id, access_level, notes)
+SELECT 'senior_technician', c.id, 'view', 'Senior tech view access to remaining categories'
+FROM categories c
+WHERE c.name NOT IN ('network', 'login', 'general', 'technical', 'hardware', 'software');
+
+-- Management: Full assign access to all categories
+INSERT INTO role_category_defaults (role, category_id, access_level, notes)
+SELECT 'management', c.id, 'assign', 'Management full assign access to all categories'
+FROM categories c;
+
+-- Customers: View access to their own tickets (enforced at application level)
+-- No default category restrictions for customers as they only see their own tickets
 
 -- ============================================================================
 -- VIEWS FOR COMMON QUERIES
@@ -448,6 +828,74 @@ COMMENT ON COLUMN tickets.ai_keywords_matched IS 'JSON object containing matched
 -- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO blueclue_app;
 
 -- ============================================================================
+-- TABLE: email_logs
+-- ============================================================================
+-- Comprehensive logging for all email send attempts
+
+CREATE TABLE email_logs (
+    id SERIAL PRIMARY KEY,
+    recipient_email VARCHAR(255) NOT NULL,
+    recipient_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    email_type VARCHAR(50) NOT NULL,
+    subject TEXT NOT NULL,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('success', 'failed', 'pending')),
+    message_id TEXT,
+    error_message TEXT,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    sent_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    metadata JSONB,
+    
+    CONSTRAINT valid_email_type CHECK (email_type IN (
+        'verification',
+        'welcome',
+        'ticket-created',
+        'ticket-status-changed',
+        'ticket-assigned',
+        'password-reset',
+        'unknown'
+    ))
+);
+
+-- Indexes for email_logs table
+CREATE INDEX idx_email_logs_recipient ON email_logs(recipient_email);
+CREATE INDEX idx_email_logs_user_id ON email_logs(recipient_user_id);
+CREATE INDEX idx_email_logs_type ON email_logs(email_type);
+CREATE INDEX idx_email_logs_status ON email_logs(status);
+CREATE INDEX idx_email_logs_sent_at ON email_logs(sent_at);
+CREATE INDEX idx_email_logs_created_at ON email_logs(created_at);
+
+-- Comments for email_logs table
+COMMENT ON TABLE email_logs IS 'Logs all email send attempts with delivery status and error tracking';
+COMMENT ON COLUMN email_logs.recipient_email IS 'Email address of recipient';
+COMMENT ON COLUMN email_logs.recipient_user_id IS 'Foreign key to users table if recipient is a system user';
+COMMENT ON COLUMN email_logs.email_type IS 'Type of email sent (verification, ticket-created, etc.)';
+COMMENT ON COLUMN email_logs.status IS 'Delivery status: success, failed, or pending';
+COMMENT ON COLUMN email_logs.message_id IS 'SMTP message ID for successful sends';
+COMMENT ON COLUMN email_logs.error_message IS 'Error details if send failed';
+COMMENT ON COLUMN email_logs.retry_count IS 'Number of retry attempts made';
+COMMENT ON COLUMN email_logs.sent_at IS 'Timestamp when email was successfully sent';
+COMMENT ON COLUMN email_logs.metadata IS 'Additional context (ticket_id, tokens, etc.) stored as JSON';
+
+-- Automatic cleanup function for old successful email logs
+CREATE OR REPLACE FUNCTION cleanup_old_email_logs()
+RETURNS INTEGER AS $$
+DECLARE
+    deleted_count INTEGER;
+BEGIN
+    -- Delete successful email logs older than 90 days
+    DELETE FROM email_logs
+    WHERE status = 'success'
+    AND created_at < NOW() - INTERVAL '90 days';
+    
+    GET DIAGNOSTICS deleted_count = ROW_COUNT;
+    RETURN deleted_count;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION cleanup_old_email_logs() IS 'Removes successful email logs older than 90 days to manage database size';
+
+-- ============================================================================
 -- SCHEMA VERSION INFO
 -- ============================================================================
 
@@ -458,7 +906,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 INSERT INTO schema_version (version, description) 
-VALUES ('1.0.0', 'Initial BlueClue database schema with AI classification support');
+VALUES ('2.1.0', 'Complete email system: verification, notifications, monitoring, and admin management with email_logs table and automatic cleanup');
 
 -- ============================================================================
 -- END OF SCHEMA

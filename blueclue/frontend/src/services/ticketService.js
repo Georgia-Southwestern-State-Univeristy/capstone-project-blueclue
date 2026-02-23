@@ -225,6 +225,24 @@ export const getTicketById = async (id) => {
 };
 
 /**
+ * Get ticket activity history
+ * @param {number|string} id - The ticket ID
+ * @returns {Promise<Object>} Object with data array of history entries
+ */
+export const getTicketHistory = async (id) => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${id}/history`, {
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch ticket history');
+  } catch (error) {
+    console.error('Get ticket history error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to load ticket history. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
  * Update a ticket
  * @param {number|string} id - The ticket ID
  * @param {Object} ticketData - The updated ticket data
@@ -306,14 +324,238 @@ export const assignTicket = async (id, technicianId) => {
   }
 };
 
+/**
+ * Assign a single ticket to a technician (with validation)
+ * @param {number|string} ticketId - The ticket ID
+ * @param {number} technicianId - The technician user ID
+ * @param {string} [note] - Optional assignment note
+ * @returns {Promise<Object>} The assignment result
+ */
+export const assignSingleTicket = async (ticketId, technicianId, note = '') => {
+  try {
+    const body = { technician_id: technicianId };
+    if (note) body.note = note;
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/assign`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(body),
+    });
+    return await handleResponse(response, 'Failed to assign ticket');
+  } catch (error) {
+    console.error('Assign single ticket error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to assign ticket. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
+ * Reassign a ticket to a different technician
+ * @param {number|string} ticketId - The ticket ID
+ * @param {number} technicianId - The new technician user ID
+ * @param {string} [note] - Optional reassignment note
+ * @returns {Promise<Object>} The reassignment result
+ */
+export const reassignTicket = async (ticketId, technicianId, note = '') => {
+  try {
+    const body = { technician_id: technicianId };
+    if (note) body.note = note;
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/reassign`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(body),
+    });
+    return await handleResponse(response, 'Failed to reassign ticket');
+  } catch (error) {
+    console.error('Reassign ticket error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to reassign ticket. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
+ * Bulk assign multiple tickets to a technician
+ * @param {Array<number>} ticketIds - Array of ticket IDs
+ * @param {number} technicianId - The technician user ID
+ * @param {string} [note] - Optional assignment note
+ * @returns {Promise<Object>} The assignment result
+ */
+export const bulkAssignTickets = async (ticketIds, technicianId, note = '') => {
+  try {
+    const body = { ticket_ids: ticketIds, technician_id: technicianId };
+    if (note) body.note = note;
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/bulk-assign`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(body),
+    });
+    return await handleResponse(response, 'Failed to assign tickets');
+  } catch (error) {
+    console.error('Bulk assign tickets error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to assign tickets. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
+ * Get recent assignment activity across all tickets
+ * @param {number} limit - Max entries to return (default 50)
+ * @returns {Promise<Object>} Object with data array of assignment events
+ */
+export const getRecentAssignmentActivity = async (limit = 50) => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/activity?limit=${limit}`, {
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch assignment activity');
+  } catch (error) {
+    console.error('Get assignment activity error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to load assignment activity. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
+ * Get available (unassigned) tickets for the current technician
+ * Returns tickets in categories the technician has access to
+ * @returns {Promise<Object>} Object with data array of available tickets
+ */
+export const getAvailableTickets = async () => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/available`, {
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch available tickets');
+  } catch (error) {
+    console.error('Get available tickets error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to load available tickets. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
+ * Request assignment of a ticket to the current technician
+ * @param {number|string} ticketId - The ticket ID
+ * @param {string} [note] - Optional note explaining why the technician wants the ticket
+ * @returns {Promise<Object>} The assignment result with updated ticket
+ */
+export const requestAssignment = async (ticketId, note = '') => {
+  try {
+    const body = {};
+    if (note) body.note = note;
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/request-assignment`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(body),
+    });
+    return await handleResponse(response, 'Failed to request ticket assignment');
+  } catch (error) {
+    console.error('Request ticket assignment error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to request ticket assignment. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
+ * Get list of active technicians for assignment dropdowns
+ * @returns {Promise<Object>} Object with data array of technicians
+ */
+export const getTechnicians = async () => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/users/technicians`, {
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch technicians');
+  } catch (error) {
+    console.error('Get technicians error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to load technicians. Please try again.');
+    throw new Error(message);
+  }
+};
+
+// ==========================================
+// Assignment Request Management (management/admin)
+// ==========================================
+
+/**
+ * Get assignment requests (defaults to pending)
+ * @param {Object} params - { status, page, limit }
+ * @returns {Promise<Object>} Paginated assignment requests
+ */
+export const getAssignmentRequests = async ({ status = 'pending', page = 1, limit = 25 } = {}) => {
+  try {
+    const params = new URLSearchParams({ status, page: String(page), limit: String(limit) });
+    const response = await fetchWithTimeout(`${API_BASE_URL}/assignment-requests?${params}`, {
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch assignment requests');
+  } catch (error) {
+    console.error('Get assignment requests error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to load assignment requests. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
+ * Approve an assignment request
+ * @param {number|string} requestId - The assignment request ID
+ * @returns {Promise<Object>} The approval result
+ */
+export const approveAssignmentRequest = async (requestId) => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/assignment-requests/${requestId}/approve`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to approve assignment request');
+  } catch (error) {
+    console.error('Approve assignment request error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to approve request. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
+ * Deny an assignment request
+ * @param {number|string} requestId - The assignment request ID
+ * @param {string} [reason] - Optional denial reason
+ * @returns {Promise<Object>} The denial result
+ */
+export const denyAssignmentRequest = async (requestId, reason = '') => {
+  try {
+    const body = {};
+    if (reason) body.reason = reason;
+    const response = await fetchWithTimeout(`${API_BASE_URL}/assignment-requests/${requestId}/deny`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(body),
+    });
+    return await handleResponse(response, 'Failed to deny assignment request');
+  } catch (error) {
+    console.error('Deny assignment request error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to deny request. Please try again.');
+    throw new Error(message);
+  }
+};
+
 export default {
   createTicket,
   getAllTickets,
   getAllTicketsForTimeline,
   getMyAssignedTickets,
+  getAvailableTickets,
+  requestAssignment,
   getTicketById,
+  getTicketHistory,
   updateTicket,
   deleteTicket,
   updateTicketStatus,
   assignTicket,
+  assignSingleTicket,
+  reassignTicket,
+  bulkAssignTickets,
+  getRecentAssignmentActivity,
+  getTechnicians,
+  getAssignmentRequests,
+  approveAssignmentRequest,
+  denyAssignmentRequest,
 };

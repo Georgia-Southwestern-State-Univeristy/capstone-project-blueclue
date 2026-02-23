@@ -10,9 +10,12 @@ import {
     changePassword,
     logout,
     refreshAccessToken,
-    getCurrentUser
+    getCurrentUser,
+    verifyEmail,
+    resendVerification
 } from '../controllers/authController.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { resendVerificationLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
@@ -22,16 +25,13 @@ const router = express.Router();
 
 /**
  * POST /api/auth/login
- * Login for technicians (username), customers (email), or guests (email + name)
+ * Login for technicians (username) or customers (email)
  * 
  * Technician login body:
  *   { username: "tnewc", password: "admin123" }
  * 
  * Customer login body:
  *   { email: "customer@example.com", password: "password123" }
- * 
- * Guest login body:
- *   { email: "guest@example.com", fullName: "John Doe", isGuest: true }
  */
 router.post('/login', login);
 
@@ -50,6 +50,25 @@ router.post('/login', login);
  *   }
  */
 router.post('/register', register);
+
+/**
+ * GET /api/auth/verify-email/:token
+ * Verify email address with token from email link
+ * 
+ * Params:
+ *   token: Verification token (64-character hex string)
+ */
+router.get('/verify-email/:token', verifyEmail);
+
+/**
+ * POST /api/auth/resend-verification
+ * Resend verification email to unverified account
+ * Rate limited: Max 3 requests per hour
+ * 
+ * Body:
+ *   { email: "customer@example.com" }
+ */
+router.post('/resend-verification', resendVerificationLimiter, resendVerification);
 
 /**
  * POST /api/auth/refresh

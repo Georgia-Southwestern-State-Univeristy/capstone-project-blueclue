@@ -9,6 +9,18 @@ import pool from './config/database.js';
 import ticketRoutes from './routes/tickets.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
+import privilegeRoutes from './routes/privileges.js';
+import categoryRoutes from './routes/categories.js';
+import roleRoutes from './routes/roles.js';
+import auditRoutes from './routes/audit.js';
+import notificationRoutes from './routes/notifications.js';
+import devRoutes from './routes/dev.js';
+import adminRoutes from './routes/admin.js';
+import webhookRoutes from './routes/webhooks.js';
+import analyticsRoutes from './routes/analytics.js';
+import configRoutes from './routes/config.js';
+import assignmentRequestRoutes from './routes/assignmentRequests.js';
+import { initializeSocketHandlers } from './services/socketService.js';
 
 dotenv.config();
 
@@ -20,12 +32,24 @@ app.use(helmet());
 app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // For parsing Mailgun webhook form data
 app.use(cookieParser());
 
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/privileges', privilegeRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/roles', roleRoutes);
+app.use('/api/audit', auditRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/webhooks', webhookRoutes); // Webhook endpoints for inbound email
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/config', configRoutes);
+app.use('/api/assignment-requests', assignmentRequestRoutes);
+app.use('/api/dev', devRoutes);
+app.use('/api/admin', adminRoutes);
 
 //test route 
 app.get('/', (req, res) => {

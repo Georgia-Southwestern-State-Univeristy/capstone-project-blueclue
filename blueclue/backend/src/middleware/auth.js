@@ -34,6 +34,14 @@ export const authenticateToken = (req, res, next) => {
                 });
             }
 
+            // Reject guest tokens (guest access has been removed)
+            if (decoded.role === 'guest' || decoded.isGuest === true) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Guest access is no longer supported. Please create an account.'
+                });
+            }
+
             // Add user data to request
             req.user = decoded;
             next();

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your BlueClue Account is Ready</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .content h2 {
+            color: #1e3a8a;
+            margin-top: 0;
+        }
+        .alert-box {
+            background-color: #dbeafe;
+            border-left: 4px solid #3b82f6;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .alert-box strong {
+            color: #1e3a8a;
+        }
+        .account-details {
+            background-color: #f9fafb;
+            padding: 20px;
+            border-radius: 6px;
+            margin: 20px 0;
+            border: 1px solid #e5e7eb;
+        }
+        .account-details table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .account-details td {
+            padding: 10px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .account-details td:first-child {
+            font-weight: 600;
+            color: #6b7280;
+            width: 140px;
+        }
+        .account-details tr:last-child td {
+            border-bottom: none;
+        }
+        .button {
+            display: inline-block;
+            padding: 14px 32px;
+            background-color: #3b82f6;
+            color: white !important;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            margin: 20px 0;
+        }
+        .button:hover {
+            background-color: #2563eb;
+        }
+        .steps {
+            counter-reset: step-counter;
+            list-style: none;
+            padding: 0;
+            margin: 20px 0;
+        }
+        .steps li {
+            counter-increment: step-counter;
+            margin: 15px 0;
+            padding-left: 40px;
+            position: relative;
+        }
+        .steps li:before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            top: 0;
+            background-color: #3b82f6;
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 28px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .note {
+            background-color: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .footer {
+            background-color: #f9fafb;
+            padding: 20px;
+            text-align: center;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .footer a {
+            color: #3b82f6;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔵 Your BlueClue Account is Ready!</h1>
+        </div>
+        
+        <div class="content">
+            <h2>Hello {{firstName}}! 👋</h2>
+            
+            <div class="alert-box">
+                <strong>Good news!</strong> We've received your support request via email (#{{ticketId}}) and automatically created a BlueClue account for you.
+            </div>
+            
+            <p>Your account gives you access to our support portal where you can:</p>
+            
+            <ul style="margin: 15px 0; padding-left: 25px;">
+                <li>Track your current ticket (#{{ticketId}}) in real-time</li>
+                <li>View ticket history and updates</li>
+                <li>Submit new support requests</li>
+                <li>Communicate directly with our support team</li>
+            </ul>
+            
+            <h3 style="color: #1e3a8a; margin-top: 30px;">📋 Your Account Details</h3>
+            
+            <div class="account-details">
+                <table>
+                    <tr>
+                        <td>Email Address:</td>
+                        <td><strong>{{email}}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Account Type:</td>
+                        <td>Customer Portal</td>
+                    </tr>
+                    <tr>
+                        <td>Current Ticket:</td>
+                        <td>#{{ticketId}}</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <h3 style="color: #1e3a8a; margin-top: 30px;">🔐 Set Your Password</h3>
+            
+            <p>To access your account, you need to verify your email and set a password. Here's how:</p>
+            
+            <ol class="steps">
+                <li><strong>Verify your email</strong> by clicking the button below</li>
+                <li><strong>Set your password</strong> on the verification page</li>
+                <li><strong>Log in</strong> to your support portal dashboard</li>
+                <li><strong>Track your ticket</strong> and communicate with our team</li>
+            </ol>
+            
+            <center>
+                <a href="{{verificationLink}}" class="button">Verify Email & Set Password</a>
+            </center>
+            
+            <div class="note">
+                <strong>💡 Note:</strong> This verification link expires in 24 hours. If it expires, you can request a new one from the login page.
+            </div>
+            
+            <h3 style="color: #1e3a8a; margin-top: 30px;">🎯 What's Happening with Your Ticket?</h3>
+            
+            <p>Your support request has been received and is being reviewed by our team. You'll receive email updates as your ticket progresses, and you can always check the status in your portal dashboard.</p>
+            
+            <p style="margin-top: 30px;">If you have any questions or need assistance, feel free to reply to this email or contact us at <a href="mailto:support@blueclue.com" style="color: #3b82f6;">support@blueclue.com</a>.</p>
+            
+            <p style="margin-top: 20px;">Best regards,<br><strong>The BlueClue Support Team</strong></p>
+        </div>
+        
+        <div class="footer">
+            <p><strong>BlueClue Support Portal</strong></p>
+            <p>
+                <a href="{{frontendUrl}}">Support Portal</a> • 
+                <a href="{{frontendUrl}}/help">Help Center</a> • 
+                <a href="mailto:support@blueclue.com">Contact Support</a>
+            </p>
+            <p style="margin-top: 15px; color: #9ca3af; font-size: 12px;">
+                This email was sent because you submitted a support request. If you didn't make this request, please contact us immediately.
+            </p>
+            <p style="color: #9ca3af; font-size: 12px;">© 2026 BlueClue. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

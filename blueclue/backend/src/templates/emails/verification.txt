@@ -1,0 +1,16 @@
+Verify Your Email Address - BlueClue
+
+Hello {{firstName}}!
+
+Thank you for signing up with BlueClue. To complete your registration and access all features, please verify your email address by clicking the link below:
+
+{{verificationLink}}
+
+⏰ This link will expire in 24 hours
+For security reasons, this verification link can only be used once.
+
+If you didn't create an account with BlueClue, you can safely ignore this email.
+
+---
+BlueClue Support Portal
+© 2026 BlueClue. All rights reserved.
