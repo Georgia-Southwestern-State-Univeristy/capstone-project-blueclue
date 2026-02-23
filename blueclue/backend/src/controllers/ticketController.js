@@ -6,10 +6,12 @@ import AIConfiguration from '../models/AIConfiguration.js';
 import UserPrivilege from '../models/UserPrivilege.js';
 import CategoryAccess from '../models/CategoryAccess.js';
 import TicketHistory from '../models/TicketHistory.js';
+import Notification from '../models/Notification.js';
 import { classifyTicketWithFallback } from '../services/aiService.js';
 import { calculateFinalPriority, explainPriorityDecision } from '../services/priorityService.js';
 import pool from '../config/database.js';
 import { sendTicketConfirmation, sendTicketStatusUpdate, sendTicketAssignment } from '../services/emailService.js';
+import { emitNotificationToUser, emitUnreadCountToUser, broadcastNotification } from '../services/socketService.js';
 
 // Helper function to check if user is a technician (any level)
 const isTechnician = (role) => {
@@ -1506,6 +1508,31 @@ export const requestTicketAssignment = async (req, res) => {
             note || 'Technician requested assignment (pending approval)',
             { assignment_type: 'request', request_id: request.id, technician_name: `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() }
         );
+
+        // Notify all management/admin users about the new request
+        try {
+            const techName = `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'A technician';
+            const mgmtResult = await pool.query(
+                `SELECT id FROM users WHERE role IN ('management', 'admin', 'senior_technician') AND id != $1`,
+                [req.user.id]
+            );
+            const io = req.app.get('io');
+            for (const mgr of mgmtResult.rows) {
+                const notification = await Notification.create({
+                    user_id: mgr.id,
+                    type: 'assignment',
+                    message: `${techName} requested assignment to ticket #${ticket.ticket_number || id}: ${ticket.title}`,
+                    ticket_id: parseInt(id)
+                });
+                if (io) {
+                    emitNotificationToUser(io, mgr.id, notification);
+                    const unreadCount = await Notification.getUnreadCount(mgr.id);
+                    emitUnreadCountToUser(io, mgr.id, unreadCount);
+                }
+            }
+        } catch (notifError) {
+            console.error('Failed to send assignment request notifications:', notifError);
+        }
 
         res.status(201).json({
             status: 'success',

@@ -48,7 +48,7 @@ export const getPendingRequests = async (req, res) => {
                 ar.reviewed_by,
                 ar.reviewed_at,
                 ar.created_at,
-                t.title AS ticket_title,
+                t.subject AS ticket_title,
                 t.category AS ticket_category,
                 t.priority AS ticket_priority,
                 t.status AS ticket_status,
@@ -241,7 +241,7 @@ export const approveRequest = async (req, res) => {
             `SELECT ar.*,
                     requester.first_name AS requester_first_name,
                     requester.last_name AS requester_last_name,
-                    t.title AS ticket_title
+                    t.subject AS ticket_title
              FROM ticket_assignment_requests ar
              JOIN users requester ON ar.requested_by = requester.id
              JOIN tickets t ON ar.ticket_id = t.id
@@ -329,7 +329,7 @@ export const denyRequest = async (req, res) => {
             `SELECT ar.*,
                     requester.first_name AS requester_first_name,
                     requester.last_name AS requester_last_name,
-                    t.title AS ticket_title
+                    t.subject AS ticket_title
              FROM ticket_assignment_requests ar
              JOIN users requester ON ar.requested_by = requester.id
              JOIN tickets t ON ar.ticket_id = t.id

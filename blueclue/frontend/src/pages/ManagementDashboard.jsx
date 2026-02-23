@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Alert from '../components/Alert'
 import ManagementNav from '../components/ManagementNav'
 import TicketControlWidget from '../components/TicketControlWidget'
 import TicketTimeline from '../components/TicketTimeline'
+import PendingRequestsWidget from '../components/PendingRequestsWidget'
 import { getAllTickets } from '../services/ticketService'
+import { useNotificationSocket } from '../hooks/useNotificationSocket'
 
 /**
  * Management Dashboard
@@ -16,6 +18,17 @@ function ManagementDashboard() {
   const [error, setError] = useState(null)
   const [tickets, setTickets] = useState([])
   const [activeTab, setActiveTab] = useState('overview')
+  const pendingRequestsRef = useRef(null)
+
+  // Real-time: refresh pending requests when a new notification arrives
+  const handleNewNotification = useCallback((notification) => {
+    // If the notification is assignment-related, auto-refresh the widget
+    if (notification?.type === 'assignment' || notification?.message?.includes('requested assignment')) {
+      pendingRequestsRef.current?.refresh()
+    }
+  }, [])
+
+  useNotificationSocket(handleNewNotification, null)
 
   // Summary statistics
   const [stats, setStats] = useState({
@@ -417,8 +430,11 @@ function ManagementDashboard() {
           </div>
         </div>
 
-        {/* Right Column - Quick Actions Sidebar */}
-        <div className="lg:col-span-1">
+        {/* Right Column - Pending Requests + Quick Actions Sidebar */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* Pending Assignment Requests Widget */}
+          <PendingRequestsWidget ref={pendingRequestsRef} onAction={() => fetchTickets()} />
+
           <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-6 sticky top-20">
             <h3 className="text-xl font-bold text-white mb-4">Quick Actions</h3>
             
