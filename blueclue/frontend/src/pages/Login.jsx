@@ -6,7 +6,7 @@ import logo from '../assets/EditedBlueClueLogo.png'
 function Login() {
   const navigate = useNavigate()
   const location = useLocation()
-  const [loginType, setLoginType] = useState('customer') // 'customer', 'technician'
+  const [loginType, setLoginType] = useState('customer') // 'customer', 'technician', 'management'
   const [formData, setFormData] = useState({
     email: '',
     username: '',
@@ -69,7 +69,7 @@ function Login() {
     try {
       let credentials = {}
 
-      if (loginType === 'technician') {
+      if (loginType === 'technician' || loginType === 'management') {
         credentials = {
           username: formData.username,
           password: formData.password
@@ -124,11 +124,11 @@ function Login() {
         </div>
 
         {/* Login Type Selector */}
-        <div className="bg-gray-900 border border-gray-800 rounded-lg p-1 mb-6 flex gap-1">
+        <div className="bg-gray-900 border border-gray-800 rounded-lg p-1 mb-6 grid grid-cols-3 gap-1">
           <button
             type="button"
             onClick={() => setLoginType('customer')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+            className={`py-2 px-4 rounded-md text-sm font-medium transition-colors ${
               loginType === 'customer'
                 ? 'bg-blue-600 text-white'
                 : 'text-gray-400 hover:text-white hover:bg-gray-800'
@@ -139,13 +139,24 @@ function Login() {
           <button
             type="button"
             onClick={() => setLoginType('technician')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+            className={`py-2 px-4 rounded-md text-sm font-medium transition-colors ${
               loginType === 'technician'
                 ? 'bg-blue-600 text-white'
                 : 'text-gray-400 hover:text-white hover:bg-gray-800'
             }`}
           >
             Technician
+          </button>
+          <button
+            type="button"
+            onClick={() => setLoginType('management')}
+            className={`py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              loginType === 'management'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-400 hover:text-white hover:bg-gray-800'
+            }`}
+          >
+            Management
           </button>
         </div>
 
@@ -176,8 +187,8 @@ function Login() {
               </div>
             )}
 
-            {/* Technician Login Fields */}
-            {loginType === 'technician' && (
+            {/* Technician & Management Login Fields */}
+            {(loginType === 'technician' || loginType === 'management') && (
               <>
                 <div>
                   <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-2">
@@ -190,7 +201,7 @@ function Login() {
                     value={formData.username}
                     onChange={handleInputChange}
                     required
-                    placeholder="tnewc, cmcgo, or jwill"
+                    placeholder={loginType === 'management' ? 'manager' : 'tnewc, cmcgo, or jwill'}
                     className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -205,7 +216,7 @@ function Login() {
                     value={formData.password}
                     onChange={handleInputChange}
                     required
-                    placeholder="Default: admin123"
+                    placeholder={loginType === 'management' ? 'BlueClue2026!' : 'Default: admin123'}
                     className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -284,6 +295,8 @@ function Login() {
           <p>
             {loginType === 'technician' 
               ? 'Technicians: Use your assigned username and default password admin123'
+              : loginType === 'management'
+              ? 'Management: Use username "manager" and password BlueClue2026!'
               : loginType === 'guest'
               ? 'Guest sessions expire after 24 hours of inactivity'
               : 'Protected by industry-standard encryption'}

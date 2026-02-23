@@ -7,7 +7,11 @@ import {
     getTicketById,
     updateTicket,
     deleteTicket,
-    updateTicketStatus
+    updateTicketStatus,
+    bulkAssignTickets,
+    assignTicket,
+    reassignTicket,
+    getTicketHistory
 } from '../controllers/ticketController.js';
 import { optionalAuth, authenticateToken } from '../middleware/auth.js';
 import { checkPrivilege } from '../middleware/rbac.js';
@@ -27,6 +31,39 @@ router.get('/', optionalAuth, getAllTickets);
  * @access  Private (technician/admin only)
  */
 router.get('/assigned/me', authenticateToken, getMyAssignedTickets);
+
+/**
+ * @route   POST /api/tickets/bulk-assign
+ * @desc    Bulk assign tickets to a technician
+ * @access  Private (management/admin only)
+ */
+router.post('/bulk-assign', authenticateToken, bulkAssignTickets);
+
+/**
+ * @route   GET /api/tickets/activity
+ * @desc    Get recent assignment activity across all tickets
+ * @access  Private (authenticated users)
+ */
+router.get('/activity', authenticateToken, async (req, res) => {
+    try {
+        const TicketHistory = (await import('../models/TicketHistory.js')).default;
+        const limit = parseInt(req.query.limit) || 50;
+        const activity = await TicketHistory.getRecentActivity(limit);
+
+        res.status(200).json({
+            status: 'success',
+            count: activity.length,
+            data: activity
+        });
+    } catch (error) {
+        console.error('Get assignment activity error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve assignment activity',
+            error: error.message
+        });
+    }
+});
 
 /**
  * @route   GET /api/tickets/timeline
@@ -61,11 +98,32 @@ router.get('/timeline', async (req, res) => {
 router.get('/:id', optionalAuth, getTicketById);
 
 /**
+ * @route   GET /api/tickets/:id/history
+ * @desc    Get ticket activity history / audit log
+ * @access  Private (authenticated)
+ */
+router.get('/:id/history', authenticateToken, getTicketHistory);
+
+/**
  * @route   POST /api/tickets
  * @desc    Create a new ticket
  * @access  Public (allows guest submission)
  */
 router.post('/', createTicket);
+
+/**
+ * @route   POST /api/tickets/:id/assign
+ * @desc    Assign a single ticket to a technician
+ * @access  Private (management/admin or CAN_ASSIGN_TICKETS)
+ */
+router.post('/:id/assign', authenticateToken, assignTicket);
+
+/**
+ * @route   PATCH /api/tickets/:id/reassign
+ * @desc    Reassign an already-assigned ticket to a different technician
+ * @access  Private (management/admin or CAN_ASSIGN_TICKETS)
+ */
+router.patch('/:id/reassign', authenticateToken, reassignTicket);
 
 /**
  * @route   PATCH /api/tickets/:id/status
