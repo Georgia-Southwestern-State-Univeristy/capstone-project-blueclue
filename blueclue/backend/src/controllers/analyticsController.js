@@ -219,3 +219,486 @@ export default {
     getAIPerformanceMetrics,
     getCategoryInsights
 };
+
+// ============================================================================
+// Dashboard Widget Endpoints (Issue #95)
+// ============================================================================
+
+/**
+ * GET /api/analytics/assignment-stats
+ * Returns assigned vs unassigned ticket counts and percentages
+ */
+export const getAssignmentStats = async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT
+                COUNT(*) AS total,
+                COUNT(assigned_to) AS assigned,
+                COUNT(*) - COUNT(assigned_to) AS unassigned,
+                CASE WHEN COUNT(*) > 0
+                    THEN ROUND(COUNT(assigned_to)::NUMERIC / COUNT(*)::NUMERIC * 100, 1)
+                    ELSE 0
+                END AS assigned_pct,
+                CASE WHEN COUNT(*) > 0
+                    THEN ROUND((COUNT(*) - COUNT(assigned_to))::NUMERIC / COUNT(*)::NUMERIC * 100, 1)
+                    ELSE 0
+                END AS unassigned_pct
+            FROM tickets
+            WHERE status NOT IN ('closed', 'cancelled')
+        `);
+
+        const row = result.rows[0];
+        res.json({
+            status: 'success',
+            data: {
+                total: parseInt(row.total),
+                assigned: parseInt(row.assigned),
+                unassigned: parseInt(row.unassigned),
+                assigned_pct: parseFloat(row.assigned_pct),
+                unassigned_pct: parseFloat(row.unassigned_pct)
+            }
+        });
+    } catch (error) {
+        console.error('Assignment stats error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to retrieve assignment stats', error: error.message });
+    }
+};
+
+/**
+ * GET /api/analytics/category-breakdown
+ * Returns ticket counts by category with color codes
+ */
+export const getCategoryBreakdown = async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT
+                t.category,
+                COALESCE(c.display_name, INITCAP(REPLACE(t.category::TEXT, '_', ' '))) AS display_name,
+                c.color_code,
+                COUNT(*) AS count,
+                CASE WHEN SUM(COUNT(*)) OVER () > 0
+                    THEN ROUND(COUNT(*)::NUMERIC / SUM(COUNT(*)) OVER ()::NUMERIC * 100, 1)
+                    ELSE 0
+                END AS percentage
+            FROM tickets t
+            LEFT JOIN categories c ON c.name = t.category
+            WHERE t.status NOT IN ('closed', 'cancelled')
+            GROUP BY t.category, c.display_name, c.color_code
+            ORDER BY count DESC
+        `);
+
+        res.json({
+            status: 'success',
+            data: result.rows.map(r => ({
+                category: r.category,
+                display_name: r.display_name,
+                color_code: r.color_code,
+                count: parseInt(r.count),
+                percentage: parseFloat(r.percentage)
+            }))
+        });
+    } catch (error) {
+        console.error('Category breakdown error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to retrieve category breakdown', error: error.message });
+    }
+};
+
+/**
+ * GET /api/analytics/overdue-tickets
+ * Returns list of overdue tickets with days overdue and alert level
+ */
+export const getOverdueTickets = async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT
+                t.id,
+                t.ticket_number,
+                t.subject,
+                t.priority,
+                t.status,
+                t.category,
+                t.created_at,
+                t.resolution_due_at,
+                CONCAT(customer.first_name, ' ', customer.last_name) AS customer_name,
+                CONCAT(assigned.first_name, ' ', assigned.last_name) AS assigned_to_name,
+                EXTRACT(EPOCH FROM (NOW() - t.resolution_due_at)) / 86400 AS days_overdue
+            FROM tickets t
+            LEFT JOIN users customer ON t.customer_id = customer.id
+            LEFT JOIN users assigned ON t.assigned_to = assigned.id
+            WHERE t.resolution_due_at < NOW()
+              AND t.status NOT IN ('resolved', 'closed', 'cancelled')
+            ORDER BY t.resolution_due_at ASC
+        `);
+
+        res.json({
+            status: 'success',
+            count: result.rows.length,
+            data: result.rows.map(r => {
+                const daysOverdue = parseFloat(r.days_overdue) || 0;
+                let alert_level = 'warning';  // default
+                if (daysOverdue > 7) alert_level = 'critical';
+                else if (daysOverdue > 3) alert_level = 'high';
+                else if (daysOverdue > 1) alert_level = 'medium';
+
+                return {
+                    ...r,
+                    days_overdue: Math.round(daysOverdue * 10) / 10,
+                    alert_level
+                };
+            })
+        });
+    } catch (error) {
+        console.error('Overdue tickets error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to retrieve overdue tickets', error: error.message });
+    }
+};
+
+/**
+ * GET /api/analytics/tech-workload
+ * Returns per-technician workload: open ticket counts, avg resolution time, color grade
+ */
+export const getTechWorkload = async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT
+                u.id AS tech_id,
+                CONCAT(u.first_name, ' ', u.last_name) AS tech_name,
+                u.email,
+
+                -- Active ticket count
+                COUNT(t.id) FILTER (
+                    WHERE t.status NOT IN ('resolved', 'closed', 'cancelled')
+                ) AS open_tickets,
+
+                -- Total ever assigned (including resolved)
+                COUNT(t.id) AS total_assigned,
+
+                -- Resolved in last 30 days
+                COUNT(t.id) FILTER (
+                    WHERE t.status IN ('resolved', 'closed')
+                      AND t.resolved_at >= NOW() - INTERVAL '30 days'
+                ) AS resolved_30d,
+
+                -- Average resolution time (hours) for resolved tickets
+                ROUND(
+                    AVG(
+                        EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600
+                    ) FILTER (WHERE t.status IN ('resolved', 'closed') AND t.resolved_at IS NOT NULL),
+                    1
+                ) AS avg_resolution_hours,
+
+                -- Priority breakdown of open tickets
+                COUNT(t.id) FILTER (WHERE t.priority = 'critical' AND t.status NOT IN ('resolved', 'closed', 'cancelled')) AS critical_count,
+                COUNT(t.id) FILTER (WHERE t.priority = 'high'     AND t.status NOT IN ('resolved', 'closed', 'cancelled')) AS high_count,
+                COUNT(t.id) FILTER (WHERE t.priority = 'medium'   AND t.status NOT IN ('resolved', 'closed', 'cancelled')) AS medium_count,
+                COUNT(t.id) FILTER (WHERE t.priority = 'low'      AND t.status NOT IN ('resolved', 'closed', 'cancelled')) AS low_count
+
+            FROM users u
+            LEFT JOIN tickets t ON t.assigned_to = u.id
+            WHERE u.role IN ('technician', 'senior_technician')
+              AND u.is_active = true
+            GROUP BY u.id, u.first_name, u.last_name, u.email
+            ORDER BY open_tickets DESC, u.last_name
+        `);
+
+        // Compute load grade: green (<5), yellow (5-9), orange (10-14), red (>=15)
+        const data = result.rows.map(r => {
+            const open = parseInt(r.open_tickets);
+            let load_color = 'green';
+            if (open >= 15) load_color = 'red';
+            else if (open >= 10) load_color = 'orange';
+            else if (open >= 5) load_color = 'yellow';
+
+            return {
+                ...r,
+                open_tickets: open,
+                total_assigned: parseInt(r.total_assigned),
+                resolved_30d: parseInt(r.resolved_30d),
+                avg_resolution_hours: r.avg_resolution_hours ? parseFloat(r.avg_resolution_hours) : null,
+                critical_count: parseInt(r.critical_count),
+                high_count: parseInt(r.high_count),
+                medium_count: parseInt(r.medium_count),
+                low_count: parseInt(r.low_count),
+                load_color
+            };
+        });
+
+        res.json({ status: 'success', count: data.length, data });
+    } catch (error) {
+        console.error('Tech workload error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to retrieve tech workload', error: error.message });
+    }
+};
+
+/**
+ * GET /api/analytics/escalations
+ * Returns critical / high-priority tickets that are unresolved (simulated escalations)
+ * In the absence of an explicit escalation table, we treat critical or high priority,
+ * open-status tickets that have gone without response past their SLA as escalations.
+ */
+export const getEscalations = async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT
+                t.id,
+                t.ticket_number,
+                t.subject,
+                t.priority,
+                t.status,
+                t.category,
+                t.created_at,
+                t.response_due_at,
+                t.first_response_at,
+                CONCAT(customer.first_name, ' ', customer.last_name) AS customer_name,
+                CONCAT(assigned.first_name, ' ', assigned.last_name) AS assigned_to_name,
+                t.assigned_to AS assigned_to_id,
+                -- Time since ticket was created (hours)
+                ROUND(EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 3600, 1) AS hours_since_created,
+                -- Reason for appearing here
+                CASE
+                    WHEN t.priority = 'critical' AND t.first_response_at IS NULL
+                         AND t.response_due_at < NOW()
+                        THEN 'Critical SLA breach - no first response'
+                    WHEN t.priority = 'critical'
+                        THEN 'Critical priority - requires immediate attention'
+                    WHEN t.priority = 'high' AND t.first_response_at IS NULL
+                         AND t.response_due_at < NOW()
+                        THEN 'High priority SLA breach - no first response'
+                    WHEN t.priority = 'high' AND t.resolution_due_at < NOW()
+                        THEN 'High priority - resolution overdue'
+                    ELSE 'Elevated priority - review recommended'
+                END AS escalation_reason
+            FROM tickets t
+            LEFT JOIN users customer ON t.customer_id = customer.id
+            LEFT JOIN users assigned ON t.assigned_to = assigned.id
+            WHERE t.status NOT IN ('resolved', 'closed', 'cancelled')
+              AND t.priority IN ('critical', 'high')
+            ORDER BY
+                CASE t.priority WHEN 'critical' THEN 0 ELSE 1 END,
+                t.created_at ASC
+        `);
+
+        res.json({ status: 'success', count: result.rows.length, data: result.rows });
+    } catch (error) {
+        console.error('Escalations error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to retrieve escalations', error: error.message });
+    }
+};
+
+/**
+ * GET /api/analytics/todays-actions
+ * Returns a combined view of items requiring action today:
+ *  - Tickets due today (resolution_due_at within today)
+ *  - Overdue tickets
+ *  - Unassigned high/critical tickets
+ */
+export const getTodaysActions = async (req, res) => {
+    try {
+        // Tickets with resolution due today
+        const dueTodayResult = await pool.query(`
+            SELECT
+                t.id, t.ticket_number, t.subject, t.priority, t.status,
+                t.resolution_due_at,
+                CONCAT(assigned.first_name, ' ', assigned.last_name) AS assigned_to_name,
+                'due_today' AS action_type,
+                'Ticket resolution due today' AS action_label
+            FROM tickets t
+            LEFT JOIN users assigned ON t.assigned_to = assigned.id
+            WHERE t.resolution_due_at >= CURRENT_DATE
+              AND t.resolution_due_at < CURRENT_DATE + INTERVAL '1 day'
+              AND t.status NOT IN ('resolved', 'closed', 'cancelled')
+            ORDER BY t.resolution_due_at ASC
+        `);
+
+        // Overdue tickets (resolution past due)
+        const overdueResult = await pool.query(`
+            SELECT
+                t.id, t.ticket_number, t.subject, t.priority, t.status,
+                t.resolution_due_at,
+                CONCAT(assigned.first_name, ' ', assigned.last_name) AS assigned_to_name,
+                'overdue' AS action_type,
+                'Overdue - requires immediate attention' AS action_label
+            FROM tickets t
+            LEFT JOIN users assigned ON t.assigned_to = assigned.id
+            WHERE t.resolution_due_at < CURRENT_DATE
+              AND t.status NOT IN ('resolved', 'closed', 'cancelled')
+            ORDER BY t.resolution_due_at ASC
+            LIMIT 20
+        `);
+
+        // Unassigned high/critical
+        const unassignedUrgentResult = await pool.query(`
+            SELECT
+                t.id, t.ticket_number, t.subject, t.priority, t.status,
+                t.created_at,
+                NULL AS assigned_to_name,
+                'unassigned_urgent' AS action_type,
+                'Unassigned ' || INITCAP(t.priority::TEXT) || ' ticket' AS action_label
+            FROM tickets t
+            WHERE t.assigned_to IS NULL
+              AND t.priority IN ('critical', 'high')
+              AND t.status NOT IN ('resolved', 'closed', 'cancelled')
+            ORDER BY
+                CASE t.priority WHEN 'critical' THEN 0 ELSE 1 END,
+                t.created_at ASC
+            LIMIT 20
+        `);
+
+        const actions = [
+            ...overdueResult.rows,
+            ...unassignedUrgentResult.rows,
+            ...dueTodayResult.rows
+        ];
+
+        res.json({
+            status: 'success',
+            count: actions.length,
+            data: actions,
+            summary: {
+                due_today: dueTodayResult.rows.length,
+                overdue: overdueResult.rows.length,
+                unassigned_urgent: unassignedUrgentResult.rows.length
+            }
+        });
+    } catch (error) {
+        console.error('Todays actions error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to retrieve todays actions', error: error.message });
+    }
+};
+
+/**
+ * GET /api/analytics/top-requesters?timeRange=30d
+ * Returns top users by ticket volume in the given time range
+ * Accepted timeRange values: 7d, 30d, 90d, all  (default 30d)
+ */
+export const getTopRequesters = async (req, res) => {
+    try {
+        const { timeRange = '30d' } = req.query;
+
+        // Map timeRange to interval
+        const intervalMap = { '7d': '7 days', '30d': '30 days', '90d': '90 days' };
+        const interval = intervalMap[timeRange]; // null for 'all'
+
+        let whereClause = '';
+        const params = [];
+        if (interval) {
+            whereClause = `AND t.created_at >= NOW() - $1::INTERVAL`;
+            params.push(interval);
+        }
+
+        const result = await pool.query(`
+            SELECT
+                u.id AS user_id,
+                CONCAT(u.first_name, ' ', u.last_name) AS user_name,
+                u.email,
+                COUNT(t.id) AS ticket_count,
+                ROUND(
+                    AVG(
+                        EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600
+                    ) FILTER (WHERE t.resolved_at IS NOT NULL),
+                    1
+                ) AS avg_resolution_hours,
+                COUNT(t.id) FILTER (WHERE t.status NOT IN ('resolved', 'closed', 'cancelled')) AS open_ticket_count
+            FROM users u
+            JOIN tickets t ON t.customer_id = u.id
+            WHERE 1=1 ${whereClause}
+            GROUP BY u.id, u.first_name, u.last_name, u.email
+            ORDER BY ticket_count DESC
+            LIMIT 10
+        `, params);
+
+        res.json({
+            status: 'success',
+            time_range: timeRange,
+            data: result.rows.map(r => ({
+                ...r,
+                ticket_count: parseInt(r.ticket_count),
+                open_ticket_count: parseInt(r.open_ticket_count),
+                avg_resolution_hours: r.avg_resolution_hours ? parseFloat(r.avg_resolution_hours) : null
+            }))
+        });
+    } catch (error) {
+        console.error('Top requesters error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to retrieve top requesters', error: error.message });
+    }
+};
+
+/**
+ * GET /api/analytics/tech-performance
+ * Returns per-technician performance metrics:
+ *  - avg resolution time, first response time, tickets resolved (30d), satisfaction placeholder
+ */
+export const getTechPerformance = async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT
+                u.id AS tech_id,
+                CONCAT(u.first_name, ' ', u.last_name) AS tech_name,
+                u.email,
+
+                -- Tickets resolved in last 30 days
+                COUNT(t.id) FILTER (
+                    WHERE t.status IN ('resolved', 'closed')
+                      AND t.resolved_at >= NOW() - INTERVAL '30 days'
+                ) AS resolved_30d,
+
+                -- Total tickets ever assigned
+                COUNT(t.id) AS total_assigned,
+
+                -- Average resolution time (hours)
+                ROUND(
+                    AVG(
+                        EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600
+                    ) FILTER (WHERE t.resolved_at IS NOT NULL),
+                    1
+                ) AS avg_resolution_hours,
+
+                -- Average first response time (hours)
+                ROUND(
+                    AVG(
+                        EXTRACT(EPOCH FROM (t.first_response_at - t.created_at)) / 3600
+                    ) FILTER (WHERE t.first_response_at IS NOT NULL),
+                    1
+                ) AS avg_first_response_hours,
+
+                -- Currently open tickets
+                COUNT(t.id) FILTER (
+                    WHERE t.status NOT IN ('resolved', 'closed', 'cancelled')
+                ) AS open_tickets,
+
+                -- Resolution rate (resolved+closed / total)
+                CASE WHEN COUNT(t.id) > 0
+                    THEN ROUND(
+                        COUNT(t.id) FILTER (WHERE t.status IN ('resolved', 'closed'))::NUMERIC
+                        / COUNT(t.id)::NUMERIC * 100, 1
+                    )
+                    ELSE 0
+                END AS resolution_rate
+
+            FROM users u
+            LEFT JOIN tickets t ON t.assigned_to = u.id
+            WHERE u.role IN ('technician', 'senior_technician')
+              AND u.is_active = true
+            GROUP BY u.id, u.first_name, u.last_name, u.email
+            ORDER BY resolved_30d DESC, u.last_name
+        `);
+
+        res.json({
+            status: 'success',
+            count: result.rows.length,
+            data: result.rows.map(r => ({
+                ...r,
+                resolved_30d: parseInt(r.resolved_30d),
+                total_assigned: parseInt(r.total_assigned),
+                open_tickets: parseInt(r.open_tickets),
+                avg_resolution_hours: r.avg_resolution_hours ? parseFloat(r.avg_resolution_hours) : null,
+                avg_first_response_hours: r.avg_first_response_hours ? parseFloat(r.avg_first_response_hours) : null,
+                resolution_rate: parseFloat(r.resolution_rate),
+                satisfaction_score: null  // placeholder — no satisfaction data yet
+            }))
+        });
+    } catch (error) {
+        console.error('Tech performance error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to retrieve tech performance', error: error.message });
+    }
+};

@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Alert from '../components/Alert'
 import ManagementNav from '../components/ManagementNav'
 import BaseWidget from '../components/BaseWidget'
+import UnassignedVsAssignedWidget from '../components/UnassignedVsAssignedWidget'
 import { getAllTickets } from '../services/ticketService'
 
 /**
@@ -15,6 +16,7 @@ function ManagementDashboard() {
   const [error, setError] = useState(null)
   const [tickets, setTickets] = useState([])
   const [activeTab, setActiveTab] = useState('overview')
+  const [assignmentFilter, setAssignmentFilter] = useState(null) // 'assigned' | 'unassigned' | null
 
   // Summary statistics
   const [stats, setStats] = useState({
@@ -80,6 +82,15 @@ function ManagementDashboard() {
     { id: 'team', label: 'Team Management', icon: 'M' },
     { id: 'analytics', label: 'Analytics', icon: 'A' }
   ]
+
+  // Filtered tickets based on assignment widget selection
+  const filteredTickets = useMemo(() => {
+    if (!assignmentFilter) return tickets
+    if (assignmentFilter === 'assigned') {
+      return tickets.filter(t => t.assigned_to_name && t.assigned_to_name !== 'null')
+    }
+    return tickets.filter(t => !t.assigned_to_name || t.assigned_to_name === 'null')
+  }, [tickets, assignmentFilter])
 
   // Render summary stat card
   const StatCard = ({ title, value, subtitle, bgColor = 'bg-gray-800' }) => (
@@ -155,38 +166,12 @@ function ManagementDashboard() {
         <div className="lg:col-span-2 space-y-6">
           {/* Charts Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <BaseWidget
-              title="Assignment Status"
-              icon="📊"
+            <UnassignedVsAssignedWidget
+              tickets={tickets}
               onRefresh={fetchTickets}
-              isEmpty={tickets.length === 0}
-              emptyMessage="No tickets to display"
-              emptyIcon="📋"
-              minHeight="12rem"
-            >
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-400 text-sm">Assigned</span>
-                  <span className="text-white font-bold">{stats.assignedTickets}</span>
-                </div>
-                <div className="w-full bg-gray-700 rounded h-2">
-                  <div
-                    className="bg-green-500 h-2 rounded transition-all duration-500"
-                    style={{ width: stats.totalTickets > 0 ? `${(stats.assignedTickets / stats.totalTickets) * 100}%` : '0%' }}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-400 text-sm">Unassigned</span>
-                  <span className="text-white font-bold">{stats.unassignedTickets}</span>
-                </div>
-                <div className="w-full bg-gray-700 rounded h-2">
-                  <div
-                    className="bg-orange-500 h-2 rounded transition-all duration-500"
-                    style={{ width: stats.totalTickets > 0 ? `${(stats.unassignedTickets / stats.totalTickets) * 100}%` : '0%' }}
-                  />
-                </div>
-              </div>
-            </BaseWidget>
+              activeFilter={assignmentFilter}
+              onFilter={setAssignmentFilter}
+            />
 
             <BaseWidget
               title="Priority Breakdown"
@@ -225,6 +210,70 @@ function ManagementDashboard() {
               })()}
             </BaseWidget>
           </div>
+
+          {/* Filtered ticket list — shown when a donut segment is clicked */}
+          {assignmentFilter && (
+            <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-white flex items-center gap-2">
+                  <span className={assignmentFilter === 'assigned' ? 'text-green-400' : 'text-orange-400'}>●</span>
+                  {assignmentFilter === 'assigned' ? 'Assigned' : 'Unassigned'} Tickets
+                  <span className="text-sm font-normal text-gray-400">({filteredTickets.length})</span>
+                </h3>
+                <button
+                  onClick={() => setAssignmentFilter(null)}
+                  className="text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-1 bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Clear filter
+                </button>
+              </div>
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {filteredTickets.length === 0 ? (
+                  <p className="text-gray-500 text-sm py-2">No tickets match this filter.</p>
+                ) : (
+                  filteredTickets.slice(0, 25).map((t) => {
+                    const priorityColors = {
+                      critical: 'text-red-400',
+                      high: 'text-orange-400',
+                      medium: 'text-yellow-400',
+                      low: 'text-blue-400',
+                    }
+                    return (
+                      <div
+                        key={t.id || t.ticket_id}
+                        className="flex items-center justify-between p-2.5 bg-gray-700/50 rounded border border-gray-600 text-sm hover:bg-gray-700 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-gray-500 font-mono text-xs flex-shrink-0">
+                            {t.ticket_number || `#${t.id || t.ticket_id}`}
+                          </span>
+                          <span className="text-white truncate">{t.subject || t.title}</span>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0 ml-2">
+                          <span className={`text-xs capitalize ${priorityColors[t.priority] || 'text-gray-400'}`}>
+                            {t.priority}
+                          </span>
+                          {t.assigned_to_name && t.assigned_to_name !== 'null' ? (
+                            <span className="text-green-400 text-xs">{t.assigned_to_name}</span>
+                          ) : (
+                            <span className="text-orange-400 text-xs">Unassigned</span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+                {filteredTickets.length > 25 && (
+                  <p className="text-gray-500 text-xs text-center pt-1">
+                    Showing 25 of {filteredTickets.length} tickets
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Tab Navigation - Using ManagementNav Component */}
           <ManagementNav activeTab={activeTab} onTabChange={setActiveTab} tabs={tabs} />
