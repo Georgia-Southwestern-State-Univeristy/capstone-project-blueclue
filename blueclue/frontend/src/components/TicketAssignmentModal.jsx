@@ -17,6 +17,7 @@ function TicketAssignmentModal({ isOpen, onClose, tickets = [], onAssign }) {
   const [techLoading, setTechLoading] = useState(false)
   const [assigning, setAssigning] = useState(false)
   const [assignError, setAssignError] = useState(null)
+  const [assignmentNote, setAssignmentNote] = useState('')
 
   // Fetch technicians when modal opens
   useEffect(() => {
@@ -39,6 +40,7 @@ function TicketAssignmentModal({ isOpen, onClose, tickets = [], onAssign }) {
         setFilterCategory('all')
         setFilterAge('all')
         setSelectedTechnician('')
+        setAssignmentNote('')
         setAssignError(null)
         setAssigning(false)
       }, 0)
@@ -126,7 +128,7 @@ function TicketAssignmentModal({ isOpen, onClose, tickets = [], onAssign }) {
       setAssigning(true)
       setAssignError(null)
       try {
-        await onAssign(selectedTickets, parseInt(selectedTechnician))
+        await onAssign(selectedTickets, parseInt(selectedTechnician), assignmentNote.trim())
       } catch (err) {
         setAssignError(err.message || 'Failed to assign tickets')
       } finally {
@@ -326,13 +328,28 @@ function TicketAssignmentModal({ isOpen, onClose, tickets = [], onAssign }) {
           </>
         )}
 
-        {/* Footer - Technician selector and assign button */}
+        {/* Footer - Note field, technician selector, and assign button */}
         <div className="px-6 py-4 border-t border-gray-700 space-y-3">
           {assignError && (
             <div className="text-red-400 text-sm bg-red-900/30 border border-red-700 rounded px-3 py-2">
               {assignError}
             </div>
           )}
+
+          {/* Assignment Note */}
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Assignment Note (optional)</label>
+            <textarea
+              value={assignmentNote}
+              onChange={(e) => setAssignmentNote(e.target.value)}
+              placeholder="Add context for the technician, e.g. 'Customer is a VIP, please prioritize'"
+              rows={2}
+              maxLength={500}
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+            <p className="text-xs text-gray-500 mt-1 text-right">{assignmentNote.length}/500</p>
+          </div>
+
           <div className="flex items-center justify-between gap-4">
             <button
               onClick={onClose}
@@ -354,11 +371,15 @@ function TicketAssignmentModal({ isOpen, onClose, tickets = [], onAssign }) {
                   <option value="">
                     {techLoading ? 'Loading...' : 'Select Technician'}
                   </option>
-                  {technicians.map(tech => (
-                    <option key={tech.id} value={tech.id}>
-                      {tech.full_name || `${tech.first_name} ${tech.last_name}`}
-                    </option>
-                  ))}
+                  {technicians.map(tech => {
+                    const name = tech.full_name || `${tech.first_name} ${tech.last_name}`
+                    const count = tech.open_ticket_count ?? 0
+                    return (
+                      <option key={tech.id} value={tech.id}>
+                        {name} ({count} open ticket{count !== 1 ? 's' : ''})
+                      </option>
+                    )
+                  })}
                 </select>
               </div>
 

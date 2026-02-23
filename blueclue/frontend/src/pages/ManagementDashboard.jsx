@@ -76,8 +76,8 @@ function ManagementDashboard() {
   }, [tickets, calculateStats])
 
   // Handle ticket assignment from modal
-  const handleAssignTickets = async (ticketIds, technicianId) => {
-    const result = await bulkAssignTickets(ticketIds, technicianId)
+  const handleAssignTickets = async (ticketIds, technicianId, note = '') => {
+    const result = await bulkAssignTickets(ticketIds, technicianId, note)
     console.log('Assignment result:', result)
     setIsAssignmentModalOpen(false)
     // Refresh tickets after assignment
