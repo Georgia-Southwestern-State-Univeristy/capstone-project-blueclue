@@ -4,6 +4,7 @@ import Alert from '../components/Alert'
 import DonutChart from '../components/DonutChart'
 import TicketTimeline from '../components/TicketTimeline'
 import PieChart from '../components/PieChart'
+import TicketDetailView from '../components/TicketDetailView'
 import { getAllTickets, updateTicketStatus, assignTicket } from '../services/ticketService'
 import { getTechnicians } from '../services/userService'
 
@@ -62,6 +63,8 @@ function TechnicianDashboard() {
   const [searchQuery, setSearchQuery] = useState('')
   const [technicians, setTechnicians] = useState([])
   const [assigningTicketId, setAssigningTicketId] = useState(null)
+  const [selectedTicketId, setSelectedTicketId] = useState(null)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
 
   // Filter state
   const [filters, setFilters] = useState({
@@ -326,7 +329,7 @@ function TechnicianDashboard() {
 
       {/* Bar Chart (TicketTimeline) above Pie Charts */}
       <div className="mb-8">
-        <TicketTimeline tickets={tickets} onRefresh={fetchTickets} isRefreshing={loading} />
+        <TicketTimeline tickets={tickets} onRefresh={fetchTickets} isRefreshing={loading} onTicketClick={(id) => { setSelectedTicketId(id); setIsDetailOpen(true) }} />
       </div>
 
       {/* Charts */}
@@ -575,7 +578,8 @@ function TechnicianDashboard() {
                 return (
                   <div
                     key={ticket.id}
-                    className={`${statusColor.bg} border ${statusColor.border} rounded-lg p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-1 hover:border-blue-400`}
+                    className={`${statusColor.bg} border ${statusColor.border} rounded-lg p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-1 hover:border-blue-400 cursor-pointer`}
+                    onClick={() => { setSelectedTicketId(ticket.id); setIsDetailOpen(true) }}
                   >
                     {/* Ticket-Specific Error Message */}
                     {ticketErrors[ticket.id] && (
@@ -613,6 +617,7 @@ function TechnicianDashboard() {
                       <select
                         value={ticket.status}
                         onChange={(e) => handleStatusChange(ticket.id, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
                         disabled={updatingTicketId === ticket.id || ticket.status === 'closed'}
                         className={`w-full px-3 py-2 rounded-md text-sm font-medium cursor-pointer transition-colors ${statusColor.badge} border border-gray-600 hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
@@ -726,6 +731,7 @@ function TechnicianDashboard() {
                         id={`assign-${ticket.id}`}
                         value={ticket.assigned_to || ''}
                         onChange={(e) => handleAssignmentChange(ticket.id, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
                         disabled={assigningTicketId === ticket.id || ticket.status === 'closed'}
                         className="w-full px-2 py-1.5 rounded-md text-sm bg-gray-800 border border-gray-600 text-gray-200 hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -750,6 +756,13 @@ function TechnicianDashboard() {
           </div>
         )}
       </div>
+      {/* Ticket Detail View Modal */}
+      <TicketDetailView
+        ticketId={selectedTicketId}
+        isOpen={isDetailOpen}
+        onClose={() => setIsDetailOpen(false)}
+        onTicketUpdated={fetchTickets}
+      />
     </div>
   )
 }

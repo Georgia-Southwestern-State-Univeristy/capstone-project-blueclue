@@ -4,6 +4,7 @@ import Alert from '../components/Alert'
 import ManagementNav from '../components/ManagementNav'
 import TicketControlWidget from '../components/TicketControlWidget'
 import TicketTimeline from '../components/TicketTimeline'
+import TicketDetailView from '../components/TicketDetailView'
 import { getAllTickets } from '../services/ticketService'
 
 /**
@@ -16,6 +17,13 @@ function ManagementDashboard() {
   const [error, setError] = useState(null)
   const [tickets, setTickets] = useState([])
   const [activeTab, setActiveTab] = useState('overview')
+  const [selectedTicketId, setSelectedTicketId] = useState(null)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
+
+  const handleTicketClick = (ticketId) => {
+    setSelectedTicketId(ticketId)
+    setIsDetailOpen(true)
+  }
 
   // Summary statistics
   const [stats, setStats] = useState({
@@ -152,7 +160,7 @@ function ManagementDashboard() {
 
       {/* Submission Timeline + Assignment Activity */}
       <div className="mb-8">
-        <TicketTimeline tickets={tickets} onRefresh={fetchTickets} isRefreshing={loading} />
+        <TicketTimeline tickets={tickets} onRefresh={fetchTickets} isRefreshing={loading} onTicketClick={handleTicketClick} />
       </div>
 
       {/* Ticket Control Widget */}
@@ -475,6 +483,13 @@ function ManagementDashboard() {
         </div>
       </div>
 
+      {/* Ticket Detail View Modal */}
+      <TicketDetailView
+        ticketId={selectedTicketId}
+        isOpen={isDetailOpen}
+        onClose={() => setIsDetailOpen(false)}
+        onTicketUpdated={fetchTickets}
+      />
     </div>
   )
 }

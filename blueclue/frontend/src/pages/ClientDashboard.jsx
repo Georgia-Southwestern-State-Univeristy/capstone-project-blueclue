@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import TicketSubmissionModal from '../components/TicketSubmissionModal'
+import TicketDetailView from '../components/TicketDetailView'
 import Alert from '../components/Alert'
 import LoadingSpinner from '../components/LoadingSpinner'
 import TicketTimeline from '../components/TicketTimeline'
@@ -15,6 +16,8 @@ function ClientDashboard() {
   const [isTimelineLoading, setIsTimelineLoading] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
+  const [selectedTicketId, setSelectedTicketId] = useState(null)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
 
   // Fetch tickets on component mount
   useEffect(() => {
@@ -163,7 +166,7 @@ function ClientDashboard() {
 
       {/* Timeline section */}
       <div className="mb-8">
-        <TicketTimeline tickets={timelineTickets} onRefresh={fetchTimelineTickets} isRefreshing={isTimelineLoading} />
+        <TicketTimeline tickets={timelineTickets} onRefresh={fetchTimelineTickets} isRefreshing={isTimelineLoading} onTicketClick={(id) => { setSelectedTicketId(id); setIsDetailOpen(true) }} />
       </div>
 
       {/* Ticket Submission Modal */}
@@ -215,7 +218,12 @@ function ClientDashboard() {
               </thead>
               <tbody>
                 {tickets.map((ticket) => (
-                  <tr key={ticket.id} className="border-b border-gray-800 hover:bg-gray-800 transition-colors">
+                  <tr
+                    key={ticket.id}
+                    className="border-b border-gray-800 hover:bg-gray-800 transition-colors cursor-pointer"
+                    onClick={() => { setSelectedTicketId(ticket.id); setIsDetailOpen(true) }}
+                    title="Click to view ticket details"
+                  >
                     <td className="py-3 px-4 text-white font-medium">#{ticket.id}</td>
                     <td className="py-3 px-4 text-gray-300">{ticket.subject || 'N/A'}</td>
                     <td className="py-3 px-4">
@@ -231,6 +239,13 @@ function ClientDashboard() {
           </div>
         )}
       </div>
+      {/* Ticket Detail View Modal */}
+      <TicketDetailView
+        ticketId={selectedTicketId}
+        isOpen={isDetailOpen}
+        onClose={() => setIsDetailOpen(false)}
+        onTicketUpdated={() => { fetchTickets(); fetchTimelineTickets() }}
+      />
     </div>
   )
 }

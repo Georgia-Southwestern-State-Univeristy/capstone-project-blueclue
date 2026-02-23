@@ -5,7 +5,7 @@ import { getRecentAssignmentActivity } from '../services/ticketService'
  * Hourly timeline bar chart showing ticket submissions over the last 3 days,
  * with a recent assignment activity feed below.
  */
-function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false }) {
+function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, onTicketClick = null }) {
   const [hoveredIndex, setHoveredIndex] = useState(null)
   const scrollRef = useRef(null)
   const [activity, setActivity] = useState([])
@@ -267,7 +267,11 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false }
                       {' unassigned '}
                       <span className="text-gray-300">{prevAssignee}</span>
                       {' from '}
-                      <span className="text-blue-300">#{entry.ticket_number || details.ticket_number || entry.ticket_id}</span>
+                      {onTicketClick ? (
+                        <button onClick={() => onTicketClick(entry.ticket_id)} className="text-blue-300 hover:text-blue-200 hover:underline font-medium">#{entry.ticket_number || details.ticket_number || entry.ticket_id}</button>
+                      ) : (
+                        <span className="text-blue-300">#{entry.ticket_number || details.ticket_number || entry.ticket_id}</span>
+                      )}
                     </span>
                   )
                 } else if (entry.change_type === 'ticket_reassigned') {
@@ -284,7 +288,11 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false }
                     <span>
                       <span className="text-white font-medium">{details.assigned_by_name || entry.changed_by_name || 'System'}</span>
                       {' reassigned '}
-                      <span className="text-blue-300">#{entry.ticket_number || details.ticket_number || entry.ticket_id}</span>
+                      {onTicketClick ? (
+                        <button onClick={() => onTicketClick(entry.ticket_id)} className="text-blue-300 hover:text-blue-200 hover:underline font-medium">#{entry.ticket_number || details.ticket_number || entry.ticket_id}</button>
+                      ) : (
+                        <span className="text-blue-300">#{entry.ticket_number || details.ticket_number || entry.ticket_id}</span>
+                      )}
                       {' from '}
                       <span className="text-gray-300">{fromName}</span>
                       {' to '}
@@ -305,7 +313,11 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false }
                   const assignerName = details.assigned_by_name || (entry.change_type === 'assignment' ? null : entry.changed_by_name) || 'System'
                   description = (
                     <span>
-                      <span className="text-blue-300">#{entry.ticket_number || details.ticket_number || entry.ticket_id}</span>
+                      {onTicketClick ? (
+                        <button onClick={() => onTicketClick(entry.ticket_id)} className="text-blue-300 hover:text-blue-200 hover:underline font-medium">#{entry.ticket_number || details.ticket_number || entry.ticket_id}</button>
+                      ) : (
+                        <span className="text-blue-300">#{entry.ticket_number || details.ticket_number || entry.ticket_id}</span>
+                      )}
                       {' assigned to '}
                       <span className="text-green-300 font-medium">{assigneeName}</span>
                       {' by '}
