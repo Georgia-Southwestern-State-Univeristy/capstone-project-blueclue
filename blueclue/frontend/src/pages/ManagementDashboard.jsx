@@ -184,10 +184,8 @@ function ManagementDashboard() {
         />
       </div>
 
-      {/* Main Content Grid - Charts and Widgets */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Left Column - Main Widgets (2 columns) */}
-        <div className="lg:col-span-2 space-y-6">
+      {/* Main Content - Charts and Widgets */}
+      <div className="space-y-6 mb-8">
           {/* Charts Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <UnassignedVsAssignedWidget
@@ -497,7 +495,7 @@ function ManagementDashboard() {
                       <option>Custom Range</option>
                     </select>
                     <button className="px-4 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg text-sm hover:bg-gray-700 transition-colors">
-                      📅 Custom Date
+                      Custom Date
                     </button>
                   </div>
 
@@ -543,66 +541,6 @@ function ManagementDashboard() {
               </div>
             )}
           </div>
-        </div>
-
-        {/* Right Column - Quick Actions Sidebar */}
-        <div className="lg:col-span-1">
-          <BaseWidget
-            title="Quick Actions"
-            icon="⚡"
-            className="sticky top-20"
-          >
-            <div className="space-y-3 mb-8">
-              <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
-                <span>+</span>
-                <span>Assign Ticket</span>
-              </button>
-              
-              <button className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
-                <span>#</span>
-                <span>Add Technician</span>
-              </button>
-              
-              <button className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
-                <span>⬇</span>
-                <span>Generate Report</span>
-              </button>
-              
-              <button className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
-                <span>⚙</span>
-                <span>Settings</span>
-              </button>
-            </div>
-
-            {/* System Status Card */}
-            <div className="pt-6 border-t border-gray-700">
-              <h4 className="text-sm font-bold text-gray-400 mb-3">System Status</h4>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between p-2 bg-gray-800 rounded border border-gray-700">
-                  <span className="text-gray-400">Backend</span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                    <span className="text-green-400">Online</span>
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-2 bg-gray-800 rounded border border-gray-700">
-                  <span className="text-gray-400">Database</span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                    <span className="text-green-400">Connected</span>
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-2 bg-gray-800 rounded border border-gray-700">
-                  <span className="text-gray-400">AI Service</span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                    <span className="text-green-400">Active</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-          </BaseWidget>
-        </div>
       </div>
     </div>
   )

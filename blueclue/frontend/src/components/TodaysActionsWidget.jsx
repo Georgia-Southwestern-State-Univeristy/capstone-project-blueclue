@@ -154,7 +154,7 @@ export default function TodaysActionsWidget({ onRefresh, onAction, autoRefreshIn
       isLoading={loading}
       error={error}
       isEmpty={totalCount === 0}
-      emptyMessage="No urgent actions for today — all clear! 🎉"
+      emptyMessage="No urgent actions for today — all clear!"
       emptyIcon={
         <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

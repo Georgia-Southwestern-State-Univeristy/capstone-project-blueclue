@@ -13,7 +13,7 @@ const ALERT_STYLES = {
     text: 'text-red-400',
     badge: 'bg-red-500/20 text-red-400',
     label: 'CRITICAL',
-    icon: '🔴',
+    icon: 'critical',
     pulse: true,
   },
   high: {
@@ -22,7 +22,7 @@ const ALERT_STYLES = {
     text: 'text-orange-400',
     badge: 'bg-orange-500/20 text-orange-400',
     label: 'HIGH',
-    icon: '🟠',
+    icon: 'high',
     pulse: false,
   },
   medium: {
@@ -31,7 +31,7 @@ const ALERT_STYLES = {
     text: 'text-yellow-400',
     badge: 'bg-yellow-500/20 text-yellow-400',
     label: 'MEDIUM',
-    icon: '🟡',
+    icon: 'medium',
     pulse: false,
   },
   warning: {
@@ -40,7 +40,7 @@ const ALERT_STYLES = {
     text: 'text-yellow-300',
     badge: 'bg-yellow-500/15 text-yellow-300',
     label: 'WARNING',
-    icon: '⚠️',
+    icon: 'warning',
     pulse: false,
   },
 }
@@ -124,14 +124,22 @@ function OverdueTicketsWidget({
   return (
     <BaseWidget
       title="Overdue Tickets"
-      icon="⏰"
+      icon={
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      }
       onRefresh={handleRefresh}
       autoRefreshInterval={autoRefreshInterval}
       isLoading={loading && data.length === 0}
       error={error}
       isEmpty={data.length === 0 && !loading}
-      emptyMessage="No overdue tickets — great job! 🎉"
-      emptyIcon="✅"
+      emptyMessage="No overdue tickets — great job!"
+      emptyIcon={
+        <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+      }
       noPadding
       headerExtra={
         data.length > 0 ? (
@@ -159,7 +167,11 @@ function OverdueTicketsWidget({
                   ${isActive ? 'ring-1 ring-current scale-105' : 'opacity-80 hover:opacity-100'}
                 `}
               >
-                <span className="text-[10px]">{style.icon}</span>
+                <span className={`inline-block w-2 h-2 rounded-full ${
+                  level === 'critical' ? 'bg-red-500' :
+                  level === 'high' ? 'bg-orange-500' :
+                  level === 'medium' ? 'bg-yellow-500' : 'bg-yellow-300'
+                }`} />
                 {count} {style.label.toLowerCase()}
               </button>
             )

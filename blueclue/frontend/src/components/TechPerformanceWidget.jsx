@@ -141,7 +141,7 @@ export default function TechPerformanceWidget({ onRefresh, onTechClick, autoRefr
         if (v == null) return <span className="text-xs text-gray-600 italic">N/A</span>
         return (
           <span className={`text-sm font-medium ${v >= 4 ? 'text-green-400' : v >= 3 ? 'text-yellow-400' : 'text-red-400'}`}>
-            {v.toFixed(1)} ★
+            {v.toFixed(1)}
           </span>
         )
       default:
