@@ -8,7 +8,9 @@ import {
     updateTicket,
     deleteTicket,
     updateTicketStatus,
-    bulkAssignTickets
+    bulkAssignTickets,
+    assignTicket,
+    reassignTicket
 } from '../controllers/ticketController.js';
 import { optionalAuth, authenticateToken } from '../middleware/auth.js';
 import { checkPrivilege } from '../middleware/rbac.js';
@@ -74,6 +76,20 @@ router.get('/:id', optionalAuth, getTicketById);
  * @access  Public (allows guest submission)
  */
 router.post('/', createTicket);
+
+/**
+ * @route   POST /api/tickets/:id/assign
+ * @desc    Assign a single ticket to a technician
+ * @access  Private (management/admin or CAN_ASSIGN_TICKETS)
+ */
+router.post('/:id/assign', authenticateToken, assignTicket);
+
+/**
+ * @route   PATCH /api/tickets/:id/reassign
+ * @desc    Reassign an already-assigned ticket to a different technician
+ * @access  Private (management/admin or CAN_ASSIGN_TICKETS)
+ */
+router.patch('/:id/reassign', authenticateToken, reassignTicket);
 
 /**
  * @route   PATCH /api/tickets/:id/status
