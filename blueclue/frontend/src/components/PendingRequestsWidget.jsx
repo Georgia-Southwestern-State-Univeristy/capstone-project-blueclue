@@ -93,6 +93,21 @@ const PendingRequestsWidget = forwardRef(({ onAction }, ref) => {
     low: 'bg-blue-500',
   }
 
+  const formatExpiresIn = (seconds) => {
+    if (!seconds || seconds <= 0) return 'Expired'
+    const hrs = Math.floor(seconds / 3600)
+    const mins = Math.floor((seconds % 3600) / 60)
+    if (hrs > 0) return `${hrs}h ${mins}m left`
+    return `${mins}m left`
+  }
+
+  const getExpirationColor = (seconds) => {
+    if (!seconds || seconds <= 0) return 'text-red-400'
+    if (seconds < 3600) return 'text-red-400'       // < 1 hour
+    if (seconds < 14400) return 'text-amber-400'     // < 4 hours
+    return 'text-gray-500'
+  }
+
   return (
     <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">
       {/* Header */}
@@ -157,13 +172,36 @@ const PendingRequestsWidget = forwardRef(({ onAction }, ref) => {
                     {(request.requester_last_name?.[0] || '').toUpperCase()}
                   </div>
                   <div>
-                    <p className="text-white text-sm font-medium">
-                      {request.requester_first_name} {request.requester_last_name}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-white text-sm font-medium">
+                        {request.requester_first_name} {request.requester_last_name}
+                      </p>
+                      {request.requester_workload !== undefined && (
+                        <span
+                          className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                            parseInt(request.requester_workload) >= 10
+                              ? 'bg-red-900 text-red-300 border border-red-700'
+                              : parseInt(request.requester_workload) >= 5
+                              ? 'bg-amber-900 text-amber-300 border border-amber-700'
+                              : 'bg-gray-700 text-gray-300 border border-gray-600'
+                          }`}
+                          title={`Currently assigned ${request.requester_workload} active ticket(s)`}
+                        >
+                          {request.requester_workload} tickets
+                        </span>
+                      )}
+                    </div>
                     <p className="text-gray-500 text-xs capitalize">{request.requester_role?.replace('_', ' ')}</p>
                   </div>
                 </div>
-                <span className="text-gray-500 text-xs">{formatTimeAgo(request.created_at)}</span>
+                <div className="text-right">
+                  <span className="text-gray-500 text-xs block">{formatTimeAgo(request.created_at)}</span>
+                  {request.expires_in_seconds !== undefined && (
+                    <span className={`text-xs block ${getExpirationColor(parseFloat(request.expires_in_seconds))}`}>
+                      {formatExpiresIn(parseFloat(request.expires_in_seconds))}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Ticket info */}

@@ -25,6 +25,45 @@ export const getPendingRequests = async (req, res) => {
             });
         }
 
+        // --- 24-hour expiration: auto-deny requests older than 24 hours ---
+        try {
+            const expiredResult = await pool.query(
+                `UPDATE ticket_assignment_requests
+                 SET status = 'denied', reviewed_at = NOW()
+                 WHERE status = 'pending' AND created_at < NOW() - INTERVAL '24 hours'
+                 RETURNING id, requested_by, ticket_id`
+            );
+
+            // Notify each tech whose request expired
+            if (expiredResult.rows.length > 0) {
+                const io = req.app.get('io');
+                for (const row of expiredResult.rows) {
+                    try {
+                        const ticketResult = await pool.query(
+                            `SELECT subject FROM tickets WHERE id = $1`, [row.ticket_id]
+                        );
+                        const ticketLabel = ticketResult.rows[0]?.subject || `#${row.ticket_id}`;
+                        const notification = await Notification.create({
+                            user_id: row.requested_by,
+                            type: 'assignment',
+                            message: `Your assignment request for "${ticketLabel}" has expired after 24 hours without review.`,
+                            ticket_id: row.ticket_id
+                        });
+                        if (io) {
+                            emitNotificationToUser(io, row.requested_by, notification);
+                            const unreadCount = await Notification.getUnreadCount(row.requested_by);
+                            emitUnreadCountToUser(io, row.requested_by, unreadCount);
+                        }
+                    } catch (notifErr) {
+                        console.error(`Failed to notify tech ${row.requested_by} about expiration:`, notifErr.message);
+                    }
+                }
+                console.log(`Auto-expired ${expiredResult.rows.length} assignment request(s)`);
+            }
+        } catch (expireErr) {
+            console.error('Failed to expire old requests:', expireErr.message);
+        }
+
         let whereClause = '';
         const params = [];
 
@@ -60,7 +99,12 @@ export const getPendingRequests = async (req, res) => {
                 requester.email AS requester_email,
                 requester.role AS requester_role,
                 reviewer.first_name AS reviewer_first_name,
-                reviewer.last_name AS reviewer_last_name
+                reviewer.last_name AS reviewer_last_name,
+                (SELECT COUNT(*) FROM tickets wt
+                 WHERE wt.assigned_to = ar.requested_by
+                   AND wt.status NOT IN ('closed', 'cancelled', 'resolved')
+                ) AS requester_workload,
+                EXTRACT(EPOCH FROM (ar.created_at + INTERVAL '24 hours' - NOW())) AS expires_in_seconds
             FROM ticket_assignment_requests ar
             JOIN tickets t ON ar.ticket_id = t.id
             JOIN users requester ON ar.requested_by = requester.id

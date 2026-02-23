@@ -31,6 +31,58 @@ const VALID_TRANSITIONS = {
 };
 
 /**
+ * Auto-deny all pending assignment requests for a ticket.
+ * Called whenever a ticket gets assigned/reassigned through any code path.
+ * Notifies each affected technician via socket.
+ */
+const autoDenyPendingRequests = async (ticketId, reviewerId, reason, io) => {
+    try {
+        // Find all pending requests for this ticket
+        const pendingResult = await pool.query(
+            `SELECT ar.id, ar.requested_by, t.subject AS ticket_title
+             FROM ticket_assignment_requests ar
+             JOIN tickets t ON ar.ticket_id = t.id
+             WHERE ar.ticket_id = $1 AND ar.status = 'pending'`,
+            [ticketId]
+        );
+
+        if (pendingResult.rows.length === 0) return;
+
+        // Bulk-deny all pending requests
+        await pool.query(
+            `UPDATE ticket_assignment_requests
+             SET status = 'denied', reviewed_by = $1, reviewed_at = NOW()
+             WHERE ticket_id = $2 AND status = 'pending'`,
+            [reviewerId, ticketId]
+        );
+
+        // Notify each affected technician
+        for (const row of pendingResult.rows) {
+            try {
+                const ticketLabel = row.ticket_title || `#${ticketId}`;
+                const notification = await Notification.create({
+                    user_id: row.requested_by,
+                    type: 'assignment',
+                    message: `Your assignment request for "${ticketLabel}" was automatically denied: ${reason}`,
+                    ticket_id: ticketId
+                });
+                if (io) {
+                    emitNotificationToUser(io, row.requested_by, notification);
+                    const unreadCount = await Notification.getUnreadCount(row.requested_by);
+                    emitUnreadCountToUser(io, row.requested_by, unreadCount);
+                }
+            } catch (notifErr) {
+                console.error(`Failed to notify tech ${row.requested_by} about auto-deny:`, notifErr.message);
+            }
+        }
+
+        console.log(`Auto-denied ${pendingResult.rows.length} pending request(s) for ticket ${ticketId}`);
+    } catch (err) {
+        console.error('autoDenyPendingRequests error:', err.message);
+    }
+};
+
+/**
  * Create a new ticket
  * POST /api/tickets
  */
@@ -638,6 +690,17 @@ export const updateTicket = async (req, res) => {
             }
         }
 
+        // Auto-deny pending assignment requests if ticket was just assigned
+        if (updates.assigned_to !== undefined && updates.assigned_to !== existingTicket.assigned_to && updates.assigned_to !== null) {
+            const io = req.app.get('io');
+            await autoDenyPendingRequests(
+                parseInt(id),
+                req.user ? req.user.id : null,
+                'Ticket was assigned through another action',
+                io
+            );
+        }
+
         // Send assignment notification if ticket was assigned to a technician
         if (updates.assigned_to !== undefined && updates.assigned_to !== existingTicket.assigned_to) {
             try {
@@ -885,6 +948,17 @@ export const bulkAssignTickets = async (req, res) => {
             }
         }
 
+        // Auto-deny pending assignment requests for each ticket in the bulk
+        const io = req.app.get('io');
+        for (const ticket of updateResult.rows) {
+            await autoDenyPendingRequests(
+                ticket.id,
+                req.user ? req.user.id : null,
+                'Ticket was bulk-assigned to another technician',
+                io
+            );
+        }
+
         res.status(200).json({
             status: 'success',
             message: `${updatedCount} ticket(s) assigned to ${techName}`,
@@ -999,6 +1073,15 @@ export const assignTicket = async (req, res) => {
         } catch (histErr) {
             console.error('Failed to log assignment history:', histErr.message);
         }
+
+        // Auto-deny pending assignment requests for this ticket
+        const io = req.app.get('io');
+        await autoDenyPendingRequests(
+            parseInt(id),
+            req.user ? req.user.id : null,
+            'Ticket was directly assigned to another technician',
+            io
+        );
 
         // Send assignment notification
         if (technician.email_notifications) {
@@ -1131,6 +1214,15 @@ export const reassignTicket = async (req, res) => {
         } catch (histErr) {
             console.error('Failed to log reassignment history:', histErr.message);
         }
+
+        // Auto-deny pending assignment requests for this ticket
+        const io = req.app.get('io');
+        await autoDenyPendingRequests(
+            parseInt(id),
+            req.user ? req.user.id : null,
+            'Ticket was reassigned to another technician',
+            io
+        );
 
         // Send assignment notification to new technician
         if (technician.email_notifications) {
