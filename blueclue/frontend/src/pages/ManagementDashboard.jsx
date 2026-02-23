@@ -7,6 +7,7 @@ import UnassignedVsAssignedWidget from '../components/UnassignedVsAssignedWidget
 import TicketCategoriesWidget from '../components/TicketCategoriesWidget'
 import OverdueTicketsWidget from '../components/OverdueTicketsWidget'
 import EscalationsWidget from '../components/EscalationsWidget'
+import TodaysActionsWidget from '../components/TodaysActionsWidget'
 import { getAllTickets } from '../services/ticketService'
 
 /**
@@ -211,6 +212,11 @@ function ManagementDashboard() {
 
           {/* Escalations Widget */}
           <EscalationsWidget
+            onRefresh={fetchTickets}
+          />
+
+          {/* Today's Actions Widget */}
+          <TodaysActionsWidget
             onRefresh={fetchTickets}
           />
 
