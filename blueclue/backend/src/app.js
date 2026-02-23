@@ -1,7 +1,5 @@
 //src app.js
 import express from 'express';
-import { createServer } from 'http';
-import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
@@ -27,22 +25,7 @@ import { initializeSocketHandlers } from './services/socketService.js';
 dotenv.config();
 
 const app = express();
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
-    methods: ['GET', 'POST'],
-    credentials: true
-  }
-});
-
 const PORT = process.env.PORT || 3000;
-
-// Initialize Socket.io handlers
-initializeSocketHandlers(io);
-
-// Make io accessible to routes
-app.set('io', io);
 
 // Middleware
 app.use(helmet());
@@ -115,7 +98,6 @@ app.get('/api/test-db', async (req, res) => {
     }
 });
 
-httpServer.listen(PORT, () => {
+app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
-    console.log(`WebSocket server is ready`);
 });
