@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { getTechnicians, bulkAssignTickets } from '../services/ticketService'
+import { getTechnicians, bulkAssignTickets, assignTicket as assignTicketApi } from '../services/ticketService'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -22,6 +22,14 @@ const getPriorityColor = (p) => {
 const formatStatus = (s) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 const formatDate = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
+/** Returns workload tier with color classes and label */
+const getWorkloadTier = (count) => {
+  if (count >= 10) return { text: 'text-red-400',    barBg: 'bg-red-500',    label: 'Heavy',  avatarBg: 'bg-red-900',    avatarBorder: 'border-red-500' }
+  if (count >= 7)  return { text: 'text-orange-400', barBg: 'bg-orange-500', label: 'High',   avatarBg: 'bg-orange-900', avatarBorder: 'border-orange-500' }
+  if (count >= 4)  return { text: 'text-yellow-400', barBg: 'bg-yellow-500', label: 'Medium', avatarBg: 'bg-yellow-900', avatarBorder: 'border-yellow-500' }
+  return                   { text: 'text-green-400',  barBg: 'bg-green-500',  label: 'Light',  avatarBg: 'bg-green-900',  avatarBorder: 'border-green-500' }
+}
+
 // ── Component ────────────────────────────────────────────────────────────
 
 function TicketControlWidget({ tickets = [], onRefresh }) {
@@ -33,6 +41,7 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState({ status: [], priority: [], assignmentStatus: [] })
+  const [refreshing, setRefreshing] = useState(false)
 
   // ── Assign state ──
   const [technicians, setTechnicians] = useState([])
@@ -43,15 +52,30 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
   const [assigning, setAssigning] = useState(false)
   const [assignError, setAssignError] = useState(null)
   const [assignSuccess, setAssignSuccess] = useState(null)
+  const [unassigning, setUnassigning] = useState(null) // ticket id being unassigned
 
-  // ── Fetch technicians on mount ──
-  useEffect(() => {
+  // ── Fetch technicians ──
+  const refreshTechnicians = () => {
     setTechLoading(true)
     getTechnicians()
       .then(res => setTechnicians(res.data || []))
       .catch(err => console.error('Failed to load technicians:', err))
       .finally(() => setTechLoading(false))
-  }, [])
+  }
+
+  useEffect(() => { refreshTechnicians() }, [])
+
+  // ── Refresh handler with visual feedback ──
+  const handleRefresh = async () => {
+    if (refreshing || !onRefresh) return
+    setRefreshing(true)
+    try {
+      await onRefresh()
+      refreshTechnicians()
+    } finally {
+      setTimeout(() => setRefreshing(false), 600)
+    }
+  }
 
   // ── Filtering logic (same as technician dashboard) ──
   const handleFilterChange = (filterType, value) => {
@@ -128,13 +152,28 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
       setSelectedTechnician(null)
       setAssignmentNote('')
       setActiveTab('queue')
-      // Refresh technician workloads
-      getTechnicians().then(res => setTechnicians(res.data || [])).catch(() => {})
+      refreshTechnicians()
       if (onRefresh) onRefresh()
     } catch (err) {
       setAssignError(err.message || 'Failed to assign tickets')
     } finally {
       setAssigning(false)
+    }
+  }
+
+  // ── Unassign ──
+  const handleUnassign = async (ticketId) => {
+    setUnassigning(ticketId)
+    setAssignError(null)
+    try {
+      await assignTicketApi(ticketId, null)
+      setAssignSuccess('Ticket unassigned successfully')
+      refreshTechnicians()
+      if (onRefresh) onRefresh()
+    } catch (err) {
+      setAssignError(err.message || 'Failed to unassign ticket')
+    } finally {
+      setUnassigning(null)
     }
   }
 
@@ -149,9 +188,12 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
   // ── Selected ticket details for assign tab ──
   const selectedTicketDetails = useMemo(() => tickets.filter(t => selectedTickets.includes(t.id)), [tickets, selectedTickets])
 
-  // ── Mini assignment pie (reused from technician dash) ──
+  // ── Mini assignment counts ──
   const assignedCount = tickets.filter(t => t.assigned_to_name && t.assigned_to_name !== 'null').length
   const unassignedCount = tickets.length - assignedCount
+
+  // ── Max workload for bar scaling ──
+  const maxWorkload = useMemo(() => Math.max(15, ...technicians.map(t => t.open_ticket_count ?? 0)), [technicians])
 
   // ──────────────────────────────────────────────────────────────────────
   // RENDER
@@ -246,8 +288,8 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
                   )}
                 </button>
                 {onRefresh && (
-                  <button onClick={onRefresh} title="Refresh tickets" className="w-10 h-10 flex items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-all">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  <button onClick={handleRefresh} disabled={refreshing} title="Refresh tickets" className={`w-10 h-10 flex items-center justify-center rounded-full text-white transition-all ${refreshing ? 'bg-blue-800 cursor-wait' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                    <svg className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                   </button>
                 )}
               </div>
@@ -441,23 +483,53 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
                 <button onClick={() => setActiveTab('queue')} className="text-blue-400 hover:text-blue-300 text-sm font-medium">Go to Queue &rarr;</button>
               </div>
             ) : (
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {selectedTicketDetails.map(ticket => (
-                  <div key={ticket.id} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg border border-gray-700">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getPriorityColor(ticket.priority)}`}>
-                        {ticket.priority?.charAt(0).toUpperCase() + ticket.priority?.slice(1)}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-white text-sm font-medium truncate">{ticket.subject}</p>
-                        <p className="text-gray-400 text-xs">{ticket.ticket_number || `#${ticket.id}`}</p>
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {selectedTicketDetails.map(ticket => {
+                  const isCurrentlyAssigned = ticket.assigned_to_name && ticket.assigned_to_name !== 'null'
+                  const isUnassigningThis = unassigning === ticket.id
+                  return (
+                    <div key={ticket.id} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg border border-gray-700">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getPriorityColor(ticket.priority)}`}>
+                          {ticket.priority?.charAt(0).toUpperCase() + ticket.priority?.slice(1)}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-white text-sm font-medium truncate">{ticket.subject}</p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-400 text-xs">{ticket.ticket_number || `#${ticket.id}`}</span>
+                            {isCurrentlyAssigned && (
+                              <span className="text-blue-300 text-xs flex items-center gap-1">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                                {ticket.assigned_to_name}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                        {/* Unassign button — only for currently assigned tickets */}
+                        {isCurrentlyAssigned && (
+                          <button
+                            onClick={() => handleUnassign(ticket.id)}
+                            disabled={isUnassigningThis}
+                            title="Unassign from current technician"
+                            className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                              isUnassigningThis
+                                ? 'bg-gray-700 text-gray-500 cursor-wait'
+                                : 'bg-red-900/40 text-red-400 border border-red-700 hover:bg-red-900/70 hover:text-red-300'
+                            }`}
+                          >
+                            {isUnassigningThis ? 'Removing...' : 'Unassign'}
+                          </button>
+                        )}
+                        {/* Remove from selection */}
+                        <button onClick={() => toggleTicket(ticket.id)} className="text-gray-500 hover:text-red-400 transition-colors" title="Remove from selection">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
                       </div>
                     </div>
-                    <button onClick={() => toggleTicket(ticket.id)} className="text-gray-500 hover:text-red-400 transition-colors flex-shrink-0 ml-2" title="Remove from selection">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
@@ -486,35 +558,66 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
             ) : filteredTechnicians.length === 0 ? (
               <div className="text-center py-6 text-gray-500">No technicians found</div>
             ) : (
-              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                 {filteredTechnicians.map(tech => {
                   const name = tech.full_name || `${tech.first_name} ${tech.last_name}`
                   const count = tech.open_ticket_count ?? 0
                   const isSelected = selectedTechnician?.id === tech.id
+                  const tier = getWorkloadTier(count)
+                  const barPercent = Math.min(100, (count / maxWorkload) * 100)
+
+                  // Tickets from the selection that are currently assigned to this tech
+                  const assignedFromSelection = selectedTicketDetails.filter(
+                    t => t.assigned_to_name === name
+                  )
+
                   return (
                     <button
                       key={tech.id}
                       onClick={() => setSelectedTechnician(isSelected ? null : tech)}
-                      className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all text-left ${
+                      className={`w-full rounded-lg border transition-all text-left ${
                         isSelected
                           ? 'bg-blue-900/40 border-blue-500 ring-1 ring-blue-500/50'
                           : 'bg-gray-800 border-gray-700 hover:border-gray-500 hover:bg-gray-750'
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ${isSelected ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
-                          {name.charAt(0).toUpperCase()}
+                      <div className="flex items-center justify-between p-3">
+                        <div className="flex items-center gap-3">
+                          {/* Avatar with workload-colored border */}
+                          <div className={`relative w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold border-2 ${tier.avatarBorder} ${tier.avatarBg}`}>
+                            {name.charAt(0).toUpperCase()}
+                            {/* Pulsing dot for heavy workload */}
+                            {count >= 10 && (
+                              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-red-500 border-2 border-gray-800 animate-pulse"></span>
+                            )}
+                          </div>
+                          <div>
+                            <p className={`text-sm font-medium ${isSelected ? 'text-blue-200' : 'text-white'}`}>{name}</p>
+                            <p className="text-xs text-gray-400">{tech.role === 'senior_technician' ? 'Senior Technician' : 'Technician'}</p>
+                            {/* Show which selected tickets are assigned to this tech */}
+                            {assignedFromSelection.length > 0 && (
+                              <p className="text-xs text-blue-400 mt-0.5">
+                                Currently assigned {assignedFromSelection.length} of your selected ticket{assignedFromSelection.length !== 1 ? 's' : ''}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <p className={`text-sm font-medium ${isSelected ? 'text-blue-200' : 'text-white'}`}>{name}</p>
-                          <p className="text-xs text-gray-400">{tech.role === 'senior_technician' ? 'Senior Technician' : 'Technician'}</p>
+
+                        {/* Ticket count badge */}
+                        <div className="text-right flex-shrink-0">
+                          <p className={`text-lg font-bold ${tier.text}`}>{count}</p>
+                          <p className="text-xs text-gray-500">{tier.label}</p>
                         </div>
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className={`text-sm font-bold ${count >= 10 ? 'text-red-400' : count >= 5 ? 'text-yellow-400' : 'text-green-400'}`}>
-                          {count}
-                        </p>
-                        <p className="text-xs text-gray-500">open</p>
+
+                      {/* Workload progress bar */}
+                      <div className="px-3 pb-3">
+                        <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${tier.barBg}`}
+                            style={{ width: `${barPercent}%` }}
+                          ></div>
+                        </div>
                       </div>
                     </button>
                   )

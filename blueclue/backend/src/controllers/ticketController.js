@@ -445,8 +445,8 @@ export const updateTicket = async (req, res) => {
 
         // Check if user is trying to change assignment
         if (updates.assigned_to !== undefined && req.user) {
-            // Only admins or users with CAN_ASSIGN_TICKETS can change assignments
-            if (req.user.role !== 'admin') {
+            // Admins and management can always change assignments
+            if (req.user.role !== 'admin' && req.user.role !== 'management') {
                 const canAssign = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_ASSIGN_TICKETS');
                 if (!canAssign) {
                     return res.status(403).json({
