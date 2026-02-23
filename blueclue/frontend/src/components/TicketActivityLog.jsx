@@ -78,6 +78,17 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
           bgColor: 'bg-blue-900/30',
           label: 'Assigned'
         }
+      case 'ticket_unassigned':
+        return {
+          icon: (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6h12a6 6 0 00-6-6zM21 12h-6" />
+            </svg>
+          ),
+          color: 'text-red-400',
+          bgColor: 'bg-red-900/30',
+          label: 'Unassigned'
+        }
       case 'status_change':
         return {
           icon: (
@@ -148,6 +159,14 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
             <span className="text-gray-300">{details.previous_assignee_name || `User #${entry.old_value}`}</span>
             {' to '}
             <span className="text-blue-300 font-medium">{details.assigned_to_name || `User #${entry.new_value}`}</span>
+          </span>
+        )
+      case 'ticket_unassigned':
+        return (
+          <span>
+            <span className="text-white font-medium">{details.unassigned_by_name || by}</span>
+            {' unassigned '}
+            <span className="text-red-300">{details.previous_assignee_name || `User #${entry.old_value}`}</span>
           </span>
         )
       case 'assignment':

@@ -496,6 +496,104 @@ export const updateTicket = async (req, res) => {
             });
         }
 
+        // Log assignment change to ticket history
+        if (updates.assigned_to !== undefined && updates.assigned_to !== existingTicket.assigned_to) {
+            try {
+                const assignerName = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'System' : 'System';
+                const isUnassign = updates.assigned_to === null;
+
+                if (isUnassign) {
+                    // Unassign — look up the previous assignee name
+                    let prevName = null;
+                    if (existingTicket.assigned_to) {
+                        const prevResult = await pool.query(
+                            'SELECT first_name, last_name FROM users WHERE id = $1',
+                            [existingTicket.assigned_to]
+                        );
+                        if (prevResult.rows[0]) {
+                            prevName = `${prevResult.rows[0].first_name} ${prevResult.rows[0].last_name}`;
+                        }
+                    }
+                    await TicketHistory.log(
+                        parseInt(id),
+                        req.user ? req.user.id : null,
+                        'ticket_unassigned',
+                        'assigned_to',
+                        existingTicket.assigned_to ? existingTicket.assigned_to.toString() : null,
+                        null,
+                        null,
+                        {
+                            action: 'unassign',
+                            previous_assignee_name: prevName,
+                            unassigned_by_name: assignerName,
+                            ticket_number: existingTicket.ticket_number
+                        }
+                    );
+                } else if (existingTicket.assigned_to) {
+                    // Reassignment via general update
+                    let prevName = null;
+                    const prevResult = await pool.query(
+                        'SELECT first_name, last_name FROM users WHERE id = $1',
+                        [existingTicket.assigned_to]
+                    );
+                    if (prevResult.rows[0]) {
+                        prevName = `${prevResult.rows[0].first_name} ${prevResult.rows[0].last_name}`;
+                    }
+                    let newName = null;
+                    const newResult = await pool.query(
+                        'SELECT first_name, last_name FROM users WHERE id = $1',
+                        [updates.assigned_to]
+                    );
+                    if (newResult.rows[0]) {
+                        newName = `${newResult.rows[0].first_name} ${newResult.rows[0].last_name}`;
+                    }
+                    await TicketHistory.log(
+                        parseInt(id),
+                        req.user ? req.user.id : null,
+                        'ticket_reassigned',
+                        'assigned_to',
+                        existingTicket.assigned_to.toString(),
+                        updates.assigned_to.toString(),
+                        null,
+                        {
+                            action: 'reassign',
+                            previous_assignee_name: prevName,
+                            assigned_to_name: newName,
+                            assigned_by_name: assignerName,
+                            ticket_number: existingTicket.ticket_number
+                        }
+                    );
+                } else {
+                    // Fresh assignment via general update
+                    let newName = null;
+                    const newResult = await pool.query(
+                        'SELECT first_name, last_name FROM users WHERE id = $1',
+                        [updates.assigned_to]
+                    );
+                    if (newResult.rows[0]) {
+                        newName = `${newResult.rows[0].first_name} ${newResult.rows[0].last_name}`;
+                    }
+                    await TicketHistory.log(
+                        parseInt(id),
+                        req.user ? req.user.id : null,
+                        'ticket_assigned',
+                        'assigned_to',
+                        'unassigned',
+                        updates.assigned_to.toString(),
+                        null,
+                        {
+                            action: 'assign',
+                            assigned_to_name: newName,
+                            assigned_by_name: assignerName,
+                            ticket_number: existingTicket.ticket_number
+                        }
+                    );
+                }
+            } catch (histErr) {
+                console.error('Failed to log assignment history in updateTicket:', histErr.message);
+            }
+        }
+
         // Send assignment notification if ticket was assigned to a technician
         if (updates.assigned_to !== undefined && updates.assigned_to !== existingTicket.assigned_to) {
             try {

@@ -3,6 +3,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import Alert from '../components/Alert'
 import ManagementNav from '../components/ManagementNav'
 import TicketControlWidget from '../components/TicketControlWidget'
+import TicketTimeline from '../components/TicketTimeline'
 import { getAllTickets } from '../services/ticketService'
 
 /**
@@ -147,6 +148,11 @@ function ManagementDashboard() {
           value={stats.overdueTickets}
           bgColor="bg-red-900 bg-opacity-30 border-red-700"
         />
+      </div>
+
+      {/* Submission Timeline + Assignment Activity */}
+      <div className="mb-8">
+        <TicketTimeline tickets={tickets} onRefresh={fetchTickets} isRefreshing={loading} />
       </div>
 
       {/* Ticket Control Widget */}

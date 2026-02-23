@@ -40,6 +40,32 @@ router.get('/assigned/me', authenticateToken, getMyAssignedTickets);
 router.post('/bulk-assign', authenticateToken, bulkAssignTickets);
 
 /**
+ * @route   GET /api/tickets/activity
+ * @desc    Get recent assignment activity across all tickets
+ * @access  Private (authenticated users)
+ */
+router.get('/activity', authenticateToken, async (req, res) => {
+    try {
+        const TicketHistory = (await import('../models/TicketHistory.js')).default;
+        const limit = parseInt(req.query.limit) || 50;
+        const activity = await TicketHistory.getRecentActivity(limit);
+
+        res.status(200).json({
+            status: 'success',
+            count: activity.length,
+            data: activity
+        });
+    } catch (error) {
+        console.error('Get assignment activity error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve assignment activity',
+            error: error.message
+        });
+    }
+});
+
+/**
  * @route   GET /api/tickets/timeline
  * @desc    Get all tickets for timeline display (no filtering)
  * @access  Public
