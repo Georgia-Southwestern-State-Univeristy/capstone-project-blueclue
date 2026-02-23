@@ -2,9 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Alert from '../components/Alert'
 import ManagementNav from '../components/ManagementNav'
-import TicketAssignmentWidget from '../components/TicketAssignmentWidget'
-import TicketAssignmentModal from '../components/TicketAssignmentModal'
-import { getAllTickets, bulkAssignTickets } from '../services/ticketService'
+import TicketControlWidget from '../components/TicketControlWidget'
+import { getAllTickets } from '../services/ticketService'
 
 /**
  * Management Dashboard
@@ -16,7 +15,6 @@ function ManagementDashboard() {
   const [error, setError] = useState(null)
   const [tickets, setTickets] = useState([])
   const [activeTab, setActiveTab] = useState('overview')
-  const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false)
 
   // Summary statistics
   const [stats, setStats] = useState({
@@ -74,15 +72,6 @@ function ManagementDashboard() {
       calculateStats()
     }
   }, [tickets, calculateStats])
-
-  // Handle ticket assignment from modal
-  const handleAssignTickets = async (ticketIds, technicianId, note = '') => {
-    const result = await bulkAssignTickets(ticketIds, technicianId, note)
-    console.log('Assignment result:', result)
-    setIsAssignmentModalOpen(false)
-    // Refresh tickets after assignment
-    fetchTickets()
-  }
 
   // Tab navigation items
   const tabs = [
@@ -160,12 +149,9 @@ function ManagementDashboard() {
         />
       </div>
 
+      {/* Ticket Control Widget */}
       <div className="mb-8">
-        <TicketAssignmentWidget
-          assignedCount={stats.assignedTickets}
-          unassignedCount={stats.unassignedTickets}
-          onAssignTickets={() => setIsAssignmentModalOpen(true)}
-        />
+        <TicketControlWidget tickets={tickets} onRefresh={fetchTickets} />
       </div>
 
       {/* Main Content Grid - Charts and Widgets */}
@@ -483,13 +469,6 @@ function ManagementDashboard() {
         </div>
       </div>
 
-      {/* Ticket Assignment Modal */}
-      <TicketAssignmentModal
-        isOpen={isAssignmentModalOpen}
-        onClose={() => setIsAssignmentModalOpen(false)}
-        tickets={tickets}
-        onAssign={handleAssignTickets}
-      />
     </div>
   )
 }
