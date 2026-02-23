@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { getTechnicians, bulkAssignTickets, assignTicket as assignTicketApi } from '../services/ticketService'
+import TicketDetailView from './TicketDetailView'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -53,6 +54,8 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
   const [assignError, setAssignError] = useState(null)
   const [assignSuccess, setAssignSuccess] = useState(null)
   const [unassigning, setUnassigning] = useState(null) // ticket id being unassigned
+  const [detailTicketId, setDetailTicketId] = useState(null)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
 
   // ── Fetch technicians ──
   const refreshTechnicians = () => {
@@ -199,6 +202,7 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
   // RENDER
   // ──────────────────────────────────────────────────────────────────────
   return (
+    <>
     <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">
       {/* Success Toast */}
       {assignSuccess && (
@@ -394,7 +398,7 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
                   return (
                     <div
                       key={ticket.id}
-                      onClick={() => toggleTicket(ticket.id)}
+                      onClick={() => { setDetailTicketId(ticket.id); setIsDetailOpen(true) }}
                       className={`${statusColor.bg} border ${isSelected ? 'border-blue-400 ring-1 ring-blue-400/50' : statusColor.border} rounded-lg p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 cursor-pointer select-none`}
                     >
                       {/* Header */}
@@ -403,7 +407,8 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
                           type="checkbox"
                           checked={isSelected}
                           onChange={(e) => { e.stopPropagation(); toggleTicket(ticket.id) }}
-                          className="w-4 h-4 accent-blue-500 cursor-pointer mt-1 flex-shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-5 h-5 accent-blue-500 cursor-pointer mt-1 flex-shrink-0"
                         />
                         <div className="min-w-0 flex-1">
                           <h3 className="font-bold text-white text-sm leading-tight break-words">{ticket.subject}</h3>
@@ -428,14 +433,16 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
                         <span className="text-gray-400">
                           {ticket.customer_name || 'Unknown'}
                         </span>
-                        {ticket.assigned_to_name && ticket.assigned_to_name !== 'null' ? (
-                          <span className="text-blue-300 flex items-center gap-1">
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                            {ticket.assigned_to_name}
-                          </span>
-                        ) : (
-                          <span className="text-gray-500 italic">Unassigned</span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {ticket.assigned_to_name && ticket.assigned_to_name !== 'null' ? (
+                            <span className="text-blue-300 flex items-center gap-1">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                              {ticket.assigned_to_name}
+                            </span>
+                          ) : (
+                            <span className="text-gray-500 italic">Unassigned</span>
+                          )}
+                        </div>
                       </div>
 
                       {/* AI Classification */}
@@ -522,6 +529,14 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
                             {isUnassigningThis ? 'Removing...' : 'Unassign'}
                           </button>
                         )}
+                        {/* View details */}
+                        <button
+                          onClick={() => { setDetailTicketId(ticket.id); setIsDetailOpen(true) }}
+                          className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-blue-400 transition-colors"
+                          title="View ticket details"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                        </button>
                         {/* Remove from selection */}
                         <button onClick={() => toggleTicket(ticket.id)} className="text-gray-500 hover:text-red-400 transition-colors" title="Remove from selection">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -670,6 +685,15 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
         </div>
       )}
     </div>
+
+    {/* Ticket Detail View Modal */}
+    <TicketDetailView
+      ticketId={detailTicketId}
+      isOpen={isDetailOpen}
+      onClose={() => setIsDetailOpen(false)}
+      onTicketUpdated={onRefresh}
+    />
+    </>
   )
 }
 
