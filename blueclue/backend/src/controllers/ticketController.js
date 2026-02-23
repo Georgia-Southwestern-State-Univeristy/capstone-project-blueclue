@@ -1407,8 +1407,8 @@ export const getAvailableTickets = async (req, res) => {
 };
 
 /**
- * Request assignment of a ticket to the current technician
- * Technician self-assigns an unassigned ticket in their category access
+ * Request assignment of a ticket to the current technician.
+ * Creates a pending entry in ticket_assignment_requests for management review.
  * POST /api/tickets/:id/request-assignment
  */
 export const requestTicketAssignment = async (req, res) => {
@@ -1473,68 +1473,44 @@ export const requestTicketAssignment = async (req, res) => {
             }
         }
 
-        // Assign the ticket to the requesting technician
-        const updatedTicket = await Ticket.update(id, { assigned_to: req.user.id });
+        // Check for an existing pending request from this technician for this ticket
+        const existingCheck = await pool.query(
+            `SELECT id FROM ticket_assignment_requests
+             WHERE ticket_id = $1 AND requested_by = $2 AND status = 'pending'`,
+            [id, req.user.id]
+        );
+        if (existingCheck.rows.length > 0) {
+            return res.status(409).json({
+                status: 'error',
+                message: 'You already have a pending request for this ticket.'
+            });
+        }
 
-        // Record in ticket_assignments
-        const assignmentQuery = `
-            INSERT INTO ticket_assignments (ticket_id, user_id, role, assigned_by, notes)
-            VALUES ($1, $2, 'primary', $2, $3)
-            ON CONFLICT (ticket_id, user_id) 
-            DO UPDATE SET unassigned_at = NULL, assigned_at = CURRENT_TIMESTAMP, notes = $3
+        // Insert a pending assignment request
+        const insertQuery = `
+            INSERT INTO ticket_assignment_requests (ticket_id, requested_by, note, status)
+            VALUES ($1, $2, $3, 'pending')
+            RETURNING *
         `;
-        await pool.query(assignmentQuery, [id, req.user.id, note || 'Self-requested assignment']);
+        const result = await pool.query(insertQuery, [id, req.user.id, note || null]);
+        const request = result.rows[0];
 
         // Record in ticket history
         await TicketHistory.log(
             id,
             req.user.id,
-            'ticket_assigned',
+            'assignment_requested',
             'assigned_to',
             null,
             req.user.id.toString(),
-            note || 'Technician requested assignment',
-            { assignment_type: 'self_request', technician_name: `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() }
+            note || 'Technician requested assignment (pending approval)',
+            { assignment_type: 'request', request_id: request.id, technician_name: `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() }
         );
 
-        // Update ticket status to in_progress if it's currently open
-        if (ticket.status === 'open') {
-            await Ticket.update(id, { status: 'in_progress' });
-            updatedTicket.status = 'in_progress';
-
-            await TicketHistory.log(
-                id,
-                req.user.id,
-                'status_change',
-                'status',
-                'open',
-                'in_progress',
-                'Auto-updated when technician requested assignment'
-            );
-        }
-
-        // Send assignment email notification
-        try {
-            const techResult = await pool.query(
-                `SELECT first_name, last_name, email FROM users WHERE id = $1`,
-                [req.user.id]
-            );
-            const techName = techResult.rows[0] 
-                ? `${techResult.rows[0].first_name} ${techResult.rows[0].last_name}` 
-                : 'Unknown';
-            await sendTicketAssignment(updatedTicket, techName);
-        } catch (emailError) {
-            console.error('Failed to send assignment email:', emailError);
-            // Don't fail the request if email fails
-        }
-
-        // Return the full updated ticket with joins
-        const fullTicket = await Ticket.getById(id);
-
-        res.status(200).json({
+        res.status(201).json({
             status: 'success',
-            message: 'Ticket assigned successfully',
-            data: fullTicket
+            message: 'Assignment request submitted. Awaiting management approval.',
+            data: request
         });
 
     } catch (error) {
