@@ -64,9 +64,9 @@ class Ticket {
         const query = `
             SELECT 
                 t.*,
-                CONCAT(customer.first_name, ' ', customer.last_name) as customer_name,
+                customer.first_name || ' ' || customer.last_name as customer_name,
                 customer.email as customer_email,
-                CONCAT(assigned.first_name, ' ', assigned.last_name) as assigned_to_name,
+                assigned.first_name || ' ' || assigned.last_name as assigned_to_name,
                 assigned.email as assigned_to_email
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
@@ -87,9 +87,9 @@ class Ticket {
         const query = `
             SELECT 
                 t.*,
-                CONCAT(customer.first_name, ' ', customer.last_name) as customer_name,
+                customer.first_name || ' ' || customer.last_name as customer_name,
                 customer.email as customer_email,
-                CONCAT(assigned.first_name, ' ', assigned.last_name) as assigned_to_name,
+                assigned.first_name || ' ' || assigned.last_name as assigned_to_name,
                 assigned.email as assigned_to_email
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
@@ -111,9 +111,9 @@ class Ticket {
         const query = `
             SELECT 
                 t.*,
-                CONCAT(customer.first_name, ' ', customer.last_name) as customer_name,
+                customer.first_name || ' ' || customer.last_name as customer_name,
                 customer.email as customer_email,
-                CONCAT(assigned.first_name, ' ', assigned.last_name) as assigned_to_name,
+                assigned.first_name || ' ' || assigned.last_name as assigned_to_name,
                 assigned.email as assigned_to_email
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
@@ -135,9 +135,9 @@ class Ticket {
         const query = `
             SELECT 
                 t.*,
-                CONCAT(customer.first_name, ' ', customer.last_name) as customer_name,
+                customer.first_name || ' ' || customer.last_name as customer_name,
                 customer.email as customer_email,
-                CONCAT(assigned.first_name, ' ', assigned.last_name) as assigned_to_name,
+                assigned.first_name || ' ' || assigned.last_name as assigned_to_name,
                 assigned.email as assigned_to_email
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
@@ -159,11 +159,11 @@ class Ticket {
         const query = `
             SELECT 
                 t.*,
-                CONCAT(customer.first_name, ' ', customer.last_name) as customer_name,
+                customer.first_name || ' ' || customer.last_name as customer_name,
                 customer.email as customer_email,
-                CONCAT(assigned.first_name, ' ', assigned.last_name) as assigned_to_name,
+                assigned.first_name || ' ' || assigned.last_name as assigned_to_name,
                 assigned.email as assigned_to_email,
-                CONCAT(resolver.first_name, ' ', resolver.last_name) as resolved_by_name
+                resolver.first_name || ' ' || resolver.last_name as resolved_by_name
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
             LEFT JOIN users assigned ON t.assigned_to = assigned.id

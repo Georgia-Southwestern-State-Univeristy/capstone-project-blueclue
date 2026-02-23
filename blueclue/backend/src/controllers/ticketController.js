@@ -5,6 +5,7 @@ import PriorityOverride from '../models/PriorityOverride.js';
 import AIConfiguration from '../models/AIConfiguration.js';
 import UserPrivilege from '../models/UserPrivilege.js';
 import CategoryAccess from '../models/CategoryAccess.js';
+import TicketHistory from '../models/TicketHistory.js';
 import { classifyTicketWithFallback } from '../services/aiService.js';
 import { calculateFinalPriority, explainPriorityDecision } from '../services/priorityService.js';
 import pool from '../config/database.js';
@@ -486,8 +487,8 @@ export const updateTicket = async (req, res) => {
 
         // Check if user is trying to change assignment
         if (updates.assigned_to !== undefined && req.user) {
-            // Only admins or users with CAN_ASSIGN_TICKETS can change assignments
-            if (req.user.role !== 'admin') {
+            // Admins and management can always change assignments
+            if (req.user.role !== 'admin' && req.user.role !== 'management') {
                 const canAssign = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_ASSIGN_TICKETS');
                 if (!canAssign) {
                     return res.status(403).json({
@@ -535,6 +536,104 @@ export const updateTicket = async (req, res) => {
                 status: 'error',
                 message: 'Ticket not found'
             });
+        }
+
+        // Log assignment change to ticket history
+        if (updates.assigned_to !== undefined && updates.assigned_to !== existingTicket.assigned_to) {
+            try {
+                const assignerName = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'System' : 'System';
+                const isUnassign = updates.assigned_to === null;
+
+                if (isUnassign) {
+                    // Unassign — look up the previous assignee name
+                    let prevName = null;
+                    if (existingTicket.assigned_to) {
+                        const prevResult = await pool.query(
+                            'SELECT first_name, last_name FROM users WHERE id = $1',
+                            [existingTicket.assigned_to]
+                        );
+                        if (prevResult.rows[0]) {
+                            prevName = `${prevResult.rows[0].first_name} ${prevResult.rows[0].last_name}`;
+                        }
+                    }
+                    await TicketHistory.log(
+                        parseInt(id),
+                        req.user ? req.user.id : null,
+                        'ticket_unassigned',
+                        'assigned_to',
+                        existingTicket.assigned_to ? existingTicket.assigned_to.toString() : null,
+                        null,
+                        null,
+                        {
+                            action: 'unassign',
+                            previous_assignee_name: prevName,
+                            unassigned_by_name: assignerName,
+                            ticket_number: existingTicket.ticket_number
+                        }
+                    );
+                } else if (existingTicket.assigned_to) {
+                    // Reassignment via general update
+                    let prevName = null;
+                    const prevResult = await pool.query(
+                        'SELECT first_name, last_name FROM users WHERE id = $1',
+                        [existingTicket.assigned_to]
+                    );
+                    if (prevResult.rows[0]) {
+                        prevName = `${prevResult.rows[0].first_name} ${prevResult.rows[0].last_name}`;
+                    }
+                    let newName = null;
+                    const newResult = await pool.query(
+                        'SELECT first_name, last_name FROM users WHERE id = $1',
+                        [updates.assigned_to]
+                    );
+                    if (newResult.rows[0]) {
+                        newName = `${newResult.rows[0].first_name} ${newResult.rows[0].last_name}`;
+                    }
+                    await TicketHistory.log(
+                        parseInt(id),
+                        req.user ? req.user.id : null,
+                        'ticket_reassigned',
+                        'assigned_to',
+                        existingTicket.assigned_to.toString(),
+                        updates.assigned_to.toString(),
+                        null,
+                        {
+                            action: 'reassign',
+                            previous_assignee_name: prevName,
+                            assigned_to_name: newName,
+                            assigned_by_name: assignerName,
+                            ticket_number: existingTicket.ticket_number
+                        }
+                    );
+                } else {
+                    // Fresh assignment via general update
+                    let newName = null;
+                    const newResult = await pool.query(
+                        'SELECT first_name, last_name FROM users WHERE id = $1',
+                        [updates.assigned_to]
+                    );
+                    if (newResult.rows[0]) {
+                        newName = `${newResult.rows[0].first_name} ${newResult.rows[0].last_name}`;
+                    }
+                    await TicketHistory.log(
+                        parseInt(id),
+                        req.user ? req.user.id : null,
+                        'ticket_assigned',
+                        'assigned_to',
+                        'unassigned',
+                        updates.assigned_to.toString(),
+                        null,
+                        {
+                            action: 'assign',
+                            assigned_to_name: newName,
+                            assigned_by_name: assignerName,
+                            ticket_number: existingTicket.ticket_number
+                        }
+                    );
+                }
+            } catch (histErr) {
+                console.error('Failed to log assignment history in updateTicket:', histErr.message);
+            }
         }
 
         // Send assignment notification if ticket was assigned to a technician
@@ -641,6 +740,459 @@ export const deleteTicket = async (req, res) => {
             message: 'Failed to delete ticket',
             error: error.message
         });
+    }
+};
+
+/**
+ * Bulk assign tickets to a technician
+ * POST /api/tickets/bulk-assign
+ */
+export const bulkAssignTickets = async (req, res) => {
+    try {
+        const { ticket_ids, technician_id } = req.body;
+
+        // Validation
+        if (!ticket_ids || !Array.isArray(ticket_ids) || ticket_ids.length === 0) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'ticket_ids must be a non-empty array'
+            });
+        }
+
+        if (!technician_id) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'technician_id is required'
+            });
+        }
+
+        // Verify technician exists and is active
+        const techResult = await pool.query(
+            `SELECT id, first_name, last_name, email, role, email_notifications
+             FROM users WHERE id = $1 AND role IN ('technician', 'senior_technician') AND is_active = true`,
+            [technician_id]
+        );
+
+        if (techResult.rows.length === 0) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Invalid technician. User does not exist or is not an active technician.'
+            });
+        }
+
+        const technician = techResult.rows[0];
+        const techName = `${technician.first_name} ${technician.last_name}`;
+
+        // Check permission: management and admin can bulk-assign
+        if (req.user && !['management', 'admin'].includes(req.user.role)) {
+            const canAssign = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_ASSIGN_TICKETS');
+            if (!canAssign) {
+                return res.status(403).json({
+                    status: 'error',
+                    message: 'Access denied. You do not have permission to assign tickets.'
+                });
+            }
+        }
+
+        // Validate technician has category access for each ticket
+        const ticketsResult = await pool.query(
+            `SELECT t.id, t.category FROM tickets t WHERE t.id = ANY($1::int[])`,
+            [ticket_ids]
+        );
+        const ticketCategories = [...new Set(ticketsResult.rows.map(t => t.category).filter(Boolean))];
+
+        if (ticketCategories.length > 0) {
+            const catResult = await pool.query(
+                `SELECT id, name FROM categories WHERE name = ANY($1::ticket_category[])`,
+                [ticketCategories]
+            );
+            const deniedCategories = [];
+            for (const cat of catResult.rows) {
+                const hasAccess = await CategoryAccess.hasAccess(technician_id, cat.id, 'view');
+                if (!hasAccess) {
+                    deniedCategories.push(cat.name);
+                }
+            }
+            if (deniedCategories.length > 0) {
+                return res.status(403).json({
+                    status: 'error',
+                    message: `Technician does not have access to categories: ${deniedCategories.join(', ')}`
+                });
+            }
+        }
+
+        // Bulk update all tickets
+        const updateQuery = `
+            UPDATE tickets
+            SET assigned_to = $1, 
+                status = CASE WHEN status = 'open' THEN 'in_progress' ELSE status END,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ANY($2::int[])
+            RETURNING *
+        `;
+        const updateResult = await pool.query(updateQuery, [technician_id, ticket_ids]);
+
+        const updatedCount = updateResult.rows.length;
+
+        // Log assignment activity for each ticket
+        const assignerName = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'System' : 'System';
+        for (const ticket of updateResult.rows) {
+            try {
+                await TicketHistory.log(
+                    ticket.id,
+                    req.user ? req.user.id : null,
+                    'ticket_assigned',
+                    'assigned_to',
+                    'unassigned',
+                    technician_id.toString(),
+                    note || null,
+                    {
+                        action: 'bulk_assign',
+                        assigned_to_name: techName,
+                        assigned_by_name: assignerName,
+                        ticket_number: ticket.ticket_number
+                    }
+                );
+            } catch (histErr) {
+                console.error(`Failed to log history for ticket ${ticket.id}:`, histErr.message);
+            }
+        }
+
+        // Send assignment notification email for each ticket (non-blocking)
+        if (technician.email_notifications) {
+            for (const ticket of updateResult.rows) {
+                try {
+                    const requesterResult = await pool.query(
+                        'SELECT first_name, last_name FROM users WHERE id = $1',
+                        [ticket.customer_id]
+                    );
+                    const requesterName = requesterResult.rows[0]
+                        ? `${requesterResult.rows[0].first_name} ${requesterResult.rows[0].last_name}`
+                        : 'Unknown';
+
+                    await sendTicketAssignment(
+                        technician.email,
+                        techName,
+                        ticket,
+                        requesterName,
+                        technician_id
+                    );
+                } catch (emailError) {
+                    console.error(`Failed to send assignment email for ticket ${ticket.id}:`, emailError.message);
+                }
+            }
+        }
+
+        res.status(200).json({
+            status: 'success',
+            message: `${updatedCount} ticket(s) assigned to ${techName}`,
+            data: {
+                assigned_count: updatedCount,
+                technician: { id: technician.id, name: techName },
+                ticket_ids: updateResult.rows.map(t => t.id)
+            }
+        });
+
+    } catch (error) {
+        console.error('Bulk assign tickets error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to assign tickets',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Assign a single ticket to a technician
+ * POST /api/tickets/:id/assign
+ */
+export const assignTicket = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { technician_id, note } = req.body;
+
+        if (isNaN(id)) {
+            return res.status(400).json({ status: 'error', message: 'Invalid ticket ID' });
+        }
+
+        if (!technician_id) {
+            return res.status(400).json({ status: 'error', message: 'technician_id is required' });
+        }
+
+        // Check assigner privileges
+        if (req.user && !['management', 'admin'].includes(req.user.role)) {
+            const canAssign = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_ASSIGN_TICKETS');
+            if (!canAssign) {
+                return res.status(403).json({ status: 'error', message: 'Access denied. You do not have permission to assign tickets.' });
+            }
+        }
+
+        // Get the ticket
+        const ticket = await Ticket.getById(parseInt(id));
+        if (!ticket) {
+            return res.status(404).json({ status: 'error', message: 'Ticket not found' });
+        }
+
+        // Check if already assigned (suggest reassign instead)
+        if (ticket.assigned_to) {
+            return res.status(409).json({
+                status: 'error',
+                message: 'Ticket is already assigned. Use PATCH /api/tickets/:id/reassign to reassign.',
+                current_assignee: ticket.assigned_to_name
+            });
+        }
+
+        // Verify technician exists and is active
+        const techResult = await pool.query(
+            `SELECT id, first_name, last_name, email, role, email_notifications
+             FROM users WHERE id = $1 AND role IN ('technician', 'senior_technician') AND is_active = true`,
+            [technician_id]
+        );
+        if (techResult.rows.length === 0) {
+            return res.status(400).json({ status: 'error', message: 'Invalid technician. User does not exist or is not an active technician.' });
+        }
+
+        const technician = techResult.rows[0];
+        const techName = `${technician.first_name} ${technician.last_name}`;
+
+        // Validate technician has access to this ticket's category
+        const categoryQuery = `SELECT id FROM categories WHERE name = $1`;
+        const categoryResult = await pool.query(categoryQuery, [ticket.category]);
+        if (categoryResult.rows.length > 0) {
+            const categoryId = categoryResult.rows[0].id;
+            const hasAccess = await CategoryAccess.hasAccess(technician_id, categoryId, 'view');
+            if (!hasAccess) {
+                return res.status(403).json({
+                    status: 'error',
+                    message: `Technician does not have access to the '${ticket.category}' category.`
+                });
+            }
+        }
+
+        // Assign the ticket
+        const updatedTicket = await Ticket.update(parseInt(id), {
+            assigned_to: technician_id,
+            status: ticket.status === 'open' ? 'in_progress' : ticket.status
+        });
+
+        // Log assignment activity
+        const assignerName = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'System' : 'System';
+        try {
+            await TicketHistory.log(
+                parseInt(id),
+                req.user ? req.user.id : null,
+                'ticket_assigned',
+                'assigned_to',
+                'unassigned',
+                technician_id.toString(),
+                note || null,
+                {
+                    action: 'assign',
+                    assigned_to_name: techName,
+                    assigned_by_name: assignerName,
+                    ticket_number: ticket.ticket_number
+                }
+            );
+        } catch (histErr) {
+            console.error('Failed to log assignment history:', histErr.message);
+        }
+
+        // Send assignment notification
+        if (technician.email_notifications) {
+            try {
+                const requesterResult = await pool.query(
+                    'SELECT first_name, last_name FROM users WHERE id = $1',
+                    [ticket.customer_id]
+                );
+                const requesterName = requesterResult.rows[0]
+                    ? `${requesterResult.rows[0].first_name} ${requesterResult.rows[0].last_name}`
+                    : 'Unknown';
+                await sendTicketAssignment(technician.email, techName, updatedTicket, requesterName, technician_id);
+            } catch (emailError) {
+                console.error('Failed to send assignment notification:', emailError.message);
+            }
+        }
+
+        res.status(200).json({
+            status: 'success',
+            message: `Ticket #${id} assigned to ${techName}`,
+            data: updatedTicket,
+            assignment: {
+                technician: { id: technician.id, name: techName },
+                note: note || null,
+                assigned_by: req.user ? req.user.id : null
+            }
+        });
+
+    } catch (error) {
+        console.error('Assign ticket error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to assign ticket', error: error.message });
+    }
+};
+
+/**
+ * Reassign an already-assigned ticket to a different technician
+ * PATCH /api/tickets/:id/reassign
+ */
+export const reassignTicket = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { technician_id, note } = req.body;
+
+        if (isNaN(id)) {
+            return res.status(400).json({ status: 'error', message: 'Invalid ticket ID' });
+        }
+
+        if (!technician_id) {
+            return res.status(400).json({ status: 'error', message: 'technician_id is required' });
+        }
+
+        // Check assigner privileges
+        if (req.user && !['management', 'admin'].includes(req.user.role)) {
+            const canAssign = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_ASSIGN_TICKETS');
+            if (!canAssign) {
+                return res.status(403).json({ status: 'error', message: 'Access denied. You do not have permission to reassign tickets.' });
+            }
+        }
+
+        // Get the ticket
+        const ticket = await Ticket.getById(parseInt(id));
+        if (!ticket) {
+            return res.status(404).json({ status: 'error', message: 'Ticket not found' });
+        }
+
+        // Store previous assignee info for response
+        const previousAssignee = ticket.assigned_to
+            ? { id: ticket.assigned_to, name: ticket.assigned_to_name }
+            : null;
+
+        // Verify new technician exists and is active
+        const techResult = await pool.query(
+            `SELECT id, first_name, last_name, email, role, email_notifications
+             FROM users WHERE id = $1 AND role IN ('technician', 'senior_technician') AND is_active = true`,
+            [technician_id]
+        );
+        if (techResult.rows.length === 0) {
+            return res.status(400).json({ status: 'error', message: 'Invalid technician. User does not exist or is not an active technician.' });
+        }
+
+        const technician = techResult.rows[0];
+        const techName = `${technician.first_name} ${technician.last_name}`;
+
+        // Cannot reassign to the same person
+        if (ticket.assigned_to === technician_id) {
+            return res.status(400).json({
+                status: 'error',
+                message: `Ticket is already assigned to ${techName}.`
+            });
+        }
+
+        // Validate technician has access to this ticket's category
+        const categoryQuery = `SELECT id FROM categories WHERE name = $1`;
+        const categoryResult = await pool.query(categoryQuery, [ticket.category]);
+        if (categoryResult.rows.length > 0) {
+            const categoryId = categoryResult.rows[0].id;
+            const hasAccess = await CategoryAccess.hasAccess(technician_id, categoryId, 'view');
+            if (!hasAccess) {
+                return res.status(403).json({
+                    status: 'error',
+                    message: `Technician does not have access to the '${ticket.category}' category.`
+                });
+            }
+        }
+
+        // Reassign the ticket
+        const updatedTicket = await Ticket.update(parseInt(id), {
+            assigned_to: technician_id
+        });
+
+        // Log reassignment activity
+        const reassignerName = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'System' : 'System';
+        try {
+            await TicketHistory.log(
+                parseInt(id),
+                req.user ? req.user.id : null,
+                'ticket_reassigned',
+                'assigned_to',
+                previousAssignee ? previousAssignee.id.toString() : 'unassigned',
+                technician_id.toString(),
+                note || null,
+                {
+                    action: 'reassign',
+                    previous_assignee_name: previousAssignee ? previousAssignee.name : null,
+                    assigned_to_name: techName,
+                    assigned_by_name: reassignerName,
+                    ticket_number: ticket.ticket_number
+                }
+            );
+        } catch (histErr) {
+            console.error('Failed to log reassignment history:', histErr.message);
+        }
+
+        // Send assignment notification to new technician
+        if (technician.email_notifications) {
+            try {
+                const requesterResult = await pool.query(
+                    'SELECT first_name, last_name FROM users WHERE id = $1',
+                    [ticket.customer_id]
+                );
+                const requesterName = requesterResult.rows[0]
+                    ? `${requesterResult.rows[0].first_name} ${requesterResult.rows[0].last_name}`
+                    : 'Unknown';
+                await sendTicketAssignment(technician.email, techName, updatedTicket, requesterName, technician_id);
+            } catch (emailError) {
+                console.error('Failed to send reassignment notification:', emailError.message);
+            }
+        }
+
+        res.status(200).json({
+            status: 'success',
+            message: `Ticket #${id} reassigned to ${techName}`,
+            data: updatedTicket,
+            reassignment: {
+                previous_assignee: previousAssignee,
+                new_assignee: { id: technician.id, name: techName },
+                note: note || null,
+                reassigned_by: req.user ? req.user.id : null
+            }
+        });
+
+    } catch (error) {
+        console.error('Reassign ticket error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to reassign ticket', error: error.message });
+    }
+};
+
+/**
+ * Get ticket history / activity log
+ * GET /api/tickets/:id/history
+ */
+export const getTicketHistory = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (isNaN(id)) {
+            return res.status(400).json({ status: 'error', message: 'Invalid ticket ID' });
+        }
+
+        // Verify ticket exists
+        const ticket = await Ticket.getById(parseInt(id));
+        if (!ticket) {
+            return res.status(404).json({ status: 'error', message: 'Ticket not found' });
+        }
+
+        const history = await TicketHistory.getByTicketId(parseInt(id));
+
+        res.status(200).json({
+            status: 'success',
+            count: history.length,
+            data: history
+        });
+
+    } catch (error) {
+        console.error('Get ticket history error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to get ticket history', error: error.message });
     }
 };
 

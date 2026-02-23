@@ -357,6 +357,34 @@ export const sendWelcomeEmail = async (email, firstName, verificationToken = nul
 };
 
 /**
+ * Send welcome email for accounts created via email submission
+ * @param {string} email - User email
+ * @param {string} firstName - User first name
+ * @param {string} verificationToken - Email verification token
+ * @param {number} ticketId - Ticket ID that triggered account creation
+ * @param {number|null} userId - User ID for logging
+ */
+export const sendEmailCreatedWelcome = async (email, firstName, verificationToken, ticketId, userId = null) => {
+    const verificationLink = `${FRONTEND_URL}/verify-email/${verificationToken}`;
+    
+    return sendTemplateEmail(
+        email,
+        'welcome-email-created',
+        {
+            subject: 'Your BlueClue Account is Ready - Verify Email',
+            firstName,
+            email,
+            verificationLink,
+            ticketId,
+            frontendUrl: FRONTEND_URL
+        },
+        'welcome-email-created',
+        userId,
+        { verificationToken, ticket_id: ticketId }
+    );
+};
+
+/**
  * Send email verification
  * @param {string} email - User email
  * @param {string} firstName - User first name
@@ -394,10 +422,10 @@ export const sendTicketConfirmation = async (email, ticket, userId = null) => {
         {
             subject: `Ticket #${ticket.id} Submitted - BlueClue Support`,
             ticketId: ticket.id,
-            subject: ticket.subject,
-            description: ticket.description,
-            priority: ticket.priority,
-            category: ticket.category,
+            ticketSubject: ticket.subject,
+            description: ticket.description || 'No description provided',
+            priority: ticket.priority || 'medium',
+            category: ticket.category || 'General',
             ticketUrl: `${FRONTEND_URL}/tickets/${ticket.id}`,
             frontendUrl: FRONTEND_URL
         },
@@ -530,6 +558,7 @@ export default {
     sendEmail,
     sendTemplateEmail,
     sendWelcomeEmail,
+    sendEmailCreatedWelcome,
     sendVerificationEmail,
     sendTicketConfirmation,
     sendTicketStatusUpdate,

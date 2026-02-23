@@ -10,6 +10,7 @@ import {
     resendFailedEmail,
     resendBulkFailedEmails
 } from '../controllers/emailLogsController.js';
+import * as adminController from '../controllers/adminController.js';
 
 const router = express.Router();
 
@@ -17,7 +18,8 @@ const router = express.Router();
 router.use(authenticateToken);
 router.use(checkRole('admin'));
 
-// Email logs routes
+// ==================== OUTBOUND Email Logs (Existing) ====================
+// Email logs routes for confirmation/verification emails
 router.get('/email-logs', getEmailLogs);
 router.get('/email-logs/:id', getEmailLogById);
 router.get('/email-stats', getEmailStats);
@@ -25,5 +27,90 @@ router.get('/email-alerts', getEmailAlerts);
 router.post('/email-logs/cleanup', cleanupOldLogs);
 router.post('/email-resend/:id', resendFailedEmail);
 router.post('/email-resend-bulk', resendBulkFailedEmails);
+
+// ==================== INBOUND Email Management (Part 6) ====================
+// Email spam logs routes for inbound ticket emails
+
+/**
+ * GET /api/admin/inbound-logs
+ * Get paginated list of inbound email spam logs
+ * Query params: page, limit, status, isBlocked, isSpam, senderEmail, startDate, endDate
+ */
+router.get('/inbound-logs', adminController.getEmailLogs);
+
+/**
+ * GET /api/admin/inbound-logs/:id
+ * Get full details of a specific inbound email log including raw data
+ */
+router.get('/inbound-logs/:id', adminController.getEmailLogDetails);
+
+/**
+ * POST /api/admin/inbound-logs/:id/retry
+ * Retry creating ticket from a failed email parse
+ * Body: { overrides: { category, priority } } (optional)
+ */
+router.post('/inbound-logs/:id/retry', adminController.retryFailedParse);
+
+// ==================== Dashboard Statistics (Part 6) ====================
+
+/**
+ * GET /api/admin/dashboard/stats
+ * Get dashboard statistics and metrics for inbound emails
+ * Query params: days (default 7)
+ */
+router.get('/dashboard/stats', adminController.getDashboardStats);
+
+// ==================== Domain Allowlist Management (Part 6) ====================
+
+/**
+ * GET /api/admin/allowlist
+ * Get all allowlisted domains
+ * Query params: activeOnly (default true)
+ */
+router.get('/allowlist', adminController.getAllowlist);
+
+/**
+ * POST /api/admin/allowlist
+ * Add a domain to the allowlist
+ * Body: { domain: string, reason: string (optional) }
+ */
+router.post('/allowlist', adminController.addToAllowlist);
+
+/**
+ * DELETE /api/admin/allowlist/:domain
+ * Remove a domain from the allowlist (soft delete - sets inactive)
+ */
+router.delete('/allowlist/:domain', adminController.removeFromAllowlist);
+
+// ==================== System Settings (Part 6) ====================
+
+/**
+ * GET /api/admin/settings
+ * Get all system settings
+ * Query params: public (default false)
+ */
+router.get('/settings', adminController.getSystemSettings);
+
+/**
+ * PUT /api/admin/settings/:key
+ * Update a specific system setting
+ * Body: { value: any }
+ */
+router.put('/settings/:key', adminController.updateSystemSetting);
+
+// ==================== Security Alerts (Part 6) ====================
+
+/**
+ * GET /api/admin/security-alerts
+ * Get security alerts from spam protection
+ * Query params: limit (default 50), unresolvedOnly (default false)
+ */
+router.get('/security-alerts', adminController.getSecurityAlerts);
+
+/**
+ * POST /api/admin/security-alerts/:id/resolve
+ * Mark a security alert as resolved
+ */
+router.post('/security-alerts/:id/resolve', adminController.resolveSecurityAlert);
 
 export default router;

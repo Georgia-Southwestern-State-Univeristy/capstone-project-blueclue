@@ -10,6 +10,8 @@ import EscalationsWidget from '../components/EscalationsWidget'
 import TodaysActionsWidget from '../components/TodaysActionsWidget'
 import TopRequestersWidget from '../components/TopRequestersWidget'
 import TechPerformanceWidget from '../components/TechPerformanceWidget'
+import TicketControlWidget from '../components/TicketControlWidget'
+import TicketTimeline from '../components/TicketTimeline'
 import { getAllTickets } from '../services/ticketService'
 
 /**
@@ -186,6 +188,20 @@ function ManagementDashboard() {
 
       {/* Main Content - Charts and Widgets */}
       <div className="space-y-6 mb-8">
+      {/* Submission Timeline + Assignment Activity */}
+      <div className="mb-8">
+        <TicketTimeline tickets={tickets} onRefresh={fetchTickets} isRefreshing={loading} />
+      </div>
+
+      {/* Ticket Control Widget */}
+      <div className="mb-8">
+        <TicketControlWidget tickets={tickets} onRefresh={fetchTickets} />
+      </div>
+
+      {/* Main Content Grid - Charts and Widgets */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        {/* Left Column - Main Widgets (2 columns) */}
+        <div className="lg:col-span-2 space-y-6">
           {/* Charts Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <UnassignedVsAssignedWidget
@@ -363,19 +379,6 @@ function ManagementDashboard() {
                 </div>
                 
                 <div className="space-y-4">
-                  <div className="p-4 bg-gradient-to-r from-blue-900 to-blue-800 rounded-lg border border-blue-700">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <p className="text-blue-300 font-medium mb-1">
-                          Unassigned Tickets Queue
-                        </p>
-                        <p className="text-gray-300 text-sm">Tickets waiting for technician assignment</p>
-                      </div>
-                      <span className="bg-blue-700 text-white px-3 py-1 rounded-full font-bold">{stats.unassignedTickets}</span>
-                    </div>
-                    <button className="text-blue-200 hover:text-blue-100 text-sm font-medium">View Queue →</button>
-                  </div>
-
                   <div className="p-4 bg-gradient-to-r from-orange-900 to-orange-800 rounded-lg border border-orange-700">
                     <div className="flex items-start justify-between mb-3">
                       <div>
@@ -542,6 +545,7 @@ function ManagementDashboard() {
             )}
           </div>
       </div>
+
     </div>
   )
 }
