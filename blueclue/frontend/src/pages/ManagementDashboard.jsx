@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Alert from '../components/Alert'
 import ManagementNav from '../components/ManagementNav'
+import BaseWidget from '../components/BaseWidget'
 import { getAllTickets } from '../services/ticketService'
 
 /**
@@ -154,19 +155,75 @@ function ManagementDashboard() {
         <div className="lg:col-span-2 space-y-6">
           {/* Charts Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-6">
-              <h3 className="text-lg font-bold text-white mb-4">📊 Assignment Status</h3>
-              <div className="h-48 flex items-center justify-center bg-gray-800 rounded border border-gray-700">
-                <p className="text-gray-400">Chart Widget Placeholder</p>
+            <BaseWidget
+              title="Assignment Status"
+              icon="📊"
+              onRefresh={fetchTickets}
+              isEmpty={tickets.length === 0}
+              emptyMessage="No tickets to display"
+              emptyIcon="📋"
+              minHeight="12rem"
+            >
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400 text-sm">Assigned</span>
+                  <span className="text-white font-bold">{stats.assignedTickets}</span>
+                </div>
+                <div className="w-full bg-gray-700 rounded h-2">
+                  <div
+                    className="bg-green-500 h-2 rounded transition-all duration-500"
+                    style={{ width: stats.totalTickets > 0 ? `${(stats.assignedTickets / stats.totalTickets) * 100}%` : '0%' }}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400 text-sm">Unassigned</span>
+                  <span className="text-white font-bold">{stats.unassignedTickets}</span>
+                </div>
+                <div className="w-full bg-gray-700 rounded h-2">
+                  <div
+                    className="bg-orange-500 h-2 rounded transition-all duration-500"
+                    style={{ width: stats.totalTickets > 0 ? `${(stats.unassignedTickets / stats.totalTickets) * 100}%` : '0%' }}
+                  />
+                </div>
               </div>
-            </div>
-            
-            <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-6">
-              <h3 className="text-lg font-bold text-white mb-4">📈 Priority Breakdown</h3>
-              <div className="h-48 flex items-center justify-center bg-gray-800 rounded border border-gray-700">
-                <p className="text-gray-400">Chart Widget Placeholder</p>
-              </div>
-            </div>
+            </BaseWidget>
+
+            <BaseWidget
+              title="Priority Breakdown"
+              icon="📈"
+              onRefresh={fetchTickets}
+              isEmpty={tickets.length === 0}
+              emptyMessage="No tickets to display"
+              emptyIcon="📋"
+              minHeight="12rem"
+            >
+              {(() => {
+                const priorities = ['critical', 'high', 'medium', 'low']
+                const colors = { critical: 'bg-red-500', high: 'bg-orange-500', medium: 'bg-yellow-500', low: 'bg-blue-500' }
+                const textColors = { critical: 'text-red-400', high: 'text-orange-400', medium: 'text-yellow-400', low: 'text-blue-400' }
+                return (
+                  <div className="space-y-3">
+                    {priorities.map(p => {
+                      const count = tickets.filter(t => t.priority === p).length
+                      return (
+                        <div key={p}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className={`text-sm capitalize ${textColors[p]}`}>{p}</span>
+                            <span className="text-white font-bold text-sm">{count}</span>
+                          </div>
+                          <div className="w-full bg-gray-700 rounded h-1.5">
+                            <div
+                              className={`${colors[p]} h-1.5 rounded transition-all duration-500`}
+                              style={{ width: tickets.length > 0 ? `${(count / tickets.length) * 100}%` : '0%' }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
+            </BaseWidget>
           </div>
 
           {/* Tab Navigation - Using ManagementNav Component */}
@@ -420,9 +477,11 @@ function ManagementDashboard() {
 
         {/* Right Column - Quick Actions Sidebar */}
         <div className="lg:col-span-1">
-          <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-6 sticky top-20">
-            <h3 className="text-xl font-bold text-white mb-4">Quick Actions</h3>
-            
+          <BaseWidget
+            title="Quick Actions"
+            icon="⚡"
+            className="sticky top-20"
+          >
             <div className="space-y-3 mb-8">
               <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
                 <span>+</span>
@@ -472,7 +531,7 @@ function ManagementDashboard() {
                 </div>
               </div>
             </div>
-          </div>
+          </BaseWidget>
         </div>
       </div>
     </div>
