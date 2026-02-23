@@ -9,6 +9,7 @@ import OverdueTicketsWidget from '../components/OverdueTicketsWidget'
 import EscalationsWidget from '../components/EscalationsWidget'
 import TodaysActionsWidget from '../components/TodaysActionsWidget'
 import TopRequestersWidget from '../components/TopRequestersWidget'
+import TechPerformanceWidget from '../components/TechPerformanceWidget'
 import { getAllTickets } from '../services/ticketService'
 
 /**
@@ -223,6 +224,11 @@ function ManagementDashboard() {
 
           {/* Top Requesters Widget */}
           <TopRequestersWidget
+            onRefresh={fetchTickets}
+          />
+
+          {/* Technician Performance Widget */}
+          <TechPerformanceWidget
             onRefresh={fetchTickets}
           />
 
