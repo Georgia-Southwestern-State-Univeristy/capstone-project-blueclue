@@ -4,6 +4,7 @@ import Alert from '../components/Alert'
 import ManagementNav from '../components/ManagementNav'
 import BaseWidget from '../components/BaseWidget'
 import UnassignedVsAssignedWidget from '../components/UnassignedVsAssignedWidget'
+import TicketCategoriesWidget from '../components/TicketCategoriesWidget'
 import { getAllTickets } from '../services/ticketService'
 
 /**
@@ -18,6 +19,7 @@ function ManagementDashboard() {
   const [activeTab, setActiveTab] = useState('overview')
   const [assignmentFilter, setAssignmentFilter] = useState(null) // 'assigned' | 'unassigned' | null
   const [widgetFilters, setWidgetFilters] = useState({ priority: null, category: null, status: null })
+  const [categoryFilter, setCategoryFilter] = useState(null) // selected category key or null
 
   const handleWidgetFilterChange = useCallback((key, value) => {
     setWidgetFilters((prev) => ({ ...prev, [key]: value }))
@@ -192,42 +194,12 @@ function ManagementDashboard() {
               onWidgetFilterChange={handleWidgetFilterChange}
             />
 
-            <BaseWidget
-              title="Priority Breakdown"
-              icon="📈"
+            <TicketCategoriesWidget
+              tickets={tickets}
               onRefresh={fetchTickets}
-              isEmpty={tickets.length === 0}
-              emptyMessage="No tickets to display"
-              emptyIcon="📋"
-              minHeight="12rem"
-            >
-              {(() => {
-                const priorities = ['critical', 'high', 'medium', 'low']
-                const colors = { critical: 'bg-red-500', high: 'bg-orange-500', medium: 'bg-yellow-500', low: 'bg-blue-500' }
-                const textColors = { critical: 'text-red-400', high: 'text-orange-400', medium: 'text-yellow-400', low: 'text-blue-400' }
-                return (
-                  <div className="space-y-3">
-                    {priorities.map(p => {
-                      const count = tickets.filter(t => t.priority === p).length
-                      return (
-                        <div key={p}>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className={`text-sm capitalize ${textColors[p]}`}>{p}</span>
-                            <span className="text-white font-bold text-sm">{count}</span>
-                          </div>
-                          <div className="w-full bg-gray-700 rounded h-1.5">
-                            <div
-                              className={`${colors[p]} h-1.5 rounded transition-all duration-500`}
-                              style={{ width: tickets.length > 0 ? `${(count / tickets.length) * 100}%` : '0%' }}
-                            />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )
-              })()}
-            </BaseWidget>
+              activeCategory={categoryFilter}
+              onCategorySelect={setCategoryFilter}
+            />
           </div>
 
           {/* Filtered ticket list — shown when a donut segment is clicked */}
