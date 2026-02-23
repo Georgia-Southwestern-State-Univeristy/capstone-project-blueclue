@@ -1521,7 +1521,7 @@ export const requestTicketAssignment = async (req, res) => {
                 const notification = await Notification.create({
                     user_id: mgr.id,
                     type: 'assignment',
-                    message: `${techName} requested assignment to ticket #${ticket.ticket_number || id}: ${ticket.title}`,
+                    message: `${techName} requested assignment to ticket #${ticket.ticket_number || id}: ${ticket.subject}`,
                     ticket_id: parseInt(id)
                 });
                 if (io) {

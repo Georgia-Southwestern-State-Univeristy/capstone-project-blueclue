@@ -2,6 +2,8 @@
 import pool from '../config/database.js';
 import Ticket from '../models/Ticket.js';
 import TicketHistory from '../models/TicketHistory.js';
+import Notification from '../models/Notification.js';
+import { emitNotificationToUser, emitUnreadCountToUser } from '../services/socketService.js';
 import { sendTicketAssignment } from '../services/emailService.js';
 
 /**
@@ -249,6 +251,26 @@ export const approveRequest = async (req, res) => {
             [id]
         );
 
+        // Notify the requesting technician that their request was approved
+        try {
+            const reviewerName = `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'Management';
+            const ticketLabel = updatedResult.rows[0]?.ticket_title || `#${request.ticket_id}`;
+            const notification = await Notification.create({
+                user_id: request.requested_by,
+                type: 'assignment',
+                message: `Your assignment request for "${ticketLabel}" has been approved by ${reviewerName}. The ticket is now assigned to you.`,
+                ticket_id: request.ticket_id
+            });
+            const io = req.app.get('io');
+            if (io) {
+                emitNotificationToUser(io, request.requested_by, notification);
+                const unreadCount = await Notification.getUnreadCount(request.requested_by);
+                emitUnreadCountToUser(io, request.requested_by, unreadCount);
+            }
+        } catch (notifError) {
+            console.error('Failed to send approval notification to tech:', notifError);
+        }
+
         res.status(200).json({
             status: 'success',
             message: 'Assignment request approved. Ticket has been assigned.',
@@ -336,6 +358,29 @@ export const denyRequest = async (req, res) => {
              WHERE ar.id = $1`,
             [id]
         );
+
+        // Notify the requesting technician that their request was denied
+        try {
+            const reviewerName = `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'Management';
+            const ticketLabel = enrichedResult.rows[0]?.ticket_title || `#${request.ticket_id}`;
+            const denyMsg = reason
+                ? `Your assignment request for "${ticketLabel}" was denied by ${reviewerName}. Reason: ${reason}`
+                : `Your assignment request for "${ticketLabel}" was denied by ${reviewerName}.`;
+            const notification = await Notification.create({
+                user_id: request.requested_by,
+                type: 'assignment',
+                message: denyMsg,
+                ticket_id: request.ticket_id
+            });
+            const io = req.app.get('io');
+            if (io) {
+                emitNotificationToUser(io, request.requested_by, notification);
+                const unreadCount = await Notification.getUnreadCount(request.requested_by);
+                emitUnreadCountToUser(io, request.requested_by, unreadCount);
+            }
+        } catch (notifError) {
+            console.error('Failed to send denial notification to tech:', notifError);
+        }
 
         res.status(200).json({
             status: 'success',
