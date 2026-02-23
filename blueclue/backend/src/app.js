@@ -19,6 +19,8 @@ import notificationRoutes from './routes/notifications.js';
 import devRoutes from './routes/dev.js';
 import adminRoutes from './routes/admin.js';
 import webhookRoutes from './routes/webhooks.js';
+import analyticsRoutes from './routes/analytics.js';
+import configRoutes from './routes/config.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 
 dotenv.config();
@@ -59,6 +61,8 @@ app.use('/api/roles', roleRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/webhooks', webhookRoutes); // Webhook endpoints for inbound email
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/config', configRoutes);
 app.use('/api/dev', devRoutes);
 app.use('/api/admin', adminRoutes);
 

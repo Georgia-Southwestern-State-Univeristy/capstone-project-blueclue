@@ -9,15 +9,18 @@ class User {
     static async getTechnicians() {
         const query = `
             SELECT 
-                id,
-                email,
-                first_name,
-                last_name,
-                username,
-                CONCAT(first_name, ' ', last_name) as full_name
-            FROM users
-            WHERE role = 'technician' AND is_active = true
-            ORDER BY first_name, last_name
+                u.id,
+                u.email,
+                u.first_name,
+                u.last_name,
+                u.username,
+                u.first_name || ' ' || u.last_name as full_name,
+                COUNT(t.id) FILTER (WHERE t.status NOT IN ('resolved', 'closed')) as open_ticket_count
+            FROM users u
+            LEFT JOIN tickets t ON t.assigned_to = u.id
+            WHERE u.role IN ('technician', 'senior_technician') AND u.is_active = true
+            GROUP BY u.id, u.email, u.first_name, u.last_name, u.username
+            ORDER BY u.first_name, u.last_name
         `;
         
         const result = await pool.query(query);
