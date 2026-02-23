@@ -307,17 +307,68 @@ export const assignTicket = async (id, technicianId) => {
 };
 
 /**
+ * Assign a single ticket to a technician (with validation)
+ * @param {number|string} ticketId - The ticket ID
+ * @param {number} technicianId - The technician user ID
+ * @param {string} [note] - Optional assignment note
+ * @returns {Promise<Object>} The assignment result
+ */
+export const assignSingleTicket = async (ticketId, technicianId, note = '') => {
+  try {
+    const body = { technician_id: technicianId };
+    if (note) body.note = note;
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/assign`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(body),
+    });
+    return await handleResponse(response, 'Failed to assign ticket');
+  } catch (error) {
+    console.error('Assign single ticket error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to assign ticket. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
+ * Reassign a ticket to a different technician
+ * @param {number|string} ticketId - The ticket ID
+ * @param {number} technicianId - The new technician user ID
+ * @param {string} [note] - Optional reassignment note
+ * @returns {Promise<Object>} The reassignment result
+ */
+export const reassignTicket = async (ticketId, technicianId, note = '') => {
+  try {
+    const body = { technician_id: technicianId };
+    if (note) body.note = note;
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/reassign`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(body),
+    });
+    return await handleResponse(response, 'Failed to reassign ticket');
+  } catch (error) {
+    console.error('Reassign ticket error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to reassign ticket. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
  * Bulk assign multiple tickets to a technician
  * @param {Array<number>} ticketIds - Array of ticket IDs
  * @param {number} technicianId - The technician user ID
+ * @param {string} [note] - Optional assignment note
  * @returns {Promise<Object>} The assignment result
  */
-export const bulkAssignTickets = async (ticketIds, technicianId) => {
+export const bulkAssignTickets = async (ticketIds, technicianId, note = '') => {
   try {
+    const body = { ticket_ids: ticketIds, technician_id: technicianId };
+    if (note) body.note = note;
     const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/bulk-assign`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ ticket_ids: ticketIds, technician_id: technicianId }),
+      body: JSON.stringify(body),
     });
     return await handleResponse(response, 'Failed to assign tickets');
   } catch (error) {
@@ -354,6 +405,8 @@ export default {
   deleteTicket,
   updateTicketStatus,
   assignTicket,
+  assignSingleTicket,
+  reassignTicket,
   bulkAssignTickets,
   getTechnicians,
 };
