@@ -1,8 +1,39 @@
 import { useState, useMemo } from 'react'
 import BaseWidget from './BaseWidget'
 
+const PRIORITY_OPTIONS = [
+  { value: 'critical', label: 'Critical', color: '#ef4444' },
+  { value: 'high', label: 'High', color: '#f97316' },
+  { value: 'medium', label: 'Medium', color: '#eab308' },
+  { value: 'low', label: 'Low', color: '#3b82f6' },
+]
+
+const CATEGORY_OPTIONS = [
+  { value: 'general', label: 'General' },
+  { value: 'technical', label: 'Technical' },
+  { value: 'billing', label: 'Billing' },
+  { value: 'account', label: 'Account' },
+  { value: 'feature_request', label: 'Feature Request' },
+  { value: 'hardware', label: 'Hardware' },
+  { value: 'software', label: 'Software' },
+  { value: 'network', label: 'Network' },
+  { value: 'login', label: 'Login' },
+  { value: 'other', label: 'Other' },
+]
+
+const STATUS_OPTIONS = [
+  { value: 'open', label: 'Open' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'waiting_on_customer', label: 'Waiting on Customer' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'closed', label: 'Closed' },
+  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'reopened', label: 'Reopened' },
+]
+
 /**
  * Donut chart widget showing assigned vs unassigned tickets.
+ * Includes dropdown filters for priority, category, and status.
  * Clicking a segment calls onFilter with 'assigned' | 'unassigned' | null (toggle off).
  *
  * @param {Object} props
@@ -10,30 +41,51 @@ import BaseWidget from './BaseWidget'
  * @param {Function} [props.onRefresh]    - Callback for manual refresh
  * @param {string|null} [props.activeFilter] - Currently active filter value
  * @param {Function} [props.onFilter]     - Called with 'assigned' | 'unassigned' | null
+ * @param {Object} [props.widgetFilters]  - { priority, category, status } current filter values
+ * @param {Function} [props.onWidgetFilterChange] - Called with (filterKey, value) when a dropdown changes
  */
 function UnassignedVsAssignedWidget({
   tickets = [],
   onRefresh = null,
   activeFilter = null,
   onFilter = null,
+  widgetFilters = {},
+  onWidgetFilterChange = null,
 }) {
   const [hoveredIndex, setHoveredIndex] = useState(null)
 
-  // Compute segments
+  // Apply widget-level filters (priority, category, status) to tickets
+  const filteredByDropdowns = useMemo(() => {
+    let result = tickets
+    if (widgetFilters.priority) {
+      result = result.filter((t) => t.priority === widgetFilters.priority)
+    }
+    if (widgetFilters.category) {
+      result = result.filter((t) => t.category === widgetFilters.category)
+    }
+    if (widgetFilters.status) {
+      result = result.filter((t) => t.status === widgetFilters.status)
+    }
+    return result
+  }, [tickets, widgetFilters])
+
+  const activeDropdownCount = [widgetFilters.priority, widgetFilters.category, widgetFilters.status].filter(Boolean).length
+
+  // Compute segments from filtered tickets
   const { segments, total } = useMemo(() => {
-    const assigned = tickets.filter(
+    const assigned = filteredByDropdowns.filter(
       (t) => t.assigned_to_name && t.assigned_to_name !== 'null'
     ).length
-    const unassigned = tickets.length - assigned
+    const unassigned = filteredByDropdowns.length - assigned
 
     return {
-      total: tickets.length,
+      total: filteredByDropdowns.length,
       segments: [
         { key: 'assigned', label: 'Assigned', count: assigned, color: '#22c55e' },
         { key: 'unassigned', label: 'Unassigned', count: unassigned, color: '#f97316' },
       ],
     }
-  }, [tickets])
+  }, [filteredByDropdowns])
 
   // SVG arc helper
   const getArcPath = (percent, offset, radius = 40) => {
@@ -80,8 +132,133 @@ function UnassignedVsAssignedWidget({
       emptyMessage="No tickets to display"
       emptyIcon="📋"
       noPadding
+      headerExtra={
+        activeDropdownCount > 0 ? (
+          <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full font-medium">
+            {activeDropdownCount} filter{activeDropdownCount > 1 ? 's' : ''}
+          </span>
+        ) : null
+      }
     >
       <div className="flex flex-col items-center gap-4 px-4 py-4 md:px-6">
+        {/* Filter dropdowns */}
+        <div className="w-full flex flex-wrap gap-2">
+          {/* Priority filter */}
+          <select
+            value={widgetFilters.priority || ''}
+            onChange={(e) => onWidgetFilterChange?.('priority', e.target.value || null)}
+            className={`flex-1 min-w-0 text-xs rounded-md border px-2 py-1.5 bg-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors cursor-pointer ${
+              widgetFilters.priority
+                ? 'border-blue-500 text-white'
+                : 'border-gray-600 text-gray-400'
+            }`}
+          >
+            <option value="">All Priorities</option>
+            {PRIORITY_OPTIONS.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+
+          {/* Category filter */}
+          <select
+            value={widgetFilters.category || ''}
+            onChange={(e) => onWidgetFilterChange?.('category', e.target.value || null)}
+            className={`flex-1 min-w-0 text-xs rounded-md border px-2 py-1.5 bg-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors cursor-pointer ${
+              widgetFilters.category
+                ? 'border-blue-500 text-white'
+                : 'border-gray-600 text-gray-400'
+            }`}
+          >
+            <option value="">All Categories</option>
+            {CATEGORY_OPTIONS.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+
+          {/* Status filter */}
+          <select
+            value={widgetFilters.status || ''}
+            onChange={(e) => onWidgetFilterChange?.('status', e.target.value || null)}
+            className={`flex-1 min-w-0 text-xs rounded-md border px-2 py-1.5 bg-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors cursor-pointer ${
+              widgetFilters.status
+                ? 'border-blue-500 text-white'
+                : 'border-gray-600 text-gray-400'
+            }`}
+          >
+            <option value="">All Statuses</option>
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Active filter pills + clear all */}
+        {activeDropdownCount > 0 && (
+          <div className="w-full flex flex-wrap items-center gap-1.5">
+            {widgetFilters.priority && (
+              <span className="inline-flex items-center gap-1 text-[10px] bg-gray-700 text-gray-300 rounded-full pl-2 pr-1 py-0.5">
+                {PRIORITY_OPTIONS.find((p) => p.value === widgetFilters.priority)?.label}
+                <button
+                  onClick={() => onWidgetFilterChange?.('priority', null)}
+                  className="hover:text-white transition-colors ml-0.5"
+                >
+                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </span>
+            )}
+            {widgetFilters.category && (
+              <span className="inline-flex items-center gap-1 text-[10px] bg-gray-700 text-gray-300 rounded-full pl-2 pr-1 py-0.5">
+                {CATEGORY_OPTIONS.find((c) => c.value === widgetFilters.category)?.label}
+                <button
+                  onClick={() => onWidgetFilterChange?.('category', null)}
+                  className="hover:text-white transition-colors ml-0.5"
+                >
+                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </span>
+            )}
+            {widgetFilters.status && (
+              <span className="inline-flex items-center gap-1 text-[10px] bg-gray-700 text-gray-300 rounded-full pl-2 pr-1 py-0.5">
+                {STATUS_OPTIONS.find((s) => s.value === widgetFilters.status)?.label}
+                <button
+                  onClick={() => onWidgetFilterChange?.('status', null)}
+                  className="hover:text-white transition-colors ml-0.5"
+                >
+                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </span>
+            )}
+            <button
+              onClick={() => {
+                onWidgetFilterChange?.('priority', null)
+                onWidgetFilterChange?.('category', null)
+                onWidgetFilterChange?.('status', null)
+              }}
+              className="text-[10px] text-gray-500 hover:text-white transition-colors ml-auto"
+            >
+              Clear all
+            </button>
+          </div>
+        )}
+
+        {/* "Showing X of Y" subtitle when filters narrow the set */}
+        {activeDropdownCount > 0 && (
+          <p className="text-[10px] text-gray-500 -mt-2">
+            Showing {filteredByDropdowns.length} of {tickets.length} tickets
+          </p>
+        )}
         {/* Donut Chart */}
         <div className="relative w-40 h-40 flex-shrink-0">
           <svg

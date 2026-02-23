@@ -17,6 +17,11 @@ function ManagementDashboard() {
   const [tickets, setTickets] = useState([])
   const [activeTab, setActiveTab] = useState('overview')
   const [assignmentFilter, setAssignmentFilter] = useState(null) // 'assigned' | 'unassigned' | null
+  const [widgetFilters, setWidgetFilters] = useState({ priority: null, category: null, status: null })
+
+  const handleWidgetFilterChange = useCallback((key, value) => {
+    setWidgetFilters((prev) => ({ ...prev, [key]: value }))
+  }, [])
 
   // Summary statistics
   const [stats, setStats] = useState({
@@ -83,14 +88,26 @@ function ManagementDashboard() {
     { id: 'analytics', label: 'Analytics', icon: 'A' }
   ]
 
-  // Filtered tickets based on assignment widget selection
+  // Filtered tickets based on widget filters (dropdowns + donut segment click)
   const filteredTickets = useMemo(() => {
-    if (!assignmentFilter) return tickets
-    if (assignmentFilter === 'assigned') {
-      return tickets.filter(t => t.assigned_to_name && t.assigned_to_name !== 'null')
+    let result = tickets
+    // Apply widget dropdown filters first
+    if (widgetFilters.priority) {
+      result = result.filter(t => t.priority === widgetFilters.priority)
     }
-    return tickets.filter(t => !t.assigned_to_name || t.assigned_to_name === 'null')
-  }, [tickets, assignmentFilter])
+    if (widgetFilters.category) {
+      result = result.filter(t => t.category === widgetFilters.category)
+    }
+    if (widgetFilters.status) {
+      result = result.filter(t => t.status === widgetFilters.status)
+    }
+    // Then apply assignment segment filter
+    if (!assignmentFilter) return result
+    if (assignmentFilter === 'assigned') {
+      return result.filter(t => t.assigned_to_name && t.assigned_to_name !== 'null')
+    }
+    return result.filter(t => !t.assigned_to_name || t.assigned_to_name === 'null')
+  }, [tickets, assignmentFilter, widgetFilters])
 
   // Render summary stat card
   const StatCard = ({ title, value, subtitle, bgColor = 'bg-gray-800' }) => (
@@ -171,6 +188,8 @@ function ManagementDashboard() {
               onRefresh={fetchTickets}
               activeFilter={assignmentFilter}
               onFilter={setAssignmentFilter}
+              widgetFilters={widgetFilters}
+              onWidgetFilterChange={handleWidgetFilterChange}
             />
 
             <BaseWidget
