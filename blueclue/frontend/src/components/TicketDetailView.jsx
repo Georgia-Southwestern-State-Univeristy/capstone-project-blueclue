@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getTicketById, getTicketHistory, updateTicketStatus } from '../services/ticketService'
+import { getTicketById, updateTicketStatus } from '../services/ticketService'
+import { getUserRole } from '../services/authService'
 import TicketActivityLog from './TicketActivityLog'
 
 /**
@@ -21,6 +22,14 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
 
   const modalRef = useRef(null)
   const previousOverflow = useRef('')
+
+  // ─── Role-based visibility ─────────────────────────────────────
+  const userRole = getUserRole()
+  const isTech = userRole === 'technician'
+  const isManagement = userRole === 'management'
+  const canSeeInternals = isTech || isManagement   // priority, SLA, assignee, reopen
+  const canSeeAudit = isManagement                 // AI classification, audit logs
+  const canChangeStatus = isTech || isManagement   // only staff can change status
 
   // ─── Fetch ticket data ───────────────────────────────────────────
   const fetchTicket = useCallback(async () => {
@@ -287,8 +296,8 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                     {formatStatus(ticket.status)}
                   </span>
 
-                  {/* Quick status actions */}
-                  {validTransitions[ticket.status]?.length > 0 && (
+                  {/* Quick status actions — tech & management only */}
+                  {canChangeStatus && validTransitions[ticket.status]?.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {validTransitions[ticket.status].map((s) => (
                         <button
@@ -311,7 +320,8 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                   )}
                 </div>
 
-                {/* Priority */}
+                {/* Priority — hidden from clients */}
+                {canSeeInternals && (
                 <div>
                   <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">Priority</label>
                   {(() => {
@@ -325,8 +335,8 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                       </div>
                     )
                   })()}
-                  {/* Show AI vs user priority if different */}
-                  {(ticket.ai_priority || ticket.user_priority) && (
+                  {/* Show AI vs user priority if different — management only */}
+                  {canSeeAudit && (ticket.ai_priority || ticket.user_priority) && (
                     <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-gray-500">
                       {ticket.ai_priority && ticket.ai_priority !== ticket.priority && (
                         <span>AI: <span className="text-gray-400 capitalize">{ticket.ai_priority}</span></span>
@@ -337,6 +347,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Category */}
                 <div>
@@ -344,7 +355,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                   <span className="inline-block px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200 capitalize">
                     {ticket.category?.replace(/_/g, ' ') || '—'}
                   </span>
-                  {ticket.ai_classified && (
+                  {canSeeAudit && ticket.ai_classified && (
                     <span className="ml-2 text-xs text-gray-500">
                       AI classified
                       {ticket.ai_confidence != null && (
@@ -354,9 +365,10 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                   )}
                 </div>
 
+                {/* Assignee — hidden from clients */}
+                {canSeeInternals && (
+                <>
                 <hr className="border-gray-800" />
-
-                {/* Assignee */}
                 <div>
                   <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">Assigned To</label>
                   {ticket.assigned_to_name && ticket.assigned_to_name !== 'null' ? (
@@ -375,6 +387,8 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                     <p className="text-gray-500 text-sm italic">Unassigned</p>
                   )}
                 </div>
+                </>
+                )}
 
                 {/* Requester */}
                 <div>
@@ -429,8 +443,8 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                   )}
                 </div>
 
-                {/* SLA Info */}
-                {(ticket.response_due_at || ticket.resolution_due_at) && (
+                {/* SLA Info — hidden from clients */}
+                {canSeeInternals && (ticket.response_due_at || ticket.resolution_due_at) && (
                   <>
                     <hr className="border-gray-800" />
                     <div className="space-y-2">
@@ -461,8 +475,8 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                   </>
                 )}
 
-                {/* Reopen count */}
-                {ticket.reopen_count > 0 && (
+                {/* Reopen count — hidden from clients */}
+                {canSeeInternals && ticket.reopen_count > 0 && (
                   <>
                     <hr className="border-gray-800" />
                     <div className="flex items-center gap-2 text-xs">
@@ -539,8 +553,8 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                       </div>
                     )}
 
-                    {/* AI Classification Details */}
-                    {ticket.ai_classified && (
+                    {/* AI Classification Details — management only */}
+                    {canSeeAudit && ticket.ai_classified && (
                       <div>
                         <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">AI Classification</label>
                         <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 space-y-2">
