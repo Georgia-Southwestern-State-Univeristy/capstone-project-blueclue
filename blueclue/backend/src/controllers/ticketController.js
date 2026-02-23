@@ -653,6 +653,33 @@ export const bulkAssignTickets = async (req, res) => {
             }
         }
 
+        // Validate technician has category access for each ticket
+        const ticketsResult = await pool.query(
+            `SELECT t.id, t.category FROM tickets t WHERE t.id = ANY($1::int[])`,
+            [ticket_ids]
+        );
+        const ticketCategories = [...new Set(ticketsResult.rows.map(t => t.category).filter(Boolean))];
+
+        if (ticketCategories.length > 0) {
+            const catResult = await pool.query(
+                `SELECT id, name FROM categories WHERE name = ANY($1::ticket_category[])`,
+                [ticketCategories]
+            );
+            const deniedCategories = [];
+            for (const cat of catResult.rows) {
+                const hasAccess = await CategoryAccess.hasAccess(technician_id, cat.id, 'view');
+                if (!hasAccess) {
+                    deniedCategories.push(cat.name);
+                }
+            }
+            if (deniedCategories.length > 0) {
+                return res.status(403).json({
+                    status: 'error',
+                    message: `Technician does not have access to categories: ${deniedCategories.join(', ')}`
+                });
+            }
+        }
+
         // Bulk update all tickets
         const updateQuery = `
             UPDATE tickets
