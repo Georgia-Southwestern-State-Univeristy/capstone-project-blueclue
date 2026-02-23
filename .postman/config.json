@@ -1,0 +1,15 @@
+{
+  "workspace": {
+    "id": "ed6ac4db-f22e-486b-8409-b40824fd4346"
+  },
+  "entities": {
+    "environments": [],
+    "flows": [],
+    "globals": [],
+    "mocks": [],
+    "specs": [],
+    "collections": [
+      "..\\blueclue\\backend\\postman\\BlueClue-Tickets-API.postman_collection.json"
+    ]
+  }
+}
