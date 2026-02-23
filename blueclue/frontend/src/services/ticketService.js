@@ -225,6 +225,24 @@ export const getTicketById = async (id) => {
 };
 
 /**
+ * Get ticket activity history
+ * @param {number|string} id - The ticket ID
+ * @returns {Promise<Object>} Object with data array of history entries
+ */
+export const getTicketHistory = async (id) => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${id}/history`, {
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch ticket history');
+  } catch (error) {
+    console.error('Get ticket history error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to load ticket history. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
  * Update a ticket
  * @param {number|string} id - The ticket ID
  * @param {Object} ticketData - The updated ticket data
@@ -401,6 +419,7 @@ export default {
   getAllTicketsForTimeline,
   getMyAssignedTickets,
   getTicketById,
+  getTicketHistory,
   updateTicket,
   deleteTicket,
   updateTicketStatus,

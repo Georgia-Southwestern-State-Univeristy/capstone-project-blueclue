@@ -3,6 +3,7 @@ import Ticket from '../models/Ticket.js';
 import AIClassification from '../models/AIClassification.js';
 import UserPrivilege from '../models/UserPrivilege.js';
 import CategoryAccess from '../models/CategoryAccess.js';
+import TicketHistory from '../models/TicketHistory.js';
 import { classifyTicketWithFallback } from '../services/aiService.js';
 import pool from '../config/database.js';
 import { sendTicketConfirmation, sendTicketStatusUpdate, sendTicketAssignment } from '../services/emailService.js';
@@ -693,6 +694,30 @@ export const bulkAssignTickets = async (req, res) => {
 
         const updatedCount = updateResult.rows.length;
 
+        // Log assignment activity for each ticket
+        const assignerName = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'System' : 'System';
+        for (const ticket of updateResult.rows) {
+            try {
+                await TicketHistory.log(
+                    ticket.id,
+                    req.user ? req.user.id : null,
+                    'ticket_assigned',
+                    'assigned_to',
+                    'unassigned',
+                    technician_id.toString(),
+                    note || null,
+                    {
+                        action: 'bulk_assign',
+                        assigned_to_name: techName,
+                        assigned_by_name: assignerName,
+                        ticket_number: ticket.ticket_number
+                    }
+                );
+            } catch (histErr) {
+                console.error(`Failed to log history for ticket ${ticket.id}:`, histErr.message);
+            }
+        }
+
         // Send assignment notification email for each ticket (non-blocking)
         if (technician.email_notifications) {
             for (const ticket of updateResult.rows) {
@@ -811,6 +836,28 @@ export const assignTicket = async (req, res) => {
             status: ticket.status === 'open' ? 'in_progress' : ticket.status
         });
 
+        // Log assignment activity
+        const assignerName = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'System' : 'System';
+        try {
+            await TicketHistory.log(
+                parseInt(id),
+                req.user ? req.user.id : null,
+                'ticket_assigned',
+                'assigned_to',
+                'unassigned',
+                technician_id.toString(),
+                note || null,
+                {
+                    action: 'assign',
+                    assigned_to_name: techName,
+                    assigned_by_name: assignerName,
+                    ticket_number: ticket.ticket_number
+                }
+            );
+        } catch (histErr) {
+            console.error('Failed to log assignment history:', histErr.message);
+        }
+
         // Send assignment notification
         if (technician.email_notifications) {
             try {
@@ -920,6 +967,29 @@ export const reassignTicket = async (req, res) => {
             assigned_to: technician_id
         });
 
+        // Log reassignment activity
+        const reassignerName = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'System' : 'System';
+        try {
+            await TicketHistory.log(
+                parseInt(id),
+                req.user ? req.user.id : null,
+                'ticket_reassigned',
+                'assigned_to',
+                previousAssignee ? previousAssignee.id.toString() : 'unassigned',
+                technician_id.toString(),
+                note || null,
+                {
+                    action: 'reassign',
+                    previous_assignee_name: previousAssignee ? previousAssignee.name : null,
+                    assigned_to_name: techName,
+                    assigned_by_name: reassignerName,
+                    ticket_number: ticket.ticket_number
+                }
+            );
+        } catch (histErr) {
+            console.error('Failed to log reassignment history:', histErr.message);
+        }
+
         // Send assignment notification to new technician
         if (technician.email_notifications) {
             try {
@@ -951,6 +1021,38 @@ export const reassignTicket = async (req, res) => {
     } catch (error) {
         console.error('Reassign ticket error:', error);
         res.status(500).json({ status: 'error', message: 'Failed to reassign ticket', error: error.message });
+    }
+};
+
+/**
+ * Get ticket history / activity log
+ * GET /api/tickets/:id/history
+ */
+export const getTicketHistory = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (isNaN(id)) {
+            return res.status(400).json({ status: 'error', message: 'Invalid ticket ID' });
+        }
+
+        // Verify ticket exists
+        const ticket = await Ticket.getById(parseInt(id));
+        if (!ticket) {
+            return res.status(404).json({ status: 'error', message: 'Ticket not found' });
+        }
+
+        const history = await TicketHistory.getByTicketId(parseInt(id));
+
+        res.status(200).json({
+            status: 'success',
+            count: history.length,
+            data: history
+        });
+
+    } catch (error) {
+        console.error('Get ticket history error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to get ticket history', error: error.message });
     }
 };
 

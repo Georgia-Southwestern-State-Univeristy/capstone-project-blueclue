@@ -10,7 +10,8 @@ import {
     updateTicketStatus,
     bulkAssignTickets,
     assignTicket,
-    reassignTicket
+    reassignTicket,
+    getTicketHistory
 } from '../controllers/ticketController.js';
 import { optionalAuth, authenticateToken } from '../middleware/auth.js';
 import { checkPrivilege } from '../middleware/rbac.js';
@@ -69,6 +70,13 @@ router.get('/timeline', async (req, res) => {
  * @access  Private (authenticated, respects category access)
  */
 router.get('/:id', optionalAuth, getTicketById);
+
+/**
+ * @route   GET /api/tickets/:id/history
+ * @desc    Get ticket activity history / audit log
+ * @access  Private (authenticated)
+ */
+router.get('/:id/history', authenticateToken, getTicketHistory);
 
 /**
  * @route   POST /api/tickets
