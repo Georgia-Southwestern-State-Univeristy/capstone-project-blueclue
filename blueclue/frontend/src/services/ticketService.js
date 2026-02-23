@@ -415,6 +415,47 @@ export const getRecentAssignmentActivity = async (limit = 50) => {
 };
 
 /**
+ * Get available (unassigned) tickets for the current technician
+ * Returns tickets in categories the technician has access to
+ * @returns {Promise<Object>} Object with data array of available tickets
+ */
+export const getAvailableTickets = async () => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/available`, {
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch available tickets');
+  } catch (error) {
+    console.error('Get available tickets error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to load available tickets. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
+ * Request assignment of a ticket to the current technician
+ * @param {number|string} ticketId - The ticket ID
+ * @param {string} [note] - Optional note explaining why the technician wants the ticket
+ * @returns {Promise<Object>} The assignment result with updated ticket
+ */
+export const requestAssignment = async (ticketId, note = '') => {
+  try {
+    const body = {};
+    if (note) body.note = note;
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/request-assignment`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(body),
+    });
+    return await handleResponse(response, 'Failed to request ticket assignment');
+  } catch (error) {
+    console.error('Request ticket assignment error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to request ticket assignment. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
  * Get list of active technicians for assignment dropdowns
  * @returns {Promise<Object>} Object with data array of technicians
  */
@@ -436,6 +477,8 @@ export default {
   getAllTickets,
   getAllTicketsForTimeline,
   getMyAssignedTickets,
+  getAvailableTickets,
+  requestAssignment,
   getTicketById,
   getTicketHistory,
   updateTicket,

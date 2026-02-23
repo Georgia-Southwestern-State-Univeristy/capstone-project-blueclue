@@ -4,6 +4,8 @@ import {
     createTicket,
     getAllTickets,
     getMyAssignedTickets,
+    getAvailableTickets,
+    requestTicketAssignment,
     getTicketById,
     updateTicket,
     deleteTicket,
@@ -31,6 +33,13 @@ router.get('/', optionalAuth, getAllTickets);
  * @access  Private (technician/admin only)
  */
 router.get('/assigned/me', authenticateToken, getMyAssignedTickets);
+
+/**
+ * @route   GET /api/tickets/available
+ * @desc    Get unassigned tickets in the technician's accessible categories
+ * @access  Private (technician/admin only)
+ */
+router.get('/available', authenticateToken, getAvailableTickets);
 
 /**
  * @route   POST /api/tickets/bulk-assign
@@ -96,6 +105,13 @@ router.get('/timeline', async (req, res) => {
  * @access  Private (authenticated, respects category access)
  */
 router.get('/:id', optionalAuth, getTicketById);
+
+/**
+ * @route   POST /api/tickets/:id/request-assignment
+ * @desc    Technician requests assignment to an unassigned ticket
+ * @access  Private (technician only)
+ */
+router.post('/:id/request-assignment', authenticateToken, requestTicketAssignment);
 
 /**
  * @route   GET /api/tickets/:id/history

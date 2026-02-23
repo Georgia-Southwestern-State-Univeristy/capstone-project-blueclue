@@ -1316,3 +1316,233 @@ export const updateTicketStatus = async (req, res) => {
         });
     }
 };
+
+/**
+ * Get available (unassigned) tickets for a technician
+ * Only returns tickets in categories the technician has access to
+ * GET /api/tickets/available
+ */
+export const getAvailableTickets = async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                status: 'error',
+                message: 'Authentication required'
+            });
+        }
+
+        if (!isTechnician(req.user.role) && req.user.role !== 'admin') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Access denied. Only technicians and admins can view available tickets.'
+            });
+        }
+
+        let categoryFilter = '';
+        let queryParams = [];
+
+        if (req.user.role !== 'admin') {
+            // Check if technician has CAN_VIEW_ALL_TICKETS privilege
+            const canViewAll = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_VIEW_ALL_TICKETS');
+
+            if (!canViewAll) {
+                // Get accessible categories for this technician
+                const accessibleCategories = await CategoryAccess.getUserAccessibleCategories(req.user.id, 'view');
+
+                if (accessibleCategories.length === 0) {
+                    return res.status(200).json({
+                        status: 'success',
+                        count: 0,
+                        data: [],
+                        message: 'No category access. Contact administrator.'
+                    });
+                }
+
+                // Get category names from IDs
+                const categoryQuery = `SELECT name FROM categories WHERE id = ANY($1::int[])`;
+                const categoryResult = await pool.query(categoryQuery, [accessibleCategories]);
+                const categoryNames = categoryResult.rows.map(row => row.name);
+
+                categoryFilter = `AND t.category = ANY($1::ticket_category[])`;
+                queryParams = [categoryNames];
+            }
+        }
+
+        const ticketsQuery = `
+            SELECT t.*, 
+                   c.first_name || ' ' || c.last_name as customer_name,
+                   c.email as customer_email,
+                   EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 86400 as age_days
+            FROM tickets t
+            LEFT JOIN users c ON t.customer_id = c.id
+            WHERE t.assigned_to IS NULL
+              AND t.status NOT IN ('closed', 'cancelled', 'resolved')
+              ${categoryFilter}
+            ORDER BY 
+                CASE t.priority
+                    WHEN 'critical' THEN 1
+                    WHEN 'high' THEN 2
+                    WHEN 'medium' THEN 3
+                    WHEN 'low' THEN 4
+                END,
+                t.created_at ASC
+        `;
+
+        const result = await pool.query(ticketsQuery, queryParams);
+
+        res.status(200).json({
+            status: 'success',
+            count: result.rows.length,
+            data: result.rows
+        });
+
+    } catch (error) {
+        console.error('Get available tickets error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve available tickets',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Request assignment of a ticket to the current technician
+ * Technician self-assigns an unassigned ticket in their category access
+ * POST /api/tickets/:id/request-assignment
+ */
+export const requestTicketAssignment = async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                status: 'error',
+                message: 'Authentication required'
+            });
+        }
+
+        if (!isTechnician(req.user.role)) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Access denied. Only technicians can request ticket assignments.'
+            });
+        }
+
+        const { id } = req.params;
+        const { note } = req.body;
+
+        // Fetch the ticket
+        const ticket = await Ticket.getById(id);
+        if (!ticket) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Ticket not found'
+            });
+        }
+
+        // Ensure the ticket is unassigned
+        if (ticket.assigned_to) {
+            return res.status(409).json({
+                status: 'error',
+                message: 'This ticket is already assigned to another technician.'
+            });
+        }
+
+        // Ensure the ticket is not closed/cancelled/resolved
+        if (['closed', 'cancelled', 'resolved'].includes(ticket.status)) {
+            return res.status(400).json({
+                status: 'error',
+                message: `Cannot request assignment for a ticket with status: ${ticket.status}`
+            });
+        }
+
+        // Check if technician has access to this ticket's category
+        const canViewAll = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_VIEW_ALL_TICKETS');
+        if (!canViewAll) {
+            const categoryQuery = `SELECT id FROM categories WHERE name = $1`;
+            const categoryResult = await pool.query(categoryQuery, [ticket.category]);
+
+            if (categoryResult.rows.length > 0) {
+                const categoryId = categoryResult.rows[0].id;
+                const hasAccess = await CategoryAccess.hasAccess(req.user.id, categoryId, 'view');
+                if (!hasAccess) {
+                    return res.status(403).json({
+                        status: 'error',
+                        message: 'You do not have access to tickets in this category.'
+                    });
+                }
+            }
+        }
+
+        // Assign the ticket to the requesting technician
+        const updatedTicket = await Ticket.update(id, { assigned_to: req.user.id });
+
+        // Record in ticket_assignments
+        const assignmentQuery = `
+            INSERT INTO ticket_assignments (ticket_id, user_id, role, assigned_by, notes)
+            VALUES ($1, $2, 'primary', $2, $3)
+            ON CONFLICT (ticket_id, user_id) 
+            DO UPDATE SET unassigned_at = NULL, assigned_at = CURRENT_TIMESTAMP, notes = $3
+        `;
+        await pool.query(assignmentQuery, [id, req.user.id, note || 'Self-requested assignment']);
+
+        // Record in ticket history
+        await TicketHistory.log(
+            id,
+            req.user.id,
+            'ticket_assigned',
+            'assigned_to',
+            null,
+            req.user.id.toString(),
+            note || 'Technician requested assignment',
+            { assignment_type: 'self_request', technician_name: `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() }
+        );
+
+        // Update ticket status to in_progress if it's currently open
+        if (ticket.status === 'open') {
+            await Ticket.update(id, { status: 'in_progress' });
+            updatedTicket.status = 'in_progress';
+
+            await TicketHistory.log(
+                id,
+                req.user.id,
+                'status_change',
+                'status',
+                'open',
+                'in_progress',
+                'Auto-updated when technician requested assignment'
+            );
+        }
+
+        // Send assignment email notification
+        try {
+            const techResult = await pool.query(
+                `SELECT first_name, last_name, email FROM users WHERE id = $1`,
+                [req.user.id]
+            );
+            const techName = techResult.rows[0] 
+                ? `${techResult.rows[0].first_name} ${techResult.rows[0].last_name}` 
+                : 'Unknown';
+            await sendTicketAssignment(updatedTicket, techName);
+        } catch (emailError) {
+            console.error('Failed to send assignment email:', emailError);
+            // Don't fail the request if email fails
+        }
+
+        // Return the full updated ticket with joins
+        const fullTicket = await Ticket.getById(id);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Ticket assigned successfully',
+            data: fullTicket
+        });
+
+    } catch (error) {
+        console.error('Request ticket assignment error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to request ticket assignment',
+            error: error.message
+        });
+    }
+};
