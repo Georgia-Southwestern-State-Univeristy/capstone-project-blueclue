@@ -1,7 +1,15 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Alert from '../components/Alert'
 import ManagementNav from '../components/ManagementNav'
+import BaseWidget from '../components/BaseWidget'
+import UnassignedVsAssignedWidget from '../components/UnassignedVsAssignedWidget'
+import TicketCategoriesWidget from '../components/TicketCategoriesWidget'
+import OverdueTicketsWidget from '../components/OverdueTicketsWidget'
+import EscalationsWidget from '../components/EscalationsWidget'
+import TodaysActionsWidget from '../components/TodaysActionsWidget'
+import TopRequestersWidget from '../components/TopRequestersWidget'
+import TechPerformanceWidget from '../components/TechPerformanceWidget'
 import TicketControlWidget from '../components/TicketControlWidget'
 import TicketTimeline from '../components/TicketTimeline'
 import TicketDetailView from '../components/TicketDetailView'
@@ -24,6 +32,13 @@ function ManagementDashboard() {
     setSelectedTicketId(ticketId)
     setIsDetailOpen(true)
   }
+  const [assignmentFilter, setAssignmentFilter] = useState(null) // 'assigned' | 'unassigned' | null
+  const [widgetFilters, setWidgetFilters] = useState({ priority: null, category: null, status: null })
+  const [categoryFilter, setCategoryFilter] = useState(null) // selected category key or null
+
+  const handleWidgetFilterChange = useCallback((key, value) => {
+    setWidgetFilters((prev) => ({ ...prev, [key]: value }))
+  }, [])
 
   // Summary statistics
   const [stats, setStats] = useState({
@@ -89,6 +104,27 @@ function ManagementDashboard() {
     { id: 'team', label: 'Team Management', icon: 'M' },
     { id: 'analytics', label: 'Analytics', icon: 'A' }
   ]
+
+  // Filtered tickets based on widget filters (dropdowns + donut segment click)
+  const filteredTickets = useMemo(() => {
+    let result = tickets
+    // Apply widget dropdown filters first
+    if (widgetFilters.priority) {
+      result = result.filter(t => t.priority === widgetFilters.priority)
+    }
+    if (widgetFilters.category) {
+      result = result.filter(t => t.category === widgetFilters.category)
+    }
+    if (widgetFilters.status) {
+      result = result.filter(t => t.status === widgetFilters.status)
+    }
+    // Then apply assignment segment filter
+    if (!assignmentFilter) return result
+    if (assignmentFilter === 'assigned') {
+      return result.filter(t => t.assigned_to_name && t.assigned_to_name !== 'null')
+    }
+    return result.filter(t => !t.assigned_to_name || t.assigned_to_name === 'null')
+  }, [tickets, assignmentFilter, widgetFilters])
 
   // Render summary stat card
   const StatCard = ({ title, value, subtitle, bgColor = 'bg-gray-800' }) => (
@@ -158,6 +194,8 @@ function ManagementDashboard() {
         />
       </div>
 
+      {/* Main Content - Charts and Widgets */}
+      <div className="space-y-6 mb-8">
       {/* Submission Timeline + Assignment Activity */}
       <div className="mb-8">
         <TicketTimeline tickets={tickets} onRefresh={fetchTickets} isRefreshing={loading} onTicketClick={handleTicketClick} />
@@ -174,20 +212,111 @@ function ManagementDashboard() {
         <div className="lg:col-span-2 space-y-6">
           {/* Charts Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-6">
-              <h3 className="text-lg font-bold text-white mb-4">📊 Assignment Status</h3>
-              <div className="h-48 flex items-center justify-center bg-gray-800 rounded border border-gray-700">
-                <p className="text-gray-400">Chart Widget Placeholder</p>
-              </div>
-            </div>
-            
-            <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-6">
-              <h3 className="text-lg font-bold text-white mb-4">📈 Priority Breakdown</h3>
-              <div className="h-48 flex items-center justify-center bg-gray-800 rounded border border-gray-700">
-                <p className="text-gray-400">Chart Widget Placeholder</p>
-              </div>
-            </div>
+            <UnassignedVsAssignedWidget
+              tickets={tickets}
+              onRefresh={fetchTickets}
+              activeFilter={assignmentFilter}
+              onFilter={setAssignmentFilter}
+              widgetFilters={widgetFilters}
+              onWidgetFilterChange={handleWidgetFilterChange}
+            />
+
+            <TicketCategoriesWidget
+              tickets={tickets}
+              onRefresh={fetchTickets}
+              activeCategory={categoryFilter}
+              onCategorySelect={setCategoryFilter}
+            />
           </div>
+
+          {/* Overdue Tickets Widget */}
+          <OverdueTicketsWidget
+            onRefresh={fetchTickets}
+          />
+
+          {/* Escalations Widget */}
+          <EscalationsWidget
+            onRefresh={fetchTickets}
+          />
+
+          {/* Today's Actions Widget */}
+          <TodaysActionsWidget
+            onRefresh={fetchTickets}
+          />
+
+          {/* Top Requesters Widget */}
+          <TopRequestersWidget
+            onRefresh={fetchTickets}
+          />
+
+          {/* Technician Performance Widget */}
+          <TechPerformanceWidget
+            onRefresh={fetchTickets}
+          />
+
+          {/* Filtered ticket list — shown when a donut segment is clicked */}
+          {assignmentFilter && (
+            <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-white flex items-center gap-2">
+                  <span className={assignmentFilter === 'assigned' ? 'text-green-400' : 'text-orange-400'}>●</span>
+                  {assignmentFilter === 'assigned' ? 'Assigned' : 'Unassigned'} Tickets
+                  <span className="text-sm font-normal text-gray-400">({filteredTickets.length})</span>
+                </h3>
+                <button
+                  onClick={() => setAssignmentFilter(null)}
+                  className="text-xs text-gray-400 hover:text-white transition-colors flex items-center gap-1 bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Clear filter
+                </button>
+              </div>
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {filteredTickets.length === 0 ? (
+                  <p className="text-gray-500 text-sm py-2">No tickets match this filter.</p>
+                ) : (
+                  filteredTickets.slice(0, 25).map((t) => {
+                    const priorityColors = {
+                      critical: 'text-red-400',
+                      high: 'text-orange-400',
+                      medium: 'text-yellow-400',
+                      low: 'text-blue-400',
+                    }
+                    return (
+                      <div
+                        key={t.id || t.ticket_id}
+                        className="flex items-center justify-between p-2.5 bg-gray-700/50 rounded border border-gray-600 text-sm hover:bg-gray-700 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-gray-500 font-mono text-xs flex-shrink-0">
+                            {t.ticket_number || `#${t.id || t.ticket_id}`}
+                          </span>
+                          <span className="text-white truncate">{t.subject || t.title}</span>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0 ml-2">
+                          <span className={`text-xs capitalize ${priorityColors[t.priority] || 'text-gray-400'}`}>
+                            {t.priority}
+                          </span>
+                          {t.assigned_to_name && t.assigned_to_name !== 'null' ? (
+                            <span className="text-green-400 text-xs">{t.assigned_to_name}</span>
+                          ) : (
+                            <span className="text-orange-400 text-xs">Unassigned</span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+                {filteredTickets.length > 25 && (
+                  <p className="text-gray-500 text-xs text-center pt-1">
+                    Showing 25 of {filteredTickets.length} tickets
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Tab Navigation - Using ManagementNav Component */}
           <ManagementNav activeTab={activeTab} onTabChange={setActiveTab} tabs={tabs} />
@@ -377,7 +506,7 @@ function ManagementDashboard() {
                       <option>Custom Range</option>
                     </select>
                     <button className="px-4 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg text-sm hover:bg-gray-700 transition-colors">
-                      📅 Custom Date
+                      Custom Date
                     </button>
                   </div>
 
@@ -423,64 +552,6 @@ function ManagementDashboard() {
               </div>
             )}
           </div>
-        </div>
-
-        {/* Right Column - Quick Actions Sidebar */}
-        <div className="lg:col-span-1">
-          <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-6 sticky top-20">
-            <h3 className="text-xl font-bold text-white mb-4">Quick Actions</h3>
-            
-            <div className="space-y-3 mb-8">
-              <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
-                <span>+</span>
-                <span>Assign Ticket</span>
-              </button>
-              
-              <button className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
-                <span>#</span>
-                <span>Add Technician</span>
-              </button>
-              
-              <button className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
-                <span>⬇</span>
-                <span>Generate Report</span>
-              </button>
-              
-              <button className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
-                <span>⚙</span>
-                <span>Settings</span>
-              </button>
-            </div>
-
-            {/* System Status Card */}
-            <div className="pt-6 border-t border-gray-700">
-              <h4 className="text-sm font-bold text-gray-400 mb-3">System Status</h4>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between p-2 bg-gray-800 rounded border border-gray-700">
-                  <span className="text-gray-400">Backend</span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                    <span className="text-green-400">Online</span>
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-2 bg-gray-800 rounded border border-gray-700">
-                  <span className="text-gray-400">Database</span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                    <span className="text-green-400">Connected</span>
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-2 bg-gray-800 rounded border border-gray-700">
-                  <span className="text-gray-400">AI Service</span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                    <span className="text-green-400">Active</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Ticket Detail View Modal */}
