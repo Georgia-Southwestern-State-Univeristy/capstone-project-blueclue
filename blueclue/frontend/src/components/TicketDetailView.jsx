@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getTicketById, updateTicketStatus } from '../services/ticketService'
+import { getTicketById, updateTicketStatus, updateTicket, getTechnicians, assignSingleTicket, reassignTicket } from '../services/ticketService'
 import { getUserRole } from '../services/authService'
 import TicketActivityLog from './TicketActivityLog'
 
@@ -20,8 +20,26 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   const [statusError, setStatusError] = useState(null)
   const [statusSuccess, setStatusSuccess] = useState(null)
 
+  // ─── Quick-action state ──────────────────────────────────────────
+  const [isEditing, setIsEditing] = useState(false)
+  const [editSubject, setEditSubject] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState(null)
+  const [showAssign, setShowAssign] = useState(false)
+  const [technicians, setTechnicians] = useState([])
+  const [selectedTechId, setSelectedTechId] = useState('')
+  const [assignNote, setAssignNote] = useState('')
+  const [assignLoading, setAssignLoading] = useState(false)
+  const [assignError, setAssignError] = useState(null)
+  const [techSearch, setTechSearch] = useState('')
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false)
+
   const modalRef = useRef(null)
+  const assignRef = useRef(null)
+  const statusDropdownRef = useRef(null)
   const previousOverflow = useRef('')
+  const ticketCache = useRef(new Map())  // ticketId -> { data, fetchedAt }
 
   // ─── Role-based visibility ─────────────────────────────────────
   const userRole = getUserRole()
@@ -31,20 +49,50 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   const canSeeAudit = isManagement                 // AI classification, audit logs
   const canChangeStatus = isTech || isManagement   // only staff can change status
 
-  // ─── Fetch ticket data ───────────────────────────────────────────
-  const fetchTicket = useCallback(async () => {
+  // ─── Fetch ticket data (cache-aware) ─────────────────────────────
+  const CACHE_TTL = 60_000 // 60 seconds
+
+  const fetchTicket = useCallback(async (forceRefresh = false) => {
     if (!ticketId) return
-    setLoading(true)
+
+    // Serve from cache if fresh
+    const cached = ticketCache.current.get(ticketId)
+    if (!forceRefresh && cached && Date.now() - cached.fetchedAt < CACHE_TTL) {
+      setTicket(cached.data)
+      setLoading(false)
+      setError(null)
+      return
+    }
+
+    // Show cached data immediately while refreshing in background
+    if (cached) {
+      setTicket(cached.data)
+      setLoading(false)
+    } else {
+      setLoading(true)
+    }
     setError(null)
+
     try {
       const res = await getTicketById(ticketId)
-      setTicket(res.data || res)
+      const data = res.data || res
+      ticketCache.current.set(ticketId, { data, fetchedAt: Date.now() })
+      setTicket(data)
     } catch (err) {
-      setError(err.message || 'Failed to load ticket')
+      if (!cached) setError(err.message || 'Failed to load ticket')
     } finally {
       setLoading(false)
     }
   }, [ticketId])
+
+  // Helper to update cache after local mutations
+  const updateCache = useCallback((id, updates) => {
+    const entry = ticketCache.current.get(id)
+    if (entry) {
+      entry.data = { ...entry.data, ...updates }
+      entry.fetchedAt = Date.now()
+    }
+  }, [])
 
   useEffect(() => {
     if (isOpen && ticketId) {
@@ -52,6 +100,9 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
       setActiveTab('details')
       setStatusError(null)
       setStatusSuccess(null)
+      setIsEditing(false)
+      setShowAssign(false)
+      setShowStatusDropdown(false)
       fetchTicket()
     }
   }, [isOpen, ticketId, fetchTicket])
@@ -97,9 +148,11 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     setStatusUpdating(true)
     setStatusError(null)
     setStatusSuccess(null)
+    setShowStatusDropdown(false)
     try {
       await updateTicketStatus(ticket.id, newStatus)
       setTicket((prev) => ({ ...prev, status: newStatus }))
+      updateCache(ticket.id, { status: newStatus })
       setStatusSuccess(`Status updated to ${formatStatus(newStatus)}`)
       setTimeout(() => setStatusSuccess(null), 3000)
       if (onTicketUpdated) onTicketUpdated(ticket.id, { status: newStatus })
@@ -109,6 +162,141 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
       setStatusUpdating(false)
     }
   }
+
+  // ─── Edit handlers ───────────────────────────────────────────────
+  const startEditing = () => {
+    if (!ticket) return
+    setEditSubject(ticket.subject || '')
+    setEditDescription(ticket.description || '')
+    setEditError(null)
+    setIsEditing(true)
+    setActiveTab('details')
+  }
+
+  const cancelEditing = () => {
+    setIsEditing(false)
+    setEditError(null)
+  }
+
+  const saveEdit = async () => {
+    if (!ticket || editSaving) return
+    setEditSaving(true)
+    setEditError(null)
+    try {
+      await updateTicket(ticket.id, { subject: editSubject, description: editDescription })
+      setTicket((prev) => ({ ...prev, subject: editSubject, description: editDescription }))
+      updateCache(ticket.id, { subject: editSubject, description: editDescription })
+      setIsEditing(false)
+      if (onTicketUpdated) onTicketUpdated(ticket.id, { subject: editSubject, description: editDescription })
+    } catch (err) {
+      setEditError(err.message || 'Failed to save changes')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  // ─── Assign/Reassign handlers ────────────────────────────────────
+  const openAssign = async () => {
+    setShowAssign(true)
+    setAssignError(null)
+    setAssignNote('')
+    setTechSearch('')
+    setSelectedTechId(ticket?.assigned_to ? String(ticket.assigned_to) : '')
+    try {
+      const res = await getTechnicians()
+      setTechnicians(Array.isArray(res) ? res : res.data || [])
+    } catch {
+      setTechnicians([])
+    }
+  }
+
+  const handleAssign = async () => {
+    if (!selectedTechId || assignLoading) return
+    setAssignLoading(true)
+    setAssignError(null)
+    try {
+      const techId = Number(selectedTechId)
+      if (ticket.assigned_to) {
+        await reassignTicket(ticket.id, techId, assignNote)
+      } else {
+        await assignSingleTicket(ticket.id, techId, assignNote)
+      }
+      // Re-fetch to get updated assigned_to_name
+      const res = await getTicketById(ticket.id)
+      const data = res.data || res
+      ticketCache.current.set(ticket.id, { data, fetchedAt: Date.now() })
+      setTicket(data)
+      setShowAssign(false)
+      if (onTicketUpdated) onTicketUpdated(ticket.id, { assigned_to: techId })
+    } catch (err) {
+      setAssignError(err.message || 'Failed to assign ticket')
+    } finally {
+      setAssignLoading(false)
+    }
+  }
+
+  // ─── Close ticket shortcut ───────────────────────────────────────
+  const handleCloseTicket = () => {
+    if (ticket?.status === 'resolved') {
+      handleStatusChange('closed')
+    } else if (ticket?.status !== 'closed') {
+      handleStatusChange('closed')
+    }
+  }
+
+  // ─── Print / Export ──────────────────────────────────────────────
+  const handlePrint = () => {
+    if (!ticket) return
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) return
+    const html = `
+      <!DOCTYPE html>
+      <html><head><title>${ticket.ticket_number} - ${ticket.subject}</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 2rem; color: #1a1a1a; max-width: 800px; margin: 0 auto; }
+        h1 { font-size: 1.5rem; margin-bottom: 0.25rem; } h2 { font-size: 1rem; color: #666; margin-top: 1.5rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .meta { display: flex; flex-wrap: wrap; gap: 1.5rem; margin: 1rem 0; padding: 1rem; background: #f5f5f5; border-radius: 8px; }
+        .meta-item label { display: block; font-size: 0.7rem; color: #888; text-transform: uppercase; } .meta-item span { font-size: 0.9rem; font-weight: 500; }
+        .description { white-space: pre-wrap; line-height: 1.6; padding: 1rem; border: 1px solid #e0e0e0; border-radius: 8px; }
+        .footer { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e0e0e0; font-size: 0.75rem; color: #999; }
+        @media print { body { padding: 0; } }
+      </style></head><body>
+      <h1>${ticket.ticket_number} — ${ticket.subject}</h1>
+      <div class="meta">
+        <div class="meta-item"><label>Status</label><span>${formatStatus(ticket.status)}</span></div>
+        <div class="meta-item"><label>Priority</label><span style="text-transform:capitalize">${ticket.priority || '—'}</span></div>
+        <div class="meta-item"><label>Category</label><span style="text-transform:capitalize">${ticket.category?.replace(/_/g, ' ') || '—'}</span></div>
+        <div class="meta-item"><label>Requester</label><span>${ticket.customer_name || '—'}</span></div>
+        <div class="meta-item"><label>Assigned To</label><span>${ticket.assigned_to_name || 'Unassigned'}</span></div>
+        <div class="meta-item"><label>Created</label><span>${formatDate(ticket.created_at)}</span></div>
+      </div>
+      <h2>Description</h2>
+      <div class="description">${(ticket.description || 'No description').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+      ${ticket.resolution ? `<h2>Resolution</h2><div class="description">${ticket.resolution.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>` : ''}
+      <div class="footer">Printed on ${new Date().toLocaleString()} &middot; BlueClue Ticketing System</div>
+      </body></html>
+    `
+    printWindow.document.write(html)
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => printWindow.print(), 250)
+  }
+
+  // ─── Click-outside to close popovers ─────────────────────────────
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (assignRef.current && !assignRef.current.contains(e.target)) {
+        setShowAssign(false)
+      }
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target)) {
+        setShowStatusDropdown(false)
+      }
+    }
+    if (showAssign || showStatusDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showAssign, showStatusDropdown])
 
   // ─── Formatting helpers ──────────────────────────────────────────
   const formatStatus = (status) => {
@@ -256,6 +444,267 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
             </button>
           </div>
         </div>
+
+        {/* ── Quick Actions Bar ─────────────────────────────────── */}
+        {ticket && !loading && !error && (
+          <div className="flex items-center gap-2 px-4 md:px-6 py-2 border-b border-gray-800 flex-shrink-0 bg-gray-900/40 overflow-x-auto">
+            {/* Edit — management only */}
+            {isManagement && (
+              isEditing ? (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={saveEdit}
+                    disabled={editSaving}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    {editSaving ? 'Saving...' : 'Save'}
+                  </button>
+                  <button
+                    onClick={cancelEditing}
+                    disabled={editSaving}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium border border-gray-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={startEditing}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium border border-gray-700 hover:border-gray-500 transition-colors"
+                  title="Edit ticket"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit
+                </button>
+              )
+            )}
+
+            {/* Assign / Reassign — management only */}
+            {isManagement && (
+              <div className="relative" ref={assignRef}>
+                <button
+                  onClick={() => showAssign ? setShowAssign(false) : openAssign()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium border border-gray-700 hover:border-gray-500 transition-colors"
+                  title={ticket.assigned_to ? 'Reassign ticket' : 'Assign ticket'}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  {ticket.assigned_to ? 'Reassign' : 'Assign'}
+                </button>
+              </div>
+            )}
+
+            {/* Assign overlay — rendered as a fixed centered modal */}
+            {isManagement && showAssign && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={(e) => { if (e.target === e.currentTarget) setShowAssign(false) }}>
+                <div ref={assignRef} className="w-full max-w-md bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-white text-base font-semibold">
+                      {ticket.assigned_to ? 'Reassign Ticket' : 'Assign Ticket'}
+                    </p>
+                    <button onClick={() => setShowAssign(false)} className="text-gray-500 hover:text-gray-300 transition-colors">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* Search bar */}
+                  <div>
+                    <label className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1.5 block">Technician</label>
+                    <div className="relative">
+                      <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      <input
+                        type="text"
+                        value={techSearch}
+                        onChange={(e) => setTechSearch(e.target.value)}
+                        placeholder="Search technicians..."
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  {/* Technician list */}
+                  <div className="max-h-60 overflow-y-auto rounded-lg border border-gray-700 divide-y divide-gray-800">
+                    {technicians
+                      .filter((t) => {
+                        if (!techSearch.trim()) return true
+                        const name = (t.full_name || t.name || '').toLowerCase()
+                        return name.includes(techSearch.toLowerCase())
+                      })
+                      .map((t) => {
+                        const isSelected = String(t.id) === selectedTechId
+                        const count = Number(t.open_ticket_count || 0)
+                        return (
+                          <button
+                            key={t.id}
+                            onClick={() => setSelectedTechId(String(t.id))}
+                            className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors ${
+                              isSelected
+                                ? 'bg-blue-900/40 border-l-2 border-l-blue-500'
+                                : 'hover:bg-gray-800/60 border-l-2 border-l-transparent'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                                isSelected ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'
+                              }`}>
+                                {(t.full_name || t.name || '?').split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)}
+                              </div>
+                              <div className="min-w-0">
+                                <p className={`text-sm font-medium truncate ${isSelected ? 'text-white' : 'text-gray-300'}`}>
+                                  {t.full_name || t.name || `Tech #${t.id}`}
+                                </p>
+                                {t.email && <p className="text-xs text-gray-500 truncate">{t.email}</p>}
+                              </div>
+                            </div>
+                            <span className={`flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded-full ${
+                              count >= 10 ? 'bg-red-900/50 text-red-400' :
+                              count >= 5 ? 'bg-yellow-900/50 text-yellow-400' :
+                              'bg-gray-800 text-gray-400'
+                            }`}>
+                              {count} ticket{count !== 1 ? 's' : ''}
+                            </span>
+                          </button>
+                        )
+                      })
+                    }
+                    {technicians.filter((t) => {
+                      if (!techSearch.trim()) return true
+                      const name = (t.full_name || t.name || '').toLowerCase()
+                      return name.includes(techSearch.toLowerCase())
+                    }).length === 0 && (
+                      <p className="text-gray-500 text-sm text-center py-4">No technicians found</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1.5 block">Note</label>
+                    <input
+                      type="text"
+                      value={assignNote}
+                      onChange={(e) => setAssignNote(e.target.value)}
+                      placeholder="Optional note..."
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  {assignError && <p className="text-red-400 text-xs">{assignError}</p>}
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      onClick={() => setShowAssign(false)}
+                      className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 text-sm border border-gray-700 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleAssign}
+                      disabled={!selectedTechId || assignLoading}
+                      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
+                    >
+                      {assignLoading ? 'Assigning...' : ticket.assigned_to ? 'Reassign' : 'Assign'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Change Status — tech & management */}
+            {canChangeStatus && validTransitions[ticket.status]?.length > 0 && (
+              <button
+                onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                disabled={statusUpdating}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium border border-gray-700 hover:border-gray-500 transition-colors disabled:opacity-50"
+                title="Change status"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Status
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            )}
+
+            {/* Status overlay — rendered as fixed centered modal */}
+            {canChangeStatus && showStatusDropdown && validTransitions[ticket.status]?.length > 0 && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={(e) => { if (e.target === e.currentTarget) setShowStatusDropdown(false) }}>
+                <div ref={statusDropdownRef} className="w-full max-w-xs bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-white text-base font-semibold">Change Status</p>
+                    <button onClick={() => setShowStatusDropdown(false)} className="text-gray-500 hover:text-gray-300 transition-colors">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="space-y-1">
+                    {validTransitions[ticket.status].map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => handleStatusChange(s)}
+                        className="w-full text-left px-4 py-2.5 rounded-lg text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors flex items-center gap-3"
+                      >
+                        <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                          s === 'open' ? 'bg-yellow-500' :
+                          s === 'in_progress' ? 'bg-blue-500' :
+                          s === 'waiting_on_customer' ? 'bg-purple-500' :
+                          s === 'resolved' ? 'bg-green-500' :
+                          s === 'closed' ? 'bg-gray-500' : 'bg-gray-500'
+                        }`} />
+                        {formatStatus(s)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Divider */}
+            <div className="w-px h-5 bg-gray-700 mx-0.5" />
+
+            {/* Close Ticket — tech & management, when ticket isn't already closed */}
+            {canChangeStatus && ticket.status !== 'closed' && (
+              <button
+                onClick={handleCloseTicket}
+                disabled={statusUpdating}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-red-900/60 text-gray-300 hover:text-red-300 text-xs font-medium border border-gray-700 hover:border-red-700 transition-colors disabled:opacity-50"
+                title="Close ticket"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+                Close
+              </button>
+            )}
+
+            {/* Print / Export — available to all */}
+            <button
+              onClick={handlePrint}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium border border-gray-700 hover:border-gray-500 transition-colors ml-auto"
+              title="Print / Export"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Print
+            </button>
+
+            {/* Status feedback */}
+            {statusSuccess && <span className="text-green-400 text-xs ml-2 animate-pulse">{statusSuccess}</span>}
+            {statusError && <span className="text-red-400 text-xs ml-2">{statusError}</span>}
+            {editError && <span className="text-red-400 text-xs ml-2">{editError}</span>}
+          </div>
+        )}
 
         {/* ── Body ────────────────────────────────────────────────── */}
         {loading ? (
@@ -525,9 +974,19 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                   <div className="space-y-6 max-w-3xl">
                     {/* Subject */}
                     <div>
-                      <h3 className="text-xl md:text-2xl font-bold text-white leading-tight">
-                        {ticket.subject}
-                      </h3>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          value={editSubject}
+                          onChange={(e) => setEditSubject(e.target.value)}
+                          className="w-full bg-gray-900 border border-blue-500/50 rounded-lg px-4 py-2.5 text-xl font-bold text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30"
+                          placeholder="Ticket subject"
+                        />
+                      ) : (
+                        <h3 className="text-xl md:text-2xl font-bold text-white leading-tight">
+                          {ticket.subject}
+                        </h3>
+                      )}
                       <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-500">
                         <span>Submitted by <span className="text-gray-400">{ticket.customer_name || '—'}</span></span>
                         <span>&middot;</span>
@@ -538,9 +997,19 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                     {/* Description */}
                     <div>
                       <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">Description</label>
-                      <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 text-gray-300 text-sm leading-relaxed whitespace-pre-wrap break-words">
-                        {ticket.description || <span className="text-gray-600 italic">No description provided.</span>}
-                      </div>
+                      {isEditing ? (
+                        <textarea
+                          value={editDescription}
+                          onChange={(e) => setEditDescription(e.target.value)}
+                          rows={8}
+                          className="w-full bg-gray-900 border border-blue-500/50 rounded-lg px-4 py-3 text-gray-300 text-sm leading-relaxed focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 resize-y"
+                          placeholder="Ticket description"
+                        />
+                      ) : (
+                        <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 text-gray-300 text-sm leading-relaxed whitespace-pre-wrap break-words">
+                          {ticket.description || <span className="text-gray-600 italic">No description provided.</span>}
+                        </div>
+                      )}
                     </div>
 
                     {/* Resolution */}
