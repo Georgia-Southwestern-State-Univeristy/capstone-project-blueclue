@@ -100,6 +100,17 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
           bgColor: 'bg-green-900/30',
           label: 'Status Changed'
         }
+      case 'ticket_cancelled':
+        return {
+          icon: (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+          ),
+          color: 'text-gray-400',
+          bgColor: 'bg-gray-800',
+          label: 'Cancelled'
+        }
       case 'priority_change':
         return {
           icon: (
@@ -193,6 +204,30 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
             <span className="text-green-300 font-medium">{entry.new_value?.replace(/_/g, ' ')}</span>
           </span>
         )
+      case 'ticket_cancelled': {
+        const cancelInfo = entry.change_details || {}
+        const cancelledBy = cancelInfo.cancelled_by_name || entry.changed_by_name || 'Unknown'
+        const cancelReason = cancelInfo.reason || 'No reason provided'
+        const cancelExtra = cancelInfo.details
+        const prevStatus = cancelInfo.previous_status?.replace(/_/g, ' ') || entry.old_value?.replace(/_/g, ' ')
+        return (
+          <span>
+            <span className="text-white font-medium">{cancelledBy}</span>
+            {' cancelled this ticket'}
+            {prevStatus && <span className="text-gray-500"> (was {prevStatus})</span>}
+            <br />
+            <span className="text-gray-400">Reason: </span>
+            <span className="text-gray-200">{cancelReason}</span>
+            {cancelExtra && (
+              <>
+                <br />
+                <span className="text-gray-400">Details: </span>
+                <span className="text-gray-300">{cancelExtra}</span>
+              </>
+            )}
+          </span>
+        )
+      }
       case 'priority_change':
         return (
           <span>

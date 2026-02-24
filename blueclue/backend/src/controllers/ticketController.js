@@ -1773,16 +1773,35 @@ export const cancelTicket = async (req, res) => {
 
         const updatedTicket = await Ticket.update(parseInt(id), updateData);
 
+        // Look up who is cancelling
+        let cancellerName = 'Unknown';
+        try {
+            const cancellerResult = await pool.query(
+                'SELECT first_name, last_name FROM users WHERE id = $1',
+                [userId]
+            );
+            if (cancellerResult.rows[0]) {
+                cancellerName = `${cancellerResult.rows[0].first_name} ${cancellerResult.rows[0].last_name}`;
+            }
+        } catch (_) { /* use fallback name */ }
+
         // Log to ticket history
         try {
             await TicketHistory.log(
                 parseInt(id),
                 userId,
-                'status_change',
+                'ticket_cancelled',
                 'status',
                 existingTicket.status,
                 'cancelled',
-                resolutionText
+                resolutionText,
+                {
+                    cancelled_by_name: cancellerName,
+                    cancelled_by_id: userId,
+                    reason,
+                    details: details || null,
+                    previous_status: existingTicket.status
+                }
             );
         } catch (histErr) {
             console.error('Failed to log cancellation history:', histErr);
