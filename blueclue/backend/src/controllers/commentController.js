@@ -2,6 +2,7 @@
 import TicketComment from '../models/TicketComment.js';
 import Ticket from '../models/Ticket.js';
 import Notification from '../models/Notification.js';
+import TicketCollaborator from '../models/TicketCollaborator.js';
 import pool from '../config/database.js';
 import { sendCommentNotificationToTech, sendCommentNotificationToClient } from '../services/emailService.js';
 import { emitNotificationToUser, emitUnreadCountToUser } from '../services/socketService.js';
@@ -207,6 +208,32 @@ export const createComment = async (req, res) => {
                             content.trim(),
                             ticket.customer_id
                         );
+                    }
+                }
+                
+                // Notify all collaborators (for internal comments or tech/management comments)
+                if (isInternal || userType === 'tech' || userType === 'management') {
+                    const collaborators = await TicketCollaborator.getByTicketId(ticketId);
+                    
+                    for (const collab of collaborators) {
+                        // Don't notify the commenter themselves
+                        if (collab.user_id === userId) continue;
+                        
+                        const collaboratorNotification = await Notification.create({
+                            user_id: collab.user_id,
+                            type: 'comment',
+                            message: `${commenterName} commented on ticket #${ticket.ticket_number}`,
+                            ticket_id: ticketId
+                        });
+                        
+                        // Get unread count
+                        const collabUnreadCount = await Notification.getUnreadCountByUserId(collab.user_id);
+                        
+                        // Emit WebSocket notification
+                        if (io) {
+                            emitNotificationToUser(io, collab.user_id, collaboratorNotification);
+                            emitUnreadCountToUser(io, collab.user_id, collabUnreadCount);
+                        }
                     }
                 }
             } catch (error) {
