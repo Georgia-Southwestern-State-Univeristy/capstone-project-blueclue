@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Alert from '../components/Alert'
 import ManagementNav from '../components/ManagementNav'
@@ -209,7 +208,6 @@ function ManagementDashboard() {
       </div>
 
       {/* Main Content - Charts and Widgets */}
-      <div className="space-y-6 mb-8">
       {/* Submission Timeline + Assignment Activity */}
       <div className="mb-8">
         <TicketTimeline tickets={tickets} onRefresh={fetchTickets} isRefreshing={loading} onTicketClick={handleTicketClick} />
