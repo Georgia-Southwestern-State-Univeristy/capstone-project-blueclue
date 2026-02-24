@@ -1,0 +1,31 @@
+{
+  "model_name": "Random Forest Regressor",
+  "model_key": "random_forest",
+  "version": "v1_20260224",
+  "task": "resolution_time_prediction",
+  "training_date": "2026-02-24T15:03:51.234582",
+  "training_samples": 1374,
+  "test_samples": 299,
+  "n_features": 526,
+  "uses_log_transform": true,
+  "outlier_percentile": 95,
+  "metrics": {
+    "rmse_hours": 47.7964953876167,
+    "mae_hours": 33.99718656753866,
+    "median_ae_hours": 19.714664358420308,
+    "r2_score": 0.3876384521872832,
+    "within_4h_pct": 10.367892976588628,
+    "within_8h_pct": 20.735785953177256
+  },
+  "inference_time_ms": 50.563247203826904,
+  "hyperparameters": {
+    "max_depth": 15,
+    "n_estimators": 200
+  },
+  "random_seed": 42,
+  "notes": [
+    "Trained on 1374 resolved tickets",
+    "Uses log-transformed target for skewed distribution",
+    "Outliers >95th percentile removed from training"
+  ]
+}
