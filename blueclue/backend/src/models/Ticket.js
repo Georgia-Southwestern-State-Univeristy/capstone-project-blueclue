@@ -232,6 +232,124 @@ class Ticket {
         const result = await pool.query(query, [id]);
         return result.rows[0] || null;
     }
+
+    /**
+     * Reopen a closed ticket
+     * @param {number} id - Ticket ID
+     * @param {string} reason - Reason for reopening
+     * @returns {Promise<Object>} Result object with status and updated ticket
+     */
+    static async reopen(id, reason) {
+        // Get the ticket to validate and determine reassignment
+        const ticket = await this.getById(id);
+        
+        if (!ticket) {
+            return { success: false, error: 'Ticket not found' };
+        }
+
+        // Validate ticket status
+        if (!['closed', 'cancelled'].includes(ticket.status)) {
+            return { success: false, error: 'Only closed or cancelled tickets can be reopened' };
+        }
+
+        // Validate 30-day window
+        if (ticket.closed_at) {
+            const daysSinceClosure = (Date.now() - new Date(ticket.closed_at).getTime()) / (1000 * 60 * 60 * 24);
+            if (daysSinceClosure > 30) {
+                return { success: false, error: 'Tickets can only be reopened within 30 days of closure' };
+            }
+        }
+
+        // Store previous assigned tech and determine new status
+        const previousTech = ticket.assigned_to;
+        let newStatus = 'reopened';
+        let newAssignedTo = null;
+
+        // If ticket had a tech assigned, try to reassign to them
+        if (previousTech) {
+            // Check if tech still exists and is active
+            const techQuery = `
+                SELECT id, is_active, role 
+                FROM users 
+                WHERE id = $1 
+                AND role IN ('technician', 'senior_technician', 'management')
+            `;
+            const techResult = await pool.query(techQuery, [previousTech]);
+            
+            if (techResult.rows.length > 0 && techResult.rows[0].is_active) {
+                // Tech is available, reassign to them
+                newAssignedTo = previousTech;
+                newStatus = 'open'; // or 'reopened' - keeping as reopened for distinction
+            }
+            // If tech not available, leave unassigned and status will be 'reopened'
+        }
+
+        // Update the ticket
+        const updateQuery = `
+            UPDATE tickets 
+            SET 
+                status = $1,
+                assigned_to = $2,
+                previous_assigned_tech = $3,
+                reopen_count = reopen_count + 1,
+                last_reopened_at = CURRENT_TIMESTAMP,
+                resolved_at = NULL,
+                resolved_by = NULL,
+                closed_at = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $4
+            RETURNING *
+        `;
+
+        const result = await pool.query(updateQuery, [
+            newStatus,
+            newAssignedTo,
+            previousTech,
+            id
+        ]);
+
+        return {
+            success: true,
+            ticket: result.rows[0],
+            reassigned: newAssignedTo !== null,
+            previousTech: previousTech,
+            reason: reason
+        };
+    }
+
+    /**
+     * Check if a ticket can be reopened
+     * @param {number} id - Ticket ID
+     * @param {number} userId - ID of user requesting reopen
+     * @returns {Promise<Object>} Result with canReopen boolean and reason
+     */
+    static async canReopen(id, userId) {
+        const ticket = await this.getById(id);
+
+        if (!ticket) {
+            return { canReopen: false, reason: 'Ticket not found' };
+        }
+
+        // Check if user is the requester
+        if (ticket.customer_id !== userId) {
+            return { canReopen: false, reason: 'Only the ticket requester can reopen this ticket' };
+        }
+
+        // Check status
+        if (!['closed', 'cancelled'].includes(ticket.status)) {
+            return { canReopen: false, reason: 'Ticket is not closed or cancelled' };
+        }
+
+        // Check 30-day window
+        if (ticket.closed_at) {
+            const daysSinceClosure = (Date.now() - new Date(ticket.closed_at).getTime()) / (1000 * 60 * 60 * 24);
+            if (daysSinceClosure > 30) {
+                return { canReopen: false, reason: 'Reopening window expired (>30 days)' };
+            }
+        }
+
+        return { canReopen: true };
+    }
 }
 
 export default Ticket;

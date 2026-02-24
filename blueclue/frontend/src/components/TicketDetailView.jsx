@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getTicketById, updateTicketStatus, updateTicket, getTechnicians, assignSingleTicket, reassignTicket } from '../services/ticketService'
-import { getUserRole } from '../services/authService'
+import { getTicketById, updateTicketStatus, updateTicket, getTechnicians, assignSingleTicket, reassignTicket, reopenTicket } from '../services/ticketService'
+import { getUserRole, getUserId } from '../services/authService'
 import TicketActivityLog from './TicketActivityLog'
 import TicketComments from './TicketComments'
 
@@ -35,6 +35,12 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   const [assignError, setAssignError] = useState(null)
   const [techSearch, setTechSearch] = useState('')
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
+
+  // ─── Reopen state ────────────────────────────────────────────
+  const [showReopenModal, setShowReopenModal] = useState(false)
+  const [reopenReason, setReopenReason] = useState('')
+  const [reopenLoading, setReopenLoading] = useState(false)
+  const [reopenError, setReopenError] = useState(null)
 
   const modalRef = useRef(null)
   const assignRef = useRef(null)
@@ -245,6 +251,62 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     }
   }
 
+  // ─── Reopen ticket logic ─────────────────────────────────────────
+  const canReopenTicket = () => {
+    if (!ticket) return false
+    
+    // Check if ticket is closed or cancelled
+    if (!['closed', 'cancelled'].includes(ticket.status)) return false
+    
+    // Check if user is requester or management
+    const userId = getUserId()
+    const isRequester = userId && ticket.customer_id === parseInt(userId)
+    if (!isRequester && !isManagement) return false
+    
+    // Check 30-day window
+    if (ticket.closed_at) {
+      const daysSinceClosure = (Date.now() - new Date(ticket.closed_at).getTime()) / (1000 * 60 * 60 * 24)
+      if (daysSinceClosure > 30) return false
+    }
+    
+    return true
+  }
+
+  const handleReopenTicket = async () => {
+    if (!reopenReason.trim()) {
+      setReopenError('Please provide a reason for reopening')
+      return
+    }
+
+    setReopenLoading(true)
+    setReopenError(null)
+
+    try {
+      await reopenTicket(ticketId, reopenReason.trim())
+      
+      // Close modal
+      setShowReopenModal(false)
+      setReopenReason('')
+      
+      // Refresh ticket data
+      await fetchTicket(true)
+      
+      // Notify parent component
+      if (onTicketUpdated) {
+        onTicketUpdated()
+      }
+      
+      // Show success message
+      setStatusSuccess('Ticket reopened successfully')
+      setTimeout(() => setStatusSuccess(null), 3000)
+      
+    } catch (err) {
+      setReopenError(err.message || 'Failed to reopen ticket')
+    } finally {
+      setReopenLoading(false)
+    }
+  }
+
   // ─── Print / Export ──────────────────────────────────────────────
   const handlePrint = () => {
     if (!ticket) return
@@ -341,6 +403,8 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     waiting_on_customer: 'bg-purple-900/60 text-purple-300 border-purple-600',
     resolved: 'bg-green-900/60 text-green-300 border-green-600',
     closed: 'bg-gray-700/60 text-gray-300 border-gray-600',
+    cancelled: 'bg-gray-700/60 text-gray-400 border-gray-600',
+    reopened: 'bg-orange-900/60 text-orange-300 border-orange-600',
   }
 
   const priorityConfig = {
@@ -356,6 +420,8 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     waiting_on_customer: ['in_progress', 'resolved', 'open'],
     resolved: ['closed', 'in_progress', 'open'],
     closed: [],
+    cancelled: [],
+    reopened: ['in_progress', 'waiting_on_customer', 'resolved', 'closed'],
   }
 
   if (!isOpen) return null
@@ -618,6 +684,95 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
               </div>
             )}
 
+            {/* Reopen Ticket Modal */}
+            {showReopenModal && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={(e) => { if (e.target === e.currentTarget) setShowReopenModal(false) }}>
+                <div className="w-full max-w-md bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-white text-base font-semibold">Reopen Ticket</p>
+                    <button 
+                      onClick={() => {
+                        setShowReopenModal(false)
+                        setReopenReason('')
+                        setReopenError(null)
+                      }} 
+                      className="text-gray-500 hover:text-gray-300 transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3">
+                    <div className="flex gap-2">
+                      <svg className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <div>
+                        <p className="text-yellow-300 text-sm font-medium">Reopening this ticket</p>
+                        <p className="text-gray-400 text-xs mt-1">
+                          {ticket.previous_assigned_tech || ticket.assigned_to 
+                            ? 'This ticket will be reassigned to the previous technician if available.'
+                            : 'This ticket will return to the unassigned queue.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1.5 block">
+                      Reason for Reopening <span className="text-red-400">*</span>
+                    </label>
+                    <textarea
+                      value={reopenReason}
+                      onChange={(e) => {
+                        setReopenReason(e.target.value)
+                        setReopenError(null)
+                      }}
+                      placeholder="Please explain why this ticket needs to be reopened..."
+                      rows={4}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
+                      autoFocus
+                    />
+                    <p className="text-gray-500 text-xs mt-1">
+                      {reopenReason.length}/500 characters
+                    </p>
+                  </div>
+
+                  {reopenError && (
+                    <div className="bg-red-900/20 border border-red-700/50 rounded-lg p-2">
+                      <p className="text-red-400 text-xs">{reopenError}</p>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        setShowReopenModal(false)
+                        setReopenReason('')
+                        setReopenError(null)
+                      }}
+                      className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 text-sm border border-gray-700 transition-colors"
+                      disabled={reopenLoading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleReopenTicket}
+                      disabled={!reopenReason.trim() || reopenLoading || reopenReason.length > 500}
+                      className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {reopenLoading && (
+                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      )}
+                      {reopenLoading ? 'Reopening...' : 'Reopen Ticket'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Change Status — tech & management */}
             {canChangeStatus && validTransitions[ticket.status]?.length > 0 && (
               <button
@@ -674,7 +829,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
             <div className="w-px h-5 bg-gray-700 mx-0.5" />
 
             {/* Close Ticket — tech & management, when ticket isn't already closed */}
-            {canChangeStatus && ticket.status !== 'closed' && (
+            {canChangeStatus && ticket.status !== 'closed' && ticket.status !== 'cancelled' && (
               <button
                 onClick={handleCloseTicket}
                 disabled={statusUpdating}
@@ -685,6 +840,21 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                 </svg>
                 Close
+              </button>
+            )}
+
+            {/* Reopen Ticket — requester or management, for closed/cancelled tickets < 30 days */}
+            {canReopenTicket() && (
+              <button
+                onClick={() => setShowReopenModal(true)}
+                disabled={statusUpdating}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-green-900/60 text-gray-300 hover:text-green-300 text-xs font-medium border border-gray-700 hover:border-green-700 transition-colors disabled:opacity-50"
+                title="Reopen ticket"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Reopen
               </button>
             )}
 
@@ -738,13 +908,25 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                 {/* Status */}
                 <div>
                   <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">Status</label>
-                  <span
-                    className={`inline-block px-3 py-1.5 rounded-lg text-sm font-semibold border ${
-                      statusColorMap[ticket.status] || 'bg-gray-700 text-gray-300 border-gray-600'
-                    }`}
-                  >
-                    {formatStatus(ticket.status)}
-                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span
+                      className={`inline-block px-3 py-1.5 rounded-lg text-sm font-semibold border ${
+                        statusColorMap[ticket.status] || 'bg-gray-700 text-gray-300 border-gray-600'
+                      }`}
+                    >
+                      {formatStatus(ticket.status)}
+                    </span>
+
+                    {/* Reopen indicator */}
+                    {ticket.reopen_count > 0 && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-900/30 text-orange-300 border border-orange-700/50 text-xs font-medium" title={`Reopened ${ticket.reopen_count} time${ticket.reopen_count > 1 ? 's' : ''}`}>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Reopened {ticket.reopen_count}×
+                      </span>
+                    )}
+                  </div>
 
                   {/* Quick status actions — tech & management only */}
                   {canChangeStatus && validTransitions[ticket.status]?.length > 0 && (

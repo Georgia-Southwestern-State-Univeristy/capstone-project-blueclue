@@ -11,7 +11,8 @@ import {
     getEscalations,
     getTodaysActions,
     getTopRequesters,
-    getTechPerformance
+    getTechPerformance,
+    getReopenAnalytics
 } from '../controllers/analyticsController.js';
 import { authenticateToken } from '../middleware/auth.js';
 
@@ -102,5 +103,13 @@ router.get('/top-requesters', getTopRequesters);
  * @access  Management, Admin
  */
 router.get('/tech-performance', getTechPerformance);
+
+/**
+ * @route   GET /api/analytics/reopens
+ * @desc    Ticket reopen analytics and metrics
+ * @access  Management, Admin
+ * @query   days (default: 30) - Number of days to analyze
+ */
+router.get('/reopens', getReopenAnalytics);
 
 export default router;

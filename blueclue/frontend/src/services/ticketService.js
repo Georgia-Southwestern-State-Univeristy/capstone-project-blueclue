@@ -537,6 +537,29 @@ export const denyAssignmentRequest = async (requestId, reason = '') => {
   }
 };
 
+/**
+ * Reopen a closed or cancelled ticket
+ * POST /api/tickets/:id/reopen
+ */
+export const reopenTicket = async (ticketId, reason) => {
+  try {
+    if (!reason || reason.trim() === '') {
+      throw new ApiError('Reason for reopening is required', 'validation');
+    }
+    
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/reopen`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ reason: reason.trim() }),
+    });
+    return await handleResponse(response, 'Failed to reopen ticket');
+  } catch (error) {
+    console.error('Reopen ticket error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to reopen ticket. Please try again.');
+    throw new Error(message);
+  }
+};
+
 export default {
   createTicket,
   getAllTickets,
@@ -558,4 +581,5 @@ export default {
   getAssignmentRequests,
   approveAssignmentRequest,
   denyAssignmentRequest,
+  reopenTicket,
 };

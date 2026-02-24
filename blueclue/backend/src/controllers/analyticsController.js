@@ -702,3 +702,178 @@ export const getTechPerformance = async (req, res) => {
         res.status(500).json({ status: 'error', message: 'Failed to retrieve tech performance', error: error.message });
     }
 };
+
+/**
+ * Get ticket reopen analytics
+ * GET /api/analytics/reopens
+ */
+export const getReopenAnalytics = async (req, res) => {
+    try {
+        const { days = 30 } = req.query;
+
+        // Overall reopen statistics
+        const overallQuery = `
+            SELECT 
+                COUNT(*) FILTER (WHERE reopen_count > 0) as total_reopened_tickets,
+                COUNT(*) FILTER (WHERE reopen_count >= 3) as high_reopen_tickets,
+                COUNT(*) as total_closed_tickets,
+                ROUND(
+                    COUNT(*) FILTER (WHERE reopen_count > 0)::numeric / 
+                    NULLIF(COUNT(*), 0) * 100, 
+                    2
+                ) as reopen_rate_percent,
+                AVG(reopen_count) FILTER (WHERE reopen_count > 0) as avg_reopens_when_reopened
+            FROM tickets
+            WHERE closed_at >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'
+        `;
+        const overallResult = await pool.query(overallQuery);
+
+        // Reopen count distribution
+        const distributionQuery = `
+            SELECT 
+                reopen_count,
+                COUNT(*) as ticket_count,
+                ROUND(
+                    COUNT(*)::numeric / SUM(COUNT(*)) OVER() * 100,
+                    2
+                ) as percentage
+            FROM tickets
+            WHERE closed_at >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'
+              AND reopen_count > 0
+            GROUP BY reopen_count
+            ORDER BY reopen_count
+        `;
+        const distributionResult = await pool.query(distributionQuery);
+
+        // Reopens by category
+        const categoryQuery = `
+            SELECT 
+                category,
+                COUNT(*) as total_tickets,
+                COUNT(*) FILTER (WHERE reopen_count > 0) as reopened_tickets,
+                AVG(reopen_count) as avg_reopen_count,
+                ROUND(
+                    COUNT(*) FILTER (WHERE reopen_count > 0)::numeric / 
+                    NULLIF(COUNT(*), 0) * 100,
+                    2
+                ) as reopen_rate_percent
+            FROM tickets
+            WHERE closed_at >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'
+            GROUP BY category
+            HAVING COUNT(*) >= 5
+            ORDER BY reopen_rate_percent DESC
+        `;
+        const categoryResult = await pool.query(categoryQuery);
+
+        // Tickets with high reopen counts (3+) - these need attention
+        const highReopenQuery = `
+            SELECT 
+                t.id,
+                t.ticket_number,
+                t.subject,
+                t.category,
+                t.priority,
+                t.status,
+                t.reopen_count,
+                t.last_reopened_at,
+                c.first_name || ' ' || c.last_name as customer_name,
+                c.email as customer_email,
+                a.first_name || ' ' || a.last_name as assigned_tech_name
+            FROM tickets t
+            LEFT JOIN users c ON t.customer_id = c.id
+            LEFT JOIN users a ON t.assigned_to = a.id
+            WHERE t.reopen_count >= 3
+            ORDER BY t.reopen_count DESC, t.last_reopened_at DESC
+            LIMIT 20
+        `;
+        const highReopenResult = await pool.query(highReopenQuery);
+
+        // Reopen trend over time (daily for the specified period)
+        const trendQuery = `
+            SELECT 
+                DATE(last_reopened_at) as date,
+                COUNT(*) as reopen_count,
+                COUNT(DISTINCT id) as unique_tickets
+            FROM tickets
+            WHERE last_reopened_at >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'
+            GROUP BY DATE(last_reopened_at)
+            ORDER BY date
+        `;
+        const trendResult = await pool.query(trendQuery);
+
+        // Technician reopen rates
+        const techQuery = `
+            SELECT 
+                u.id as tech_id,
+                u.first_name || ' ' || u.last_name as tech_name,
+                COUNT(*) as total_tickets_handled,
+                COUNT(*) FILTER (WHERE t.reopen_count > 0) as reopened_tickets,
+                ROUND(
+                    COUNT(*) FILTER (WHERE t.reopen_count > 0)::numeric / 
+                    NULLIF(COUNT(*), 0) * 100,
+                    2
+                ) as reopen_rate_percent,
+                AVG(t.reopen_count) FILTER (WHERE t.reopen_count > 0) as avg_reopens
+            FROM users u
+            JOIN tickets t ON t.previous_assigned_tech = u.id OR t.assigned_to = u.id
+            WHERE u.role IN ('technician', 'senior_technician', 'management')
+              AND t.closed_at >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'
+            GROUP BY u.id, u.first_name, u.last_name
+            HAVING COUNT(*) >= 5
+            ORDER BY reopen_rate_percent DESC
+            LIMIT 15
+        `;
+        const techResult = await pool.query(techQuery);
+
+        res.json({
+            status: 'success',
+            data: {
+                period_days: parseInt(days),
+                overall: {
+                    total_reopened_tickets: parseInt(overallResult.rows[0].total_reopened_tickets) || 0,
+                    high_reopen_tickets: parseInt(overallResult.rows[0].high_reopen_tickets) || 0,
+                    total_closed_tickets: parseInt(overallResult.rows[0].total_closed_tickets) || 0,
+                    reopen_rate_percent: parseFloat(overallResult.rows[0].reopen_rate_percent) || 0,
+                    avg_reopens_when_reopened: parseFloat(overallResult.rows[0].avg_reopens_when_reopened) || 0
+                },
+                distribution: distributionResult.rows.map(r => ({
+                    reopen_count: parseInt(r.reopen_count),
+                    ticket_count: parseInt(r.ticket_count),
+                    percentage: parseFloat(r.percentage)
+                })),
+                by_category: categoryResult.rows.map(r => ({
+                    category: r.category,
+                    total_tickets: parseInt(r.total_tickets),
+                    reopened_tickets: parseInt(r.reopened_tickets),
+                    avg_reopen_count: parseFloat(r.avg_reopen_count),
+                    reopen_rate_percent: parseFloat(r.reopen_rate_percent)
+                })),
+                high_reopen_tickets: highReopenResult.rows.map(r => ({
+                    ...r,
+                    reopen_count: parseInt(r.reopen_count)
+                })),
+                trend: trendResult.rows.map(r => ({
+                    date: r.date,
+                    reopen_count: parseInt(r.reopen_count),
+                    unique_tickets: parseInt(r.unique_tickets)
+                })),
+                by_technician: techResult.rows.map(r => ({
+                    tech_id: parseInt(r.tech_id),
+                    tech_name: r.tech_name,
+                    total_tickets_handled: parseInt(r.total_tickets_handled),
+                    reopened_tickets: parseInt(r.reopened_tickets),
+                    reopen_rate_percent: parseFloat(r.reopen_rate_percent),
+                    avg_reopens: parseFloat(r.avg_reopens)
+                }))
+            }
+        });
+    } catch (error) {
+        console.error('Reopen analytics error:', error);
+        res.status(500).json({ 
+            status: 'error', 
+            message: 'Failed to retrieve reopen analytics', 
+            error: error.message 
+        });
+    }
+};
+

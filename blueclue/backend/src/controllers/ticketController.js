@@ -1708,3 +1708,221 @@ export const requestTicketAssignment = async (req, res) => {
         });
     }
 };
+
+/**
+ * Reopen a closed ticket
+ * POST /api/tickets/:id/reopen
+ */
+export const reopenTicket = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body;
+
+        // Validate ticket ID
+        if (isNaN(id)) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Invalid ticket ID'
+            });
+        }
+
+        // Validate reason is provided
+        if (!reason || reason.trim() === '') {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Reason for reopening is required'
+            });
+        }
+
+        const ticketId = parseInt(id);
+
+        // Get the ticket to check permissions
+        const ticket = await Ticket.getById(ticketId);
+        if (!ticket) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Ticket not found'
+            });
+        }
+
+        // Authorization: Only ticket requester or management can reopen
+        const isRequester = req.user && req.user.id === ticket.customer_id;
+        const isManagement = req.user && ['management', 'admin'].includes(req.user.role);
+
+        if (!isRequester && !isManagement) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Only the ticket requester or management can reopen this ticket'
+            });
+        }
+
+        // Attempt to reopen the ticket
+        const result = await Ticket.reopen(ticketId, reason);
+
+        if (!result.success) {
+            return res.status(400).json({
+                status: 'error',
+                message: result.error
+            });
+        }
+
+        const { ticket: reopenedTicket, reassigned, previousTech } = result;
+
+        // Log to ticket history
+        await TicketHistory.log(
+            ticketId,
+            req.user.id,
+            'reopened',
+            'status',
+            ticket.status,
+            reopenedTicket.status,
+            `Ticket reopened: ${reason}`,
+            {
+                reopen_count: reopenedTicket.reopen_count,
+                reassigned: reassigned,
+                previous_tech: previousTech,
+                previous_status: ticket.status
+            }
+        );
+
+        // Send notifications
+        const io = req.app.get('io');
+        
+        // Notify the customer (if reopened by management)
+        if (isManagement && ticket.customer_id !== req.user.id) {
+            try {
+                const customerResult = await pool.query(
+                    'SELECT email, first_name, email_notifications FROM users WHERE id = $1',
+                    [ticket.customer_id]
+                );
+                
+                if (customerResult.rows[0]) {
+                    // Create notification
+                    const notification = await Notification.create({
+                        user_id: ticket.customer_id,
+                        type: 'update_request',
+                        message: `Your ticket "${ticket.subject}" has been reopened by management`,
+                        ticket_id: ticketId
+                    });
+
+                    if (io) {
+                        emitNotificationToUser(io, ticket.customer_id, notification);
+                        const unreadCount = await Notification.getUnreadCount(ticket.customer_id);
+                        emitUnreadCountToUser(io, ticket.customer_id, unreadCount);
+                    }
+
+                    // Send email if enabled
+                    if (customerResult.rows[0].email_notifications) {
+                        await sendTicketStatusUpdate(
+                            customerResult.rows[0].email,
+                            customerResult.rows[0].first_name,
+                            reopenedTicket,
+                            ticket.status,
+                            reopenedTicket.status,
+                            ticket.customer_id
+                        );
+                    }
+                }
+            } catch (notifError) {
+                console.error('Failed to notify customer of reopen:', notifError);
+            }
+        }
+
+        // Notify the assigned tech (if reassigned)
+        if (reassigned && previousTech) {
+            try {
+                const techResult = await pool.query(
+                    'SELECT email, first_name, last_name, email_notifications FROM users WHERE id = $1',
+                    [previousTech]
+                );
+
+                if (techResult.rows[0]) {
+                    const techName = `${techResult.rows[0].first_name} ${techResult.rows[0].last_name}`;
+                    
+                    // Create notification
+                    const notification = await Notification.create({
+                        user_id: previousTech,
+                        type: 'assignment',
+                        message: `Ticket "${ticket.subject}" has been reopened and reassigned to you`,
+                        ticket_id: ticketId
+                    });
+
+                    if (io) {
+                        emitNotificationToUser(io, previousTech, notification);
+                        const unreadCount = await Notification.getUnreadCount(previousTech);
+                        emitUnreadCountToUser(io, previousTech, unreadCount);
+                    }
+
+                    // Send email if enabled
+                    if (techResult.rows[0].email_notifications) {
+                        await sendTicketAssignment(
+                            techResult.rows[0].email,
+                            techName,
+                            reopenedTicket,
+                            previousTech
+                        );
+                    }
+                }
+            } catch (notifError) {
+                console.error('Failed to notify tech of reassignment:', notifError);
+            }
+        }
+
+        // Alert management if ticket has been reopened multiple times (3+)
+        if (reopenedTicket.reopen_count >= 3) {
+            try {
+                const mgmtResult = await pool.query(
+                    `SELECT id FROM users WHERE role IN ('management', 'admin')`
+                );
+
+                for (const mgr of mgmtResult.rows) {
+                    const notification = await Notification.create({
+                        user_id: mgr.id,
+                        type: 'overdue',
+                        message: `Alert: Ticket "${ticket.subject}" has been reopened ${reopenedTicket.reopen_count} times (recurring issue)`,
+                        ticket_id: ticketId
+                    });
+
+                    if (io) {
+                        emitNotificationToUser(io, mgr.id, notification);
+                        const unreadCount = await Notification.getUnreadCount(mgr.id);
+                        emitUnreadCountToUser(io, mgr.id, unreadCount);
+                    }
+                }
+
+                console.log(`⚠️ Management alerted: Ticket ${ticketId} reopened ${reopenedTicket.reopen_count} times`);
+            } catch (notifError) {
+                console.error('Failed to alert management of recurring reopen:', notifError);
+            }
+        }
+
+        // Emit real-time update to all connected users
+        if (io) {
+            io.emit('ticket_updated', {
+                ticket_id: ticketId,
+                status: reopenedTicket.status,
+                reopen_count: reopenedTicket.reopen_count
+            });
+        }
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Ticket reopened successfully',
+            data: {
+                ticket: reopenedTicket,
+                reassigned: reassigned,
+                previousTech: previousTech,
+                reopenCount: reopenedTicket.reopen_count
+            }
+        });
+
+    } catch (error) {
+        console.error('Reopen ticket error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to reopen ticket',
+            error: error.message
+        });
+    }
+};
+
