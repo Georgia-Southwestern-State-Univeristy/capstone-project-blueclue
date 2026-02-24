@@ -307,7 +307,7 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
                   <div>
                     <h3 className="font-semibold text-white mb-2">Status</h3>
                     <div className="space-y-1">
-                      {['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed'].map(s => (
+                      {['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed', 'cancelled'].map(s => (
                         <label key={s} className="flex items-center gap-2 cursor-pointer hover:bg-gray-700 px-2 py-1.5 rounded">
                           <input type="checkbox" checked={filters.status.includes(s)} onChange={() => handleFilterChange('status', s)} className="w-4 h-4 accent-blue-500 cursor-pointer" />
                           <span className="text-sm text-gray-300">{formatStatus(s)}</span>

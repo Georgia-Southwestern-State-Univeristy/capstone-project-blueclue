@@ -19,15 +19,16 @@ const isTechnician = (role) => {
 };
 
 // Valid ticket statuses (must match database enum)
-const VALID_STATUSES = ['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed'];
+const VALID_STATUSES = ['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed', 'cancelled'];
 
 // Valid status transitions (business rules)
 const VALID_TRANSITIONS = {
-    'open': ['in_progress', 'waiting_on_customer', 'resolved', 'closed'],
-    'in_progress': ['waiting_on_customer', 'resolved', 'open'],
-    'waiting_on_customer': ['in_progress', 'resolved', 'open'],
+    'open': ['in_progress', 'waiting_on_customer', 'resolved', 'closed', 'cancelled'],
+    'in_progress': ['waiting_on_customer', 'resolved', 'open', 'cancelled'],
+    'waiting_on_customer': ['in_progress', 'resolved', 'open', 'cancelled'],
     'resolved': ['closed', 'in_progress', 'open', 'waiting_on_customer'], // Allow reopening and status changes
-    'closed': [] // Cannot transition from closed - final state
+    'closed': [], // Cannot transition from closed - final state
+    'cancelled': [] // Cannot transition from cancelled - final state
 };
 
 /**

@@ -340,6 +340,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     waiting_on_customer: 'bg-purple-900/60 text-purple-300 border-purple-600',
     resolved: 'bg-green-900/60 text-green-300 border-green-600',
     closed: 'bg-gray-700/60 text-gray-300 border-gray-600',
+    cancelled: 'bg-orange-900/60 text-orange-300 border-orange-600',
   }
 
   const priorityConfig = {
@@ -350,11 +351,12 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   }
 
   const validTransitions = {
-    open: ['in_progress', 'waiting_on_customer', 'resolved', 'closed'],
-    in_progress: ['waiting_on_customer', 'resolved', 'open'],
-    waiting_on_customer: ['in_progress', 'resolved', 'open'],
+    open: ['in_progress', 'waiting_on_customer', 'resolved', 'closed', 'cancelled'],
+    in_progress: ['waiting_on_customer', 'resolved', 'open', 'cancelled'],
+    waiting_on_customer: ['in_progress', 'resolved', 'open', 'cancelled'],
     resolved: ['closed', 'in_progress', 'open'],
     closed: [],
+    cancelled: [],
   }
 
   if (!isOpen) return null

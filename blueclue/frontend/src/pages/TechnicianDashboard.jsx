@@ -18,7 +18,8 @@ const getStatusColor = (status) => {
     in_progress: { bg: 'bg-blue-950', border: 'border-blue-700', text: 'text-blue-400', badge: 'bg-blue-900 text-blue-300' },
     waiting_on_customer: { bg: 'bg-purple-950', border: 'border-purple-700', text: 'text-purple-400', badge: 'bg-purple-900 text-purple-300' },
     resolved: { bg: 'bg-green-950', border: 'border-green-700', text: 'text-green-400', badge: 'bg-green-900 text-green-300' },
-    closed: { bg: 'bg-gray-800', border: 'border-gray-600', text: 'text-gray-400', badge: 'bg-gray-700 text-gray-300' }
+    closed: { bg: 'bg-gray-800', border: 'border-gray-600', text: 'text-gray-400', badge: 'bg-gray-700 text-gray-300' },
+    cancelled: { bg: 'bg-orange-950', border: 'border-orange-700', text: 'text-orange-400', badge: 'bg-orange-900 text-orange-300' }
   }
   return statusColors[status] || statusColors.open
 }
@@ -271,6 +272,7 @@ function TechnicianDashboard() {
     resolved: tickets.filter(t => t.status === 'resolved').length,
     closed: tickets.filter(t => t.status === 'closed').length,
     waiting: tickets.filter(t => t.status === 'waiting_on_customer').length,
+    cancelled: tickets.filter(t => t.status === 'cancelled').length,
     total: tickets.length
   }
 
@@ -281,6 +283,7 @@ function TechnicianDashboard() {
     { label: 'Waiting', count: stats.waiting, color: '#a78bfa' },
     { label: 'Resolved', count: stats.resolved, color: '#3b82f6' },
     { label: 'Closed', count: stats.closed, color: '#6b7280' },
+    { label: 'Cancelled', count: stats.cancelled, color: '#f97316' },
   ]
 
   // Priority pie chart data
@@ -502,7 +505,7 @@ function TechnicianDashboard() {
                     Status
                   </h3>
                   <div className="space-y-1">
-                    {['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed'].map(status => (
+                    {['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed', 'cancelled'].map(status => (
                       <label key={status} className="flex items-center gap-2 cursor-pointer hover:bg-gray-700 px-2 py-1.5 rounded">
                         <input
                           type="checkbox"
@@ -655,7 +658,7 @@ function TechnicianDashboard() {
                         value={ticket.status}
                         onChange={(e) => handleStatusChange(ticket.id, e.target.value)}
                         onClick={(e) => e.stopPropagation()}
-                        disabled={updatingTicketId === ticket.id || ticket.status === 'closed'}
+                        disabled={updatingTicketId === ticket.id || ticket.status === 'closed' || ticket.status === 'cancelled'}
                         className={`w-full px-3 py-2 rounded-md text-sm font-medium cursor-pointer transition-colors ${statusColor.badge} border border-gray-600 hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
                         <option value="open">{updatingTicketId === ticket.id && ticket.status === 'open' ? '⏳ ' : ''}Open</option>
@@ -663,12 +666,13 @@ function TechnicianDashboard() {
                         <option value="waiting_on_customer">{updatingTicketId === ticket.id && ticket.status === 'waiting_on_customer' ? '⏳ ' : ''}Waiting on Customer</option>
                         <option value="resolved">{updatingTicketId === ticket.id && ticket.status === 'resolved' ? '⏳ ' : ''}Resolved</option>
                         <option value="closed">{updatingTicketId === ticket.id && ticket.status === 'closed' ? '⏳ ' : ''}Closed</option>
+                        <option value="cancelled">{updatingTicketId === ticket.id && ticket.status === 'cancelled' ? '⏳ ' : ''}Cancelled</option>
                       </select>
                       {updatingTicketId === ticket.id && (
                         <p className="text-blue-400 text-[10px] mt-1">Updating...</p>
                       )}
-                      {ticket.status === 'closed' && (
-                        <p className="text-xs text-gray-500 mt-1">Closed tickets cannot be modified</p>
+                      {(ticket.status === 'closed' || ticket.status === 'cancelled') && (
+                        <p className="text-xs text-gray-500 mt-1">{ticket.status === 'cancelled' ? 'Cancelled' : 'Closed'} tickets cannot be modified</p>
                       )}
                     </div>
 
@@ -769,7 +773,7 @@ function TechnicianDashboard() {
                         value={ticket.assigned_to || ''}
                         onChange={(e) => handleAssignmentChange(ticket.id, e.target.value)}
                         onClick={(e) => e.stopPropagation()}
-                        disabled={assigningTicketId === ticket.id || ticket.status === 'closed'}
+                        disabled={assigningTicketId === ticket.id || ticket.status === 'closed' || ticket.status === 'cancelled'}
                         className="w-full px-2 py-1.5 rounded-md text-sm bg-gray-800 border border-gray-600 text-gray-200 hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <option value="">Unassigned</option>
