@@ -1,6 +1,8 @@
 # BlueClue Database Setup
 
-Complete setup guide for the BlueClue PostgreSQL database with AI classification support, ticket comments, templates, and multi-technician assignment.
+**Current Schema Version: 2.3.0 (Fully Consolidated)**
+
+Complete setup guide for the BlueClue PostgreSQL database with AI classification, spam protection, email tracking, and comprehensive ticket management features.
 
 ## Prerequisites
 
@@ -78,6 +80,7 @@ psql -U postgres -d blueclue -c "SELECT COUNT(*) FROM ticket_templates WHERE is_
 # Should show: 15 (if seed.sql was run)
 
 psql -U postgres -d blueclue -c "SELECT version FROM schema_version ORDER BY applied_at DESC LIMIT 1;"
+# Should show: 2.3.0
 # Should show: 2.0.0
 ```
 
