@@ -3,7 +3,7 @@ import Notification from '../models/Notification.js';
 import { emitNotificationToUser, emitUnreadCountToUser } from '../services/socketService.js';
 
 // Valid notification types (must match database enum)
-const VALID_TYPES = ['assignment', 'overdue', 'update_request', 'mention'];
+const VALID_TYPES = ['assignment', 'overdue', 'update_request', 'mention', 'comment'];
 
 /**
  * Create a new notification

@@ -519,6 +519,68 @@ export const sendPasswordResetEmail = async (email, firstName, resetToken, userI
     );
 };
 
+/**
+ * Send new comment notification to technician
+ * @param {string} email - Technician email
+ * @param {string} technicianName - Technician name
+ * @param {string} commenterName - Name of person who commented
+ * @param {Object} ticket - Ticket data
+ * @param {string} commentContent - Comment text
+ * @param {number|null} userId - User ID for logging
+ */
+export const sendCommentNotificationToTech = async (email, technicianName, commenterName, ticket, commentContent, userId = null) => {
+    const ticketUrl = `${FRONTEND_URL}/tickets/${ticket.id}`;
+    
+    return sendTemplateEmail(
+        email,
+        'comment-new-for-tech',
+        {
+            subject: `New Comment on Ticket #${ticket.id} - BlueClue Support`,
+            technicianName,
+            commenterName,
+            ticketId: ticket.id,
+            ticketSubject: ticket.subject,
+            commentContent: commentContent.substring(0, 500), // Limit to 500 chars in email
+            ticketUrl,
+            frontendUrl: FRONTEND_URL
+        },
+        'comment-new-tech',
+        userId,
+        { ticket_id: ticket.id, commenter_name: commenterName }
+    );
+};
+
+/**
+ * Send new comment notification to client
+ * @param {string} email - Client email
+ * @param {string} clientName - Client name
+ * @param {string} technicianName - Technician name who commented
+ * @param {Object} ticket - Ticket data
+ * @param {string} commentContent - Comment text
+ * @param {number|null} userId - User ID for logging
+ */
+export const sendCommentNotificationToClient = async (email, clientName, technicianName, ticket, commentContent, userId = null) => {
+    const ticketUrl = `${FRONTEND_URL}/tickets/${ticket.id}`;
+    
+    return sendTemplateEmail(
+        email,
+        'comment-new-for-client',
+        {
+            subject: `New Response on Your Ticket #${ticket.id} - BlueClue Support`,
+            clientName,
+            technicianName,
+            ticketId: ticket.id,
+            ticketSubject: ticket.subject,
+            commentContent: commentContent.substring(0, 500), // Limit to 500 chars in email
+            ticketUrl,
+            frontendUrl: FRONTEND_URL
+        },
+        'comment-new-client',
+        userId,
+        { ticket_id: ticket.id, technician_name: technicianName }
+    );
+};
+
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
@@ -564,6 +626,8 @@ export default {
     sendTicketStatusUpdate,
     sendTicketAssignment,
     sendPasswordResetEmail,
+    sendCommentNotificationToTech,
+    sendCommentNotificationToClient,
     isEmailServiceReady,
     getEmailServiceStatus,
     reinitializeEmailService

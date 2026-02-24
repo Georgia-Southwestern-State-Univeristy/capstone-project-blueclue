@@ -610,6 +610,24 @@ export const restoreTicket = async (id) => {
   } catch (error) {
     console.error('Restore ticket error:', error);
     const message = getUserFriendlyMessage(error, 'Failed to restore ticket. Please try again.');
+ * Reopen a closed or cancelled ticket
+ * POST /api/tickets/:id/reopen
+ */
+export const reopenTicket = async (ticketId, reason) => {
+  try {
+    if (!reason || reason.trim() === '') {
+      throw new ApiError('Reason for reopening is required', 'validation');
+    }
+    
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/reopen`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ reason: reason.trim() }),
+    });
+    return await handleResponse(response, 'Failed to reopen ticket');
+  } catch (error) {
+    console.error('Reopen ticket error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to reopen ticket. Please try again.');
     throw new Error(message);
   }
 };
@@ -639,4 +657,5 @@ export default {
   getCancellationStats,
   getDeletedTickets,
   restoreTicket,
+  reopenTicket,
 };

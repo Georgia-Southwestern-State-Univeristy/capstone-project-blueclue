@@ -22,6 +22,7 @@ import webhookRoutes from './routes/webhooks.js';
 import analyticsRoutes from './routes/analytics.js';
 import configRoutes from './routes/config.js';
 import assignmentRequestRoutes from './routes/assignmentRequests.js';
+import commentRoutes from './routes/commentRoutes.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 
 dotenv.config();
@@ -40,6 +41,9 @@ const PORT = process.env.PORT || 3000;
 // Initialize Socket.IO handlers
 initializeSocketHandlers(io);
 
+// Make io accessible to routes/controllers
+app.set('io', io);
+
 // Middleware
 app.use(helmet());
 app.use(cors());
@@ -51,6 +55,7 @@ app.use(cookieParser());
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/tickets', ticketRoutes);
+app.use('/api', commentRoutes); // Comment routes (includes /api/comments and /api/tickets/:id/comments)
 app.use('/api/users', userRoutes);
 app.use('/api/privileges', privilegeRoutes);
 app.use('/api/categories', categoryRoutes);

@@ -1,0 +1,28 @@
+NEW RESPONSE ON YOUR TICKET
+===============================================
+
+Hi {{clientName}},
+
+Good news! {{technicianName}} from our support team has responded to your ticket.
+
+TICKET DETAILS
+--------------
+Ticket #{{ticketId}}: {{ticketSubject}}
+
+RESPONSE
+--------
+{{technicianName}} wrote:
+
+{{commentContent}}
+
+VIEW AND REPLY
+--------------
+View the full conversation and respond at:
+{{ticketUrl}}
+
+---
+BlueClue Support System
+{{frontendUrl}}
+
+You received this email because this is your support ticket.
+To manage your notification preferences, visit your account settings.

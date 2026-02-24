@@ -393,6 +393,16 @@ export const getUserRole = () => {
     return user?.role || null;
 };
 
+/**
+ * Get user ID
+ * 
+ * @returns {number|null} User ID or null
+ */
+export const getUserId = () => {
+    const user = getUser();
+    return user?.id || null;
+};
+
 export default {
     login,
     register,

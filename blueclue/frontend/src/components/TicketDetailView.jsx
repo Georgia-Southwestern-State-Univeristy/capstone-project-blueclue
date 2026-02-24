@@ -3,6 +3,12 @@ import { getTicketById, updateTicketStatus, updateTicket, deleteTicket, getTechn
 import { getUserRole, getUser } from '../services/authService'
 import TicketActivityLog from './TicketActivityLog'
 import CancelTicketModal from './CancelTicketModal'
+import { getTicketById, updateTicketStatus, updateTicket, getTechnicians, assignSingleTicket, reassignTicket, reopenTicket } from '../services/ticketService'
+import { getUserRole, getUserId } from '../services/authService'
+import TicketActivityLog from './TicketActivityLog'
+import TicketComments from './TicketComments'
+import AddCollaboratorModal from './AddCollaboratorModal'
+import { getCollaborators, addCollaborator, removeCollaborator } from '../services/collaboratorService'
 
 /**
  * TicketDetailView
@@ -47,6 +53,16 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   // ─── Delete ticket state (management) ─────────────────────────────
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  // ─── Reopen state ────────────────────────────────────────────
+  const [showReopenModal, setShowReopenModal] = useState(false)
+  const [reopenReason, setReopenReason] = useState('')
+  const [reopenLoading, setReopenLoading] = useState(false)
+  const [reopenError, setReopenError] = useState(null)
+
+  // ─── Collaboration state ─────────────────────────────────────
+  const [showCollaboratorModal, setShowCollaboratorModal] = useState(false)
+  const [collaborators, setCollaborators] = useState([])
+  const [collaboratorsLoading, setCollaboratorsLoading] = useState(false)
 
   const modalRef = useRef(null)
   const assignRef = useRef(null)
@@ -130,6 +146,9 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
       setShowAssign(false)
       setShowStatusDropdown(false)
       fetchTicket()
+      if (canSeeInternals) {
+        fetchCollaborators()
+      }
     }
   }, [isOpen, ticketId, fetchTicket])
 
@@ -377,6 +396,114 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     }
   }
 
+  // ─── Reopen ticket logic ─────────────────────────────────────────
+  const canReopenTicket = () => {
+    if (!ticket) return false
+    
+    // Check if ticket is closed or cancelled
+    if (!['closed', 'cancelled'].includes(ticket.status)) return false
+    
+    // Check if user is requester or management
+    const userId = getUserId()
+    const isRequester = userId && ticket.customer_id === parseInt(userId)
+    if (!isRequester && !isManagement) return false
+    
+    // Check 30-day window
+    if (ticket.closed_at) {
+      const daysSinceClosure = (Date.now() - new Date(ticket.closed_at).getTime()) / (1000 * 60 * 60 * 24)
+      if (daysSinceClosure > 30) return false
+    }
+    
+    return true
+  }
+
+  const handleReopenTicket = async () => {
+    if (!reopenReason.trim()) {
+      setReopenError('Please provide a reason for reopening')
+      return
+    }
+
+    setReopenLoading(true)
+    setReopenError(null)
+
+    try {
+      await reopenTicket(ticketId, reopenReason.trim())
+      
+      // Close modal
+      setShowReopenModal(false)
+      setReopenReason('')
+      
+      // Refresh ticket data
+      await fetchTicket(true)
+      
+      // Notify parent component
+      if (onTicketUpdated) {
+        onTicketUpdated()
+      }
+      
+      // Show success message
+      setStatusSuccess('Ticket reopened successfully')
+      setTimeout(() => setStatusSuccess(null), 3000)
+      
+    } catch (err) {
+      setReopenError(err.message || 'Failed to reopen ticket')
+    } finally {
+      setReopenLoading(false)
+    }
+  }
+
+  // ─── Fetch collaborators ─────────────────────────────────────────
+  const fetchCollaborators = useCallback(async () => {
+    if (!ticketId || !canSeeInternals) return
+    
+    try {
+      setCollaboratorsLoading(true)
+      const response = await getCollaborators(ticketId)
+      setCollaborators(response.data?.collaborators || [])
+    } catch (err) {
+      console.error('Failed to fetch collaborators:', err)
+    } finally {
+      setCollaboratorsLoading(false)
+    }
+  }, [ticketId, canSeeInternals])
+
+  // ─── Handle add collaborator ─────────────────────────────────────
+  const handleAddCollaborator = async (userId, role, note) => {
+    try {
+      await addCollaborator(ticketId, userId, role, note)
+      await fetchCollaborators()
+      await fetchTicket(true) // Refresh ticket data
+      setStatusSuccess('Collaborator added successfully')
+      setTimeout(() => setStatusSuccess(null), 3000)
+    } catch (err) {
+      throw err // Let modal handle the error
+    }
+  }
+
+  // ─── Handle remove collaborator ──────────────────────────────────
+  const handleRemoveCollaborator = async (userId, techName) => {
+    if (!window.confirm(`Remove ${techName} from this ticket?`)) return
+    
+    try {
+      await removeCollaborator(ticketId, userId)
+      await fetchCollaborators()
+      await fetchTicket(true)
+      setStatusSuccess('Collaborator removed')
+      setTimeout(() => setStatusSuccess(null), 3000)
+    } catch (err) {
+      setStatusError(err.message || 'Failed to remove collaborator')
+      setTimeout(() => setStatusError(null), 3000)
+    }
+  }
+
+  // ─── Check if user can add collaborators ─────────────────────────
+  const canAddCollaborators = () => {
+    if (!canSeeInternals || !ticket) return false
+    const currentUserId = getUserId()
+    const isPrimaryTech = ticket.assigned_to === parseInt(currentUserId)
+    return isManagement || isPrimaryTech
+  }
+
   // ─── Print / Export ──────────────────────────────────────────────
   const handlePrint = () => {
     if (!ticket) return
@@ -474,6 +601,8 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     resolved: 'bg-green-900/60 text-green-300 border-green-600',
     closed: 'bg-gray-700/60 text-gray-300 border-gray-600',
     cancelled: 'bg-gray-800/60 text-gray-300 border-gray-600',
+    cancelled: 'bg-gray-700/60 text-gray-400 border-gray-600',
+    reopened: 'bg-orange-900/60 text-orange-300 border-orange-600',
   }
 
   const priorityConfig = {
@@ -490,6 +619,8 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     resolved: ['closed', 'in_progress', 'open'],
     closed: [],
     cancelled: isManagement ? ['open'] : [],  // Only management/admin can reopen
+    cancelled: [],
+    reopened: ['in_progress', 'waiting_on_customer', 'resolved', 'closed'],
   }
 
   if (!isOpen) return null
@@ -752,6 +883,95 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
               </div>
             )}
 
+            {/* Reopen Ticket Modal */}
+            {showReopenModal && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={(e) => { if (e.target === e.currentTarget) setShowReopenModal(false) }}>
+                <div className="w-full max-w-md bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-white text-base font-semibold">Reopen Ticket</p>
+                    <button 
+                      onClick={() => {
+                        setShowReopenModal(false)
+                        setReopenReason('')
+                        setReopenError(null)
+                      }} 
+                      className="text-gray-500 hover:text-gray-300 transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3">
+                    <div className="flex gap-2">
+                      <svg className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <div>
+                        <p className="text-yellow-300 text-sm font-medium">Reopening this ticket</p>
+                        <p className="text-gray-400 text-xs mt-1">
+                          {ticket.previous_assigned_tech || ticket.assigned_to 
+                            ? 'This ticket will be reassigned to the previous technician if available.'
+                            : 'This ticket will return to the unassigned queue.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1.5 block">
+                      Reason for Reopening <span className="text-red-400">*</span>
+                    </label>
+                    <textarea
+                      value={reopenReason}
+                      onChange={(e) => {
+                        setReopenReason(e.target.value)
+                        setReopenError(null)
+                      }}
+                      placeholder="Please explain why this ticket needs to be reopened..."
+                      rows={4}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
+                      autoFocus
+                    />
+                    <p className="text-gray-500 text-xs mt-1">
+                      {reopenReason.length}/500 characters
+                    </p>
+                  </div>
+
+                  {reopenError && (
+                    <div className="bg-red-900/20 border border-red-700/50 rounded-lg p-2">
+                      <p className="text-red-400 text-xs">{reopenError}</p>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        setShowReopenModal(false)
+                        setReopenReason('')
+                        setReopenError(null)
+                      }}
+                      className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 text-sm border border-gray-700 transition-colors"
+                      disabled={reopenLoading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleReopenTicket}
+                      disabled={!reopenReason.trim() || reopenLoading || reopenReason.length > 500}
+                      className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {reopenLoading && (
+                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      )}
+                      {reopenLoading ? 'Reopening...' : 'Reopen Ticket'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Change Status — tech & management */}
             {canChangeStatus && validTransitions[ticket.status]?.length > 0 && (
               <button
@@ -851,6 +1071,32 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
                 Delete
+            {/* Reopen Ticket — requester or management, for closed/cancelled tickets < 30 days */}
+            {canReopenTicket() && (
+              <button
+                onClick={() => setShowReopenModal(true)}
+                disabled={statusUpdating}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-green-900/60 text-gray-300 hover:text-green-300 text-xs font-medium border border-gray-700 hover:border-green-700 transition-colors disabled:opacity-50"
+                title="Reopen ticket"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Reopen
+              </button>
+            )}
+
+            {/* Add Technician — primary tech or management */}
+            {canSeeInternals && canAddCollaborators() && (
+              <button
+                onClick={() => setShowCollaboratorModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-purple-900/60 text-gray-300 hover:text-purple-300 text-xs font-medium border border-gray-700 hover:border-purple-700 transition-colors"
+                title="Add collaborating technician"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
+                Add Technician
               </button>
             )}
 
@@ -904,13 +1150,25 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                 {/* Status */}
                 <div>
                   <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">Status</label>
-                  <span
-                    className={`inline-block px-3 py-1.5 rounded-lg text-sm font-semibold border ${
-                      statusColorMap[ticket.status] || 'bg-gray-700 text-gray-300 border-gray-600'
-                    }`}
-                  >
-                    {formatStatus(ticket.status)}
-                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span
+                      className={`inline-block px-3 py-1.5 rounded-lg text-sm font-semibold border ${
+                        statusColorMap[ticket.status] || 'bg-gray-700 text-gray-300 border-gray-600'
+                      }`}
+                    >
+                      {formatStatus(ticket.status)}
+                    </span>
+
+                    {/* Reopen indicator */}
+                    {ticket.reopen_count > 0 && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-900/30 text-orange-300 border border-orange-700/50 text-xs font-medium" title={`Reopened ${ticket.reopen_count} time${ticket.reopen_count > 1 ? 's' : ''}`}>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Reopened {ticket.reopen_count}×
+                      </span>
+                    )}
+                  </div>
 
                   {/* Quick status actions — tech & management only */}
                   {canChangeStatus && validTransitions[ticket.status]?.length > 0 && (
@@ -1017,11 +1275,54 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                           <p className="text-gray-500 text-xs">{ticket.assigned_to_email}</p>
                         )}
                       </div>
+                      <span className="ml-auto px-2 py-0.5 bg-blue-900/40 text-blue-300 text-xs rounded border border-blue-600">
+                        Primary
+                      </span>
                     </div>
                   ) : (
                     <p className="text-gray-500 text-sm italic">Unassigned</p>
                   )}
                 </div>
+
+                {/* Collaborators */}
+                {collaborators.length > 0 && (
+                  <div className="mt-4">
+                    <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                      Collaborators ({collaborators.length})
+                    </label>
+                    <div className="space-y-2">
+                      {collaborators.map((collab) => (
+                        <div key={collab.user_id} className="flex items-center gap-2 group">
+                          <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                            {(collab.first_name || '?').charAt(0)}{(collab.last_name || '?').charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white text-sm font-medium truncate">
+                              {collab.first_name} {collab.last_name}
+                            </p>
+                            {collab.email && (
+                              <p className="text-gray-500 text-xs truncate">{collab.email}</p>
+                            )}
+                          </div>
+                          <span className="px-2 py-0.5 bg-purple-900/40 text-purple-300 text-xs rounded border border-purple-600 flex-shrink-0">
+                            Assisting
+                          </span>
+                          {canAddCollaborators() && (
+                            <button
+                              onClick={() => handleRemoveCollaborator(collab.user_id, `${collab.first_name} ${collab.last_name}`)}
+                              className="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:text-red-300 transition-opacity"
+                              title="Remove collaborator"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 </>
                 )}
 
@@ -1138,6 +1439,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
               <div className="flex items-center border-b border-gray-800 px-4 md:px-6 flex-shrink-0 bg-gray-900/30">
                 {[
                   { id: 'details', label: 'Details' },
+                  { id: 'comments', label: 'Comments' },
                   { id: 'activity', label: 'Activity' },
                 ].map((tab) => (
                   <button
@@ -1365,6 +1667,10 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                   </div>
                 )}
 
+                {activeTab === 'comments' && (
+                  <TicketComments ticketId={ticket.id} />
+                )}
+
                 {activeTab === 'activity' && (
                   <div className="max-w-3xl">
                     <TicketActivityLog ticketId={ticket.id} isOpen={true} />
@@ -1374,6 +1680,16 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
             </main>
           </div>
         ) : null}
+
+        {/* Add Collaborator Modal */}
+        {ticket && showCollaboratorModal && (
+          <AddCollaboratorModal
+            isOpen={showCollaboratorModal}
+            onClose={() => setShowCollaboratorModal(false)}
+            onAdd={handleAddCollaborator}
+            existingCollaborators={collaborators}
+          />
+        )}
       </div>
 
       {/* Cancel Ticket Modal (rendered outside main content for z-index) */}

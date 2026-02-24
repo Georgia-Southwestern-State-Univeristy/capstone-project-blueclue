@@ -16,8 +16,16 @@ import {
     assignTicket,
     reassignTicket,
     getTicketHistory,
-    cancelTicket
+    cancelTicket,
+    reopenTicket
 } from '../controllers/ticketController.js';
+import {
+    addCollaborator,
+    removeCollaborator,
+    transferPrimary,
+    getCollaborators,
+    getTechnicianWorkload
+} from '../controllers/collaboratorController.js';
 import { optionalAuth, authenticateToken } from '../middleware/auth.js';
 import { checkPrivilege } from '../middleware/rbac.js';
 
@@ -117,6 +125,34 @@ router.get('/deleted', authenticateToken, checkPrivilege('CAN_DELETE_TICKETS'), 
 router.get('/:id', optionalAuth, getTicketById);
 
 /**
+ * @route   GET /api/tickets/:id/collaborators
+ * @desc    Get all collaborators for a ticket
+ * @access  Private (authenticated users)
+ */
+router.get('/:id/collaborators', authenticateToken, getCollaborators);
+
+/**
+ * @route   POST /api/tickets/:id/collaborators
+ * @desc    Add a collaborator to a ticket
+ * @access  Private (primary technician or management)
+ */
+router.post('/:id/collaborators', authenticateToken, addCollaborator);
+
+/**
+ * @route   DELETE /api/tickets/:id/collaborators/:userId
+ * @desc    Remove a collaborator from a ticket
+ * @access  Private (primary technician or management)
+ */
+router.delete('/:id/collaborators/:userId', authenticateToken, removeCollaborator);
+
+/**
+ * @route   PATCH /api/tickets/:id/transfer
+ * @desc    Transfer primary assignment to another technician
+ * @access  Private (current primary or management)
+ */
+router.patch('/:id/transfer', authenticateToken, transferPrimary);
+
+/**
  * @route   POST /api/tickets/:id/request-assignment
  * @desc    Technician requests assignment to an unassigned ticket
  * @access  Private (technician only)
@@ -164,6 +200,11 @@ router.patch('/:id/status', authenticateToken, updateTicketStatus);
  * @access  Private (ticket owner or staff)
  */
 router.patch('/:id/cancel', authenticateToken, cancelTicket);
+ * @route   POST /api/tickets/:id/reopen
+ * @desc    Reopen a closed or cancelled ticket (within 30 days)
+ * @access  Private (ticket requester or management only)
+ */
+router.post('/:id/reopen', authenticateToken, reopenTicket);
 
 /**
  * @route   PUT /api/tickets/:id
