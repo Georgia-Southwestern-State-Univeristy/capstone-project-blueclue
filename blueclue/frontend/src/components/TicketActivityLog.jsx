@@ -133,6 +133,17 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
           bgColor: 'bg-purple-900/30',
           label: 'Category Changed'
         }
+      case 'field_edited':
+        return {
+          icon: (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          ),
+          color: 'text-cyan-400',
+          bgColor: 'bg-cyan-900/30',
+          label: 'Edited'
+        }
       default:
         return {
           icon: (
@@ -246,6 +257,26 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
             <span className="text-purple-300 font-medium">{entry.new_value}</span>
           </span>
         )
+      case 'field_edited': {
+        const editDetails = entry.change_details || {}
+        const editedBy = editDetails.edited_by_name || entry.changed_by_name || 'Someone'
+        const fieldLabel = (entry.field_name || 'field').replace(/_/g, ' ')
+        return (
+          <span>
+            <span className="text-white font-medium">{editedBy}</span>
+            {' edited '}
+            <span className="text-cyan-300 font-medium">{fieldLabel}</span>
+            {entry.old_value && entry.new_value && (
+              <>
+                {' from '}
+                <span className="text-gray-400">&ldquo;{entry.old_value.length > 60 ? entry.old_value.slice(0, 60) + '...' : entry.old_value}&rdquo;</span>
+                {' to '}
+                <span className="text-gray-200">&ldquo;{entry.new_value.length > 60 ? entry.new_value.slice(0, 60) + '...' : entry.new_value}&rdquo;</span>
+              </>
+            )}
+          </span>
+        )
+      }
       default:
         return (
           <span>

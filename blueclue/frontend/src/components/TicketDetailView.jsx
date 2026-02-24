@@ -28,6 +28,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   const [editCategory, setEditCategory] = useState('')
   const [editPriority, setEditPriority] = useState('')
   const [editResolution, setEditResolution] = useState('')
+  const [editPriorityReason, setEditPriorityReason] = useState('')
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState(null)
   const [showAssign, setShowAssign] = useState(false)
@@ -66,11 +67,11 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
 
   // ─── Role-based edit permissions ──────────────────────────────────
   // Clients: own tickets that are open/waiting_on_customer
-  // Techs: tickets assigned to them
+  // Techs: tickets assigned to them (not closed/cancelled)
   // Management: all tickets
   const canEdit = ticket ? (
     isManagement ||
-    (isTech && ticket.assigned_to === currentUserId) ||
+    (isTech && ticket.assigned_to === currentUserId && !['closed', 'cancelled'].includes(ticket.status)) ||
     (isClient && ticket.customer_id === currentUserId && ['open', 'waiting_on_customer'].includes(ticket.status))
   ) : false
 
@@ -196,6 +197,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     setEditCategory(ticket.category || '')
     setEditPriority(ticket.priority || 'low')
     setEditResolution(ticket.resolution || '')
+    setEditPriorityReason('')
     setEditError(null)
     setIsEditing(true)
     setActiveTab('details')
@@ -206,36 +208,83 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     setEditError(null)
   }
 
+  // Helper: check if a field changed from its original value
+  const isFieldModified = (field) => {
+    if (!ticket) return false
+    switch (field) {
+      case 'subject': return editSubject !== (ticket.subject || '')
+      case 'description': return editDescription !== (ticket.description || '')
+      case 'category': return editCategory !== (ticket.category || '')
+      case 'priority': return editPriority !== (ticket.priority || 'low')
+      case 'resolution': return editResolution !== (ticket.resolution || '')
+      default: return false
+    }
+  }
+
   const saveEdit = async () => {
     if (!ticket || editSaving) return
+
+    // Build payload based on role — only send changed fields
+    const payload = {}
+    if (isManagement) {
+      if (editSubject !== (ticket.subject || '')) payload.subject = editSubject
+      if (editDescription !== (ticket.description || '')) payload.description = editDescription
+      if (editCategory !== (ticket.category || '')) payload.category = editCategory
+      if (editPriority !== (ticket.priority || 'low')) payload.priority = editPriority
+      if (editResolution !== (ticket.resolution || '')) payload.resolution = editResolution
+    } else if (isTech) {
+      if (editDescription !== (ticket.description || '')) payload.description = editDescription
+      if (editPriority !== (ticket.priority || 'low')) payload.priority = editPriority
+      if (editResolution !== (ticket.resolution || '')) payload.resolution = editResolution
+    } else {
+      if (editDescription !== (ticket.description || '')) payload.description = editDescription
+      if (editCategory !== (ticket.category || '')) payload.category = editCategory
+    }
+
+    // Nothing changed
+    if (Object.keys(payload).length === 0) {
+      setIsEditing(false)
+      return
+    }
+
+    // Require reason for priority changes
+    if (payload.priority && !editPriorityReason.trim()) {
+      setEditError('Please provide a reason for the priority change.')
+      return
+    }
+
+    // Confirmation for major changes (priority, category, subject)
+    const majorChanges = ['priority', 'category', 'subject'].filter(f => payload[f])
+    if (majorChanges.length > 0) {
+      const confirmed = window.confirm(
+        `You are changing: ${majorChanges.join(', ')}. Save these changes?`
+      )
+      if (!confirmed) return
+    }
+
+    // Include priority change reason if applicable
+    if (payload.priority && editPriorityReason.trim()) {
+      payload.priority_change_reason = editPriorityReason.trim()
+    }
+
     setEditSaving(true)
     setEditError(null)
+
+    // Optimistic update — apply immediately, rollback on failure
+    const previousTicket = { ...ticket }
+    const displayPayload = { ...payload }
+    delete displayPayload.priority_change_reason
+    setTicket((prev) => ({ ...prev, ...displayPayload }))
+    updateCache(ticket.id, displayPayload)
+
     try {
-      // Build payload based on role
-      const payload = {}
-      if (isManagement) {
-        // Management can edit all fields
-        payload.subject = editSubject
-        payload.description = editDescription
-        payload.category = editCategory
-        payload.priority = editPriority
-        if (editResolution !== (ticket.resolution || '')) payload.resolution = editResolution
-      } else if (isTech) {
-        // Techs: description, priority, resolution (notes)
-        payload.description = editDescription
-        payload.priority = editPriority
-        if (editResolution !== (ticket.resolution || '')) payload.resolution = editResolution
-      } else {
-        // Clients: description, category
-        payload.description = editDescription
-        payload.category = editCategory
-      }
       await updateTicket(ticket.id, payload)
-      setTicket((prev) => ({ ...prev, ...payload }))
-      updateCache(ticket.id, payload)
       setIsEditing(false)
-      if (onTicketUpdated) onTicketUpdated(ticket.id, payload)
+      if (onTicketUpdated) onTicketUpdated(ticket.id, displayPayload)
     } catch (err) {
+      // Rollback on failure
+      setTicket(previousTicket)
+      updateCache(ticket.id, previousTicket)
       setEditError(err.message || 'Failed to save changes')
     } finally {
       setEditSaving(false)
@@ -1112,13 +1161,22 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                     {/* Subject */}
                     <div>
                       {isEditing && isManagement ? (
-                        <input
-                          type="text"
-                          value={editSubject}
-                          onChange={(e) => setEditSubject(e.target.value)}
-                          className="w-full bg-gray-900 border border-blue-500/50 rounded-lg px-4 py-2.5 text-xl font-bold text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30"
-                          placeholder="Ticket subject"
-                        />
+                        <div>
+                          <input
+                            type="text"
+                            value={editSubject}
+                            onChange={(e) => setEditSubject(e.target.value)}
+                            className={`w-full bg-gray-900 border rounded-lg px-4 py-2.5 text-xl font-bold text-white focus:outline-none focus:ring-1 ${
+                              isFieldModified('subject')
+                                ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-500/30'
+                                : 'border-blue-500/50 focus:border-blue-500 focus:ring-blue-500/30'
+                            }`}
+                            placeholder="Ticket subject"
+                          />
+                          {isFieldModified('subject') && (
+                            <span className="text-amber-400 text-xs mt-1 block">Modified</span>
+                          )}
+                        </div>
                       ) : (
                         <h3 className="text-xl md:text-2xl font-bold text-white leading-tight">
                           {ticket.subject}
@@ -1133,13 +1191,22 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
 
                     {/* Description */}
                     <div>
-                      <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">Description</label>
+                      <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                        Description
+                        {isEditing && isFieldModified('description') && (
+                          <span className="text-amber-400 ml-2 normal-case">Modified</span>
+                        )}
+                      </label>
                       {isEditing ? (
                         <textarea
                           value={editDescription}
                           onChange={(e) => setEditDescription(e.target.value)}
                           rows={8}
-                          className="w-full bg-gray-900 border border-blue-500/50 rounded-lg px-4 py-3 text-gray-300 text-sm leading-relaxed focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 resize-y"
+                          className={`w-full bg-gray-900 border rounded-lg px-4 py-3 text-gray-300 text-sm leading-relaxed focus:outline-none focus:ring-1 resize-y ${
+                            isFieldModified('description')
+                              ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-500/30'
+                              : 'border-blue-500/50 focus:border-blue-500 focus:ring-blue-500/30'
+                          }`}
                           placeholder="Ticket description"
                         />
                       ) : (
@@ -1155,11 +1222,20 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                         {/* Category — clients & management */}
                         {(isClient || isManagement) && (
                           <div>
-                            <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">Category</label>
+                            <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                              Category
+                              {isFieldModified('category') && (
+                                <span className="text-amber-400 ml-2 normal-case">Modified</span>
+                              )}
+                            </label>
                             <select
                               value={editCategory}
                               onChange={(e) => setEditCategory(e.target.value)}
-                              className="w-full bg-gray-900 border border-blue-500/50 rounded-lg px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 capitalize"
+                              className={`w-full bg-gray-900 border rounded-lg px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:ring-1 capitalize ${
+                                isFieldModified('category')
+                                  ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-500/30'
+                                  : 'border-blue-500/50 focus:border-blue-500 focus:ring-blue-500/30'
+                              }`}
                             >
                               {['general', 'technical', 'billing', 'account', 'feature_request', 'hardware', 'software', 'network', 'login', 'other'].map((cat) => (
                                 <option key={cat} value={cat}>
@@ -1173,11 +1249,20 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                         {/* Priority — techs & management */}
                         {(isTech || isManagement) && (
                           <div>
-                            <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">Priority</label>
+                            <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                              Priority
+                              {isFieldModified('priority') && (
+                                <span className="text-amber-400 ml-2 normal-case">Modified</span>
+                              )}
+                            </label>
                             <select
                               value={editPriority}
                               onChange={(e) => setEditPriority(e.target.value)}
-                              className="w-full bg-gray-900 border border-blue-500/50 rounded-lg px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 capitalize"
+                              className={`w-full bg-gray-900 border rounded-lg px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:ring-1 capitalize ${
+                                isFieldModified('priority')
+                                  ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-500/30'
+                                  : 'border-blue-500/50 focus:border-blue-500 focus:ring-blue-500/30'
+                              }`}
                             >
                               {['low', 'medium', 'high', 'critical'].map((p) => (
                                 <option key={p} value={p}>
@@ -1190,15 +1275,38 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                       </div>
                     )}
 
+                    {/* Priority change reason — shown when priority is modified */}
+                    {isEditing && isFieldModified('priority') && (
+                      <div>
+                        <label className="text-amber-400 text-xs font-medium uppercase tracking-wider mb-2 block">Reason for Priority Change *</label>
+                        <input
+                          type="text"
+                          value={editPriorityReason}
+                          onChange={(e) => setEditPriorityReason(e.target.value)}
+                          className="w-full bg-gray-900 border border-amber-500/50 rounded-lg px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30"
+                          placeholder="Why is the priority being changed?"
+                        />
+                      </div>
+                    )}
+
                     {/* Resolution / Notes — editable for techs & management */}
                     {isEditing && (isTech || isManagement) ? (
                       <div>
-                        <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">Resolution / Notes</label>
+                        <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                          Resolution / Notes
+                          {isFieldModified('resolution') && (
+                            <span className="text-amber-400 ml-2 normal-case">Modified</span>
+                          )}
+                        </label>
                         <textarea
                           value={editResolution}
                           onChange={(e) => setEditResolution(e.target.value)}
                           rows={4}
-                          className="w-full bg-gray-900 border border-blue-500/50 rounded-lg px-4 py-3 text-gray-300 text-sm leading-relaxed focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 resize-y"
+                          className={`w-full bg-gray-900 border rounded-lg px-4 py-3 text-gray-300 text-sm leading-relaxed focus:outline-none focus:ring-1 resize-y ${
+                            isFieldModified('resolution')
+                              ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-500/30'
+                              : 'border-blue-500/50 focus:border-blue-500 focus:ring-blue-500/30'
+                          }`}
                           placeholder="Add resolution notes..."
                         />
                       </div>

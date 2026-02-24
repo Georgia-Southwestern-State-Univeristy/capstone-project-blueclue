@@ -562,7 +562,10 @@ export const updateTicket = async (req, res) => {
             const role = req.user.role;
             const userId = req.user.id;
 
-            if (role === 'customer') {
+            // Management and admin can edit any ticket with no restrictions
+            if (role === 'management' || role === 'admin') {
+                // No field or ticket restrictions — skip all checks
+            } else if (role === 'customer') {
                 // Clients can only edit their own tickets
                 if (existingTicket.customer_id !== userId) {
                     return res.status(403).json({
@@ -593,6 +596,13 @@ export const updateTicket = async (req, res) => {
                     return res.status(403).json({
                         status: 'error',
                         message: 'Access denied. You can only edit tickets assigned to you.'
+                    });
+                }
+                // Techs cannot edit closed or cancelled tickets
+                if (['closed', 'cancelled'].includes(existingTicket.status)) {
+                    return res.status(403).json({
+                        status: 'error',
+                        message: 'Access denied. Closed or cancelled tickets cannot be edited.'
                     });
                 }
                 // Techs can change: description, status, priority, resolution
@@ -649,12 +659,32 @@ export const updateTicket = async (req, res) => {
             }
         }
 
+        // Validate status transitions if status is being changed via edit
+        if (updates.status && updates.status !== existingTicket.status) {
+            const allowedTransitions = VALID_TRANSITIONS[existingTicket.status];
+            if (!allowedTransitions || !allowedTransitions.includes(updates.status)) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: `Invalid status transition from '${existingTicket.status}' to '${updates.status}'`
+                });
+            }
+        }
+
+        // Require reason for priority changes
+        if (updates.priority && updates.priority !== existingTicket.priority && !updates.priority_change_reason) {
+            // Allow it but mark no reason — frontend should provide reason
+        }
+
         // Automatically set resolved_at when status changes to resolved or closed
         if (updates.status === 'resolved' || updates.status === 'closed') {
             if (!updates.resolved_at) {
                 updates.resolved_at = new Date();
             }
         }
+
+        // Strip non-ticket fields before update
+        const priorityChangeReason = updates.priority_change_reason;
+        delete updates.priority_change_reason;
 
         const ticket = await Ticket.update(parseInt(id), updates);
 
@@ -663,6 +693,37 @@ export const updateTicket = async (req, res) => {
                 status: 'error',
                 message: 'Ticket not found'
             });
+        }
+
+        // ─── Audit logging: log each changed field to ticket_history ────────
+        try {
+            const changerName = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'System' : 'System';
+            const auditFields = ['subject', 'description', 'category', 'priority', 'status', 'resolution'];
+            for (const field of auditFields) {
+                if (updates[field] !== undefined && String(updates[field]) !== String(existingTicket[field] || '')) {
+                    const changeType = field === 'status' ? 'status_change'
+                        : field === 'priority' ? 'priority_change'
+                        : field === 'category' ? 'category_change'
+                        : 'field_edited';
+                    await TicketHistory.log(
+                        parseInt(id),
+                        req.user ? req.user.id : null,
+                        changeType,
+                        field,
+                        String(existingTicket[field] || ''),
+                        String(updates[field]),
+                        field === 'priority' ? (priorityChangeReason || null) : null,
+                        {
+                            action: 'edit',
+                            edited_by_name: changerName,
+                            field_name: field,
+                            ticket_number: existingTicket.ticket_number
+                        }
+                    );
+                }
+            }
+        } catch (histErr) {
+            console.error('Failed to log edit audit history:', histErr.message);
         }
 
         // Log assignment change to ticket history
