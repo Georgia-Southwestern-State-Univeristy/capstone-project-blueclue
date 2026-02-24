@@ -577,6 +577,43 @@ export const getCancellationStats = async (timeRange = '30d') => {
   }
 };
 
+/**
+ * Get all soft-deleted tickets (management/admin only)
+ * @returns {Promise<Object>} The deleted tickets response
+ */
+export const getDeletedTickets = async () => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/deleted`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch deleted tickets');
+  } catch (error) {
+    console.error('Get deleted tickets error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to fetch deleted tickets.');
+    throw new Error(message);
+  }
+};
+
+/**
+ * Restore a soft-deleted ticket (management/admin only)
+ * @param {number|string} id - The ticket ID
+ * @returns {Promise<Object>} The restored ticket
+ */
+export const restoreTicket = async (id) => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${id}/restore`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to restore ticket');
+  } catch (error) {
+    console.error('Restore ticket error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to restore ticket. Please try again.');
+    throw new Error(message);
+  }
+};
+
 export default {
   createTicket,
   getAllTickets,
@@ -600,4 +637,6 @@ export default {
   denyAssignmentRequest,
   cancelTicket,
   getCancellationStats,
+  getDeletedTickets,
+  restoreTicket,
 };

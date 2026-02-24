@@ -9,6 +9,8 @@ import {
     getTicketById,
     updateTicket,
     deleteTicket,
+    restoreTicket,
+    getDeletedTickets,
     updateTicketStatus,
     bulkAssignTickets,
     assignTicket,
@@ -101,6 +103,13 @@ router.get('/timeline', async (req, res) => {
 });
 
 /**
+ * @route   GET /api/tickets/deleted
+ * @desc    Get all soft-deleted tickets (management/admin only)
+ * @access  Private (requires CAN_DELETE_TICKETS privilege or admin)
+ */
+router.get('/deleted', authenticateToken, checkPrivilege('CAN_DELETE_TICKETS'), getDeletedTickets);
+
+/**
  * @route   GET /api/tickets/:id
  * @desc    Get a single ticket by ID
  * @access  Private (authenticated, respects category access)
@@ -169,5 +178,12 @@ router.put('/:id', authenticateToken, updateTicket);
  * @access  Private (requires CAN_DELETE_TICKETS privilege or admin)
  */
 router.delete('/:id', authenticateToken, checkPrivilege('CAN_DELETE_TICKETS'), deleteTicket);
+
+/**
+ * @route   PATCH /api/tickets/:id/restore
+ * @desc    Restore a soft-deleted ticket
+ * @access  Private (requires CAN_DELETE_TICKETS privilege or admin)
+ */
+router.patch('/:id/restore', authenticateToken, checkPrivilege('CAN_DELETE_TICKETS'), restoreTicket);
 
 export default router;

@@ -13,6 +13,7 @@ import TechPerformanceWidget from '../components/TechPerformanceWidget'
 import TicketControlWidget from '../components/TicketControlWidget'
 import TicketTimeline from '../components/TicketTimeline'
 import PendingRequestsWidget from '../components/PendingRequestsWidget'
+import DeletedTicketsWidget from '../components/DeletedTicketsWidget'
 import TicketDetailView from '../components/TicketDetailView'
 import { getAllTickets, getCancellationStats } from '../services/ticketService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
@@ -313,6 +314,12 @@ function ManagementDashboard() {
           {/* Technician Performance Widget */}
           <TechPerformanceWidget
             onRefresh={fetchTickets}
+          />
+
+          {/* Deleted Tickets Widget (management only) */}
+          <DeletedTicketsWidget
+            onRefresh={fetchTickets}
+            onTicketClick={(ticket) => handleTicketClick(ticket.id)}
           />
 
           {/* Filtered ticket list — shown when a donut segment is clicked */}

@@ -341,7 +341,7 @@ export const getAllTickets = async (req, res) => {
                     FROM tickets t
                     JOIN users c ON t.customer_id = c.id
                     LEFT JOIN users a ON t.assigned_to = a.id
-                    WHERE t.category = ANY($1::ticket_category[])
+                    WHERE t.category = ANY($1::ticket_category[]) AND t.deleted_at IS NULL
                     ORDER BY t.created_at DESC
                 `;
                 const ticketsResult = await pool.query(ticketsQuery, [categoryNames]);
@@ -918,13 +918,30 @@ export const deleteTicket = async (req, res) => {
             });
         }
 
-        const ticket = await Ticket.delete(parseInt(id));
+        const deletedBy = req.user ? req.user.id : null;
+        const ticket = await Ticket.delete(parseInt(id), deletedBy);
 
         if (!ticket) {
             return res.status(404).json({
                 status: 'error',
-                message: 'Ticket not found'
+                message: 'Ticket not found or already deleted'
             });
+        }
+
+        // Log the deletion in ticket history
+        try {
+            await TicketHistory.log(
+                parseInt(id),
+                deletedBy,
+                'ticket_deleted',
+                'deleted_at',
+                null,
+                new Date().toISOString(),
+                null,
+                { deleted_by_name: req.user ? `${req.user.first_name} ${req.user.last_name}` : 'Unknown' }
+            );
+        } catch (historyErr) {
+            console.error('Failed to log ticket deletion:', historyErr);
         }
 
         res.status(200).json({
@@ -938,6 +955,86 @@ export const deleteTicket = async (req, res) => {
         res.status(500).json({
             status: 'error',
             message: 'Failed to delete ticket',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Restore a soft-deleted ticket
+ * PATCH /api/tickets/:id/restore
+ */
+export const restoreTicket = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (isNaN(id)) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Invalid ticket ID'
+            });
+        }
+
+        const ticket = await Ticket.restore(parseInt(id));
+
+        if (!ticket) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Ticket not found or not deleted'
+            });
+        }
+
+        // Log the restoration in ticket history
+        try {
+            await TicketHistory.log(
+                parseInt(id),
+                req.user ? req.user.id : null,
+                'ticket_restored',
+                'deleted_at',
+                ticket.deleted_at,
+                null,
+                null,
+                { restored_by_name: req.user ? `${req.user.first_name} ${req.user.last_name}` : 'Unknown' }
+            );
+        } catch (historyErr) {
+            console.error('Failed to log ticket restoration:', historyErr);
+        }
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Ticket restored successfully',
+            data: ticket
+        });
+
+    } catch (error) {
+        console.error('Restore ticket error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to restore ticket',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Get all soft-deleted tickets (management/admin only)
+ * GET /api/tickets/deleted
+ */
+export const getDeletedTickets = async (req, res) => {
+    try {
+        const tickets = await Ticket.getDeleted();
+
+        res.status(200).json({
+            status: 'success',
+            count: tickets.length,
+            data: tickets
+        });
+
+    } catch (error) {
+        console.error('Get deleted tickets error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve deleted tickets',
             error: error.message
         });
     }

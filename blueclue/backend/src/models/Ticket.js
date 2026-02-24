@@ -71,6 +71,7 @@ class Ticket {
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
             LEFT JOIN users assigned ON t.assigned_to = assigned.id
+            WHERE t.deleted_at IS NULL
             ORDER BY t.created_at DESC
         `;
         
@@ -94,7 +95,7 @@ class Ticket {
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
             LEFT JOIN users assigned ON t.assigned_to = assigned.id
-            WHERE t.customer_id = $1
+            WHERE t.customer_id = $1 AND t.deleted_at IS NULL
             ORDER BY t.created_at DESC
         `;
         
@@ -118,7 +119,7 @@ class Ticket {
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
             LEFT JOIN users assigned ON t.assigned_to = assigned.id
-            WHERE customer.email = $1
+            WHERE customer.email = $1 AND t.deleted_at IS NULL
             ORDER BY t.created_at DESC
         `;
         
@@ -142,7 +143,7 @@ class Ticket {
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
             LEFT JOIN users assigned ON t.assigned_to = assigned.id
-            WHERE t.assigned_to = $1
+            WHERE t.assigned_to = $1 AND t.deleted_at IS NULL
             ORDER BY t.created_at DESC
         `;
         
@@ -213,24 +214,67 @@ class Ticket {
     }
 
     /**
-     * Delete a ticket (soft delete)
+     * Soft-delete a ticket by setting deleted_at
      * @param {number} id - Ticket ID
+     * @param {number|null} deletedBy - User ID who deleted the ticket
      * @returns {Promise<Object|null>} Deleted ticket or null
      */
-    static async delete(id) {
+    static async delete(id, deletedBy = null) {
         const query = `
             UPDATE tickets 
-            SET status = 'closed',
-                resolved_at = CASE WHEN status NOT IN ('resolved', 'closed') THEN CURRENT_TIMESTAMP ELSE resolved_at END,
-                resolved_by = CASE WHEN status NOT IN ('resolved', 'closed') THEN customer_id ELSE resolved_by END,
-                closed_at = CURRENT_TIMESTAMP,
+            SET deleted_at = CURRENT_TIMESTAMP,
+                deleted_by = $2,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1
+            WHERE id = $1 AND deleted_at IS NULL
+            RETURNING *
+        `;
+        
+        const result = await pool.query(query, [id, deletedBy]);
+        return result.rows[0] || null;
+    }
+
+    /**
+     * Restore a soft-deleted ticket
+     * @param {number} id - Ticket ID
+     * @returns {Promise<Object|null>} Restored ticket or null
+     */
+    static async restore(id) {
+        const query = `
+            UPDATE tickets 
+            SET deleted_at = NULL,
+                deleted_by = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1 AND deleted_at IS NOT NULL
             RETURNING *
         `;
         
         const result = await pool.query(query, [id]);
         return result.rows[0] || null;
+    }
+
+    /**
+     * Get all soft-deleted tickets (management/admin only)
+     * @returns {Promise<Array>} Array of deleted tickets
+     */
+    static async getDeleted() {
+        const query = `
+            SELECT 
+                t.*,
+                customer.first_name || ' ' || customer.last_name as customer_name,
+                customer.email as customer_email,
+                assigned.first_name || ' ' || assigned.last_name as assigned_to_name,
+                assigned.email as assigned_to_email,
+                deleter.first_name || ' ' || deleter.last_name as deleted_by_name
+            FROM tickets t
+            LEFT JOIN users customer ON t.customer_id = customer.id
+            LEFT JOIN users assigned ON t.assigned_to = assigned.id
+            LEFT JOIN users deleter ON t.deleted_by = deleter.id
+            WHERE t.deleted_at IS NOT NULL
+            ORDER BY t.deleted_at DESC
+        `;
+        
+        const result = await pool.query(query);
+        return result.rows;
     }
 }
 
