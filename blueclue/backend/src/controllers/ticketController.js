@@ -557,6 +557,61 @@ export const updateTicket = async (req, res) => {
             });
         }
 
+        // ─── Role-based field filtering ─────────────────────────────
+        if (req.user) {
+            const role = req.user.role;
+            const userId = req.user.id;
+
+            if (role === 'customer') {
+                // Clients can only edit their own tickets
+                if (existingTicket.customer_id !== userId) {
+                    return res.status(403).json({
+                        status: 'error',
+                        message: 'Access denied. You can only edit your own tickets.'
+                    });
+                }
+                // Clients can only edit open or waiting_on_customer tickets
+                if (!['open', 'waiting_on_customer'].includes(existingTicket.status)) {
+                    return res.status(403).json({
+                        status: 'error',
+                        message: 'Access denied. You can only edit tickets that are open or pending.'
+                    });
+                }
+                // Clients can only change description and category
+                const clientAllowed = ['description', 'category'];
+                const disallowed = Object.keys(updates).filter(k => !clientAllowed.includes(k));
+                if (disallowed.length > 0) {
+                    return res.status(403).json({
+                        status: 'error',
+                        message: `Access denied. You do not have permission to change: ${disallowed.join(', ')}`
+                    });
+                }
+            } else if (isTechnician(role)) {
+                // Techs can only edit tickets assigned to them (unless they have CAN_EDIT_ANY_TICKET)
+                const canEditAny = await UserPrivilege.hasPrivilege(userId, 'CAN_EDIT_ANY_TICKET');
+                if (!canEditAny && existingTicket.assigned_to !== userId) {
+                    return res.status(403).json({
+                        status: 'error',
+                        message: 'Access denied. You can only edit tickets assigned to you.'
+                    });
+                }
+                // Techs can change: description, status, priority, resolution
+                const techAllowed = ['description', 'status', 'priority', 'resolution'];
+                const disallowed = Object.keys(updates).filter(k => !techAllowed.includes(k));
+                if (disallowed.length > 0) {
+                    // Allow category only if tech has category access privilege
+                    const onlyCategory = disallowed.every(k => k === 'category');
+                    if (!onlyCategory) {
+                        return res.status(403).json({
+                            status: 'error',
+                            message: `Access denied. You do not have permission to change: ${disallowed.join(', ')}`
+                        });
+                    }
+                }
+            }
+            // management / admin — no field restrictions
+        }
+
         // Check if user is trying to change assignment
         if (updates.assigned_to !== undefined && req.user) {
             // Admins and management can always change assignments
