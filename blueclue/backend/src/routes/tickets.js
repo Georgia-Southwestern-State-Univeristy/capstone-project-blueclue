@@ -13,7 +13,8 @@ import {
     bulkAssignTickets,
     assignTicket,
     reassignTicket,
-    getTicketHistory
+    getTicketHistory,
+    reopenTicket
 } from '../controllers/ticketController.js';
 import { optionalAuth, authenticateToken } from '../middleware/auth.js';
 import { checkPrivilege } from '../middleware/rbac.js';
@@ -147,6 +148,13 @@ router.patch('/:id/reassign', authenticateToken, reassignTicket);
  * @access  Private (authenticated users, respects category access)
  */
 router.patch('/:id/status', authenticateToken, updateTicketStatus);
+
+/**
+ * @route   POST /api/tickets/:id/reopen
+ * @desc    Reopen a closed or cancelled ticket (within 30 days)
+ * @access  Private (ticket requester or management only)
+ */
+router.post('/:id/reopen', authenticateToken, reopenTicket);
 
 /**
  * @route   PUT /api/tickets/:id
