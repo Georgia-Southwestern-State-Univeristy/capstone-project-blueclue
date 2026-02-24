@@ -159,6 +159,10 @@ CREATE TABLE tickets (
     priority_override_reason TEXT, -- User-provided reason for override
     priority_calculation_method VARCHAR(50), -- Method used (ai_direct, weighted_average, user_override)
     
+    -- Soft-delete support
+    deleted_at TIMESTAMP WITH TIME ZONE DEFAULT NULL, -- NULL = not deleted
+    deleted_by INTEGER REFERENCES users(id) ON DELETE SET NULL, -- Who deleted the ticket
+    
     -- Constraints
     CONSTRAINT ai_confidence_range CHECK (ai_confidence IS NULL OR (ai_confidence >= 0 AND ai_confidence <= 1)),
     CONSTRAINT resolved_fields_consistency CHECK (
@@ -185,6 +189,10 @@ CREATE INDEX idx_tickets_priority_overridden ON tickets(priority_overridden) WHE
 CREATE INDEX idx_tickets_ai_classified ON tickets(ai_classified);
 CREATE INDEX idx_tickets_open_assigned ON tickets(assigned_to, status) 
     WHERE status IN ('open', 'in_progress');
+
+-- Soft-delete indexes
+CREATE INDEX idx_tickets_deleted_at ON tickets(deleted_at) WHERE deleted_at IS NOT NULL;
+CREATE INDEX idx_tickets_not_deleted ON tickets(id) WHERE deleted_at IS NULL;
 
 -- GIN index for JSON keyword matching
 CREATE INDEX idx_tickets_ai_keywords ON tickets USING GIN (ai_keywords_matched);
