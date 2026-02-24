@@ -1807,24 +1807,55 @@ export const cancelTicket = async (req, res) => {
             console.error('Failed to log cancellation history:', histErr);
         }
 
-        // Send email notification
+        // Send in-app notifications
         try {
-            const customerResult = await pool.query(
-                'SELECT email, first_name, email_notifications FROM users WHERE id = $1',
-                [updatedTicket.customer_id]
-            );
-            if (customerResult.rows[0] && customerResult.rows[0].email_notifications) {
-                await sendTicketStatusUpdate(
-                    customerResult.rows[0].email,
-                    customerResult.rows[0].first_name,
-                    updatedTicket,
-                    existingTicket.status,
-                    'cancelled',
-                    updatedTicket.customer_id
-                );
+            const io = req.app.get('io');
+            const ticketLabel = updatedTicket.ticket_number || `#${id}`;
+            const cancelMsg = `${cancellerName} cancelled ticket ${ticketLabel}: ${reason}`;
+
+            // Notify assigned technician if ticket was assigned
+            if (existingTicket.assigned_to && existingTicket.assigned_to !== userId) {
+                try {
+                    const techNotification = await Notification.create({
+                        user_id: existingTicket.assigned_to,
+                        type: 'ticket_cancelled',
+                        message: cancelMsg,
+                        ticket_id: parseInt(id)
+                    });
+                    if (io) {
+                        emitNotificationToUser(io, existingTicket.assigned_to, techNotification);
+                        const unreadCount = await Notification.getUnreadCount(existingTicket.assigned_to);
+                        emitUnreadCountToUser(io, existingTicket.assigned_to, unreadCount);
+                    }
+                } catch (techNotifErr) {
+                    console.error('Failed to notify assigned tech about cancellation:', techNotifErr.message);
+                }
             }
-        } catch (emailError) {
-            console.error('Failed to send cancellation email:', emailError.message);
+
+            // Notify all management/admin users for tracking
+            const mgmtResult = await pool.query(
+                `SELECT id FROM users WHERE role IN ('management', 'admin') AND id != $1`,
+                [userId]
+            );
+            for (const mgr of mgmtResult.rows) {
+                try {
+                    const mgrNotification = await Notification.create({
+                        user_id: mgr.id,
+                        type: 'ticket_cancelled',
+                        message: cancelMsg,
+                        ticket_id: parseInt(id)
+                    });
+                    if (io) {
+                        emitNotificationToUser(io, mgr.id, mgrNotification);
+                        const unreadCount = await Notification.getUnreadCount(mgr.id);
+                        emitUnreadCountToUser(io, mgr.id, unreadCount);
+                    }
+                } catch (mgrNotifErr) {
+                    console.error(`Failed to notify manager ${mgr.id} about cancellation:`, mgrNotifErr.message);
+                }
+            }
+        } catch (notifError) {
+            console.error('Failed to send cancellation notifications:', notifError);
         }
 
         res.status(200).json({

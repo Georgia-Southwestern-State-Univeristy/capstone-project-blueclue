@@ -37,7 +37,7 @@ CREATE TYPE ticket_status AS ENUM ('open', 'in_progress', 'waiting_on_customer',
 CREATE TYPE ticket_priority AS ENUM ('low', 'medium', 'high', 'critical');
 CREATE TYPE ticket_category AS ENUM ('general', 'technical', 'billing', 'account', 'feature_request', 'hardware', 'software', 'network', 'login', 'other');
 CREATE TYPE access_level AS ENUM ('view', 'edit', 'assign');
-CREATE TYPE notification_type AS ENUM ('assignment', 'overdue', 'update_request', 'mention');
+CREATE TYPE notification_type AS ENUM ('assignment', 'overdue', 'update_request', 'mention', 'ticket_cancelled');
 CREATE TYPE request_status AS ENUM ('pending', 'approved', 'denied');
 
 -- ============================================================================
