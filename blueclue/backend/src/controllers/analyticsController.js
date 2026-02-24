@@ -624,6 +624,119 @@ export const getTopRequesters = async (req, res) => {
 };
 
 /**
+ * GET /api/analytics/cancellation-stats
+ * Returns cancellation metrics: total cancelled, rate, trends, top reasons, by category
+ */
+export const getCancellationStats = async (req, res) => {
+    try {
+        const { timeRange = '30d' } = req.query;
+        const intervalMap = { '7d': '7 days', '30d': '30 days', '90d': '90 days' };
+        const interval = intervalMap[timeRange]; // null for 'all'
+
+        let dateFilter = '';
+        const params = [];
+        if (interval) {
+            dateFilter = `AND t.created_at >= NOW() - $1::INTERVAL`;
+            params.push(interval);
+        }
+
+        // Overall cancellation counts and rate
+        const overviewResult = await pool.query(`
+            SELECT
+                COUNT(*) AS total_tickets,
+                COUNT(*) FILTER (WHERE t.status = 'cancelled') AS cancelled_count,
+                CASE WHEN COUNT(*) > 0
+                    THEN ROUND(
+                        COUNT(*) FILTER (WHERE t.status = 'cancelled')::NUMERIC
+                        / COUNT(*)::NUMERIC * 100, 1
+                    )
+                    ELSE 0
+                END AS cancellation_rate
+            FROM tickets t
+            WHERE 1=1 ${dateFilter}
+        `, params);
+
+        const overview = overviewResult.rows[0];
+
+        // Daily cancellation trend (last 30 days regardless of timeRange)
+        const trendResult = await pool.query(`
+            SELECT
+                DATE(t.updated_at) AS date,
+                COUNT(*) AS cancelled_count
+            FROM tickets t
+            WHERE t.status = 'cancelled'
+              AND t.updated_at >= NOW() - INTERVAL '30 days'
+            GROUP BY DATE(t.updated_at)
+            ORDER BY date ASC
+        `);
+
+        // Top cancellation reasons from ticket history
+        const reasonsResult = await pool.query(`
+            SELECT
+                COALESCE(
+                    th.metadata->>'cancellation_reason',
+                    'Unknown'
+                ) AS reason,
+                COUNT(*) AS count
+            FROM ticket_history th
+            WHERE th.change_type = 'ticket_cancelled'
+              ${interval ? `AND th.created_at >= NOW() - $${params.length}::INTERVAL` : ''}
+            GROUP BY reason
+            ORDER BY count DESC
+            LIMIT 10
+        `, params);
+
+        // Cancellations by category
+        const byCategoryResult = await pool.query(`
+            SELECT
+                t.category,
+                COUNT(*) AS total_in_category,
+                COUNT(*) FILTER (WHERE t.status = 'cancelled') AS cancelled_in_category,
+                CASE WHEN COUNT(*) > 0
+                    THEN ROUND(
+                        COUNT(*) FILTER (WHERE t.status = 'cancelled')::NUMERIC
+                        / COUNT(*)::NUMERIC * 100, 1
+                    )
+                    ELSE 0
+                END AS category_cancellation_rate
+            FROM tickets t
+            WHERE 1=1 ${dateFilter}
+            GROUP BY t.category
+            HAVING COUNT(*) FILTER (WHERE t.status = 'cancelled') > 0
+            ORDER BY cancelled_in_category DESC
+        `, params);
+
+        res.json({
+            status: 'success',
+            data: {
+                overview: {
+                    total_tickets: parseInt(overview.total_tickets),
+                    cancelled_count: parseInt(overview.cancelled_count),
+                    cancellation_rate: parseFloat(overview.cancellation_rate)
+                },
+                trend_30_days: trendResult.rows.map(r => ({
+                    date: r.date,
+                    cancelled_count: parseInt(r.cancelled_count)
+                })),
+                top_reasons: reasonsResult.rows.map(r => ({
+                    reason: r.reason,
+                    count: parseInt(r.count)
+                })),
+                by_category: byCategoryResult.rows.map(r => ({
+                    category: r.category,
+                    total: parseInt(r.total_in_category),
+                    cancelled: parseInt(r.cancelled_in_category),
+                    rate: parseFloat(r.category_cancellation_rate)
+                }))
+            }
+        });
+    } catch (error) {
+        console.error('Cancellation stats error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to retrieve cancellation stats', error: error.message });
+    }
+};
+
+/**
  * GET /api/analytics/tech-performance
  * Returns per-technician performance metrics:
  *  - avg resolution time, first response time, tickets resolved (30d), satisfaction placeholder

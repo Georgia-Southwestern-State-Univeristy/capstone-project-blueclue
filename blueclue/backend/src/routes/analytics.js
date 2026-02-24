@@ -11,7 +11,8 @@ import {
     getEscalations,
     getTodaysActions,
     getTopRequesters,
-    getTechPerformance
+    getTechPerformance,
+    getCancellationStats
 } from '../controllers/analyticsController.js';
 import { authenticateToken } from '../middleware/auth.js';
 
@@ -102,5 +103,13 @@ router.get('/top-requesters', getTopRequesters);
  * @access  Management, Admin
  */
 router.get('/tech-performance', getTechPerformance);
+
+/**
+ * @route   GET /api/analytics/cancellation-stats
+ * @desc    Cancellation metrics: count, rate, trends, reasons, by category
+ * @access  Management, Admin
+ * @query   timeRange (7d | 30d | 90d | all)
+ */
+router.get('/cancellation-stats', getCancellationStats);
 
 export default router;

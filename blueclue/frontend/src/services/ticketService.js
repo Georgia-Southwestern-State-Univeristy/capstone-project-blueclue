@@ -559,6 +559,24 @@ export const cancelTicket = async (id, reason, details = '') => {
   }
 };
 
+/**
+ * Get cancellation analytics/stats
+ * @param {string} timeRange - '7d' | '30d' | '90d' | 'all'
+ * @returns {Promise<Object>} Cancellation stats data
+ */
+export const getCancellationStats = async (timeRange = '30d') => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/analytics/cancellation-stats?timeRange=${timeRange}`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch cancellation stats');
+  } catch (error) {
+    console.error('Cancellation stats error:', error);
+    throw error;
+  }
+};
+
 export default {
   createTicket,
   getAllTickets,
@@ -581,4 +599,5 @@ export default {
   approveAssignmentRequest,
   denyAssignmentRequest,
   cancelTicket,
+  getCancellationStats,
 };
