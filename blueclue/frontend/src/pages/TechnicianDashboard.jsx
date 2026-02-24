@@ -6,6 +6,7 @@ import TicketTimeline from '../components/TicketTimeline'
 import PieChart from '../components/PieChart'
 import AvailableTickets from '../components/AvailableTickets'
 import TicketDetailView from '../components/TicketDetailView'
+import RingRequestWidget from '../components/RingRequestWidget'
 import { getAllTickets, updateTicketStatus, assignTicket } from '../services/ticketService'
 import { getTechnicians } from '../services/userService'
 
@@ -794,6 +795,10 @@ function TechnicianDashboard() {
         )}
       </div>
       )}
+      
+      {/* Ring Request Widget - shows incoming help requests */}
+      <RingRequestWidget />
+      
       {/* Ticket Detail View Modal */}
       <TicketDetailView
         ticketId={selectedTicketId}
