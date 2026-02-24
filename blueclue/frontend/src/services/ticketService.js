@@ -537,6 +537,28 @@ export const denyAssignmentRequest = async (requestId, reason = '') => {
   }
 };
 
+/**
+ * Cancel a ticket (customer-facing)
+ * @param {number|string} id - The ticket ID
+ * @param {string} reason - Cancellation reason (required)
+ * @param {string} [details] - Optional additional details
+ * @returns {Promise<Object>} The cancelled ticket
+ */
+export const cancelTicket = async (id, reason, details = '') => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${id}/cancel`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ reason, details }),
+    });
+    return await handleResponse(response, 'Failed to cancel ticket');
+  } catch (error) {
+    console.error('Cancel ticket error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to cancel ticket. Please try again.');
+    throw new Error(message);
+  }
+};
+
 export default {
   createTicket,
   getAllTickets,
@@ -558,4 +580,5 @@ export default {
   getAssignmentRequests,
   approveAssignmentRequest,
   denyAssignmentRequest,
+  cancelTicket,
 };

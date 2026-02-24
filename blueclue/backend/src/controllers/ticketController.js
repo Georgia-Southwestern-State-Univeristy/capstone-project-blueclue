@@ -1709,3 +1709,104 @@ export const requestTicketAssignment = async (req, res) => {
         });
     }
 };
+
+/**
+ * Cancel a ticket (customer-facing)
+ * POST /api/tickets/:id/cancel
+ * Allows the ticket owner to cancel their own ticket with a reason.
+ */
+export const cancelTicket = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason, details } = req.body;
+
+        if (isNaN(id)) {
+            return res.status(400).json({ status: 'error', message: 'Invalid ticket ID' });
+        }
+
+        if (!reason) {
+            return res.status(400).json({ status: 'error', message: 'Cancellation reason is required' });
+        }
+
+        const existingTicket = await Ticket.getById(parseInt(id));
+        if (!existingTicket) {
+            return res.status(404).json({ status: 'error', message: 'Ticket not found' });
+        }
+
+        // Only the ticket owner or management can cancel
+        const userId = req.user?.id || req.user?.userId;
+        const userRole = req.user?.role;
+        if (existingTicket.customer_id !== userId && userRole !== 'management' && userRole !== 'admin') {
+            return res.status(403).json({ status: 'error', message: 'You can only cancel your own tickets' });
+        }
+
+        // Cannot cancel already closed or cancelled tickets
+        if (existingTicket.status === 'closed' || existingTicket.status === 'cancelled') {
+            return res.status(400).json({
+                status: 'error',
+                message: `Cannot cancel a ticket that is already ${existingTicket.status}`
+            });
+        }
+
+        // Build resolution text from reason + optional details
+        const resolutionText = details
+            ? `Cancelled: ${reason} — ${details}`
+            : `Cancelled: ${reason}`;
+
+        const updateData = {
+            status: 'cancelled',
+            resolution: resolutionText,
+            resolved_at: new Date()
+        };
+
+        const updatedTicket = await Ticket.update(parseInt(id), updateData);
+
+        // Log to ticket history
+        try {
+            await TicketHistory.log(
+                parseInt(id),
+                userId,
+                'status_change',
+                'status',
+                existingTicket.status,
+                'cancelled',
+                resolutionText
+            );
+        } catch (histErr) {
+            console.error('Failed to log cancellation history:', histErr);
+        }
+
+        // Send email notification
+        try {
+            const customerResult = await pool.query(
+                'SELECT email, first_name, email_notifications FROM users WHERE id = $1',
+                [updatedTicket.customer_id]
+            );
+            if (customerResult.rows[0] && customerResult.rows[0].email_notifications) {
+                await sendTicketStatusUpdate(
+                    customerResult.rows[0].email,
+                    customerResult.rows[0].first_name,
+                    updatedTicket,
+                    existingTicket.status,
+                    'cancelled',
+                    updatedTicket.customer_id
+                );
+            }
+        } catch (emailError) {
+            console.error('Failed to send cancellation email:', emailError.message);
+        }
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Ticket cancelled successfully',
+            data: updatedTicket
+        });
+    } catch (error) {
+        console.error('Cancel ticket error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to cancel ticket',
+            error: error.message
+        });
+    }
+};

@@ -13,7 +13,8 @@ import {
     bulkAssignTickets,
     assignTicket,
     reassignTicket,
-    getTicketHistory
+    getTicketHistory,
+    cancelTicket
 } from '../controllers/ticketController.js';
 import { optionalAuth, authenticateToken } from '../middleware/auth.js';
 import { checkPrivilege } from '../middleware/rbac.js';
@@ -147,6 +148,13 @@ router.patch('/:id/reassign', authenticateToken, reassignTicket);
  * @access  Private (authenticated users, respects category access)
  */
 router.patch('/:id/status', authenticateToken, updateTicketStatus);
+
+/**
+ * @route   POST /api/tickets/:id/cancel
+ * @desc    Cancel a ticket (customer can cancel their own tickets)
+ * @access  Private (ticket owner or management)
+ */
+router.post('/:id/cancel', authenticateToken, cancelTicket);
 
 /**
  * @route   PUT /api/tickets/:id

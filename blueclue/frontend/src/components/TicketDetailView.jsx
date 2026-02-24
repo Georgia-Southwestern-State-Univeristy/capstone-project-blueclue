@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getTicketById, updateTicketStatus, updateTicket, getTechnicians, assignSingleTicket, reassignTicket } from '../services/ticketService'
+import { getTicketById, updateTicketStatus, updateTicket, getTechnicians, assignSingleTicket, reassignTicket, cancelTicket } from '../services/ticketService'
 import { getUserRole } from '../services/authService'
 import TicketActivityLog from './TicketActivityLog'
+import CancelTicketModal from './CancelTicketModal'
 
 /**
  * TicketDetailView
@@ -35,6 +36,10 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   const [techSearch, setTechSearch] = useState('')
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
 
+  // ─── Cancel ticket state (client-facing) ─────────────────────────
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [cancelSubmitting, setCancelSubmitting] = useState(false)
+
   const modalRef = useRef(null)
   const assignRef = useRef(null)
   const statusDropdownRef = useRef(null)
@@ -48,6 +53,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   const canSeeInternals = isTech || isManagement   // priority, SLA, assignee, reopen
   const canSeeAudit = isManagement                 // AI classification, audit logs
   const canChangeStatus = isTech || isManagement   // only staff can change status
+  const isClient = !isTech && !isManagement        // client / customer role
 
   // ─── Fetch ticket data (cache-aware) ─────────────────────────────
   const CACHE_TTL = 60_000 // 60 seconds
@@ -232,6 +238,26 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
       setAssignError(err.message || 'Failed to assign ticket')
     } finally {
       setAssignLoading(false)
+    }
+  }
+
+  // ─── Cancel ticket handler (client-facing) ──────────────────────
+  const handleCancelTicket = async (reason, details) => {
+    if (!ticket || cancelSubmitting) return
+    setCancelSubmitting(true)
+    try {
+      await cancelTicket(ticket.id, reason, details)
+      setTicket((prev) => ({ ...prev, status: 'cancelled' }))
+      updateCache(ticket.id, { status: 'cancelled' })
+      setShowCancelModal(false)
+      setStatusSuccess('Ticket cancelled successfully')
+      setTimeout(() => setStatusSuccess(null), 3000)
+      if (onTicketUpdated) onTicketUpdated(ticket.id, { status: 'cancelled' })
+    } catch (err) {
+      setStatusError(err.message || 'Failed to cancel ticket')
+      setShowCancelModal(false)
+    } finally {
+      setCancelSubmitting(false)
     }
   }
 
@@ -675,7 +701,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
             <div className="w-px h-5 bg-gray-700 mx-0.5" />
 
             {/* Close Ticket — tech & management, when ticket isn't already closed */}
-            {canChangeStatus && ticket.status !== 'closed' && (
+            {canChangeStatus && ticket.status !== 'closed' && ticket.status !== 'cancelled' && (
               <button
                 onClick={handleCloseTicket}
                 disabled={statusUpdating}
@@ -686,6 +712,20 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                 </svg>
                 Close
+              </button>
+            )}
+
+            {/* Cancel Ticket — clients only, when ticket is not already closed/cancelled */}
+            {isClient && ticket.status !== 'closed' && ticket.status !== 'cancelled' && (
+              <button
+                onClick={() => setShowCancelModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-orange-900/60 text-gray-300 hover:text-orange-300 text-xs font-medium border border-gray-700 hover:border-orange-700 transition-colors"
+                title="Cancel ticket"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+                Cancel Ticket
               </button>
             )}
 
@@ -760,6 +800,21 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                           &rarr; {formatStatus(s)}
                         </button>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Cancel Ticket — client only, when ticket is still active */}
+                  {isClient && ticket.status !== 'closed' && ticket.status !== 'cancelled' && (
+                    <div className="mt-3">
+                      <button
+                        onClick={() => setShowCancelModal(true)}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-orange-900/30 hover:bg-orange-900/50 text-orange-300 text-sm font-medium border border-orange-800/50 hover:border-orange-700 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                        </svg>
+                        Cancel Ticket
+                      </button>
                     </div>
                   )}
 
@@ -1080,6 +1135,15 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
           </div>
         ) : null}
       </div>
+
+      {/* Cancel Ticket Modal (rendered outside main content for z-index) */}
+      <CancelTicketModal
+        isOpen={showCancelModal}
+        ticketNumber={ticket?.ticket_number}
+        onConfirm={handleCancelTicket}
+        onClose={() => setShowCancelModal(false)}
+        isSubmitting={cancelSubmitting}
+      />
     </div>
   )
 }
