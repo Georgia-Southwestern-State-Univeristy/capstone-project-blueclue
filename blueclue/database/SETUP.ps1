@@ -181,7 +181,8 @@ $migrationFiles = @(
     "migrations\007_add_admin_management.sql",
     "migrations\012_add_comment_reactions.sql",
     "migrations\013_add_comment_notification_type.sql",
-    "migrations\014_add_ticket_reopen_tracking.sql"
+    "migrations\014_add_ticket_reopen_tracking.sql",
+    "migrations\015_add_ticket_collaborators.sql"
 )
 
 $migrationsApplied = 0
