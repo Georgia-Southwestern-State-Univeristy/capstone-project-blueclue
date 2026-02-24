@@ -64,18 +64,24 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
 
       const assignCount = activity.filter(a => {
         const d = new Date(a.created_at)
-        return d >= hourStart && d < hourEnd
+        return d >= hourStart && d < hourEnd && a.change_type !== 'ticket_cancelled'
       }).length
 
-      data.push({ hourStart, count, assignCount })
+      const cancelCount = activity.filter(a => {
+        const d = new Date(a.created_at)
+        return d >= hourStart && d < hourEnd && a.change_type === 'ticket_cancelled'
+      }).length
+
+      data.push({ hourStart, count, assignCount, cancelCount })
     }
 
     return data
   }, [tickets, activity])
 
-  const maxCount = Math.max(...buckets.map(b => b.count + b.assignCount), 1)
+  const maxCount = Math.max(...buckets.map(b => b.count + b.assignCount + b.cancelCount), 1)
   const total = buckets.reduce((sum, b) => sum + b.count, 0)
   const totalAssignments = buckets.reduce((sum, b) => sum + b.assignCount, 0)
+  const totalCancellations = buckets.reduce((sum, b) => sum + b.cancelCount, 0)
 
   // Day boundary labels — deduplicate and enforce minimum spacing
   const dayLabels = useMemo(() => {
@@ -117,6 +123,10 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
               <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400 inline-block" />
               Assignments ({totalAssignments})
             </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm bg-gray-400 inline-block" />
+              Cancellations ({totalCancellations})
+            </span>
             <span>Last 3 days</span>
           </div>
           {onRefresh && (
@@ -142,9 +152,10 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
       >
         <div className="flex items-end gap-1 h-36 md:min-w-0" style={{ minWidth: '500px' }}>
           {buckets.map((bucket, i) => {
-            const totalHeight = bucket.count + bucket.assignCount
+            const totalHeight = bucket.count + bucket.assignCount + bucket.cancelCount
             const submitPct = totalHeight > 0 ? Math.max((bucket.count / maxCount) * 100, bucket.count > 0 ? 3 : 0) : 0
             const assignPct = totalHeight > 0 ? Math.max((bucket.assignCount / maxCount) * 100, bucket.assignCount > 0 ? 3 : 0) : 0
+            const cancelPct = totalHeight > 0 ? Math.max((bucket.cancelCount / maxCount) * 100, bucket.cancelCount > 0 ? 3 : 0) : 0
             const isHovered = hoveredIndex === i
 
             // Adjust tooltip position for right-most bar
@@ -158,11 +169,21 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
                 onMouseEnter={() => setHoveredIndex(i)}
                 onMouseLeave={() => setHoveredIndex(null)}
               >
-                {/* Stacked bar: submissions (bottom, blue) + assignments (top, green) */}
+                {/* Stacked bar: submissions (bottom, blue) + assignments (middle, green) + cancellations (top, gray) */}
                 <div className="absolute bottom-0 left-0 right-0 flex flex-col items-stretch justify-end h-full">
-                  {bucket.assignCount > 0 && (
+                  {bucket.cancelCount > 0 && (
                     <div
                       className="w-full rounded-t-sm transition-all duration-150"
+                      style={{
+                        height: `${cancelPct}%`,
+                        backgroundColor: isHovered ? '#9ca3af' : '#6b7280',
+                        opacity: hoveredIndex !== null && !isHovered ? 0.3 : 1,
+                      }}
+                    />
+                  )}
+                  {bucket.assignCount > 0 && (
+                    <div
+                      className={`w-full transition-all duration-150 ${bucket.cancelCount === 0 ? 'rounded-t-sm' : ''}`}
                       style={{
                         height: `${assignPct}%`,
                         backgroundColor: isHovered ? '#34d399' : '#6ee7b7',
@@ -172,7 +193,7 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
                   )}
                   {bucket.count > 0 && (
                     <div
-                      className={`w-full transition-all duration-150 ${bucket.assignCount === 0 ? 'rounded-t-sm' : ''}`}
+                      className={`w-full transition-all duration-150 ${bucket.assignCount === 0 && bucket.cancelCount === 0 ? 'rounded-t-sm' : ''}`}
                       style={{
                         height: `${submitPct}%`,
                         backgroundColor: isHovered ? '#3b82f6' : '#60a5fa',
@@ -198,6 +219,7 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
                     </p>
                     <p className="text-blue-400">{bucket.count} {bucket.count === 1 ? 'submission' : 'submissions'}</p>
                     <p className="text-emerald-400">{bucket.assignCount} {bucket.assignCount === 1 ? 'assignment' : 'assignments'}</p>
+                    <p className="text-gray-400">{bucket.cancelCount} {bucket.cancelCount === 1 ? 'cancellation' : 'cancellations'}</p>
                   </div>
                 )}
               </div>
@@ -252,7 +274,33 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
                 let icon, color, bgColor, description
                 const isUnassignLegacy = entry.change_type === 'assignment' && (entry.new_value === 'unassigned' || entry.new_value === null)
 
-                if (entry.change_type === 'ticket_unassigned' || isUnassignLegacy) {
+                if (entry.change_type === 'ticket_cancelled') {
+                  color = 'text-gray-400'
+                  bgColor = 'bg-gray-700'
+                  icon = (
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                    </svg>
+                  )
+                  const cancelInfo = details
+                  const cancelledBy = cancelInfo.cancelled_by_name || entry.changed_by_name || 'Unknown'
+                  const cancelReason = cancelInfo.reason || 'No reason provided'
+                  const cancelExtra = cancelInfo.details
+                  description = (
+                    <span>
+                      <span className="text-white font-medium">{cancelledBy}</span>
+                      {' cancelled '}
+                      {onTicketClick ? (
+                        <button onClick={() => onTicketClick(entry.ticket_id)} className="text-blue-300 hover:text-blue-200 hover:underline font-medium">#{entry.ticket_number || details.ticket_number || entry.ticket_id}</button>
+                      ) : (
+                        <span className="text-blue-300">#{entry.ticket_number || details.ticket_number || entry.ticket_id}</span>
+                      )}
+                      {' — '}
+                      <span className="text-gray-300">{cancelReason}</span>
+                      {cancelExtra && <span className="text-gray-500"> — {cancelExtra}</span>}
+                    </span>
+                  )
+                } else if (entry.change_type === 'ticket_unassigned' || isUnassignLegacy) {
                   color = 'text-red-400'
                   bgColor = 'bg-red-900/30'
                   icon = (

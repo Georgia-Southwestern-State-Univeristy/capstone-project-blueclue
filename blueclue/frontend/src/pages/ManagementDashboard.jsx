@@ -13,8 +13,9 @@ import TechPerformanceWidget from '../components/TechPerformanceWidget'
 import TicketControlWidget from '../components/TicketControlWidget'
 import TicketTimeline from '../components/TicketTimeline'
 import PendingRequestsWidget from '../components/PendingRequestsWidget'
+import DeletedTicketsWidget from '../components/DeletedTicketsWidget'
 import TicketDetailView from '../components/TicketDetailView'
-import { getAllTickets } from '../services/ticketService'
+import { getAllTickets, getCancellationStats } from '../services/ticketService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
 
 /**
@@ -48,6 +49,8 @@ function ManagementDashboard() {
   const [assignmentFilter, setAssignmentFilter] = useState(null) // 'assigned' | 'unassigned' | null
   const [widgetFilters, setWidgetFilters] = useState({ priority: null, category: null, status: null })
   const [categoryFilter, setCategoryFilter] = useState(null) // selected category key or null
+  const [includeCancelled, setIncludeCancelled] = useState(false)
+  const [cancellationData, setCancellationData] = useState(null)
 
   const handleWidgetFilterChange = useCallback((key, value) => {
     setWidgetFilters((prev) => ({ ...prev, [key]: value }))
@@ -59,7 +62,9 @@ function ManagementDashboard() {
     openTickets: 0,
     assignedTickets: 0,
     unassignedTickets: 0,
-    overdueTickets: 0
+    overdueTickets: 0,
+    cancelledTickets: 0,
+    cancellationRate: 0
   })
 
   const fetchTickets = async () => {
@@ -76,39 +81,59 @@ function ManagementDashboard() {
     }
   }
 
+  // Fetch cancellation stats from backend
+  const fetchCancellationStats = async () => {
+    try {
+      const response = await getCancellationStats('30d')
+      setCancellationData(response.data || null)
+    } catch (err) {
+      console.error('Error fetching cancellation stats:', err)
+    }
+  }
+
   // Fetch tickets on component mount
   useEffect(() => {
     fetchTickets()
+    fetchCancellationStats()
   }, [])
 
   const calculateStats = useCallback(() => {
     const now = new Date()
+    const cancelledTickets = tickets.filter(t => t.status === 'cancelled').length
+    // When toggle is off, exclude cancelled from all counts
+    const activeTickets = includeCancelled ? tickets : tickets.filter(t => t.status !== 'cancelled')
     
-    const openTickets = tickets.filter(t => t.status === 'open').length
-    const assignedTickets = tickets.filter(t => t.assigned_to_name && t.assigned_to_name !== 'null').length
-    const unassignedTickets = tickets.length - assignedTickets
+    const openTickets = activeTickets.filter(t => t.status === 'open').length
+    const assignedTickets = activeTickets.filter(t => t.assigned_to_name && t.assigned_to_name !== 'null').length
+    const unassignedTickets = activeTickets.length - assignedTickets
     
-    const overdueTickets = tickets.filter(t => {
+    const overdueTickets = activeTickets.filter(t => {
       if (!t.due_date) return false
       const dueDate = new Date(t.due_date)
       return dueDate < now && t.status !== 'resolved' && t.status !== 'closed'
     }).length
 
+    const cancellationRate = tickets.length > 0
+      ? parseFloat(((cancelledTickets / tickets.length) * 100).toFixed(1))
+      : 0
+
     setStats({
-      totalTickets: tickets.length,
+      totalTickets: activeTickets.length,
       openTickets,
       assignedTickets,
       unassignedTickets,
-      overdueTickets
+      overdueTickets,
+      cancelledTickets,
+      cancellationRate
     })
-  }, [tickets])
+  }, [tickets, includeCancelled])
 
-  // Recalculate stats when tickets change
+  // Recalculate stats when tickets or includeCancelled change
   useEffect(() => {
     if (tickets.length > 0) {
       calculateStats()
     }
-  }, [tickets, calculateStats])
+  }, [tickets, calculateStats, includeCancelled])
 
   // Tab navigation items
   const tabs = [
@@ -120,7 +145,7 @@ function ManagementDashboard() {
 
   // Filtered tickets based on widget filters (dropdowns + donut segment click)
   const filteredTickets = useMemo(() => {
-    let result = tickets
+    let result = includeCancelled ? tickets : tickets.filter(t => t.status !== 'cancelled')
     // Apply widget dropdown filters first
     if (widgetFilters.priority) {
       result = result.filter(t => t.priority === widgetFilters.priority)
@@ -137,7 +162,7 @@ function ManagementDashboard() {
       return result.filter(t => t.assigned_to_name && t.assigned_to_name !== 'null')
     }
     return result.filter(t => !t.assigned_to_name || t.assigned_to_name === 'null')
-  }, [tickets, assignmentFilter, widgetFilters])
+  }, [tickets, assignmentFilter, widgetFilters, includeCancelled])
 
   // Render summary stat card
   const StatCard = ({ title, value, subtitle, bgColor = 'bg-gray-800' }) => (
@@ -178,8 +203,27 @@ function ManagementDashboard() {
         </div>
       )}
 
-      {/* Summary Statistics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+      {/* Include Cancelled Toggle + Summary Statistics Grid */}
+      <div className="flex items-center justify-end mb-3">
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <span className="text-sm text-gray-400">Include Cancelled</span>
+          <button
+            onClick={() => setIncludeCancelled(prev => !prev)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
+              includeCancelled ? 'bg-blue-600' : 'bg-gray-600'
+            }`}
+            role="switch"
+            aria-checked={includeCancelled}
+          >
+            <span
+              className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                includeCancelled ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </label>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
         <StatCard 
           title="Total Tickets" 
           value={stats.totalTickets}
@@ -204,6 +248,12 @@ function ManagementDashboard() {
           title="Overdue" 
           value={stats.overdueTickets}
           bgColor="bg-red-900 bg-opacity-30 border-red-700"
+        />
+        <StatCard 
+          title="Cancelled" 
+          value={stats.cancelledTickets}
+          subtitle={`${stats.cancellationRate}% rate`}
+          bgColor="bg-gray-800 bg-opacity-50 border-gray-600"
         />
       </div>
 
@@ -264,6 +314,12 @@ function ManagementDashboard() {
           {/* Technician Performance Widget */}
           <TechPerformanceWidget
             onRefresh={fetchTickets}
+          />
+
+          {/* Deleted Tickets Widget (management only) */}
+          <DeletedTicketsWidget
+            onRefresh={fetchTickets}
+            onTicketClick={(ticket) => handleTicketClick(ticket.id)}
           />
 
           {/* Filtered ticket list — shown when a donut segment is clicked */}
@@ -379,6 +435,53 @@ function ManagementDashboard() {
                     <p className="text-2xl font-bold text-white mb-2">100%</p>
                     <p className="text-green-200 text-sm">All systems operational</p>
                     <div className="mt-3 w-full bg-green-700 rounded h-1"></div>
+                  </div>
+                </div>
+
+                {/* Cancellation Rate Metrics */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
+                    <p className="text-gray-300 font-medium mb-2">Cancellation Rate</p>
+                    <p className="text-3xl font-bold text-white">{stats.cancellationRate}%</p>
+                    <p className="text-gray-500 text-xs mt-1">{stats.cancelledTickets} of {stats.cancelledTickets + stats.totalTickets - (includeCancelled ? stats.cancelledTickets : 0)} total tickets</p>
+                    <div className="mt-3 w-full bg-gray-700 rounded h-1.5">
+                      <div
+                        className="bg-gray-400 h-1.5 rounded transition-all"
+                        style={{ width: `${Math.min(stats.cancellationRate, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
+                    <p className="text-gray-300 font-medium mb-2">Top Cancellation Reasons</p>
+                    {cancellationData?.top_reasons?.length > 0 ? (
+                      <div className="space-y-2 mt-1">
+                        {cancellationData.top_reasons.slice(0, 4).map((r, i) => (
+                          <div key={i} className="flex items-center justify-between">
+                            <span className="text-sm text-gray-400 truncate mr-2">{r.reason}</span>
+                            <span className="text-sm font-mono text-gray-300 flex-shrink-0">{r.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-sm mt-2">No cancellations recorded</p>
+                    )}
+                  </div>
+
+                  <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
+                    <p className="text-gray-300 font-medium mb-2">Cancellations by Category</p>
+                    {cancellationData?.by_category?.length > 0 ? (
+                      <div className="space-y-2 mt-1">
+                        {cancellationData.by_category.slice(0, 4).map((c, i) => (
+                          <div key={i} className="flex items-center justify-between">
+                            <span className="text-sm text-gray-400 truncate mr-2 capitalize">{c.category?.replace(/_/g, ' ')}</span>
+                            <span className="text-sm text-gray-300 flex-shrink-0">{c.cancelled} <span className="text-gray-500">({c.rate}%)</span></span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-sm mt-2">No cancellations by category</p>
+                    )}
                   </div>
                 </div>
 

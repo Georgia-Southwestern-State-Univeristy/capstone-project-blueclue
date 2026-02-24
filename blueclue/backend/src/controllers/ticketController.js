@@ -20,15 +20,16 @@ const isTechnician = (role) => {
 };
 
 // Valid ticket statuses (must match database enum)
-const VALID_STATUSES = ['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed'];
+const VALID_STATUSES = ['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed', 'cancelled'];
 
 // Valid status transitions (business rules)
 const VALID_TRANSITIONS = {
-    'open': ['in_progress', 'waiting_on_customer', 'resolved', 'closed'],
-    'in_progress': ['waiting_on_customer', 'resolved', 'open'],
-    'waiting_on_customer': ['in_progress', 'resolved', 'open'],
+    'open': ['in_progress', 'waiting_on_customer', 'resolved', 'closed', 'cancelled'],
+    'in_progress': ['waiting_on_customer', 'resolved', 'open', 'cancelled'],
+    'waiting_on_customer': ['in_progress', 'resolved', 'open', 'cancelled'],
     'resolved': ['closed', 'in_progress', 'open', 'waiting_on_customer'], // Allow reopening and status changes
-    'closed': [] // Cannot transition from closed - final state
+    'closed': [], // Cannot transition from closed - final state
+    'cancelled': ['open'] // Management/admin can reopen cancelled tickets
 };
 
 /**
@@ -36,26 +37,43 @@ const VALID_TRANSITIONS = {
  * Called whenever a ticket gets assigned/reassigned through any code path.
  * Notifies each affected technician via socket.
  */
-const autoDenyPendingRequests = async (ticketId, reviewerId, reason, io) => {
+const autoDenyPendingRequests = async (ticketId, reviewerId, reason, io, excludeUserId = null) => {
     try {
-        // Find all pending requests for this ticket
-        const pendingResult = await pool.query(
-            `SELECT ar.id, ar.requested_by, t.subject AS ticket_title
-             FROM ticket_assignment_requests ar
-             JOIN tickets t ON ar.ticket_id = t.id
-             WHERE ar.ticket_id = $1 AND ar.status = 'pending'`,
-            [ticketId]
-        );
+        // Find all pending requests for this ticket (excluding the assigned tech if provided)
+        const pendingQuery = excludeUserId
+            ? `SELECT ar.id, ar.requested_by, t.subject AS ticket_title
+               FROM ticket_assignment_requests ar
+               JOIN tickets t ON ar.ticket_id = t.id
+               WHERE ar.ticket_id = $1 AND ar.status = 'pending' AND ar.requested_by != $2`
+            : `SELECT ar.id, ar.requested_by, t.subject AS ticket_title
+               FROM ticket_assignment_requests ar
+               JOIN tickets t ON ar.ticket_id = t.id
+               WHERE ar.ticket_id = $1 AND ar.status = 'pending'`;
+        const pendingParams = excludeUserId ? [ticketId, excludeUserId] : [ticketId];
+        const pendingResult = await pool.query(pendingQuery, pendingParams);
+
+        // Also approve the assigned tech's request if they had one pending
+        if (excludeUserId) {
+            await pool.query(
+                `UPDATE ticket_assignment_requests
+                 SET status = 'approved', reviewed_by = $1, reviewed_at = NOW()
+                 WHERE ticket_id = $2 AND requested_by = $3 AND status = 'pending'`,
+                [reviewerId, ticketId, excludeUserId]
+            );
+        }
 
         if (pendingResult.rows.length === 0) return;
 
-        // Bulk-deny all pending requests
-        await pool.query(
-            `UPDATE ticket_assignment_requests
-             SET status = 'denied', reviewed_by = $1, reviewed_at = NOW()
-             WHERE ticket_id = $2 AND status = 'pending'`,
-            [reviewerId, ticketId]
-        );
+        // Bulk-deny remaining pending requests
+        const denyQuery = excludeUserId
+            ? `UPDATE ticket_assignment_requests
+               SET status = 'denied', reviewed_by = $1, reviewed_at = NOW()
+               WHERE ticket_id = $2 AND status = 'pending' AND requested_by != $3`
+            : `UPDATE ticket_assignment_requests
+               SET status = 'denied', reviewed_by = $1, reviewed_at = NOW()
+               WHERE ticket_id = $2 AND status = 'pending'`;
+        const denyParams = excludeUserId ? [reviewerId, ticketId, excludeUserId] : [reviewerId, ticketId];
+        await pool.query(denyQuery, denyParams);
 
         // Notify each affected technician
         for (const row of pendingResult.rows) {
@@ -324,7 +342,7 @@ export const getAllTickets = async (req, res) => {
                     FROM tickets t
                     JOIN users c ON t.customer_id = c.id
                     LEFT JOIN users a ON t.assigned_to = a.id
-                    WHERE t.category = ANY($1::ticket_category[])
+                    WHERE t.category = ANY($1::ticket_category[]) AND t.deleted_at IS NULL
                     ORDER BY t.created_at DESC
                 `;
                 const ticketsResult = await pool.query(ticketsQuery, [categoryNames]);
@@ -540,6 +558,71 @@ export const updateTicket = async (req, res) => {
             });
         }
 
+        // ─── Role-based field filtering ─────────────────────────────
+        if (req.user) {
+            const role = req.user.role;
+            const userId = req.user.id;
+
+            // Management and admin can edit any ticket with no restrictions
+            if (role === 'management' || role === 'admin') {
+                // No field or ticket restrictions — skip all checks
+            } else if (role === 'customer') {
+                // Clients can only edit their own tickets
+                if (existingTicket.customer_id !== userId) {
+                    return res.status(403).json({
+                        status: 'error',
+                        message: 'Access denied. You can only edit your own tickets.'
+                    });
+                }
+                // Clients can only edit open or waiting_on_customer tickets
+                if (!['open', 'waiting_on_customer'].includes(existingTicket.status)) {
+                    return res.status(403).json({
+                        status: 'error',
+                        message: 'Access denied. You can only edit tickets that are open or pending.'
+                    });
+                }
+                // Clients can only change description and category
+                const clientAllowed = ['description', 'category'];
+                const disallowed = Object.keys(updates).filter(k => !clientAllowed.includes(k));
+                if (disallowed.length > 0) {
+                    return res.status(403).json({
+                        status: 'error',
+                        message: `Access denied. You do not have permission to change: ${disallowed.join(', ')}`
+                    });
+                }
+            } else if (isTechnician(role)) {
+                // Techs can only edit tickets assigned to them (unless they have CAN_EDIT_ANY_TICKET)
+                const canEditAny = await UserPrivilege.hasPrivilege(userId, 'CAN_EDIT_ANY_TICKET');
+                if (!canEditAny && existingTicket.assigned_to !== userId) {
+                    return res.status(403).json({
+                        status: 'error',
+                        message: 'Access denied. You can only edit tickets assigned to you.'
+                    });
+                }
+                // Techs cannot edit closed or cancelled tickets
+                if (['closed', 'cancelled'].includes(existingTicket.status)) {
+                    return res.status(403).json({
+                        status: 'error',
+                        message: 'Access denied. Closed or cancelled tickets cannot be edited.'
+                    });
+                }
+                // Techs can change: description, status, priority, resolution
+                const techAllowed = ['description', 'status', 'priority', 'resolution'];
+                const disallowed = Object.keys(updates).filter(k => !techAllowed.includes(k));
+                if (disallowed.length > 0) {
+                    // Allow category only if tech has category access privilege
+                    const onlyCategory = disallowed.every(k => k === 'category');
+                    if (!onlyCategory) {
+                        return res.status(403).json({
+                            status: 'error',
+                            message: `Access denied. You do not have permission to change: ${disallowed.join(', ')}`
+                        });
+                    }
+                }
+            }
+            // management / admin — no field restrictions
+        }
+
         // Check if user is trying to change assignment
         if (updates.assigned_to !== undefined && req.user) {
             // Admins and management can always change assignments
@@ -577,12 +660,32 @@ export const updateTicket = async (req, res) => {
             }
         }
 
+        // Validate status transitions if status is being changed via edit
+        if (updates.status && updates.status !== existingTicket.status) {
+            const allowedTransitions = VALID_TRANSITIONS[existingTicket.status];
+            if (!allowedTransitions || !allowedTransitions.includes(updates.status)) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: `Invalid status transition from '${existingTicket.status}' to '${updates.status}'`
+                });
+            }
+        }
+
+        // Require reason for priority changes
+        if (updates.priority && updates.priority !== existingTicket.priority && !updates.priority_change_reason) {
+            // Allow it but mark no reason — frontend should provide reason
+        }
+
         // Automatically set resolved_at when status changes to resolved or closed
         if (updates.status === 'resolved' || updates.status === 'closed') {
             if (!updates.resolved_at) {
                 updates.resolved_at = new Date();
             }
         }
+
+        // Strip non-ticket fields before update
+        const priorityChangeReason = updates.priority_change_reason;
+        delete updates.priority_change_reason;
 
         const ticket = await Ticket.update(parseInt(id), updates);
 
@@ -591,6 +694,37 @@ export const updateTicket = async (req, res) => {
                 status: 'error',
                 message: 'Ticket not found'
             });
+        }
+
+        // ─── Audit logging: log each changed field to ticket_history ────────
+        try {
+            const changerName = req.user ? `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'System' : 'System';
+            const auditFields = ['subject', 'description', 'category', 'priority', 'status', 'resolution'];
+            for (const field of auditFields) {
+                if (updates[field] !== undefined && String(updates[field]) !== String(existingTicket[field] || '')) {
+                    const changeType = field === 'status' ? 'status_change'
+                        : field === 'priority' ? 'priority_change'
+                        : field === 'category' ? 'category_change'
+                        : 'field_edited';
+                    await TicketHistory.log(
+                        parseInt(id),
+                        req.user ? req.user.id : null,
+                        changeType,
+                        field,
+                        String(existingTicket[field] || ''),
+                        String(updates[field]),
+                        field === 'priority' ? (priorityChangeReason || null) : null,
+                        {
+                            action: 'edit',
+                            edited_by_name: changerName,
+                            field_name: field,
+                            ticket_number: existingTicket.ticket_number
+                        }
+                    );
+                }
+            }
+        } catch (histErr) {
+            console.error('Failed to log edit audit history:', histErr.message);
         }
 
         // Log assignment change to ticket history
@@ -698,7 +832,8 @@ export const updateTicket = async (req, res) => {
                 parseInt(id),
                 req.user ? req.user.id : null,
                 'Ticket was assigned through another action',
-                io
+                io,
+                parseInt(updates.assigned_to)
             );
         }
 
@@ -834,13 +969,30 @@ export const deleteTicket = async (req, res) => {
             });
         }
 
-        const ticket = await Ticket.delete(parseInt(id));
+        const deletedBy = req.user ? req.user.id : null;
+        const ticket = await Ticket.delete(parseInt(id), deletedBy);
 
         if (!ticket) {
             return res.status(404).json({
                 status: 'error',
-                message: 'Ticket not found'
+                message: 'Ticket not found or already deleted'
             });
+        }
+
+        // Log the deletion in ticket history
+        try {
+            await TicketHistory.log(
+                parseInt(id),
+                deletedBy,
+                'ticket_deleted',
+                'deleted_at',
+                null,
+                new Date().toISOString(),
+                null,
+                { deleted_by_name: req.user ? `${req.user.first_name} ${req.user.last_name}` : 'Unknown' }
+            );
+        } catch (historyErr) {
+            console.error('Failed to log ticket deletion:', historyErr);
         }
 
         res.status(200).json({
@@ -854,6 +1006,86 @@ export const deleteTicket = async (req, res) => {
         res.status(500).json({
             status: 'error',
             message: 'Failed to delete ticket',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Restore a soft-deleted ticket
+ * PATCH /api/tickets/:id/restore
+ */
+export const restoreTicket = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (isNaN(id)) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Invalid ticket ID'
+            });
+        }
+
+        const ticket = await Ticket.restore(parseInt(id));
+
+        if (!ticket) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Ticket not found or not deleted'
+            });
+        }
+
+        // Log the restoration in ticket history
+        try {
+            await TicketHistory.log(
+                parseInt(id),
+                req.user ? req.user.id : null,
+                'ticket_restored',
+                'deleted_at',
+                ticket.deleted_at,
+                null,
+                null,
+                { restored_by_name: req.user ? `${req.user.first_name} ${req.user.last_name}` : 'Unknown' }
+            );
+        } catch (historyErr) {
+            console.error('Failed to log ticket restoration:', historyErr);
+        }
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Ticket restored successfully',
+            data: ticket
+        });
+
+    } catch (error) {
+        console.error('Restore ticket error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to restore ticket',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Get all soft-deleted tickets (management/admin only)
+ * GET /api/tickets/deleted
+ */
+export const getDeletedTickets = async (req, res) => {
+    try {
+        const tickets = await Ticket.getDeleted();
+
+        res.status(200).json({
+            status: 'success',
+            count: tickets.length,
+            data: tickets
+        });
+
+    } catch (error) {
+        console.error('Get deleted tickets error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve deleted tickets',
             error: error.message
         });
     }
@@ -1035,7 +1267,8 @@ export const bulkAssignTickets = async (req, res) => {
                 ticket.id,
                 req.user ? req.user.id : null,
                 'Ticket was bulk-assigned to another technician',
-                io
+                io,
+                technician_id
             );
         }
 
@@ -1160,7 +1393,8 @@ export const assignTicket = async (req, res) => {
             parseInt(id),
             req.user ? req.user.id : null,
             'Ticket was directly assigned to another technician',
-            io
+            io,
+            technician_id
         );
 
         // Auto-create primary collaborator for newly assigned technician
@@ -1356,7 +1590,8 @@ export const reassignTicket = async (req, res) => {
             parseInt(id),
             req.user ? req.user.id : null,
             'Ticket was reassigned to another technician',
-            io
+            io,
+            technician_id
         );
 
         // Transfer primary collaborator role to newly assigned technician
@@ -1545,6 +1780,17 @@ export const updateTicketStatus = async (req, res) => {
             });
         }
 
+        // Reopening a cancelled ticket requires management or admin role
+        if (currentStatus === 'cancelled' && status === 'open') {
+            const userRole = req.user?.role;
+            if (!['management', 'admin'].includes(userRole)) {
+                return res.status(403).json({
+                    status: 'error',
+                    message: 'Only management or admin can reopen cancelled tickets'
+                });
+            }
+        }
+
         // Prepare update data
         const updateData = { status };
 
@@ -1555,6 +1801,14 @@ export const updateTicketStatus = async (req, res) => {
         } else if (existingTicket.status === 'resolved' || existingTicket.status === 'closed') {
             // Clear resolved_at when moving away from resolved/closed
             updateData.resolved_at = null;
+        }
+
+        // Track reopens from cancelled or resolved/closed → open
+        if (status === 'open' && ['cancelled', 'resolved', 'closed'].includes(currentStatus)) {
+            await pool.query(
+                `UPDATE tickets SET reopen_count = reopen_count + 1, last_reopened_at = NOW() WHERE id = $1`,
+                [parseInt(id)]
+            );
         }
 
         // Update the ticket status
@@ -1857,6 +2111,151 @@ export const requestTicketAssignment = async (req, res) => {
 };
 
 /**
+ * Cancel a ticket (customer-facing)
+ * POST /api/tickets/:id/cancel
+ * Allows the ticket owner to cancel their own ticket with a reason.
+ */
+export const cancelTicket = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason, details } = req.body;
+
+        if (isNaN(id)) {
+            return res.status(400).json({ status: 'error', message: 'Invalid ticket ID' });
+        }
+
+        if (!reason) {
+            return res.status(400).json({ status: 'error', message: 'Cancellation reason is required' });
+        }
+
+        const existingTicket = await Ticket.getById(parseInt(id));
+        if (!existingTicket) {
+            return res.status(404).json({ status: 'error', message: 'Ticket not found' });
+        }
+
+        // Determine user identity and role
+        const userId = req.user?.id || req.user?.userId;
+        const userRole = req.user?.role;
+        const isStaff = ['technician', 'senior_technician', 'management', 'admin'].includes(userRole);
+        const isOwner = existingTicket.customer_id === userId;
+
+        // Only the ticket owner or staff can cancel
+        if (!isOwner && !isStaff) {
+            return res.status(403).json({ status: 'error', message: 'You can only cancel your own tickets' });
+        }
+
+        // Cannot cancel already closed or cancelled tickets
+        if (existingTicket.status === 'closed' || existingTicket.status === 'cancelled') {
+            return res.status(400).json({
+                status: 'error',
+                message: `Cannot cancel a ticket that is already ${existingTicket.status}`
+            });
+        }
+
+        // Clients can only cancel tickets that are open or waiting_on_customer (pending)
+        const clientCancellableStatuses = ['open', 'waiting_on_customer'];
+        if (!isStaff && !clientCancellableStatuses.includes(existingTicket.status)) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'You can only cancel tickets that are open or pending. Assigned or in-progress tickets cannot be cancelled by clients.'
+            });
+        }
+
+        // Build resolution text from reason + optional details
+        const resolutionText = details
+            ? `Cancelled: ${reason} — ${details}`
+            : `Cancelled: ${reason}`;
+
+        const updateData = {
+            status: 'cancelled',
+            resolution: resolutionText
+        };
+
+        const updatedTicket = await Ticket.update(parseInt(id), updateData);
+
+        // Look up who is cancelling
+        let cancellerName = 'Unknown';
+        try {
+            const cancellerResult = await pool.query(
+                'SELECT first_name, last_name FROM users WHERE id = $1',
+                [userId]
+            );
+            if (cancellerResult.rows[0]) {
+                cancellerName = `${cancellerResult.rows[0].first_name} ${cancellerResult.rows[0].last_name}`;
+            }
+        } catch (_) { /* use fallback name */ }
+
+        // Log to ticket history
+        try {
+            await TicketHistory.log(
+                parseInt(id),
+                userId,
+                'ticket_cancelled',
+                'status',
+                existingTicket.status,
+                'cancelled',
+                resolutionText,
+                {
+                    cancelled_by_name: cancellerName,
+                    cancelled_by_id: userId,
+                    reason,
+                    details: details || null,
+                    previous_status: existingTicket.status
+                }
+            );
+        } catch (histErr) {
+            console.error('Failed to log cancellation history:', histErr);
+        }
+
+        // Send in-app notifications
+        try {
+            const io = req.app.get('io');
+            const ticketLabel = updatedTicket.ticket_number || `#${id}`;
+            const cancelMsg = `${cancellerName} cancelled ticket ${ticketLabel}: ${reason}`;
+
+            // Notify assigned technician if ticket was assigned
+            if (existingTicket.assigned_to && existingTicket.assigned_to !== userId) {
+                try {
+                    const techNotification = await Notification.create({
+                        user_id: existingTicket.assigned_to,
+                        type: 'ticket_cancelled',
+                        message: cancelMsg,
+                        ticket_id: parseInt(id)
+                    });
+                    if (io) {
+                        emitNotificationToUser(io, existingTicket.assigned_to, techNotification);
+                        const unreadCount = await Notification.getUnreadCount(existingTicket.assigned_to);
+                        emitUnreadCountToUser(io, existingTicket.assigned_to, unreadCount);
+                    }
+                } catch (techNotifErr) {
+                    console.error('Failed to notify assigned tech about cancellation:', techNotifErr.message);
+                }
+            }
+
+            // Notify all management/admin users for tracking
+            const mgmtResult = await pool.query(
+                `SELECT id FROM users WHERE role IN ('management', 'admin') AND id != $1`,
+                [userId]
+            );
+            for (const mgr of mgmtResult.rows) {
+                try {
+                    const mgrNotification = await Notification.create({
+                        user_id: mgr.id,
+                        type: 'ticket_cancelled',
+                        message: cancelMsg,
+                        ticket_id: parseInt(id)
+                    });
+                    if (io) {
+                        emitNotificationToUser(io, mgr.id, mgrNotification);
+                        const unreadCount = await Notification.getUnreadCount(mgr.id);
+                        emitUnreadCountToUser(io, mgr.id, unreadCount);
+                    }
+                } catch (mgrNotifErr) {
+                    console.error(`Failed to notify manager ${mgr.id} about cancellation:`, mgrNotifErr.message);
+                }
+            }
+        } catch (notifError) {
+            console.error('Failed to send cancellation notifications:', notifError);
  * Reopen a closed ticket
  * POST /api/tickets/:id/reopen
  */
@@ -2054,6 +2453,14 @@ export const reopenTicket = async (req, res) => {
 
         res.status(200).json({
             status: 'success',
+            message: 'Ticket cancelled successfully',
+            data: updatedTicket
+        });
+    } catch (error) {
+        console.error('Cancel ticket error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to cancel ticket',
             message: 'Ticket reopened successfully',
             data: {
                 ticket: reopenedTicket,

@@ -212,6 +212,41 @@ if ($migrationsApplied -eq $migrationFiles.Count) {
 
 Write-Host ""
 
+# Step 4.6: Apply ticket lifecycle migrations (cancelled status + soft-delete)
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Step 4.6: Applying ticket lifecycle migrations..." -ForegroundColor Yellow
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Adding cancelled notification type and soft-delete support..." -ForegroundColor White
+
+$lifecycleMigrations = @(
+    "migrations\012_add_ticket_cancelled_notification_type.sql",
+    "migrations\013_add_deleted_at_column.sql"
+)
+
+$lifecycleApplied = 0
+foreach ($migration in $lifecycleMigrations) {
+    if (Test-Path $migration) {
+        Write-Host "  Applying $migration..." -ForegroundColor White
+        $null = psql -U postgres -d blueclue -f $migration -q 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $lifecycleApplied++
+        } else {
+            Write-Host "  WARNING: Failed to apply $migration" -ForegroundColor Yellow
+        }
+    }
+}
+
+if ($lifecycleApplied -eq $lifecycleMigrations.Count) {
+    Write-Host "Ticket lifecycle migrations applied successfully" -ForegroundColor Green
+    Write-Host "  [OK] ticket_cancelled notification type" -ForegroundColor Green
+    Write-Host "  [OK] Soft-delete columns (deleted_at, deleted_by)" -ForegroundColor Green
+} else {
+    Write-Host "WARNING: Some lifecycle migrations failed ($lifecycleApplied/$($lifecycleMigrations.Count))" -ForegroundColor Yellow
+    Write-Host "Cancelled notifications or soft-delete may not work correctly" -ForegroundColor Yellow
+}
+
+Write-Host ""
+
 # Step 5: Load sample data (optional)
 if (-not $SkipSeed) {
     Write-Host "============================================================================" -ForegroundColor Cyan

@@ -11,6 +11,7 @@ const getStatusColor = (status) => {
     waiting_on_customer: { bg: 'bg-purple-950',  border: 'border-purple-700', text: 'text-purple-400', badge: 'bg-purple-900 text-purple-300' },
     resolved:            { bg: 'bg-green-950',   border: 'border-green-700',  text: 'text-green-400',  badge: 'bg-green-900 text-green-300' },
     closed:              { bg: 'bg-gray-800',    border: 'border-gray-600',   text: 'text-gray-400',   badge: 'bg-gray-700 text-gray-300' },
+    cancelled:           { bg: 'bg-gray-900',    border: 'border-gray-600',   text: 'text-gray-400',   badge: 'bg-gray-700 text-gray-300' },
   }
   return m[status] || m.open
 }
@@ -307,7 +308,7 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
                   <div>
                     <h3 className="font-semibold text-white mb-2">Status</h3>
                     <div className="space-y-1">
-                      {['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed'].map(s => (
+                      {['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed', 'cancelled'].map(s => (
                         <label key={s} className="flex items-center gap-2 cursor-pointer hover:bg-gray-700 px-2 py-1.5 rounded">
                           <input type="checkbox" checked={filters.status.includes(s)} onChange={() => handleFilterChange('status', s)} className="w-4 h-4 accent-blue-500 cursor-pointer" />
                           <span className="text-sm text-gray-300">{formatStatus(s)}</span>

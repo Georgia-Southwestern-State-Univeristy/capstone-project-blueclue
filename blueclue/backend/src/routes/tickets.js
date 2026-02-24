@@ -9,11 +9,14 @@ import {
     getTicketById,
     updateTicket,
     deleteTicket,
+    restoreTicket,
+    getDeletedTickets,
     updateTicketStatus,
     bulkAssignTickets,
     assignTicket,
     reassignTicket,
     getTicketHistory,
+    cancelTicket,
     reopenTicket
 } from '../controllers/ticketController.js';
 import {
@@ -108,6 +111,13 @@ router.get('/timeline', async (req, res) => {
 });
 
 /**
+ * @route   GET /api/tickets/deleted
+ * @desc    Get all soft-deleted tickets (management/admin only)
+ * @access  Private (requires CAN_DELETE_TICKETS privilege or admin)
+ */
+router.get('/deleted', authenticateToken, checkPrivilege('CAN_DELETE_TICKETS'), getDeletedTickets);
+
+/**
  * @route   GET /api/tickets/:id
  * @desc    Get a single ticket by ID
  * @access  Private (authenticated, respects category access)
@@ -185,6 +195,11 @@ router.patch('/:id/reassign', authenticateToken, reassignTicket);
 router.patch('/:id/status', authenticateToken, updateTicketStatus);
 
 /**
+ * @route   PATCH /api/tickets/:id/cancel
+ * @desc    Cancel a ticket (customer can cancel their own open/pending tickets; staff can cancel any active ticket)
+ * @access  Private (ticket owner or staff)
+ */
+router.patch('/:id/cancel', authenticateToken, cancelTicket);
  * @route   POST /api/tickets/:id/reopen
  * @desc    Reopen a closed or cancelled ticket (within 30 days)
  * @access  Private (ticket requester or management only)
@@ -204,5 +219,12 @@ router.put('/:id', authenticateToken, updateTicket);
  * @access  Private (requires CAN_DELETE_TICKETS privilege or admin)
  */
 router.delete('/:id', authenticateToken, checkPrivilege('CAN_DELETE_TICKETS'), deleteTicket);
+
+/**
+ * @route   PATCH /api/tickets/:id/restore
+ * @desc    Restore a soft-deleted ticket
+ * @access  Private (requires CAN_DELETE_TICKETS privilege or admin)
+ */
+router.patch('/:id/restore', authenticateToken, checkPrivilege('CAN_DELETE_TICKETS'), restoreTicket);
 
 export default router;

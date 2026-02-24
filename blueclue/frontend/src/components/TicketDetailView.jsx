@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { getTicketById, updateTicketStatus, updateTicket, deleteTicket, getTechnicians, assignSingleTicket, reassignTicket, cancelTicket } from '../services/ticketService'
+import { getUserRole, getUser } from '../services/authService'
+import TicketActivityLog from './TicketActivityLog'
+import CancelTicketModal from './CancelTicketModal'
 import { getTicketById, updateTicketStatus, updateTicket, getTechnicians, assignSingleTicket, reassignTicket, reopenTicket } from '../services/ticketService'
 import { getUserRole, getUserId } from '../services/authService'
 import TicketActivityLog from './TicketActivityLog'
@@ -27,6 +31,10 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   const [isEditing, setIsEditing] = useState(false)
   const [editSubject, setEditSubject] = useState('')
   const [editDescription, setEditDescription] = useState('')
+  const [editCategory, setEditCategory] = useState('')
+  const [editPriority, setEditPriority] = useState('')
+  const [editResolution, setEditResolution] = useState('')
+  const [editPriorityReason, setEditPriorityReason] = useState('')
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState(null)
   const [showAssign, setShowAssign] = useState(false)
@@ -38,6 +46,13 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   const [techSearch, setTechSearch] = useState('')
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
 
+  // ─── Cancel ticket state (client-facing) ─────────────────────────
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [cancelSubmitting, setCancelSubmitting] = useState(false)
+
+  // ─── Delete ticket state (management) ─────────────────────────────
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
   // ─── Reopen state ────────────────────────────────────────────
   const [showReopenModal, setShowReopenModal] = useState(false)
   const [reopenReason, setReopenReason] = useState('')
@@ -57,11 +72,24 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
 
   // ─── Role-based visibility ─────────────────────────────────────
   const userRole = getUserRole()
+  const currentUser = getUser()
+  const currentUserId = currentUser?.id
   const isTech = userRole === 'technician'
   const isManagement = userRole === 'management'
   const canSeeInternals = isTech || isManagement   // priority, SLA, assignee, reopen
   const canSeeAudit = isManagement                 // AI classification, audit logs
   const canChangeStatus = isTech || isManagement   // only staff can change status
+  const isClient = !isTech && !isManagement        // client / customer role
+
+  // ─── Role-based edit permissions ──────────────────────────────────
+  // Clients: own tickets that are open/waiting_on_customer
+  // Techs: tickets assigned to them (not closed/cancelled)
+  // Management: all tickets
+  const canEdit = ticket ? (
+    isManagement ||
+    (isTech && ticket.assigned_to === currentUserId && !['closed', 'cancelled'].includes(ticket.status)) ||
+    (isClient && ticket.customer_id === currentUserId && ['open', 'waiting_on_customer'].includes(ticket.status))
+  ) : false
 
   // ─── Fetch ticket data (cache-aware) ─────────────────────────────
   const CACHE_TTL = 60_000 // 60 seconds
@@ -185,6 +213,10 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     if (!ticket) return
     setEditSubject(ticket.subject || '')
     setEditDescription(ticket.description || '')
+    setEditCategory(ticket.category || '')
+    setEditPriority(ticket.priority || 'low')
+    setEditResolution(ticket.resolution || '')
+    setEditPriorityReason('')
     setEditError(null)
     setIsEditing(true)
     setActiveTab('details')
@@ -195,20 +227,103 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     setEditError(null)
   }
 
+  // Helper: check if a field changed from its original value
+  const isFieldModified = (field) => {
+    if (!ticket) return false
+    switch (field) {
+      case 'subject': return editSubject !== (ticket.subject || '')
+      case 'description': return editDescription !== (ticket.description || '')
+      case 'category': return editCategory !== (ticket.category || '')
+      case 'priority': return editPriority !== (ticket.priority || 'low')
+      case 'resolution': return editResolution !== (ticket.resolution || '')
+      default: return false
+    }
+  }
+
   const saveEdit = async () => {
     if (!ticket || editSaving) return
+
+    // Build payload based on role — only send changed fields
+    const payload = {}
+    if (isManagement) {
+      if (editSubject !== (ticket.subject || '')) payload.subject = editSubject
+      if (editDescription !== (ticket.description || '')) payload.description = editDescription
+      if (editCategory !== (ticket.category || '')) payload.category = editCategory
+      if (editPriority !== (ticket.priority || 'low')) payload.priority = editPriority
+      if (editResolution !== (ticket.resolution || '')) payload.resolution = editResolution
+    } else if (isTech) {
+      if (editDescription !== (ticket.description || '')) payload.description = editDescription
+      if (editPriority !== (ticket.priority || 'low')) payload.priority = editPriority
+      if (editResolution !== (ticket.resolution || '')) payload.resolution = editResolution
+    } else {
+      if (editDescription !== (ticket.description || '')) payload.description = editDescription
+      if (editCategory !== (ticket.category || '')) payload.category = editCategory
+    }
+
+    // Nothing changed
+    if (Object.keys(payload).length === 0) {
+      setIsEditing(false)
+      return
+    }
+
+    // Require reason for priority changes
+    if (payload.priority && !editPriorityReason.trim()) {
+      setEditError('Please provide a reason for the priority change.')
+      return
+    }
+
+    // Confirmation for major changes (priority, category, subject)
+    const majorChanges = ['priority', 'category', 'subject'].filter(f => payload[f])
+    if (majorChanges.length > 0) {
+      const confirmed = window.confirm(
+        `You are changing: ${majorChanges.join(', ')}. Save these changes?`
+      )
+      if (!confirmed) return
+    }
+
+    // Include priority change reason if applicable
+    if (payload.priority && editPriorityReason.trim()) {
+      payload.priority_change_reason = editPriorityReason.trim()
+    }
+
     setEditSaving(true)
     setEditError(null)
+
+    // Optimistic update — apply immediately, rollback on failure
+    const previousTicket = { ...ticket }
+    const displayPayload = { ...payload }
+    delete displayPayload.priority_change_reason
+    setTicket((prev) => ({ ...prev, ...displayPayload }))
+    updateCache(ticket.id, displayPayload)
+
     try {
-      await updateTicket(ticket.id, { subject: editSubject, description: editDescription })
-      setTicket((prev) => ({ ...prev, subject: editSubject, description: editDescription }))
-      updateCache(ticket.id, { subject: editSubject, description: editDescription })
+      await updateTicket(ticket.id, payload)
       setIsEditing(false)
-      if (onTicketUpdated) onTicketUpdated(ticket.id, { subject: editSubject, description: editDescription })
+      if (onTicketUpdated) onTicketUpdated(ticket.id, displayPayload)
     } catch (err) {
+      // Rollback on failure
+      setTicket(previousTicket)
+      updateCache(ticket.id, previousTicket)
       setEditError(err.message || 'Failed to save changes')
     } finally {
       setEditSaving(false)
+    }
+  }
+
+  // ─── Delete handler (management only) ────────────────────────────
+  const handleDeleteTicket = async () => {
+    if (!ticket || deleteLoading) return
+    setDeleteLoading(true)
+    try {
+      await deleteTicket(ticket.id)
+      setShowDeleteConfirm(false)
+      if (onTicketUpdated) onTicketUpdated(ticket.id, { deleted: true })
+      onClose()
+    } catch (err) {
+      setEditError(err.message || 'Failed to delete ticket')
+      setShowDeleteConfirm(false)
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
@@ -249,6 +364,26 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
       setAssignError(err.message || 'Failed to assign ticket')
     } finally {
       setAssignLoading(false)
+    }
+  }
+
+  // ─── Cancel ticket handler (client-facing) ──────────────────────
+  const handleCancelTicket = async (reason, details) => {
+    if (!ticket || cancelSubmitting) return
+    setCancelSubmitting(true)
+    try {
+      await cancelTicket(ticket.id, reason, details)
+      setTicket((prev) => ({ ...prev, status: 'cancelled' }))
+      updateCache(ticket.id, { status: 'cancelled' })
+      setShowCancelModal(false)
+      setStatusSuccess('Ticket cancelled successfully')
+      setTimeout(() => setStatusSuccess(null), 3000)
+      if (onTicketUpdated) onTicketUpdated(ticket.id, { status: 'cancelled' })
+    } catch (err) {
+      setStatusError(err.message || 'Failed to cancel ticket')
+      setShowCancelModal(false)
+    } finally {
+      setCancelSubmitting(false)
     }
   }
 
@@ -465,6 +600,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     waiting_on_customer: 'bg-purple-900/60 text-purple-300 border-purple-600',
     resolved: 'bg-green-900/60 text-green-300 border-green-600',
     closed: 'bg-gray-700/60 text-gray-300 border-gray-600',
+    cancelled: 'bg-gray-800/60 text-gray-300 border-gray-600',
     cancelled: 'bg-gray-700/60 text-gray-400 border-gray-600',
     reopened: 'bg-orange-900/60 text-orange-300 border-orange-600',
   }
@@ -477,11 +613,12 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   }
 
   const validTransitions = {
-    open: ['in_progress', 'waiting_on_customer', 'resolved', 'closed'],
-    in_progress: ['waiting_on_customer', 'resolved', 'open'],
-    waiting_on_customer: ['in_progress', 'resolved', 'open'],
+    open: ['in_progress', 'waiting_on_customer', 'resolved', 'closed', 'cancelled'],
+    in_progress: ['waiting_on_customer', 'resolved', 'open', 'cancelled'],
+    waiting_on_customer: ['in_progress', 'resolved', 'open', 'cancelled'],
     resolved: ['closed', 'in_progress', 'open'],
     closed: [],
+    cancelled: isManagement ? ['open'] : [],  // Only management/admin can reopen
     cancelled: [],
     reopened: ['in_progress', 'waiting_on_customer', 'resolved', 'closed'],
   }
@@ -577,8 +714,8 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
         {/* ── Quick Actions Bar ─────────────────────────────────── */}
         {ticket && !loading && !error && (
           <div className="flex items-center gap-2 px-4 md:px-6 py-2 border-b border-gray-800 flex-shrink-0 bg-gray-900/40 overflow-x-auto">
-            {/* Edit — management only */}
-            {isManagement && (
+            {/* Edit — role-based: clients (own open/pending), techs (assigned), management (all) */}
+            {canEdit && (
               isEditing ? (
                 <div className="flex items-center gap-1.5">
                   <button
@@ -905,6 +1042,35 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
               </button>
             )}
 
+            {/* Cancel Ticket — clients: open/pending only; techs/management: any active ticket */}
+            {((
+              isClient && ['open', 'waiting_on_customer'].includes(ticket.status)
+            ) || (
+              (isTech || isManagement) && ticket.status !== 'closed' && ticket.status !== 'cancelled'
+            )) && (
+              <button
+                onClick={() => setShowCancelModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-gray-100 text-xs font-medium border border-gray-700 hover:border-gray-500 transition-colors"
+                title="Cancel ticket"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+                Cancel Ticket
+              </button>
+            )}
+
+            {/* Delete Ticket — management only, with confirmation */}
+            {isManagement && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-red-900/60 text-gray-300 hover:text-red-300 text-xs font-medium border border-gray-700 hover:border-red-700 transition-colors"
+                title="Delete ticket"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Delete
             {/* Reopen Ticket — requester or management, for closed/cancelled tickets < 30 days */}
             {canReopenTicket() && (
               <button
@@ -1017,6 +1183,25 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                           &rarr; {formatStatus(s)}
                         </button>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Cancel Ticket — clients: open/pending only; techs/management: any active ticket */}
+                  {((
+                    isClient && ['open', 'waiting_on_customer'].includes(ticket.status)
+                  ) || (
+                    (isTech || isManagement) && ticket.status !== 'closed' && ticket.status !== 'cancelled'
+                  )) && (
+                    <div className="mt-3">
+                      <button
+                        onClick={() => setShowCancelModal(true)}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gray-700/30 hover:bg-gray-700/50 text-gray-300 text-sm font-medium border border-gray-600/50 hover:border-gray-500 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                        </svg>
+                        Cancel Ticket
+                      </button>
                     </div>
                   )}
 
@@ -1277,14 +1462,23 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                   <div className="space-y-6 max-w-3xl">
                     {/* Subject */}
                     <div>
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={editSubject}
-                          onChange={(e) => setEditSubject(e.target.value)}
-                          className="w-full bg-gray-900 border border-blue-500/50 rounded-lg px-4 py-2.5 text-xl font-bold text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30"
-                          placeholder="Ticket subject"
-                        />
+                      {isEditing && isManagement ? (
+                        <div>
+                          <input
+                            type="text"
+                            value={editSubject}
+                            onChange={(e) => setEditSubject(e.target.value)}
+                            className={`w-full bg-gray-900 border rounded-lg px-4 py-2.5 text-xl font-bold text-white focus:outline-none focus:ring-1 ${
+                              isFieldModified('subject')
+                                ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-500/30'
+                                : 'border-blue-500/50 focus:border-blue-500 focus:ring-blue-500/30'
+                            }`}
+                            placeholder="Ticket subject"
+                          />
+                          {isFieldModified('subject') && (
+                            <span className="text-amber-400 text-xs mt-1 block">Modified</span>
+                          )}
+                        </div>
                       ) : (
                         <h3 className="text-xl md:text-2xl font-bold text-white leading-tight">
                           {ticket.subject}
@@ -1299,13 +1493,22 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
 
                     {/* Description */}
                     <div>
-                      <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">Description</label>
+                      <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                        Description
+                        {isEditing && isFieldModified('description') && (
+                          <span className="text-amber-400 ml-2 normal-case">Modified</span>
+                        )}
+                      </label>
                       {isEditing ? (
                         <textarea
                           value={editDescription}
                           onChange={(e) => setEditDescription(e.target.value)}
                           rows={8}
-                          className="w-full bg-gray-900 border border-blue-500/50 rounded-lg px-4 py-3 text-gray-300 text-sm leading-relaxed focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 resize-y"
+                          className={`w-full bg-gray-900 border rounded-lg px-4 py-3 text-gray-300 text-sm leading-relaxed focus:outline-none focus:ring-1 resize-y ${
+                            isFieldModified('description')
+                              ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-500/30'
+                              : 'border-blue-500/50 focus:border-blue-500 focus:ring-blue-500/30'
+                          }`}
                           placeholder="Ticket description"
                         />
                       ) : (
@@ -1315,15 +1518,108 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                       )}
                     </div>
 
-                    {/* Resolution */}
-                    {ticket.resolution && (
+                    {/* Inline edit fields — role-based */}
+                    {isEditing && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Category — clients & management */}
+                        {(isClient || isManagement) && (
+                          <div>
+                            <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                              Category
+                              {isFieldModified('category') && (
+                                <span className="text-amber-400 ml-2 normal-case">Modified</span>
+                              )}
+                            </label>
+                            <select
+                              value={editCategory}
+                              onChange={(e) => setEditCategory(e.target.value)}
+                              className={`w-full bg-gray-900 border rounded-lg px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:ring-1 capitalize ${
+                                isFieldModified('category')
+                                  ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-500/30'
+                                  : 'border-blue-500/50 focus:border-blue-500 focus:ring-blue-500/30'
+                              }`}
+                            >
+                              {['general', 'technical', 'billing', 'account', 'feature_request', 'hardware', 'software', 'network', 'login', 'other'].map((cat) => (
+                                <option key={cat} value={cat}>
+                                  {cat.replace(/_/g, ' ')}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        {/* Priority — techs & management */}
+                        {(isTech || isManagement) && (
+                          <div>
+                            <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                              Priority
+                              {isFieldModified('priority') && (
+                                <span className="text-amber-400 ml-2 normal-case">Modified</span>
+                              )}
+                            </label>
+                            <select
+                              value={editPriority}
+                              onChange={(e) => setEditPriority(e.target.value)}
+                              className={`w-full bg-gray-900 border rounded-lg px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:ring-1 capitalize ${
+                                isFieldModified('priority')
+                                  ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-500/30'
+                                  : 'border-blue-500/50 focus:border-blue-500 focus:ring-blue-500/30'
+                              }`}
+                            >
+                              {['low', 'medium', 'high', 'critical'].map((p) => (
+                                <option key={p} value={p}>
+                                  {p}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Priority change reason — shown when priority is modified */}
+                    {isEditing && isFieldModified('priority') && (
+                      <div>
+                        <label className="text-amber-400 text-xs font-medium uppercase tracking-wider mb-2 block">Reason for Priority Change *</label>
+                        <input
+                          type="text"
+                          value={editPriorityReason}
+                          onChange={(e) => setEditPriorityReason(e.target.value)}
+                          className="w-full bg-gray-900 border border-amber-500/50 rounded-lg px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30"
+                          placeholder="Why is the priority being changed?"
+                        />
+                      </div>
+                    )}
+
+                    {/* Resolution / Notes — editable for techs & management */}
+                    {isEditing && (isTech || isManagement) ? (
+                      <div>
+                        <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                          Resolution / Notes
+                          {isFieldModified('resolution') && (
+                            <span className="text-amber-400 ml-2 normal-case">Modified</span>
+                          )}
+                        </label>
+                        <textarea
+                          value={editResolution}
+                          onChange={(e) => setEditResolution(e.target.value)}
+                          rows={4}
+                          className={`w-full bg-gray-900 border rounded-lg px-4 py-3 text-gray-300 text-sm leading-relaxed focus:outline-none focus:ring-1 resize-y ${
+                            isFieldModified('resolution')
+                              ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-500/30'
+                              : 'border-blue-500/50 focus:border-blue-500 focus:ring-blue-500/30'
+                          }`}
+                          placeholder="Add resolution notes..."
+                        />
+                      </div>
+                    ) : ticket.resolution ? (
                       <div>
                         <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">Resolution</label>
                         <div className="bg-green-900/20 rounded-lg border border-green-800/50 p-4 text-green-300 text-sm leading-relaxed whitespace-pre-wrap break-words">
                           {ticket.resolution}
                         </div>
                       </div>
-                    )}
+                    ) : null}
 
                     {/* AI Classification Details — management only */}
                     {canSeeAudit && ticket.ai_classified && (
@@ -1395,6 +1691,53 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
           />
         )}
       </div>
+
+      {/* Cancel Ticket Modal (rendered outside main content for z-index) */}
+      <CancelTicketModal
+        isOpen={showCancelModal}
+        ticketNumber={ticket?.ticket_number}
+        onConfirm={handleCancelTicket}
+        onClose={() => setShowCancelModal(false)}
+        isSubmitting={cancelSubmitting}
+      />
+
+      {/* Delete Ticket Confirmation Modal — management only */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50" onClick={(e) => { if (e.target === e.currentTarget) setShowDeleteConfirm(false) }}>
+          <div className="w-full max-w-sm bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-900/40 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="text-white font-semibold">Delete Ticket</h4>
+                <p className="text-gray-400 text-sm">This action cannot be undone.</p>
+              </div>
+            </div>
+            <p className="text-gray-300 text-sm mb-5">
+              Are you sure you want to delete ticket <span className="text-white font-medium">{ticket?.ticket_number}</span>? This will permanently remove the ticket and all associated data.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleteLoading}
+                className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium border border-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteTicket}
+                disabled={deleteLoading}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {deleteLoading ? 'Deleting...' : 'Delete Ticket'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -100,6 +100,17 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
           bgColor: 'bg-green-900/30',
           label: 'Status Changed'
         }
+      case 'ticket_cancelled':
+        return {
+          icon: (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+            </svg>
+          ),
+          color: 'text-gray-400',
+          bgColor: 'bg-gray-800',
+          label: 'Cancelled'
+        }
       case 'priority_change':
         return {
           icon: (
@@ -121,6 +132,17 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
           color: 'text-purple-400',
           bgColor: 'bg-purple-900/30',
           label: 'Category Changed'
+        }
+      case 'field_edited':
+        return {
+          icon: (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          ),
+          color: 'text-cyan-400',
+          bgColor: 'bg-cyan-900/30',
+          label: 'Edited'
         }
       default:
         return {
@@ -193,6 +215,30 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
             <span className="text-green-300 font-medium">{entry.new_value?.replace(/_/g, ' ')}</span>
           </span>
         )
+      case 'ticket_cancelled': {
+        const cancelInfo = entry.change_details || {}
+        const cancelledBy = cancelInfo.cancelled_by_name || entry.changed_by_name || 'Unknown'
+        const cancelReason = cancelInfo.reason || 'No reason provided'
+        const cancelExtra = cancelInfo.details
+        const prevStatus = cancelInfo.previous_status?.replace(/_/g, ' ') || entry.old_value?.replace(/_/g, ' ')
+        return (
+          <span>
+            <span className="text-white font-medium">{cancelledBy}</span>
+            {' cancelled this ticket'}
+            {prevStatus && <span className="text-gray-500"> (was {prevStatus})</span>}
+            <br />
+            <span className="text-gray-400">Reason: </span>
+            <span className="text-gray-200">{cancelReason}</span>
+            {cancelExtra && (
+              <>
+                <br />
+                <span className="text-gray-400">Details: </span>
+                <span className="text-gray-300">{cancelExtra}</span>
+              </>
+            )}
+          </span>
+        )
+      }
       case 'priority_change':
         return (
           <span>
@@ -211,6 +257,26 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
             <span className="text-purple-300 font-medium">{entry.new_value}</span>
           </span>
         )
+      case 'field_edited': {
+        const editDetails = entry.change_details || {}
+        const editedBy = editDetails.edited_by_name || entry.changed_by_name || 'Someone'
+        const fieldLabel = (entry.field_name || 'field').replace(/_/g, ' ')
+        return (
+          <span>
+            <span className="text-white font-medium">{editedBy}</span>
+            {' edited '}
+            <span className="text-cyan-300 font-medium">{fieldLabel}</span>
+            {entry.old_value && entry.new_value && (
+              <>
+                {' from '}
+                <span className="text-gray-400">&ldquo;{entry.old_value.length > 60 ? entry.old_value.slice(0, 60) + '...' : entry.old_value}&rdquo;</span>
+                {' to '}
+                <span className="text-gray-200">&ldquo;{entry.new_value.length > 60 ? entry.new_value.slice(0, 60) + '...' : entry.new_value}&rdquo;</span>
+              </>
+            )}
+          </span>
+        )
+      }
       default:
         return (
           <span>

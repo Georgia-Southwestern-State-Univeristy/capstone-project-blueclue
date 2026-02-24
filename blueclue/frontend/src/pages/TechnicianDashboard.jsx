@@ -18,7 +18,8 @@ const getStatusColor = (status) => {
     in_progress: { bg: 'bg-blue-950', border: 'border-blue-700', text: 'text-blue-400', badge: 'bg-blue-900 text-blue-300' },
     waiting_on_customer: { bg: 'bg-purple-950', border: 'border-purple-700', text: 'text-purple-400', badge: 'bg-purple-900 text-purple-300' },
     resolved: { bg: 'bg-green-950', border: 'border-green-700', text: 'text-green-400', badge: 'bg-green-900 text-green-300' },
-    closed: { bg: 'bg-gray-800', border: 'border-gray-600', text: 'text-gray-400', badge: 'bg-gray-700 text-gray-300' }
+    closed: { bg: 'bg-gray-800', border: 'border-gray-600', text: 'text-gray-400', badge: 'bg-gray-700 text-gray-300' },
+    cancelled: { bg: 'bg-gray-900', border: 'border-gray-600', text: 'text-gray-400', badge: 'bg-gray-700 text-gray-300' }
   }
   return statusColors[status] || statusColors.open
 }
@@ -67,6 +68,7 @@ function TechnicianDashboard() {
   const [activeTab, setActiveTab] = useState('queue') // 'queue' | 'available'
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const [includeCancelled, setIncludeCancelled] = useState(false)
 
   // Filter state
   const [filters, setFilters] = useState({
@@ -217,7 +219,8 @@ function TechnicianDashboard() {
 
   // Apply filters to tickets
   const getFilteredTickets = () => {
-    return tickets.filter(ticket => {
+    const baseTickets = includeCancelled ? tickets : tickets.filter(t => t.status !== 'cancelled')
+    return baseTickets.filter(ticket => {
       // Search filter
       if (searchQuery.trim() !== '') {
         const query = searchQuery.toLowerCase()
@@ -265,13 +268,19 @@ function TechnicianDashboard() {
   }
 
   // Calculate ticket statistics
+  const activeTickets = includeCancelled ? tickets : tickets.filter(t => t.status !== 'cancelled')
+  const cancelledCount = tickets.filter(t => t.status === 'cancelled').length
+  const cancellationRate = tickets.length > 0 ? parseFloat(((cancelledCount / tickets.length) * 100).toFixed(1)) : 0
+
   const stats = {
-    open: tickets.filter(t => t.status === 'open').length,
-    in_progress: tickets.filter(t => t.status === 'in_progress').length,
-    resolved: tickets.filter(t => t.status === 'resolved').length,
-    closed: tickets.filter(t => t.status === 'closed').length,
-    waiting: tickets.filter(t => t.status === 'waiting_on_customer').length,
-    total: tickets.length
+    open: activeTickets.filter(t => t.status === 'open').length,
+    in_progress: activeTickets.filter(t => t.status === 'in_progress').length,
+    resolved: activeTickets.filter(t => t.status === 'resolved').length,
+    closed: activeTickets.filter(t => t.status === 'closed').length,
+    waiting: activeTickets.filter(t => t.status === 'waiting_on_customer').length,
+    cancelled: cancelledCount,
+    cancellationRate,
+    total: activeTickets.length
   }
 
   // Donut chart segment data
@@ -281,19 +290,20 @@ function TechnicianDashboard() {
     { label: 'Waiting', count: stats.waiting, color: '#a78bfa' },
     { label: 'Resolved', count: stats.resolved, color: '#3b82f6' },
     { label: 'Closed', count: stats.closed, color: '#6b7280' },
+    { label: 'Cancelled', count: stats.cancelled, color: '#9ca3af' },
   ]
 
   // Priority pie chart data
   const prioritySegments = [
-    { label: 'Low', count: tickets.filter(t => t.priority === 'low').length, color: '#3b82f6' },
-    { label: 'Medium', count: tickets.filter(t => t.priority === 'medium').length, color: '#eab308' },
-    { label: 'High', count: tickets.filter(t => t.priority === 'high').length, color: '#f97316' },
-    { label: 'Critical', count: tickets.filter(t => t.priority === 'critical').length, color: '#ef4444' },
+    { label: 'Low', count: activeTickets.filter(t => t.priority === 'low').length, color: '#3b82f6' },
+    { label: 'Medium', count: activeTickets.filter(t => t.priority === 'medium').length, color: '#eab308' },
+    { label: 'High', count: activeTickets.filter(t => t.priority === 'high').length, color: '#f97316' },
+    { label: 'Critical', count: activeTickets.filter(t => t.priority === 'critical').length, color: '#ef4444' },
   ]
 
   // Assignment status data for mini pie chart
-  const assignedCount = tickets.filter(t => t.assigned_to_name && t.assigned_to_name !== 'null').length
-  const unassignedCount = tickets.length - assignedCount
+  const assignedCount = activeTickets.filter(t => t.assigned_to_name && t.assigned_to_name !== 'null').length
+  const unassignedCount = activeTickets.length - assignedCount
   const assignmentSegments = [
     { label: 'Assigned', count: assignedCount, color: '#3b82f6' },
     { label: 'Unassigned', count: unassignedCount, color: '#6b7280' },
@@ -311,11 +321,35 @@ function TechnicianDashboard() {
   return (
     <div className="p-4 md:p-8 bg-gray-950 min-h-screen">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold text-white mb-2">Technician Dashboard</h1>
-        <p className="text-gray-400">
-          View and manage all support tickets across the organization.
-        </p>
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-bold text-white mb-2">Technician Dashboard</h1>
+          <p className="text-gray-400">
+            View and manage all support tickets across the organization.
+          </p>
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <span className="text-sm text-gray-400">Include Cancelled</span>
+          <button
+            onClick={() => setIncludeCancelled(prev => !prev)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
+              includeCancelled ? 'bg-blue-600' : 'bg-gray-600'
+            }`}
+            role="switch"
+            aria-checked={includeCancelled}
+          >
+            <span
+              className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                includeCancelled ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+          {cancelledCount > 0 && (
+            <span className="text-xs text-gray-500 ml-1">
+              {cancelledCount} cancelled ({cancellationRate}%)
+            </span>
+          )}
+        </label>
       </div>
 
       {/* Error Alert */}
@@ -386,11 +420,11 @@ function TechnicianDashboard() {
               {/* Mini Assignment Pie Chart */}
               <div className="flex items-center gap-2 bg-gray-800 px-3 py-2 rounded-lg border border-gray-600">
                 <svg viewBox="0 0 40 40" className="w-10 h-10">
-                  {tickets.length === 0 ? (
+                  {activeTickets.length === 0 ? (
                     <circle cx="20" cy="20" r="16" fill="#374151" />
                   ) : (
                     assignmentSegments.map((segment, i) => {
-                      const total = tickets.length || 1
+                      const total = activeTickets.length || 1
                       const percent = (segment.count / total) * 100
                       if (percent === 0) return null
                       const offset = assignmentSegments.slice(0, i).reduce(
@@ -502,7 +536,7 @@ function TechnicianDashboard() {
                     Status
                   </h3>
                   <div className="space-y-1">
-                    {['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed'].map(status => (
+                    {['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed', 'cancelled'].map(status => (
                       <label key={status} className="flex items-center gap-2 cursor-pointer hover:bg-gray-700 px-2 py-1.5 rounded">
                         <input
                           type="checkbox"
@@ -655,7 +689,7 @@ function TechnicianDashboard() {
                         value={ticket.status}
                         onChange={(e) => handleStatusChange(ticket.id, e.target.value)}
                         onClick={(e) => e.stopPropagation()}
-                        disabled={updatingTicketId === ticket.id || ticket.status === 'closed'}
+                        disabled={updatingTicketId === ticket.id || ticket.status === 'closed' || ticket.status === 'cancelled'}
                         className={`w-full px-3 py-2 rounded-md text-sm font-medium cursor-pointer transition-colors ${statusColor.badge} border border-gray-600 hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed`}
                       >
                         <option value="open">{updatingTicketId === ticket.id && ticket.status === 'open' ? '⏳ ' : ''}Open</option>
@@ -663,12 +697,13 @@ function TechnicianDashboard() {
                         <option value="waiting_on_customer">{updatingTicketId === ticket.id && ticket.status === 'waiting_on_customer' ? '⏳ ' : ''}Waiting on Customer</option>
                         <option value="resolved">{updatingTicketId === ticket.id && ticket.status === 'resolved' ? '⏳ ' : ''}Resolved</option>
                         <option value="closed">{updatingTicketId === ticket.id && ticket.status === 'closed' ? '⏳ ' : ''}Closed</option>
+                        <option value="cancelled">{updatingTicketId === ticket.id && ticket.status === 'cancelled' ? '⏳ ' : ''}Cancelled</option>
                       </select>
                       {updatingTicketId === ticket.id && (
                         <p className="text-blue-400 text-[10px] mt-1">Updating...</p>
                       )}
-                      {ticket.status === 'closed' && (
-                        <p className="text-xs text-gray-500 mt-1">Closed tickets cannot be modified</p>
+                      {(ticket.status === 'closed' || ticket.status === 'cancelled') && (
+                        <p className="text-xs text-gray-500 mt-1">{ticket.status === 'cancelled' ? 'Cancelled' : 'Closed'} tickets cannot be modified</p>
                       )}
                     </div>
 
@@ -769,7 +804,7 @@ function TechnicianDashboard() {
                         value={ticket.assigned_to || ''}
                         onChange={(e) => handleAssignmentChange(ticket.id, e.target.value)}
                         onClick={(e) => e.stopPropagation()}
-                        disabled={assigningTicketId === ticket.id || ticket.status === 'closed'}
+                        disabled={assigningTicketId === ticket.id || ticket.status === 'closed' || ticket.status === 'cancelled'}
                         className="w-full px-2 py-1.5 rounded-md text-sm bg-gray-800 border border-gray-600 text-gray-200 hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <option value="">Unassigned</option>
