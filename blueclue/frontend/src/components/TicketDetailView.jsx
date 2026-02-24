@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { getTicketById, updateTicketStatus, updateTicket, getTechnicians, assignSingleTicket, reassignTicket } from '../services/ticketService'
 import { getUserRole } from '../services/authService'
 import TicketActivityLog from './TicketActivityLog'
+import TicketComments from './TicketComments'
 
 /**
  * TicketDetailView
@@ -952,6 +953,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
               <div className="flex items-center border-b border-gray-800 px-4 md:px-6 flex-shrink-0 bg-gray-900/30">
                 {[
                   { id: 'details', label: 'Details' },
+                  { id: 'comments', label: 'Comments' },
                   { id: 'activity', label: 'Activity' },
                 ].map((tab) => (
                   <button
@@ -1066,6 +1068,10 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                       </div>
                     )}
                   </div>
+                )}
+
+                {activeTab === 'comments' && (
+                  <TicketComments ticketId={ticket.id} />
                 )}
 
                 {activeTab === 'activity' && (
