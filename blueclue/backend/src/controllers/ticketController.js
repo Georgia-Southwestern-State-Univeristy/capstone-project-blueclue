@@ -36,26 +36,43 @@ const VALID_TRANSITIONS = {
  * Called whenever a ticket gets assigned/reassigned through any code path.
  * Notifies each affected technician via socket.
  */
-const autoDenyPendingRequests = async (ticketId, reviewerId, reason, io) => {
+const autoDenyPendingRequests = async (ticketId, reviewerId, reason, io, excludeUserId = null) => {
     try {
-        // Find all pending requests for this ticket
-        const pendingResult = await pool.query(
-            `SELECT ar.id, ar.requested_by, t.subject AS ticket_title
-             FROM ticket_assignment_requests ar
-             JOIN tickets t ON ar.ticket_id = t.id
-             WHERE ar.ticket_id = $1 AND ar.status = 'pending'`,
-            [ticketId]
-        );
+        // Find all pending requests for this ticket (excluding the assigned tech if provided)
+        const pendingQuery = excludeUserId
+            ? `SELECT ar.id, ar.requested_by, t.subject AS ticket_title
+               FROM ticket_assignment_requests ar
+               JOIN tickets t ON ar.ticket_id = t.id
+               WHERE ar.ticket_id = $1 AND ar.status = 'pending' AND ar.requested_by != $2`
+            : `SELECT ar.id, ar.requested_by, t.subject AS ticket_title
+               FROM ticket_assignment_requests ar
+               JOIN tickets t ON ar.ticket_id = t.id
+               WHERE ar.ticket_id = $1 AND ar.status = 'pending'`;
+        const pendingParams = excludeUserId ? [ticketId, excludeUserId] : [ticketId];
+        const pendingResult = await pool.query(pendingQuery, pendingParams);
+
+        // Also approve the assigned tech's request if they had one pending
+        if (excludeUserId) {
+            await pool.query(
+                `UPDATE ticket_assignment_requests
+                 SET status = 'approved', reviewed_by = $1, reviewed_at = NOW()
+                 WHERE ticket_id = $2 AND requested_by = $3 AND status = 'pending'`,
+                [reviewerId, ticketId, excludeUserId]
+            );
+        }
 
         if (pendingResult.rows.length === 0) return;
 
-        // Bulk-deny all pending requests
-        await pool.query(
-            `UPDATE ticket_assignment_requests
-             SET status = 'denied', reviewed_by = $1, reviewed_at = NOW()
-             WHERE ticket_id = $2 AND status = 'pending'`,
-            [reviewerId, ticketId]
-        );
+        // Bulk-deny remaining pending requests
+        const denyQuery = excludeUserId
+            ? `UPDATE ticket_assignment_requests
+               SET status = 'denied', reviewed_by = $1, reviewed_at = NOW()
+               WHERE ticket_id = $2 AND status = 'pending' AND requested_by != $3`
+            : `UPDATE ticket_assignment_requests
+               SET status = 'denied', reviewed_by = $1, reviewed_at = NOW()
+               WHERE ticket_id = $2 AND status = 'pending'`;
+        const denyParams = excludeUserId ? [reviewerId, ticketId, excludeUserId] : [reviewerId, ticketId];
+        await pool.query(denyQuery, denyParams);
 
         // Notify each affected technician
         for (const row of pendingResult.rows) {
@@ -698,7 +715,8 @@ export const updateTicket = async (req, res) => {
                 parseInt(id),
                 req.user ? req.user.id : null,
                 'Ticket was assigned through another action',
-                io
+                io,
+                parseInt(updates.assigned_to)
             );
         }
 
@@ -985,7 +1003,8 @@ export const bulkAssignTickets = async (req, res) => {
                 ticket.id,
                 req.user ? req.user.id : null,
                 'Ticket was bulk-assigned to another technician',
-                io
+                io,
+                technician_id
             );
         }
 
@@ -1110,7 +1129,8 @@ export const assignTicket = async (req, res) => {
             parseInt(id),
             req.user ? req.user.id : null,
             'Ticket was directly assigned to another technician',
-            io
+            io,
+            technician_id
         );
 
         // Send assignment notification
@@ -1270,7 +1290,8 @@ export const reassignTicket = async (req, res) => {
             parseInt(id),
             req.user ? req.user.id : null,
             'Ticket was reassigned to another technician',
-            io
+            io,
+            technician_id
         );
 
         // Send assignment notification to new technician
