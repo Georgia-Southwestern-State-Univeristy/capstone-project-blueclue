@@ -715,8 +715,12 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
               </button>
             )}
 
-            {/* Cancel Ticket — clients only, when ticket is not already closed/cancelled */}
-            {isClient && ticket.status !== 'closed' && ticket.status !== 'cancelled' && (
+            {/* Cancel Ticket — clients: open/pending only; techs/management: any active ticket */}
+            {((
+              isClient && ['open', 'waiting_on_customer'].includes(ticket.status)
+            ) || (
+              (isTech || isManagement) && ticket.status !== 'closed' && ticket.status !== 'cancelled'
+            )) && (
               <button
                 onClick={() => setShowCancelModal(true)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-orange-900/60 text-gray-300 hover:text-orange-300 text-xs font-medium border border-gray-700 hover:border-orange-700 transition-colors"
@@ -803,8 +807,12 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                     </div>
                   )}
 
-                  {/* Cancel Ticket — client only, when ticket is still active */}
-                  {isClient && ticket.status !== 'closed' && ticket.status !== 'cancelled' && (
+                  {/* Cancel Ticket — clients: open/pending only; techs/management: any active ticket */}
+                  {((
+                    isClient && ['open', 'waiting_on_customer'].includes(ticket.status)
+                  ) || (
+                    (isTech || isManagement) && ticket.status !== 'closed' && ticket.status !== 'cancelled'
+                  )) && (
                     <div className="mt-3">
                       <button
                         onClick={() => setShowCancelModal(true)}

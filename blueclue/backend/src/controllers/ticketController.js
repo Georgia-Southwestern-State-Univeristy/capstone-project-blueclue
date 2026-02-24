@@ -1733,10 +1733,14 @@ export const cancelTicket = async (req, res) => {
             return res.status(404).json({ status: 'error', message: 'Ticket not found' });
         }
 
-        // Only the ticket owner or management can cancel
+        // Determine user identity and role
         const userId = req.user?.id || req.user?.userId;
         const userRole = req.user?.role;
-        if (existingTicket.customer_id !== userId && userRole !== 'management' && userRole !== 'admin') {
+        const isStaff = ['technician', 'senior_technician', 'management', 'admin'].includes(userRole);
+        const isOwner = existingTicket.customer_id === userId;
+
+        // Only the ticket owner or staff can cancel
+        if (!isOwner && !isStaff) {
             return res.status(403).json({ status: 'error', message: 'You can only cancel your own tickets' });
         }
 
@@ -1745,6 +1749,15 @@ export const cancelTicket = async (req, res) => {
             return res.status(400).json({
                 status: 'error',
                 message: `Cannot cancel a ticket that is already ${existingTicket.status}`
+            });
+        }
+
+        // Clients can only cancel tickets that are open or waiting_on_customer (pending)
+        const clientCancellableStatuses = ['open', 'waiting_on_customer'];
+        if (!isStaff && !clientCancellableStatuses.includes(existingTicket.status)) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'You can only cancel tickets that are open or pending. Assigned or in-progress tickets cannot be cancelled by clients.'
             });
         }
 
