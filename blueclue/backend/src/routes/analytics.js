@@ -12,7 +12,8 @@ import {
     getTodaysActions,
     getTopRequesters,
     getTechPerformance,
-    getReopenAnalytics
+    getReopenAnalytics,
+    getCollaborationAnalytics
 } from '../controllers/analyticsController.js';
 import { authenticateToken } from '../middleware/auth.js';
 
@@ -111,5 +112,13 @@ router.get('/tech-performance', getTechPerformance);
  * @query   days (default: 30) - Number of days to analyze
  */
 router.get('/reopens', getReopenAnalytics);
+
+/**
+ * @route   GET /api/analytics/collaboration
+ * @desc    Multi-technician collaboration analytics
+ * @access  Management, Admin
+ * @query   days (default: 30) - Number of days to analyze
+ */
+router.get('/collaboration', getCollaborationAnalytics);
 
 export default router;

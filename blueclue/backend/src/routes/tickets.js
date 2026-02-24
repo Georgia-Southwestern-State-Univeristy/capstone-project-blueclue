@@ -16,6 +16,13 @@ import {
     getTicketHistory,
     reopenTicket
 } from '../controllers/ticketController.js';
+import {
+    addCollaborator,
+    removeCollaborator,
+    transferPrimary,
+    getCollaborators,
+    getTechnicianWorkload
+} from '../controllers/collaboratorController.js';
 import { optionalAuth, authenticateToken } from '../middleware/auth.js';
 import { checkPrivilege } from '../middleware/rbac.js';
 
@@ -106,6 +113,34 @@ router.get('/timeline', async (req, res) => {
  * @access  Private (authenticated, respects category access)
  */
 router.get('/:id', optionalAuth, getTicketById);
+
+/**
+ * @route   GET /api/tickets/:id/collaborators
+ * @desc    Get all collaborators for a ticket
+ * @access  Private (authenticated users)
+ */
+router.get('/:id/collaborators', authenticateToken, getCollaborators);
+
+/**
+ * @route   POST /api/tickets/:id/collaborators
+ * @desc    Add a collaborator to a ticket
+ * @access  Private (primary technician or management)
+ */
+router.post('/:id/collaborators', authenticateToken, addCollaborator);
+
+/**
+ * @route   DELETE /api/tickets/:id/collaborators/:userId
+ * @desc    Remove a collaborator from a ticket
+ * @access  Private (primary technician or management)
+ */
+router.delete('/:id/collaborators/:userId', authenticateToken, removeCollaborator);
+
+/**
+ * @route   PATCH /api/tickets/:id/transfer
+ * @desc    Transfer primary assignment to another technician
+ * @access  Private (current primary or management)
+ */
+router.patch('/:id/transfer', authenticateToken, transferPrimary);
 
 /**
  * @route   POST /api/tickets/:id/request-assignment

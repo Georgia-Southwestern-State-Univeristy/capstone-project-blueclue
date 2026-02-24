@@ -7,6 +7,7 @@ import UserPrivilege from '../models/UserPrivilege.js';
 import CategoryAccess from '../models/CategoryAccess.js';
 import TicketHistory from '../models/TicketHistory.js';
 import Notification from '../models/Notification.js';
+import TicketCollaborator from '../models/TicketCollaborator.js';
 import { classifyTicketWithFallback } from '../services/aiService.js';
 import { calculateFinalPriority, explainPriorityDecision } from '../services/priorityService.js';
 import pool from '../config/database.js';
@@ -701,6 +702,56 @@ export const updateTicket = async (req, res) => {
             );
         }
 
+        // Auto-create/update primary collaborator when ticket is assigned
+        if (updates.assigned_to !== undefined && updates.assigned_to !== existingTicket.assigned_to) {
+            try {
+                const ticketId = parseInt(id);
+                const newAssigneeId = updates.assigned_to;
+                const oldAssigneeId = existingTicket.assigned_to;
+
+                if (newAssigneeId !== null) {
+                    // Get current primary collaborator (if any)
+                    const currentPrimary = await TicketCollaborator.getPrimaryByTicketId(ticketId);
+
+                    // If there's an existing primary, demote them to assisting
+                    if (currentPrimary && currentPrimary.user_id !== newAssigneeId) {
+                        await TicketCollaborator.updateRole(ticketId, currentPrimary.user_id, 'assisting');
+                        console.log(`Demoted user ${currentPrimary.user_id} from primary to assisting on ticket ${ticketId}`);
+                    }
+
+                    // Check if new assignee is already a collaborator
+                    const existingCollab = await TicketCollaborator.getByTicketAndUser(ticketId, newAssigneeId);
+                    
+                    if (existingCollab) {
+                        // Update existing collaborator to primary role
+                        await TicketCollaborator.updateRole(ticketId, newAssigneeId, 'primary');
+                        console.log(`Updated user ${newAssigneeId} to primary collaborator on ticket ${ticketId}`);
+                    } else {
+                        // Create new primary collaborator
+                        await TicketCollaborator.add(
+                            ticketId,
+                            newAssigneeId,
+                            'primary',
+                            req.user ? req.user.id : null,
+                            'Auto-added as primary when assigned to ticket'
+                        );
+                        console.log(`Auto-created primary collaborator user ${newAssigneeId} on ticket ${ticketId}`);
+                    }
+                } else if (oldAssigneeId !== null) {
+                    // Ticket was unassigned - remove primary role but keep as assisting if they were a collaborator
+                    const oldCollab = await TicketCollaborator.getByTicketAndUser(ticketId, oldAssigneeId);
+                    if (oldCollab && oldCollab.role === 'primary') {
+                        // Change to assisting instead of removing completely
+                        await TicketCollaborator.updateRole(ticketId, oldAssigneeId, 'assisting');
+                        console.log(`Changed user ${oldAssigneeId} from primary to assisting on unassigned ticket ${ticketId}`);
+                    }
+                }
+            } catch (collabError) {
+                // Log error but don't fail the assignment
+                console.error('Failed to sync primary collaborator:', collabError.message);
+            }
+        }
+
         // Send assignment notification if ticket was assigned to a technician
         if (updates.assigned_to !== undefined && updates.assigned_to !== existingTicket.assigned_to) {
             try {
@@ -1112,6 +1163,42 @@ export const assignTicket = async (req, res) => {
             io
         );
 
+        // Auto-create primary collaborator for newly assigned technician
+        try {
+            const ticketId = parseInt(id);
+            
+            // Get current primary collaborator (if any)
+            const currentPrimary = await TicketCollaborator.getPrimaryByTicketId(ticketId);
+
+            // If there's an existing primary, demote them to assisting
+            if (currentPrimary && currentPrimary.user_id !== technician_id) {
+                await TicketCollaborator.updateRole(ticketId, currentPrimary.user_id, 'assisting');
+                console.log(`Demoted user ${currentPrimary.user_id} from primary to assisting on ticket ${ticketId}`);
+            }
+
+            // Check if new assignee is already a collaborator
+            const existingCollab = await TicketCollaborator.getByTicketAndUser(ticketId, technician_id);
+            
+            if (existingCollab) {
+                // Update existing collaborator to primary role
+                await TicketCollaborator.updateRole(ticketId, technician_id, 'primary');
+                console.log(`Updated user ${technician_id} to primary collaborator on ticket ${ticketId}`);
+            } else {
+                // Create new primary collaborator
+                await TicketCollaborator.add(
+                    ticketId,
+                    technician_id,
+                    'primary',
+                    req.user ? req.user.id : null,
+                    note || 'Auto-added as primary when assigned to ticket'
+                );
+                console.log(`Auto-created primary collaborator user ${technician_id} on ticket ${ticketId}`);
+            }
+        } catch (collabError) {
+            // Log error but don't fail the assignment
+            console.error('Failed to sync primary collaborator:', collabError.message);
+        }
+
         // Send assignment notification
         if (technician.email_notifications) {
             try {
@@ -1271,6 +1358,42 @@ export const reassignTicket = async (req, res) => {
             'Ticket was reassigned to another technician',
             io
         );
+
+        // Transfer primary collaborator role to newly assigned technician
+        try {
+            const ticketId = parseInt(id);
+            
+            // Get current primary collaborator (if any)
+            const currentPrimary = await TicketCollaborator.getPrimaryByTicketId(ticketId);
+
+            // If there's an existing primary, demote them to assisting
+            if (currentPrimary && currentPrimary.user_id !== technician_id) {
+                await TicketCollaborator.updateRole(ticketId, currentPrimary.user_id, 'assisting');
+                console.log(`Demoted user ${currentPrimary.user_id} from primary to assisting on ticket ${ticketId}`);
+            }
+
+            // Check if new assignee is already a collaborator
+            const existingCollab = await TicketCollaborator.getByTicketAndUser(ticketId, technician_id);
+            
+            if (existingCollab) {
+                // Update existing collaborator to primary role
+                await TicketCollaborator.updateRole(ticketId, technician_id, 'primary');
+                console.log(`Updated user ${technician_id} to primary collaborator on ticket ${ticketId}`);
+            } else {
+                // Create new primary collaborator
+                await TicketCollaborator.add(
+                    ticketId,
+                    technician_id,
+                    'primary',
+                    req.user ? req.user.id : null,
+                    note || 'Auto-added as primary when reassigned to ticket'
+                );
+                console.log(`Auto-created primary collaborator user ${technician_id} on ticket ${ticketId}`);
+            }
+        } catch (collabError) {
+            // Log error but don't fail the reassignment
+            console.error('Failed to sync primary collaborator:', collabError.message);
+        }
 
         // Send assignment notification to new technician
         if (technician.email_notifications) {
@@ -1458,6 +1581,30 @@ export const updateTicketStatus = async (req, res) => {
         } catch (emailError) {
             // Log email error but don't fail the status update
             console.error('Failed to send status update email:', emailError.message);
+        }
+
+        // Notify all collaborators of status change
+        try {
+            const collaborators = await TicketCollaborator.getByTicketId(parseInt(id));
+            
+            for (const collab of collaborators) {
+                const notification = await Notification.create(
+                    collab.user_id,
+                    'update_request',
+                    `Ticket #${updatedTicket.ticket_number} status changed from ${existingTicket.status} to ${status}`,
+                    parseInt(id)
+                );
+                
+                // Emit real-time notification
+                if (req.app.locals.io) {
+                    emitNotificationToUser(req.app.locals.io, collab.user_id, notification);
+                    
+                    const unreadCount = await Notification.getUnreadCountByUserId(collab.user_id);
+                    emitUnreadCountToUser(req.app.locals.io, collab.user_id, unreadCount);
+                }
+            }
+        } catch (collabError) {
+            console.error('Failed to notify collaborators:', collabError.message);
         }
 
         res.status(200).json({

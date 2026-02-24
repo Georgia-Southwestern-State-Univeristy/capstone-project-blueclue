@@ -214,10 +214,202 @@ export const getCategoryInsights = async (req, res) => {
     }
 };
 
+/**
+ * Get collaboration analytics
+ * GET /api/analytics/collaboration
+ * @query {number} days - Number of days to analyze (default: 30)
+ */
+export const getCollaborationAnalytics = async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 30;
+
+        // Overall collaboration statistics
+        const overallStatsQuery = `
+            SELECT 
+                COUNT(DISTINCT tc.ticket_id) as total_collaborated_tickets,
+                COUNT(DISTINCT CASE WHEN tc.role = 'primary' THEN tc.user_id END) as unique_primary_techs,
+                COUNT(DISTINCT CASE WHEN tc.role = 'assisting' THEN tc.user_id END) as unique_assisting_techs,
+                ROUND(AVG(collab_counts.count)::numeric, 2) as avg_collaborators_per_ticket,
+                COUNT(DISTINCT CASE WHEN collab_counts.count >= 3 THEN tc.ticket_id END) as tickets_with_3plus_techs
+            FROM ticket_collaborators tc
+            JOIN (
+                SELECT ticket_id, COUNT(*) as count
+                FROM ticket_collaborators
+                WHERE added_at >= NOW() - INTERVAL '${days} days'
+                GROUP BY ticket_id
+            ) collab_counts ON tc.ticket_id = collab_counts.ticket_id
+            WHERE tc.added_at >= NOW() - INTERVAL '${days} days'
+        `;
+        
+        const overallStats = await pool.query(overallStatsQuery);
+
+        // Collaboration rate (% of tickets with collaborators)
+        const collaborationRateQuery = `
+            SELECT 
+                COUNT(DISTINCT t.id) as total_tickets,
+                COUNT(DISTINCT tc.ticket_id) as collaborated_tickets,
+                ROUND((COUNT(DISTINCT tc.ticket_id)::numeric / NULLIF(COUNT(DISTINCT t.id), 0) * 100), 2) as collaboration_rate_percent
+            FROM tickets t
+            LEFT JOIN ticket_collaborators tc ON t.id = tc.ticket_id
+            WHERE t.created_at >= NOW() - INTERVAL '${days} days'
+        `;
+        
+        const collaborationRate = await pool.query(collaborationRateQuery);
+
+        // Most collaborative technicians
+        const mostCollaborativeQuery = `
+            SELECT 
+                u.id,
+                u.first_name,
+                u.last_name,
+                u.email,
+                COUNT(CASE WHEN tc.role = 'primary' THEN 1 END) as primary_count,
+                COUNT(CASE WHEN tc.role = 'assisting' THEN 1 END) as assisting_count,
+                COUNT(*) as total_collaborations
+            FROM ticket_collaborators tc
+            JOIN users u ON tc.user_id = u.id
+            WHERE tc.added_at >= NOW() - INTERVAL '${days} days'
+            GROUP BY u.id, u.first_name, u.last_name, u.email
+            HAVING COUNT(*) >= 3
+            ORDER BY total_collaborations DESC
+            LIMIT 10
+        `;
+        
+        const mostCollaborative = await pool.query(mostCollaborativeQuery);
+
+        // Collaboration by category
+        const categoryCollaborationQuery = `
+            SELECT 
+                t.category,
+                COUNT(DISTINCT tc.ticket_id) as collaborated_tickets,
+                COUNT(DISTINCT t.id) as total_tickets,
+                ROUND((COUNT(DISTINCT tc.ticket_id)::numeric / NULLIF(COUNT(DISTINCT t.id), 0) * 100), 2) as collaboration_rate_percent,
+                ROUND(AVG(collab_counts.count)::numeric, 2) as avg_techs_per_ticket
+            FROM tickets t
+            LEFT JOIN ticket_collaborators tc ON t.id = tc.ticket_id AND tc.added_at >= NOW() - INTERVAL '${days} days'
+            LEFT JOIN (
+                SELECT ticket_id, COUNT(*) as count
+                FROM ticket_collaborators
+                WHERE added_at >= NOW() - INTERVAL '${days} days'
+                GROUP BY ticket_id
+            ) collab_counts ON t.id = collab_counts.ticket_id
+            WHERE t.created_at >= NOW() - INTERVAL '${days} days'
+            GROUP BY t.category
+            ORDER BY collaboration_rate_percent DESC
+        `;
+        
+        const categoryCollaboration = await pool.query(categoryCollaborationQuery);
+
+        // Resolution time comparison: collaborated vs non-collaborated
+        const resolutionComparisonQuery = `
+            SELECT 
+                CASE 
+                    WHEN tc.ticket_id IS NOT NULL THEN 'Collaborated'
+                    ELSE 'Single Tech'
+                END as ticket_type,
+                COUNT(t.id) as ticket_count,
+                ROUND(AVG(EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600)::numeric, 2) as avg_resolution_hours,
+                ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600)::numeric, 2) as median_resolution_hours
+            FROM tickets t
+            LEFT JOIN ticket_collaborators tc ON t.id = tc.ticket_id AND tc.added_at >= NOW() - INTERVAL '${days} days'
+            WHERE t.created_at >= NOW() - INTERVAL '${days} days'
+              AND t.resolved_at IS NOT NULL
+              AND t.status IN ('resolved', 'closed')
+            GROUP BY 
+                CASE 
+                    WHEN tc.ticket_id IS NOT NULL THEN 'Collaborated'
+                    ELSE 'Single Tech'
+                END
+        `;
+        
+        const resolutionComparison = await pool.query(resolutionComparisonQuery);
+
+        // Collaboration over time (daily trend)
+        const collaborationTrendQuery = `
+            SELECT 
+                DATE(tc.added_at) as date,
+                COUNT(DISTINCT tc.ticket_id) as tickets_with_new_collaborators,
+                COUNT(*) as total_collaborators_added
+            FROM ticket_collaborators tc
+            WHERE tc.added_at >= NOW() - INTERVAL '${days} days'
+            GROUP BY DATE(tc.added_at)
+            ORDER BY date DESC
+        `;
+        
+        const collaborationTrend = await pool.query(collaborationTrendQuery);
+
+        // Tickets needing collaboration (high priority or overdue with only 1 tech)
+        const needsCollaborationQuery = `
+            SELECT 
+                t.id,
+                t.ticket_number,
+                t.title,
+                t.priority,
+                t.category,
+                t.status,
+                t.created_at,
+                EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 3600 as age_hours,
+                u.first_name as primary_tech_first_name,
+                u.last_name as primary_tech_last_name,
+                collab_count.count as current_collaborator_count
+            FROM tickets t
+            JOIN (
+                SELECT ticket_id, COUNT(*) as count
+                FROM ticket_collaborators
+                WHERE role = 'primary'
+                GROUP BY ticket_id
+            ) collab_count ON t.id = collab_count.ticket_id
+            LEFT JOIN ticket_collaborators tc ON t.id = tc.ticket_id AND tc.role = 'primary'
+            LEFT JOIN users u ON tc.user_id = u.id
+            WHERE collab_count.count = 1
+              AND t.status NOT IN ('resolved', 'closed', 'cancelled')
+              AND (
+                  t.priority IN ('critical', 'high')
+                  OR EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 3600 > 48
+              )
+            ORDER BY 
+                CASE t.priority
+                    WHEN 'critical' THEN 1
+                    WHEN 'high' THEN 2
+                    WHEN 'medium' THEN 3
+                    WHEN 'low' THEN 4
+                END,
+                t.created_at ASC
+            LIMIT 20
+        `;
+        
+        const needsCollaboration = await pool.query(needsCollaborationQuery);
+
+        // Response structure
+        res.status(200).json({
+            status: 'success',
+            data: {
+                time_period_days: days,
+                overall: overallStats.rows[0],
+                collaboration_rate: collaborationRate.rows[0],
+                most_collaborative_techs: mostCollaborative.rows,
+                by_category: categoryCollaboration.rows,
+                resolution_comparison: resolutionComparison.rows,
+                trend: collaborationTrend.rows,
+                needs_collaboration: needsCollaboration.rows
+            }
+        });
+
+    } catch (error) {
+        console.error('Get collaboration analytics error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve collaboration analytics',
+            error: error.message
+        });
+    }
+};
+
 export default {
     getAIPriorityAnalytics,
     getAIPerformanceMetrics,
-    getCategoryInsights
+    getCategoryInsights,
+    getCollaborationAnalytics
 };
 
 // ============================================================================
