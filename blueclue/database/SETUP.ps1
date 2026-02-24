@@ -170,15 +170,17 @@ Write-Host ""
 
 # Step 4.5: Apply email-to-ticket migrations
 Write-Host "============================================================================" -ForegroundColor Cyan
-Write-Host "Step 4.5: Applying email-to-ticket migrations..." -ForegroundColor Yellow
+Write-Host "Step 4.5: Applying feature migrations..." -ForegroundColor Yellow
 Write-Host "============================================================================" -ForegroundColor Cyan
-Write-Host "Adding email tracking, thread management, and spam protection..." -ForegroundColor White
+Write-Host "Adding email tracking, thread management, spam protection, and comment system..." -ForegroundColor White
 
 $migrationFiles = @(
     "migrations\004_add_email_created_flag.sql",
     "migrations\005_add_email_thread_tracking.sql",
     "migrations\006_add_spam_protection.sql",
-    "migrations\007_add_admin_management.sql"
+    "migrations\007_add_admin_management.sql",
+    "migrations\012_add_comment_reactions.sql",
+    "migrations\013_add_comment_notification_type.sql"
 )
 
 $migrationsApplied = 0
@@ -195,11 +197,12 @@ foreach ($migration in $migrationFiles) {
 }
 
 if ($migrationsApplied -eq $migrationFiles.Count) {
-    Write-Host "Email-to-ticket system configured successfully" -ForegroundColor Green
+    Write-Host "Email-to-ticket and comment system configured successfully" -ForegroundColor Green
     Write-Host "  [OK] Email creation tracking" -ForegroundColor Green
     Write-Host "  [OK] Email thread management" -ForegroundColor Green
     Write-Host "  [OK] Spam detection and filtering" -ForegroundColor Green
     Write-Host "  [OK] Admin management features" -ForegroundColor Green
+    Write-Host "  [OK] Comment reactions and threading" -ForegroundColor Green
 } else {
     Write-Host "WARNING: Some migrations failed to apply ($migrationsApplied/$($migrationFiles.Count))" -ForegroundColor Yellow
     Write-Host "Email-to-ticket features may not work correctly" -ForegroundColor Yellow
@@ -321,6 +324,12 @@ Write-Host "  [OK] Mailgun webhook integration" -ForegroundColor Green
 Write-Host "  [OK] Email thread tracking and replies" -ForegroundColor Green
 Write-Host "  [OK] Spam detection and filtering" -ForegroundColor Green
 Write-Host "  [OK] Automatic priority classification" -ForegroundColor Green
+Write-Host ""
+Write-Host "Comment System Enabled:" -ForegroundColor Yellow
+Write-Host "  [OK] Threaded comments with reply support" -ForegroundColor Green
+Write-Host "  [OK] Internal (tech-only) comments" -ForegroundColor Green
+Write-Host "  [OK] Emoji reactions (6 types)" -ForegroundColor Green
+Write-Host "  [OK] Real-time updates via WebSocket" -ForegroundColor Green
 Write-Host ""
 Write-Host "Connection String:" -ForegroundColor Yellow
 Write-Host "postgresql://postgres:PASSWORD@localhost:5432/blueclue" -ForegroundColor White
