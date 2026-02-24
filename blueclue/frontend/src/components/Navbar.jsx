@@ -1,13 +1,20 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useState, useRef, useEffect } from 'react'
 import { logout, isAuthenticated, getUser } from '../services/authService'
+import NotificationBell from './NotificationBell'
+import NotificationDropdown from './NotificationDropdown'
+import NotificationPreferences from './NotificationPreferences'
 import logo from '../assets/EditedBlueClueLogo.png'
 
 function Navbar() {
   const navigate = useNavigate()
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [notificationDropdownOpen, setNotificationDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [preferencesOpen, setPreferencesOpen] = useState(false)
   const dropdownRef = useRef(null)
+  const notificationDropdownRef = useRef(null)
+  const notificationBellRef = useRef(null)
   const authenticated = isAuthenticated()
   const user = getUser()
 
@@ -16,6 +23,9 @@ function Navbar() {
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setDropdownOpen(false)
+      }
+       if (notificationDropdownRef.current && !notificationDropdownRef.current.contains(event.target)) {
+        setNotificationDropdownOpen(false)
       }
     }
 
@@ -80,6 +90,24 @@ function Navbar() {
                 <span>{user?.firstName || user?.fullName || user?.username || 'User'}</span>
                 <span className="text-gray-600">|</span>
                 <span className="text-gray-400 capitalize">{user?.role || 'User'}</span>
+              </div>
+
+            {/* Notification Bell & Dropdown */}
+              <div className="relative" ref={notificationDropdownRef}>
+                <NotificationBell 
+                  ref={notificationBellRef}
+                  onClick={() => setNotificationDropdownOpen(!notificationDropdownOpen)} 
+                />
+                <NotificationDropdown 
+                  isOpen={notificationDropdownOpen}
+                  onClose={() => setNotificationDropdownOpen(false)}
+                  onNotificationUpdate={() => {
+                    // Refresh the bell's unread count
+                    if (notificationBellRef.current?.refresh) {
+                      notificationBellRef.current.refresh();
+                    }
+                  }}
+                />
               </div>
 
               {/* Account Dropdown */}
@@ -214,6 +242,27 @@ function Navbar() {
           >
             🚪 Logout
           </button>
+        </div>
+      )}
+       {/* Notification Preferences Modal */}
+      {preferencesOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4">
+          <div className="bg-gray-900 rounded-lg max-w-2xl w-full max-h-96 overflow-y-auto">
+            <div className="sticky top-0 flex items-center justify-between p-6 border-b border-gray-700 bg-gray-800">
+              <h2 className="text-2xl font-bold text-white">Notification Preferences</h2>
+              <button
+                onClick={() => setPreferencesOpen(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-6">
+              <NotificationPreferences />
+            </div>
+          </div>
         </div>
       )}
     </nav>

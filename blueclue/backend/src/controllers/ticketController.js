@@ -948,6 +948,35 @@ export const bulkAssignTickets = async (req, res) => {
             }
         }
 
+        // Create in-app notifications for each assigned ticket
+        for (const ticket of updateResult.rows) {
+            try {
+                const notification = await Notification.create({
+                    user_id: technician_id,
+                    type: 'assignment',
+                    message: `You have been assigned to ticket #${ticket.ticket_number}: ${ticket.subject}`,
+                    ticket_id: ticket.id
+                });
+
+                // Emit real-time notification via WebSocket
+                if (io) {
+                    emitNotificationToUser(io, technician_id, notification);
+                }
+            } catch (notifError) {
+                console.error(`Failed to create in-app notification for ticket ${ticket.id}:`, notifError.message);
+            }
+        }
+
+        // Emit updated unread count once after all notifications
+        if (io && updateResult.rows.length > 0) {
+            try {
+                const unreadCount = await Notification.getUnreadCount(technician_id);
+                emitUnreadCountToUser(io, technician_id, unreadCount);
+            } catch (countError) {
+                console.error('Failed to update unread count:', countError.message);
+            }
+        }
+
         // Auto-deny pending assignment requests for each ticket in the bulk
         const io = req.app.get('io');
         for (const ticket of updateResult.rows) {
@@ -1099,6 +1128,25 @@ export const assignTicket = async (req, res) => {
             }
         }
 
+        // Create in-app notification for the assigned technician
+        try {
+            const notification = await Notification.create({
+                user_id: technician_id,
+                type: 'assignment',
+                message: `You have been assigned to ticket #${ticket.ticket_number}: ${ticket.subject}`,
+                ticket_id: parseInt(id)
+            });
+
+            // Emit real-time notification via WebSocket
+            if (io) {
+                emitNotificationToUser(io, technician_id, notification);
+                const unreadCount = await Notification.getUnreadCount(technician_id);
+                emitUnreadCountToUser(io, technician_id, unreadCount);
+            }
+        } catch (notifError) {
+            console.error('Failed to create in-app notification:', notifError.message);
+        }
+
         res.status(200).json({
             status: 'success',
             message: `Ticket #${id} assigned to ${techName}`,
@@ -1238,6 +1286,25 @@ export const reassignTicket = async (req, res) => {
             } catch (emailError) {
                 console.error('Failed to send reassignment notification:', emailError.message);
             }
+        }
+
+        // Create in-app notification for the reassigned technician
+        try {
+            const notification = await Notification.create({
+                user_id: technician_id,
+                type: 'assignment',
+                message: `Ticket #${ticket.ticket_number} has been reassigned to you: ${ticket.subject}`,
+                ticket_id: parseInt(id)
+            });
+
+            // Emit real-time notification via WebSocket
+            if (io) {
+                emitNotificationToUser(io, technician_id, notification);
+                const unreadCount = await Notification.getUnreadCount(technician_id);
+                emitUnreadCountToUser(io, technician_id, unreadCount);
+            }
+        } catch (notifError) {
+            console.error('Failed to create in-app notification:', notifError.message);
         }
 
         res.status(200).json({
