@@ -21,6 +21,8 @@ if ($Help) {
     Write-Host "  -SkipSeed    Skip loading sample data (customers, admin)" -ForegroundColor White
     Write-Host "  -Help        Show this help message" -ForegroundColor White
     Write-Host ""
+    Write-Host "Note: You will be prompted to optionally fix admin password or create manager account" -ForegroundColor Yellow
+    Write-Host ""
     Write-Host "What this script does:" -ForegroundColor Yellow
     Write-Host "  1. Drops existing 'blueclue' database (if exists)" -ForegroundColor White
     Write-Host "  2. Creates fresh 'blueclue' database" -ForegroundColor White
@@ -79,12 +81,25 @@ Write-Host "====================================================================
 Write-Host "Step 1: Dropping existing database (if exists)..." -ForegroundColor Yellow
 Write-Host "============================================================================" -ForegroundColor Cyan
 
-$null = psql -U postgres -c "DROP DATABASE IF EXISTS blueclue;" 2>&1
+# First, terminate all active connections to the database
+Write-Host "Terminating active connections to blueclue database..." -ForegroundColor White
+$terminateQuery = @"
+SELECT pg_terminate_backend(pid) 
+FROM pg_stat_activity 
+WHERE datname = 'blueclue' 
+  AND pid <> pg_backend_pid();
+"@
+
+$null = psql -U postgres -c $terminateQuery 2>&1
+
+# Now drop the database
+$dropResult = psql -U postgres -c "DROP DATABASE IF EXISTS blueclue;" 2>&1
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Existing database dropped successfully" -ForegroundColor Green
 } else {
-    Write-Host "No existing database to drop (OK)" -ForegroundColor Yellow
+    Write-Host "Note: Could not drop database (may not exist)" -ForegroundColor Yellow
+    Write-Host $dropResult -ForegroundColor Gray
 }
 
 Write-Host ""
@@ -217,6 +232,49 @@ if (-not $SkipSeed) {
 
 Write-Host ""
 
+# Step 6: Optional utility scripts (with user prompts)
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Optional Setup Tasks" -ForegroundColor Yellow
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host ""
+
+# Prompt for admin password fix
+$fixAdminResponse = Read-Host "Do you want to reset admin password to BlueClue2026!? (y/n)"
+if ($fixAdminResponse -eq 'y' -or $fixAdminResponse -eq 'Y') {
+    Write-Host ""
+    Write-Host "Resetting admin@blueclue.com password..." -ForegroundColor White
+
+    $null = psql -U postgres -d blueclue -f fix_admin_password.sql 2>&1
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Admin password reset successfully" -ForegroundColor Green
+    } else {
+        Write-Host "WARNING: Failed to reset admin password" -ForegroundColor Yellow
+    }
+}
+
+Write-Host ""
+
+# Prompt for manager account creation
+$createManagerResponse = Read-Host "Do you want to create manager@blueclue.com account with full permissions? (y/n)"
+if ($createManagerResponse -eq 'y' -or $createManagerResponse -eq 'Y') {
+    Write-Host ""
+    Write-Host "Creating manager@blueclue.com with full category permissions..." -ForegroundColor White
+
+    $null = psql -U postgres -d blueclue -f create_manager_account.sql 2>&1
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Manager account created successfully" -ForegroundColor Green
+        Write-Host "  Login: manager@blueclue.com / BlueClue2026!" -ForegroundColor White
+        $managerCreated = $true
+    } else {
+        Write-Host "WARNING: Failed to create manager account" -ForegroundColor Yellow
+        $managerCreated = $false
+    }
+}
+
+Write-Host ""
+
 # Verify setup
 Write-Host "============================================================================" -ForegroundColor Cyan
 Write-Host "Verifying setup..." -ForegroundColor Yellow
@@ -281,6 +339,13 @@ if (-not $SkipSeed) {
     Write-Host ""
     Write-Host "Admin Login:" -ForegroundColor Yellow
     Write-Host "  Email: admin@blueclue.com" -ForegroundColor White
+    Write-Host "  Password: BlueClue2026!" -ForegroundColor White
+    Write-Host ""
+}
+
+if ($managerCreated) {
+    Write-Host "Manager Login:" -ForegroundColor Yellow
+    Write-Host "  Email: manager@blueclue.com" -ForegroundColor White
     Write-Host "  Password: BlueClue2026!" -ForegroundColor White
     Write-Host ""
 }
