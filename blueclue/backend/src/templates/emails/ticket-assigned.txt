@@ -1,0 +1,34 @@
+TICKET ASSIGNED TO YOU
+======================
+
+Hi {{technicianName}},
+
+A new ticket has been assigned to you. Please review the details below and take necessary action.
+
+TICKET DETAILS
+--------------
+Ticket ID:    #{{ticketId}}
+Subject:      {{subject}}
+Priority:     {{priority}}
+Category:     {{category}}
+Status:       {{status}}
+Requester:    {{requesterName}}
+Created:      {{createdAt}}
+
+DESCRIPTION
+-----------
+{{description}}
+
+VIEW TICKET
+-----------
+Visit your dashboard to view and respond to this ticket:
+{{dashboardUrl}}
+
+Please respond to this ticket as soon as possible. The customer is waiting for your assistance.
+
+---
+BlueClue Support
+This is an automated notification from your ticket management system.
+
+You are receiving this email because a ticket was assigned to you.
+To manage your email preferences, visit your account settings.
