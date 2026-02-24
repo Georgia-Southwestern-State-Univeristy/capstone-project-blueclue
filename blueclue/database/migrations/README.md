@@ -5,19 +5,23 @@ This directory contains database migration scripts for the BlueClue ticket syste
 ## 🎯 Quick Start Guide
 
 ### For Fresh Database Setup
-**✅ Use `schema.sql` instead** - It includes everything (v2.1.0+)
+**✅ Use `schema.sql` instead** - It includes everything (v2.3.0)
 
 ```bash
 # From database directory
 psql -U postgres -d blueclue -f schema.sql
 ```
 
-The main `schema.sql` file includes all features:
+The main `schema.sql` (v2.3.0) includes all features:
 - ✅ Core tables (users, tickets, categories, etc.)
-- ✅ Ticket comments and templates (v2.0.0)
-- ✅ Email verification system (v2.1.0)
-- ✅ Email notifications (v2.1.0)
-- ✅ Email monitoring/logging (v2.1.0)
+- ✅ Ticket comments and templates
+- ✅ AI priority influence and configuration
+- ✅ Email tracking and thread support
+- ✅ Comprehensive spam protection (6 tables)
+- ✅ Admin management (allowlist, settings)
+- ✅ Notifications and assignment requests
+- ✅ Email verification and logging
+- ✅ All analytics views and functions
 
 ### For Existing Database Upgrades
 **Use migration files** if you already have a database from an earlier version:
@@ -26,33 +30,43 @@ The main `schema.sql` file includes all features:
 # Check your current version
 psql -U postgres -d blueclue -c "SELECT * FROM schema_version ORDER BY applied_at DESC LIMIT 1;"
 
-# Apply migrations you're missing (see below)
+# If you're on version 2.2.0 or earlier, you can rebuild with schema.sql
+# Or apply remaining migrations (see below)
 ```
 
 ---
 
 ## 📂 Migration Files
 
-Migrations are numbered sequentially and include both upgrade and rollback scripts:
+**Current Active Migrations:**
+- `010_consolidate_missing_tables.sql` - Consolidation migration for upgrading v2.1.0 → v2.2.0
 
-- `001_add_comments_templates_reopen_tracking_v2.sql` - Adds ticket comments, templates, multi-tech assignments, and reopen tracking (v1.0.0 → v2.0.0)
-- `001_rollback.sql` - Rolls back migration 001
-- `archive/` - Contains **archived migrations** that are now in schema.sql
+**Note:** Most migrations have been consolidated into `schema.sql` v2.3.0 and moved to the `archive/` folder.
 
-### Archived Migrations
+### Archived Migrations (Consolidated into schema.sql v2.3.0)
 
-The following migrations were used during development but are **now consolidated into schema.sql v2.1.0**:
+The following migrations are **now part of the main schema.sql**:
 
-- ~~`001_add_email_verification.sql`~~ → Moved to `archive/` 
-- ~~`002_add_email_notifications.sql`~~ → Moved to `archive/`
-- ~~`003_add_email_logs.sql`~~ → Moved to `archive/`
+- ✅ `001_add_comments_templates_reopen_tracking*.sql` → Consolidated in v2.2.0
+- ✅ `002_add_ai_priority_influence.sql` → Consolidated in v2.3.0
+- ✅ `004_add_email_created_flag.sql` → Consolidated in v2.3.0
+- ✅ `005_add_email_thread_tracking.sql` → Consolidated in v2.3.0
+- ✅ `006_add_spam_protection.sql` → Consolidated in v2.3.0
+- ✅ `007_add_admin_management.sql` → Consolidated in v2.3.0
+- ✅ `008_add_ticket_assignment_requests.sql` → Consolidated in v2.2.0
+- ✅ `009_add_notifications_table.sql` → Consolidated in v2.2.0
 
-**Why archived?** For fresh installations, it's simpler to have all email features in the main schema. The archived files are kept for:
-- Development history reference
-- Upgrading existing databases that don't have email features
-- Understanding incremental changes
+**Early Migrations (archived):**
+- `archive/001_add_email_verification.sql` → Consolidated in v2.1.0
+- `archive/002_add_email_notifications.sql` → Consolidated in v2.1.0
+- `archive/003_add_email_logs.sql` → Consolidated in v2.1.0
 
-See `archive/README.md` for details on applying archived migrations to existing databases.
+**Why archived?** For fresh installations, it's simpler to have everything in the main schema. The archived files are kept for:
+- Development history and reference
+- Understanding incremental feature additions
+- Debugging legacy installations
+
+See `archive/README.md` for details on individual archived migrations.
 
 ---
 
