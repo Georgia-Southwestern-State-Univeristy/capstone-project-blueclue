@@ -3,6 +3,8 @@ import { getTicketById, updateTicketStatus, updateTicket, getTechnicians, assign
 import { getUserRole, getUserId } from '../services/authService'
 import TicketActivityLog from './TicketActivityLog'
 import TicketComments from './TicketComments'
+import AddCollaboratorModal from './AddCollaboratorModal'
+import { getCollaborators, addCollaborator, removeCollaborator } from '../services/collaboratorService'
 
 /**
  * TicketDetailView
@@ -41,6 +43,11 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   const [reopenReason, setReopenReason] = useState('')
   const [reopenLoading, setReopenLoading] = useState(false)
   const [reopenError, setReopenError] = useState(null)
+
+  // ─── Collaboration state ─────────────────────────────────────
+  const [showCollaboratorModal, setShowCollaboratorModal] = useState(false)
+  const [collaborators, setCollaborators] = useState([])
+  const [collaboratorsLoading, setCollaboratorsLoading] = useState(false)
 
   const modalRef = useRef(null)
   const assignRef = useRef(null)
@@ -111,6 +118,9 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
       setShowAssign(false)
       setShowStatusDropdown(false)
       fetchTicket()
+      if (canSeeInternals) {
+        fetchCollaborators()
+      }
     }
   }, [isOpen, ticketId, fetchTicket])
 
@@ -305,6 +315,58 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     } finally {
       setReopenLoading(false)
     }
+  }
+
+  // ─── Fetch collaborators ─────────────────────────────────────────
+  const fetchCollaborators = useCallback(async () => {
+    if (!ticketId || !canSeeInternals) return
+    
+    try {
+      setCollaboratorsLoading(true)
+      const response = await getCollaborators(ticketId)
+      setCollaborators(response.data?.collaborators || [])
+    } catch (err) {
+      console.error('Failed to fetch collaborators:', err)
+    } finally {
+      setCollaboratorsLoading(false)
+    }
+  }, [ticketId, canSeeInternals])
+
+  // ─── Handle add collaborator ─────────────────────────────────────
+  const handleAddCollaborator = async (userId, role, note) => {
+    try {
+      await addCollaborator(ticketId, userId, role, note)
+      await fetchCollaborators()
+      await fetchTicket(true) // Refresh ticket data
+      setStatusSuccess('Collaborator added successfully')
+      setTimeout(() => setStatusSuccess(null), 3000)
+    } catch (err) {
+      throw err // Let modal handle the error
+    }
+  }
+
+  // ─── Handle remove collaborator ──────────────────────────────────
+  const handleRemoveCollaborator = async (userId, techName) => {
+    if (!window.confirm(`Remove ${techName} from this ticket?`)) return
+    
+    try {
+      await removeCollaborator(ticketId, userId)
+      await fetchCollaborators()
+      await fetchTicket(true)
+      setStatusSuccess('Collaborator removed')
+      setTimeout(() => setStatusSuccess(null), 3000)
+    } catch (err) {
+      setStatusError(err.message || 'Failed to remove collaborator')
+      setTimeout(() => setStatusError(null), 3000)
+    }
+  }
+
+  // ─── Check if user can add collaborators ─────────────────────────
+  const canAddCollaborators = () => {
+    if (!canSeeInternals || !ticket) return false
+    const currentUserId = getUserId()
+    const isPrimaryTech = ticket.assigned_to === parseInt(currentUserId)
+    return isManagement || isPrimaryTech
   }
 
   // ─── Print / Export ──────────────────────────────────────────────
@@ -858,6 +920,20 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
               </button>
             )}
 
+            {/* Add Technician — primary tech or management */}
+            {canSeeInternals && canAddCollaborators() && (
+              <button
+                onClick={() => setShowCollaboratorModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-purple-900/60 text-gray-300 hover:text-purple-300 text-xs font-medium border border-gray-700 hover:border-purple-700 transition-colors"
+                title="Add collaborating technician"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
+                Add Technician
+              </button>
+            )}
+
             {/* Print / Export — available to all */}
             <button
               onClick={handlePrint}
@@ -1014,11 +1090,54 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                           <p className="text-gray-500 text-xs">{ticket.assigned_to_email}</p>
                         )}
                       </div>
+                      <span className="ml-auto px-2 py-0.5 bg-blue-900/40 text-blue-300 text-xs rounded border border-blue-600">
+                        Primary
+                      </span>
                     </div>
                   ) : (
                     <p className="text-gray-500 text-sm italic">Unassigned</p>
                   )}
                 </div>
+
+                {/* Collaborators */}
+                {collaborators.length > 0 && (
+                  <div className="mt-4">
+                    <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                      Collaborators ({collaborators.length})
+                    </label>
+                    <div className="space-y-2">
+                      {collaborators.map((collab) => (
+                        <div key={collab.user_id} className="flex items-center gap-2 group">
+                          <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                            {(collab.first_name || '?').charAt(0)}{(collab.last_name || '?').charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white text-sm font-medium truncate">
+                              {collab.first_name} {collab.last_name}
+                            </p>
+                            {collab.email && (
+                              <p className="text-gray-500 text-xs truncate">{collab.email}</p>
+                            )}
+                          </div>
+                          <span className="px-2 py-0.5 bg-purple-900/40 text-purple-300 text-xs rounded border border-purple-600 flex-shrink-0">
+                            Assisting
+                          </span>
+                          {canAddCollaborators() && (
+                            <button
+                              onClick={() => handleRemoveCollaborator(collab.user_id, `${collab.first_name} ${collab.last_name}`)}
+                              className="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:text-red-300 transition-opacity"
+                              title="Remove collaborator"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 </>
                 )}
 
@@ -1265,6 +1384,16 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
             </main>
           </div>
         ) : null}
+
+        {/* Add Collaborator Modal */}
+        {ticket && showCollaboratorModal && (
+          <AddCollaboratorModal
+            isOpen={showCollaboratorModal}
+            onClose={() => setShowCollaboratorModal(false)}
+            onAdd={handleAddCollaborator}
+            existingCollaborators={collaborators}
+          />
+        )}
       </div>
     </div>
   )
