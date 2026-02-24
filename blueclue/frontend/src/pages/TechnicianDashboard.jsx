@@ -19,7 +19,7 @@ const getStatusColor = (status) => {
     waiting_on_customer: { bg: 'bg-purple-950', border: 'border-purple-700', text: 'text-purple-400', badge: 'bg-purple-900 text-purple-300' },
     resolved: { bg: 'bg-green-950', border: 'border-green-700', text: 'text-green-400', badge: 'bg-green-900 text-green-300' },
     closed: { bg: 'bg-gray-800', border: 'border-gray-600', text: 'text-gray-400', badge: 'bg-gray-700 text-gray-300' },
-    cancelled: { bg: 'bg-orange-950', border: 'border-orange-700', text: 'text-orange-400', badge: 'bg-orange-900 text-orange-300' }
+    cancelled: { bg: 'bg-gray-900', border: 'border-gray-600', text: 'text-gray-400', badge: 'bg-gray-700 text-gray-300' }
   }
   return statusColors[status] || statusColors.open
 }
@@ -283,7 +283,7 @@ function TechnicianDashboard() {
     { label: 'Waiting', count: stats.waiting, color: '#a78bfa' },
     { label: 'Resolved', count: stats.resolved, color: '#3b82f6' },
     { label: 'Closed', count: stats.closed, color: '#6b7280' },
-    { label: 'Cancelled', count: stats.cancelled, color: '#f97316' },
+    { label: 'Cancelled', count: stats.cancelled, color: '#9ca3af' },
   ]
 
   // Priority pie chart data

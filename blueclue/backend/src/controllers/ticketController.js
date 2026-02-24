@@ -1768,8 +1768,7 @@ export const cancelTicket = async (req, res) => {
 
         const updateData = {
             status: 'cancelled',
-            resolution: resolutionText,
-            resolved_at: new Date()
+            resolution: resolutionText
         };
 
         const updatedTicket = await Ticket.update(parseInt(id), updateData);

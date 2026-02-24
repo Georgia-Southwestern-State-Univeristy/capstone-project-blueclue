@@ -366,7 +366,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     waiting_on_customer: 'bg-purple-900/60 text-purple-300 border-purple-600',
     resolved: 'bg-green-900/60 text-green-300 border-green-600',
     closed: 'bg-gray-700/60 text-gray-300 border-gray-600',
-    cancelled: 'bg-orange-900/60 text-orange-300 border-orange-600',
+    cancelled: 'bg-gray-800/60 text-gray-300 border-gray-600',
   }
 
   const priorityConfig = {
@@ -723,7 +723,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
             )) && (
               <button
                 onClick={() => setShowCancelModal(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-orange-900/60 text-gray-300 hover:text-orange-300 text-xs font-medium border border-gray-700 hover:border-orange-700 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-gray-100 text-xs font-medium border border-gray-700 hover:border-gray-500 transition-colors"
                 title="Cancel ticket"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -816,7 +816,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                     <div className="mt-3">
                       <button
                         onClick={() => setShowCancelModal(true)}
-                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-orange-900/30 hover:bg-orange-900/50 text-orange-300 text-sm font-medium border border-orange-800/50 hover:border-orange-700 transition-colors"
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gray-700/30 hover:bg-gray-700/50 text-gray-300 text-sm font-medium border border-gray-600/50 hover:border-gray-500 transition-colors"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />

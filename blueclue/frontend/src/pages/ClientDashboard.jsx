@@ -140,7 +140,7 @@ function ClientDashboard() {
       case 'closed':
         return 'bg-gray-700 text-gray-300'
       case 'cancelled':
-        return 'bg-orange-900 text-orange-300'
+        return 'bg-gray-700 text-gray-300'
       default:
         return 'bg-gray-700 text-gray-300'
     }

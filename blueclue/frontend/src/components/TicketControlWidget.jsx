@@ -11,6 +11,7 @@ const getStatusColor = (status) => {
     waiting_on_customer: { bg: 'bg-purple-950',  border: 'border-purple-700', text: 'text-purple-400', badge: 'bg-purple-900 text-purple-300' },
     resolved:            { bg: 'bg-green-950',   border: 'border-green-700',  text: 'text-green-400',  badge: 'bg-green-900 text-green-300' },
     closed:              { bg: 'bg-gray-800',    border: 'border-gray-600',   text: 'text-gray-400',   badge: 'bg-gray-700 text-gray-300' },
+    cancelled:           { bg: 'bg-gray-900',    border: 'border-gray-600',   text: 'text-gray-400',   badge: 'bg-gray-700 text-gray-300' },
   }
   return m[status] || m.open
 }

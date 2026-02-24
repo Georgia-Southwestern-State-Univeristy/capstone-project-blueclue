@@ -68,8 +68,8 @@ function CancelTicketModal({ isOpen, ticketNumber, onConfirm, onClose, isSubmitt
         {/* Header */}
         <div className="px-6 pt-6 pb-4 border-b border-gray-800">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-orange-900/60 flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-10 h-10 rounded-full bg-gray-700/60 flex items-center justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
               </svg>
             </div>
@@ -97,7 +97,7 @@ function CancelTicketModal({ isOpen, ticketNumber, onConfirm, onClose, isSubmitt
               value={reason}
               onChange={(e) => { setReason(e.target.value); setError(null) }}
               disabled={isSubmitting}
-              className="w-full px-3 py-2.5 rounded-lg bg-gray-800 border border-gray-600 text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-50 cursor-pointer"
+              className="w-full px-3 py-2.5 rounded-lg bg-gray-800 border border-gray-600 text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 disabled:opacity-50 cursor-pointer"
             >
               {CANCELLATION_REASONS.map((opt) => (
                 <option key={opt.value} value={opt.value} disabled={opt.value === ''}>
@@ -119,7 +119,7 @@ function CancelTicketModal({ isOpen, ticketNumber, onConfirm, onClose, isSubmitt
               placeholder="Provide any additional context..."
               rows={3}
               maxLength={500}
-              className="w-full px-3 py-2.5 rounded-lg bg-gray-800 border border-gray-600 text-gray-200 text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-50 resize-none"
+              className="w-full px-3 py-2.5 rounded-lg bg-gray-800 border border-gray-600 text-gray-200 text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 disabled:opacity-50 resize-none"
             />
             <p className="text-xs text-gray-600 mt-1 text-right">{details.length}/500</p>
           </div>
@@ -147,7 +147,7 @@ function CancelTicketModal({ isOpen, ticketNumber, onConfirm, onClose, isSubmitt
           <button
             onClick={handleSubmit}
             disabled={isSubmitting || !reason}
-            className="px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-4 py-2 rounded-lg bg-gray-600 hover:bg-gray-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isSubmitting ? (
               <>
