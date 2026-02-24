@@ -547,7 +547,7 @@ export const denyAssignmentRequest = async (requestId, reason = '') => {
 export const cancelTicket = async (id, reason, details = '') => {
   try {
     const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${id}/cancel`, {
-      method: 'POST',
+      method: 'PATCH',
       headers: getAuthHeaders(),
       body: JSON.stringify({ reason, details }),
     });

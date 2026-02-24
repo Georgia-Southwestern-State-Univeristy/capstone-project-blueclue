@@ -150,11 +150,11 @@ router.patch('/:id/reassign', authenticateToken, reassignTicket);
 router.patch('/:id/status', authenticateToken, updateTicketStatus);
 
 /**
- * @route   POST /api/tickets/:id/cancel
- * @desc    Cancel a ticket (customer can cancel their own tickets)
- * @access  Private (ticket owner or management)
+ * @route   PATCH /api/tickets/:id/cancel
+ * @desc    Cancel a ticket (customer can cancel their own open/pending tickets; staff can cancel any active ticket)
+ * @access  Private (ticket owner or staff)
  */
-router.post('/:id/cancel', authenticateToken, cancelTicket);
+router.patch('/:id/cancel', authenticateToken, cancelTicket);
 
 /**
  * @route   PUT /api/tickets/:id
