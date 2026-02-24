@@ -814,7 +814,8 @@ export const deleteTicket = async (req, res) => {
  */
 export const bulkAssignTickets = async (req, res) => {
     try {
-        const { ticket_ids, technician_id } = req.body;
+        const { ticket_ids, technician_id, note } = req.body;
+        const io = req.app.get('io');
 
         // Validation
         if (!ticket_ids || !Array.isArray(ticket_ids) || ticket_ids.length === 0) {
@@ -978,7 +979,6 @@ export const bulkAssignTickets = async (req, res) => {
         }
 
         // Auto-deny pending assignment requests for each ticket in the bulk
-        const io = req.app.get('io');
         for (const ticket of updateResult.rows) {
             await autoDenyPendingRequests(
                 ticket.id,
