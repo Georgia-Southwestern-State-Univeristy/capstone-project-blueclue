@@ -28,7 +28,7 @@ const VALID_TRANSITIONS = {
     'waiting_on_customer': ['in_progress', 'resolved', 'open', 'cancelled'],
     'resolved': ['closed', 'in_progress', 'open', 'waiting_on_customer'], // Allow reopening and status changes
     'closed': [], // Cannot transition from closed - final state
-    'cancelled': [] // Cannot transition from cancelled - final state
+    'cancelled': ['open'] // Management/admin can reopen cancelled tickets
 };
 
 /**
@@ -1444,6 +1444,17 @@ export const updateTicketStatus = async (req, res) => {
             });
         }
 
+        // Reopening a cancelled ticket requires management or admin role
+        if (currentStatus === 'cancelled' && status === 'open') {
+            const userRole = req.user?.role;
+            if (!['management', 'admin'].includes(userRole)) {
+                return res.status(403).json({
+                    status: 'error',
+                    message: 'Only management or admin can reopen cancelled tickets'
+                });
+            }
+        }
+
         // Prepare update data
         const updateData = { status };
 
@@ -1454,6 +1465,14 @@ export const updateTicketStatus = async (req, res) => {
         } else if (existingTicket.status === 'resolved' || existingTicket.status === 'closed') {
             // Clear resolved_at when moving away from resolved/closed
             updateData.resolved_at = null;
+        }
+
+        // Track reopens from cancelled or resolved/closed → open
+        if (status === 'open' && ['cancelled', 'resolved', 'closed'].includes(currentStatus)) {
+            await pool.query(
+                `UPDATE tickets SET reopen_count = reopen_count + 1, last_reopened_at = NOW() WHERE id = $1`,
+                [parseInt(id)]
+            );
         }
 
         // Update the ticket status

@@ -382,7 +382,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     waiting_on_customer: ['in_progress', 'resolved', 'open', 'cancelled'],
     resolved: ['closed', 'in_progress', 'open'],
     closed: [],
-    cancelled: [],
+    cancelled: isManagement ? ['open'] : [],  // Only management/admin can reopen
   }
 
   if (!isOpen) return null
