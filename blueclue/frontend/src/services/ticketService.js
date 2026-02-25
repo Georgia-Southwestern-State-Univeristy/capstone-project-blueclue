@@ -610,6 +610,11 @@ export const restoreTicket = async (id) => {
   } catch (error) {
     console.error('Restore ticket error:', error);
     const message = getUserFriendlyMessage(error, 'Failed to restore ticket. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
  * Reopen a closed or cancelled ticket
  * POST /api/tickets/:id/reopen
  */

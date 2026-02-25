@@ -1,11 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getTicketById, updateTicketStatus, updateTicket, deleteTicket, getTechnicians, assignSingleTicket, reassignTicket, cancelTicket } from '../services/ticketService'
-import { getUserRole, getUser } from '../services/authService'
+import { getTicketById, updateTicketStatus, updateTicket, deleteTicket, getTechnicians, assignSingleTicket, reassignTicket, cancelTicket, reopenTicket } from '../services/ticketService'
+import { getUserRole, getUser, getUserId } from '../services/authService'
 import TicketActivityLog from './TicketActivityLog'
 import CancelTicketModal from './CancelTicketModal'
-import { getTicketById, updateTicketStatus, updateTicket, getTechnicians, assignSingleTicket, reassignTicket, reopenTicket } from '../services/ticketService'
-import { getUserRole, getUserId } from '../services/authService'
-import TicketActivityLog from './TicketActivityLog'
 import TicketComments from './TicketComments'
 import AddCollaboratorModal from './AddCollaboratorModal'
 import RingForHelpModal from './RingForHelpModal'
@@ -616,7 +613,6 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     waiting_on_customer: 'bg-purple-900/60 text-purple-300 border-purple-600',
     resolved: 'bg-green-900/60 text-green-300 border-green-600',
     closed: 'bg-gray-700/60 text-gray-300 border-gray-600',
-    cancelled: 'bg-gray-800/60 text-gray-300 border-gray-600',
     cancelled: 'bg-gray-700/60 text-gray-400 border-gray-600',
     reopened: 'bg-orange-900/60 text-orange-300 border-orange-600',
   }
@@ -635,7 +631,6 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     resolved: ['closed', 'in_progress', 'open'],
     closed: [],
     cancelled: isManagement ? ['open'] : [],  // Only management/admin can reopen
-    cancelled: [],
     reopened: ['in_progress', 'waiting_on_customer', 'resolved', 'closed'],
   }
 
@@ -1087,6 +1082,9 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
                 Delete
+              </button>
+            )}
+
             {/* Reopen Ticket — requester or management, for closed/cancelled tickets < 30 days */}
             {canReopenTicket() && (
               <button
