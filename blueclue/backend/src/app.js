@@ -23,6 +23,7 @@ import analyticsRoutes from './routes/analytics.js';
 import configRoutes from './routes/config.js';
 import assignmentRequestRoutes from './routes/assignmentRequests.js';
 import commentRoutes from './routes/commentRoutes.js';
+import ringRoutes from './routes/ring.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 
 dotenv.config();
@@ -66,6 +67,7 @@ app.use('/api/webhooks', webhookRoutes); // Webhook endpoints for inbound email
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/assignment-requests', assignmentRequestRoutes);
+app.use('/api', ringRoutes); // Ring for Help routes
 app.use('/api/dev', devRoutes);
 app.use('/api/admin', adminRoutes);
 

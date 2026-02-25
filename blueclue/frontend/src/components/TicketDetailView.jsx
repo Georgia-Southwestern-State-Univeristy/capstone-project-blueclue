@@ -8,6 +8,7 @@ import { getUserRole, getUserId } from '../services/authService'
 import TicketActivityLog from './TicketActivityLog'
 import TicketComments from './TicketComments'
 import AddCollaboratorModal from './AddCollaboratorModal'
+import RingForHelpModal from './RingForHelpModal'
 import { getCollaborators, addCollaborator, removeCollaborator } from '../services/collaboratorService'
 
 /**
@@ -63,6 +64,9 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   const [showCollaboratorModal, setShowCollaboratorModal] = useState(false)
   const [collaborators, setCollaborators] = useState([])
   const [collaboratorsLoading, setCollaboratorsLoading] = useState(false)
+
+  // ─── Ring for Help state ─────────────────────────────────────
+  const [showRingModal, setShowRingModal] = useState(false)
 
   const modalRef = useRef(null)
   const assignRef = useRef(null)
@@ -502,6 +506,18 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     const currentUserId = getUserId()
     const isPrimaryTech = ticket.assigned_to === parseInt(currentUserId)
     return isManagement || isPrimaryTech
+  }
+
+  // ─── Check if user is working on this ticket (can send ring requests) ─
+  const isWorkingOnTicket = () => {
+    if (!canSeeInternals || !ticket) return false
+    const currentUserId = parseInt(getUserId())
+    
+    // Check if assigned
+    if (ticket.assigned_to === currentUserId) return true
+    
+    // Check if collaborator
+    return collaborators.some(c => c.user_id === currentUserId)
   }
 
   // ─── Print / Export ──────────────────────────────────────────────
@@ -1100,6 +1116,20 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
               </button>
             )}
 
+            {/* Ring for Help — assigned tech or collaborators */}
+            {canSeeInternals && isWorkingOnTicket() && (
+              <button
+                onClick={() => setShowRingModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-orange-900/60 to-red-900/60 hover:from-orange-800/70 hover:to-red-800/70 text-orange-200 hover:text-orange-100 text-xs font-medium border border-orange-700/50 hover:border-orange-600 transition-colors"
+                title="Request urgent help from another technician"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                Ring for Help
+              </button>
+            )}
+
             {/* Print / Export — available to all */}
             <button
               onClick={handlePrint}
@@ -1688,6 +1718,24 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
             onClose={() => setShowCollaboratorModal(false)}
             onAdd={handleAddCollaborator}
             existingCollaborators={collaborators}
+          />
+        )}
+
+        {/* Ring for Help Modal */}
+        {ticket && showRingModal && (
+          <RingForHelpModal
+            isOpen={showRingModal}
+            onClose={() => setShowRingModal(false)}
+            ticketId={ticket.id}
+            ticketSubject={ticket.subject}
+            existingCollaborators={collaborators}
+            onRingSent={(data) => {
+              // Show success message
+              setStatusSuccess(`Ring request sent to ${data.targetTech.first_name} ${data.targetTech.last_name}`)
+              setTimeout(() => setStatusSuccess(null), 3000)
+              // Refresh ticket data to show updated activity
+              fetchTicket(true)
+            }}
           />
         )}
       </div>
