@@ -200,6 +200,8 @@ router.patch('/:id/status', authenticateToken, updateTicketStatus);
  * @access  Private (ticket owner or staff)
  */
 router.patch('/:id/cancel', authenticateToken, cancelTicket);
+
+/**
  * @route   POST /api/tickets/:id/reopen
  * @desc    Reopen a closed or cancelled ticket (within 30 days)
  * @access  Private (ticket requester or management only)

@@ -12,7 +12,7 @@ import {
     getTodaysActions,
     getTopRequesters,
     getTechPerformance,
-    getCancellationStats
+    getCancellationStats,
     getReopenAnalytics,
     getCollaborationAnalytics
 } from '../controllers/analyticsController.js';
@@ -113,6 +113,8 @@ router.get('/tech-performance', getTechPerformance);
  * @query   timeRange (7d | 30d | 90d | all)
  */
 router.get('/cancellation-stats', getCancellationStats);
+
+/**
  * @route   GET /api/analytics/reopens
  * @desc    Ticket reopen analytics and metrics
  * @access  Management, Admin

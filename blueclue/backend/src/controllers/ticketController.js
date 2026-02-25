@@ -2256,6 +2256,25 @@ export const cancelTicket = async (req, res) => {
             }
         } catch (notifError) {
             console.error('Failed to send cancellation notifications:', notifError);
+        }
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Ticket cancelled successfully',
+            data: updatedTicket
+        });
+
+    } catch (error) {
+        console.error('Cancel ticket error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to cancel ticket',
+            error: error.message
+        });
+    }
+};
+
+/**
  * Reopen a closed ticket
  * POST /api/tickets/:id/reopen
  */
@@ -2453,14 +2472,6 @@ export const reopenTicket = async (req, res) => {
 
         res.status(200).json({
             status: 'success',
-            message: 'Ticket cancelled successfully',
-            data: updatedTicket
-        });
-    } catch (error) {
-        console.error('Cancel ticket error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to cancel ticket',
             message: 'Ticket reopened successfully',
             data: {
                 ticket: reopenedTicket,

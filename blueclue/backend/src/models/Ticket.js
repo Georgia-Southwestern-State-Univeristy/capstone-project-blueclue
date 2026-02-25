@@ -275,6 +275,9 @@ class Ticket {
         
         const result = await pool.query(query);
         return result.rows;
+    }
+
+    /**
      * Reopen a closed ticket
      * @param {number} id - Ticket ID
      * @param {string} reason - Reason for reopening
