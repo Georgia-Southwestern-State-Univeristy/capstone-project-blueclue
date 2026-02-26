@@ -561,12 +561,12 @@ async function logSpamActivity(emailData, spamResult) {
         senderDomain,
         emailData.subject,
         bodyPreview,
-        spamResult.spamScore,
+        spamResult.spamScore ?? 0,  // Ensure consistent numeric type (default to 0 if null/undefined)
         spamResult.spamScore >= VERIFICATION_CHALLENGE_THRESHOLD,
         spamResult.blocked,
         spamResult.reason || null,
-        spamResult.spfResult,
-        spamResult.dkimResult,
+        spamResult.spfResult || null,  // Ensure consistent type
+        spamResult.dkimResult || null,  // Ensure consistent type
         filtersArray,
         emailData.ip || null,
         processingStatus,
