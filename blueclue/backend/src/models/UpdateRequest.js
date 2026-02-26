@@ -331,9 +331,9 @@ class UpdateRequest {
           THEN EXTRACT(EPOCH FROM (deadline - fulfilled_at))/3600 
         END) as avg_time_before_deadline
        FROM ticket_update_requests
-       WHERE assigned_to = $1 
-         AND created_at > CURRENT_TIMESTAMP - INTERVAL '${days} days'`,
-      [techId]
+       WHERE assigned_to = $1::integer
+         AND created_at > CURRENT_TIMESTAMP - INTERVAL '1 day' * $2::integer`,
+      [techId, days]
     );
     
     return result.rows[0];
@@ -376,7 +376,7 @@ class UpdateRequest {
        JOIN users u ON u.id = ur.fulfilled_by
        WHERE ur.status = 'fulfilled'
          AND ur.response_time_seconds IS NOT NULL
-         AND ur.fulfilled_at >= CURRENT_TIMESTAMP - INTERVAL '1 day' * $1
+         AND ur.fulfilled_at >= CURRENT_TIMESTAMP - INTERVAL '1 day' * $1::integer
        GROUP BY u.id, u.first_name, u.last_name, u.email
        ORDER BY avg_response_time_seconds ASC`,
       [days]
