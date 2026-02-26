@@ -6,6 +6,7 @@ import CancelTicketModal from './CancelTicketModal'
 import TicketComments from './TicketComments'
 import AddCollaboratorModal from './AddCollaboratorModal'
 import RingForHelpModal from './RingForHelpModal'
+import RequestUpdateModal from './RequestUpdateModal'
 import { getCollaborators, addCollaborator, removeCollaborator } from '../services/collaboratorService'
 
 /**
@@ -64,6 +65,9 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
 
   // ─── Ring for Help state ─────────────────────────────────────
   const [showRingModal, setShowRingModal] = useState(false)
+
+  // ─── Request Update state ────────────────────────────────────
+  const [showRequestUpdateModal, setShowRequestUpdateModal] = useState(false)
 
   const modalRef = useRef(null)
   const assignRef = useRef(null)
@@ -1128,6 +1132,20 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
               </button>
             )}
 
+            {/* Request Update — management only */}
+            {isManagement && (ticket.assigned_to || collaborators.length > 0) && (
+              <button
+                onClick={() => setShowRequestUpdateModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-900/60 hover:bg-indigo-800/70 text-indigo-200 hover:text-indigo-100 text-xs font-medium border border-indigo-700/50 hover:border-indigo-600 transition-colors"
+                title="Request status update from technician"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+                Request Update
+              </button>
+            )}
+
             {/* Print / Export — available to all */}
             <button
               onClick={handlePrint}
@@ -1734,6 +1752,26 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
               // Refresh ticket data to show updated activity
               fetchTicket(true)
             }}
+          />
+        )}
+
+        {/* Request Update Modal */}
+        {ticket && showRequestUpdateModal && (
+          <RequestUpdateModal
+            isOpen={showRequestUpdateModal}
+            onClose={(data) => {
+              setShowRequestUpdateModal(false)
+              if (data) {
+                setStatusSuccess('Update request sent successfully')
+                setTimeout(() => setStatusSuccess(null), 3000)
+                fetchTicket(true)
+              }
+            }}
+            ticketId={ticket.id}
+            ticketSubject={ticket.subject}
+            collaborators={collaborators}
+            assignedTo={ticket.assigned_to}
+            assignedToName={ticket.assigned_to_name}
           />
         )}
       </div>
