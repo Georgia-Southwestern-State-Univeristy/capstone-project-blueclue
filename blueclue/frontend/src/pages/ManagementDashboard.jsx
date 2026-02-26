@@ -616,10 +616,21 @@ function ManagementDashboard() {
             {activeTab === 'analytics' && (
               <div>
                 <div className="mb-6">
-                  <h2 className="text-2xl font-bold text-white mb-2">Analytics & Reporting</h2>
-                  <p className="text-gray-400">
-                    Comprehensive analytics, trends, performance reports, and business insights.
-                  </p>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                      <h2 className="text-2xl font-bold text-white mb-2">Analytics & Reporting</h2>
+                      <p className="text-gray-400">
+                        Comprehensive analytics, trends, performance reports, and business insights.
+                      </p>
+                    </div>
+                    <a
+                      href="/analytics"
+                      className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-lg transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
+                    >
+                      <span>📊</span>
+                      <span>Open Full Analytics Dashboard</span>
+                    </a>
+                  </div>
                 </div>
                 
                 <div className="space-y-4">
