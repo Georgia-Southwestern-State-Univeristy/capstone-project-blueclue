@@ -210,7 +210,8 @@ export default function TodaysActionsWidget({ onRefresh, onAction, autoRefreshIn
             return (
               <div
                 key={`${item.action_type}-${item.id}`}
-                className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${cfg.row}`}
+                className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer ${cfg.row}`}
+                onClick={() => handleAction(item)}
               >
                 {/* Status dot */}
                 <div className="flex-shrink-0">
@@ -255,7 +256,7 @@ export default function TodaysActionsWidget({ onRefresh, onAction, autoRefreshIn
 
                 {/* Action button */}
                 <button
-                  onClick={() => handleAction(item)}
+                  onClick={(e) => { e.stopPropagation(); handleAction(item) }}
                   className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg transition-all ${cfg.actionBtn}`}
                 >
                   {cfg.actionLabel}

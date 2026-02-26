@@ -426,7 +426,10 @@ function TechnicianDashboard() {
 
       {/* Available Tickets Tab */}
       {activeTab === 'available' && (
-        <AvailableTickets />
+        <AvailableTickets onTicketClick={(ticketId) => {
+          setSelectedTicketId(ticketId);
+          setIsDetailOpen(true);
+        }} />
       )}
 
       {/* Ticket Queue with Filters */}

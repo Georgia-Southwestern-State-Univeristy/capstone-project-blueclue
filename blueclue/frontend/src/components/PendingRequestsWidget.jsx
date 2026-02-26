@@ -6,7 +6,7 @@ import { getAssignmentRequests, approveAssignmentRequest, denyAssignmentRequest 
  * Displays pending technician assignment requests with quick approve/deny actions.
  * Designed for the Management Dashboard right sidebar or main area.
  */
-const PendingRequestsWidget = forwardRef(({ onAction }, ref) => {
+const PendingRequestsWidget = forwardRef(({ onAction, onTicketClick }, ref) => {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -205,7 +205,10 @@ const PendingRequestsWidget = forwardRef(({ onAction }, ref) => {
               </div>
 
               {/* Ticket info */}
-              <div className="mb-2 p-2 bg-gray-750 bg-opacity-50 rounded border border-gray-700">
+              <div
+                className={`mb-2 p-2 bg-gray-750 bg-opacity-50 rounded border border-gray-700 ${onTicketClick ? 'cursor-pointer hover:border-blue-500 hover:bg-gray-700 transition-colors' : ''}`}
+                onClick={() => onTicketClick?.(request.ticket_id)}
+              >
                 <div className="flex items-center gap-2 mb-1">
                   {request.ticket_priority && (
                     <span className={`w-2 h-2 rounded-full ${priorityColors[request.ticket_priority] || 'bg-gray-500'}`}></span>

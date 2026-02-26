@@ -7,7 +7,7 @@ import {
 import LoadingSpinner from './LoadingSpinner';
 import NotificationCard from './NotificationCard';
 
-function NotificationDropdown({ isOpen, onClose, onNotificationUpdate }) {
+function NotificationDropdown({ isOpen, onClose, onNotificationUpdate, onTicketClick }) {
   const [notifications, setNotifications] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -131,6 +131,10 @@ function NotificationDropdown({ isOpen, onClose, onNotificationUpdate }) {
                 onUpdate={() => {
                   fetchNotifications();
                   if (onNotificationUpdate) onNotificationUpdate();
+                }}
+                onTicketClick={(ticketId) => {
+                  if (onTicketClick) onTicketClick(ticketId);
+                  onClose();
                 }}
               />
             ))}

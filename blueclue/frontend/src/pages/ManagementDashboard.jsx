@@ -126,23 +126,24 @@ function ManagementWidgetGrid({
           onRefresh={fetchTickets}
           activeCategory={categoryFilter}
           onCategorySelect={setCategoryFilter}
+          onTicketClick={(ticket) => handleTicketClick(ticket.id || ticket.ticket_id)}
         />
       ),
     },
     {
       key: 'overdue',
       label: 'Overdue Tickets',
-      component: <OverdueTicketsWidget onRefresh={fetchTickets} />,
+      component: <OverdueTicketsWidget onRefresh={fetchTickets} onTicketClick={(ticket) => handleTicketClick(ticket.id)} />,
     },
     {
       key: 'escalations',
       label: 'Escalations',
-      component: <EscalationsWidget onRefresh={fetchTickets} />,
+      component: <EscalationsWidget onRefresh={fetchTickets} onView={(ticket) => handleTicketClick(ticket.id)} />,
     },
     {
       key: 'todaysActions',
       label: "Today's Actions",
-      component: <TodaysActionsWidget onRefresh={fetchTickets} />,
+      component: <TodaysActionsWidget onRefresh={fetchTickets} onAction={(item) => handleTicketClick(item.id || item.ticket_id)} />,
     },
     {
       key: 'topRequesters',
@@ -162,7 +163,7 @@ function ManagementWidgetGrid({
     {
       key: 'pendingRequests',
       label: 'Pending Requests',
-      component: <PendingRequestsWidget ref={pendingRequestsRef} onAction={() => fetchTickets()} />,
+      component: <PendingRequestsWidget ref={pendingRequestsRef} onAction={() => fetchTickets()} onTicketClick={(ticketId) => handleTicketClick(ticketId)} />,
     },
     {
       key: 'responseTime',
@@ -212,7 +213,8 @@ function ManagementWidgetGrid({
                 return (
                   <div
                     key={t.id || t.ticket_id}
-                    className="flex items-center justify-between p-2.5 bg-gray-700/50 rounded border border-gray-600 text-sm hover:bg-gray-700 transition-colors"
+                    className="flex items-center justify-between p-2.5 bg-gray-700/50 rounded border border-gray-600 text-sm hover:bg-gray-700 transition-colors cursor-pointer"
+                    onClick={() => handleTicketClick(t.id || t.ticket_id)}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <span className="text-gray-500 font-mono text-xs flex-shrink-0">

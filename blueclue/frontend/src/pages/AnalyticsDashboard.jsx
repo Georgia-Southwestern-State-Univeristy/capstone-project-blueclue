@@ -5,6 +5,7 @@ import Alert from '../components/Alert'
 import { LineChart, BarChart, StackedBarChart, Heatmap, MetricCard } from '../components/analytics'
 import DonutChart from '../components/DonutChart'
 import * as analyticsService from '../services/analyticsService'
+import TicketDetailView from '../components/TicketDetailView'
 
 /**
  * Analytics Dashboard
@@ -36,6 +37,10 @@ function AnalyticsDashboard() {
   
   // Export state
   const [exporting, setExporting] = useState(false)
+
+  // Ticket detail state
+  const [selectedTicketId, setSelectedTicketId] = useState(null)
+  const [isDetailOpen, setIsDetailOpen] = useState(false)
 
   // Check user authentication and role
   useEffect(() => {
@@ -384,11 +389,18 @@ function AnalyticsDashboard() {
           onClose={closeDrillDown}
           onLoadMore={loadMoreDrillDown}
           onTicketClick={(ticket) => {
-            // Navigate to ticket or open detail view
-            navigate(`/management-dashboard?ticket=${ticket.id}`)
+            setSelectedTicketId(ticket.id);
+            setIsDetailOpen(true);
           }}
         />
       )}
+
+      {/* Ticket Detail View Modal */}
+      <TicketDetailView
+        ticketId={selectedTicketId}
+        isOpen={isDetailOpen}
+        onClose={() => setIsDetailOpen(false)}
+      />
     </div>
   )
 }

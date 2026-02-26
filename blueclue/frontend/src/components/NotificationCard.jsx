@@ -1,17 +1,22 @@
 import { useState } from 'react';
 import { markNotificationAsRead, deleteNotification } from '../services/notificationService';
 
-function NotificationCard({ notification, onUpdate }) {
+function NotificationCard({ notification, onUpdate, onTicketClick }) {
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const handleMarkAsRead = async () => {
-    if (notification.isRead) return;
-    
-    try {
-      await markNotificationAsRead(notification.id);
-      onUpdate();
-    } catch (err) {
-      console.error('Failed to mark as read:', err);
+  const handleClick = async () => {
+    // Mark as read first
+    if (!notification.isRead) {
+      try {
+        await markNotificationAsRead(notification.id);
+        onUpdate();
+      } catch (err) {
+        console.error('Failed to mark as read:', err);
+      }
+    }
+    // If notification has a ticket, navigate to it
+    if (notification.ticket_id && onTicketClick) {
+      onTicketClick(notification.ticket_id);
     }
   };
 
@@ -91,7 +96,7 @@ function NotificationCard({ notification, onUpdate }) {
       className={`px-4 py-3 hover:bg-gray-700/50 transition-colors cursor-pointer ${
         !notification.isRead ? 'bg-gray-700/30' : ''
       } ${isDeleting ? 'opacity-50' : ''}`}
-      onClick={handleMarkAsRead}
+      onClick={handleClick}
     >
       <div className="flex gap-3">
         {/* Icon */}
@@ -102,7 +107,14 @@ function NotificationCard({ notification, onUpdate }) {
         {/* Content */}
         <div className="flex-1 min-w-0">
           <p className="text-sm text-gray-200 break-words">{notification.message}</p>
-          <p className="text-xs text-gray-500 mt-1">{formatTime(notification.createdAt)}</p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-xs text-gray-500">{formatTime(notification.createdAt)}</p>
+            {notification.ticket_id && (
+              <span className="text-xs text-blue-400 hover:text-blue-300">
+                View ticket →
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Actions */}

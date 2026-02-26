@@ -4,6 +4,7 @@ import { logout, isAuthenticated, getUser } from '../services/authService'
 import NotificationBell from './NotificationBell'
 import NotificationDropdown from './NotificationDropdown'
 import NotificationPreferences from './NotificationPreferences'
+import TicketDetailView from './TicketDetailView'
 import logo from '../assets/EditedBlueClueLogo.png'
 
 function Navbar() {
@@ -12,6 +13,8 @@ function Navbar() {
   const [notificationDropdownOpen, setNotificationDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [preferencesOpen, setPreferencesOpen] = useState(false)
+  const [ticketDetailId, setTicketDetailId] = useState(null)
+  const [ticketDetailOpen, setTicketDetailOpen] = useState(false)
   const dropdownRef = useRef(null)
   const notificationDropdownRef = useRef(null)
   const notificationBellRef = useRef(null)
@@ -108,6 +111,10 @@ function Navbar() {
                     if (notificationBellRef.current?.refresh) {
                       notificationBellRef.current.refresh();
                     }
+                  }}
+                  onTicketClick={(ticketId) => {
+                    setTicketDetailId(ticketId);
+                    setTicketDetailOpen(true);
                   }}
                 />
               </div>
@@ -269,6 +276,13 @@ function Navbar() {
           </div>
         </div>
       )}
+
+      {/* Ticket Detail View - opened from notification clicks */}
+      <TicketDetailView
+        ticketId={ticketDetailId}
+        isOpen={ticketDetailOpen}
+        onClose={() => setTicketDetailOpen(false)}
+      />
     </nav>
   )
 }

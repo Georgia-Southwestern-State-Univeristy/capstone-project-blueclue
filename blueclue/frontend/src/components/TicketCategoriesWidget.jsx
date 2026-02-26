@@ -33,6 +33,7 @@ function TicketCategoriesWidget({
   onRefresh = null,
   activeCategory = null,
   onCategorySelect = null,
+  onTicketClick = null,
 }) {
   const [hoveredIndex, setHoveredIndex] = useState(null)
   const [apiData, setApiData] = useState(null)
@@ -341,7 +342,8 @@ function TicketCategoriesWidget({
               drillDownTickets.slice(0, 20).map((t) => (
                 <div
                   key={t.id || t.ticket_id}
-                  className="flex items-center justify-between p-2 bg-gray-800/60 rounded border border-gray-700/50 text-xs hover:bg-gray-700/60 transition-colors"
+                  className={`flex items-center justify-between p-2 bg-gray-800/60 rounded border border-gray-700/50 text-xs hover:bg-gray-700/60 transition-colors ${onTicketClick ? 'cursor-pointer hover:border-blue-500/50' : ''}`}
+                  onClick={() => onTicketClick?.(t)}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-gray-500 font-mono flex-shrink-0">
