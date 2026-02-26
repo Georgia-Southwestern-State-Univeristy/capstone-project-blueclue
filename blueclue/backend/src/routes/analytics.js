@@ -14,7 +14,18 @@ import {
     getTechPerformance,
     getCancellationStats,
     getReopenAnalytics,
-    getCollaborationAnalytics
+    getCollaborationAnalytics,
+    // New comprehensive dashboard endpoints
+    getResolutionTime,
+    getTicketVolume,
+    getTechPerformanceDashboard,
+    getCategoriesDashboard,
+    getSLAComplianceDashboard,
+    getAdditionalMetricsDashboard,
+    getDashboardSummary,
+    exportAnalytics,
+    clearCache,
+    getTicketsByFilter
 } from '../controllers/analyticsController.js';
 import { authenticateToken } from '../middleware/auth.js';
 
@@ -129,5 +140,88 @@ router.get('/reopens', getReopenAnalytics);
  * @query   days (default: 30) - Number of days to analyze
  */
 router.get('/collaboration', getCollaborationAnalytics);
+
+// ============================================================================
+// Comprehensive Analytics Dashboard Endpoints
+// ============================================================================
+
+/**
+ * @route   GET /api/analytics/resolution-time
+ * @desc    Get resolution time metrics with trends and breakdowns
+ * @access  Technicians (own data), Management, Admin (all data)
+ * @query   startDate, endDate, preset (today|week|month|quarter|year), category, techId
+ */
+router.get('/resolution-time', getResolutionTime);
+
+/**
+ * @route   GET /api/analytics/ticket-volume
+ * @desc    Get ticket volume metrics with heatmap and trends
+ * @access  Technicians (own data), Management, Admin (all data)
+ * @query   startDate, endDate, preset, category
+ */
+router.get('/ticket-volume', getTicketVolume);
+
+/**
+ * @route   GET /api/analytics/tech-performance-dashboard
+ * @desc    Get comprehensive technician performance with leaderboard
+ * @access  Technicians (own data), Management, Admin (all data)
+ * @query   startDate, endDate, preset, techId
+ */
+router.get('/tech-performance-dashboard', getTechPerformanceDashboard);
+
+/**
+ * @route   GET /api/analytics/categories-dashboard
+ * @desc    Get issue category analysis with trends
+ * @access  Management, Admin only
+ * @query   startDate, endDate, preset
+ */
+router.get('/categories-dashboard', getCategoriesDashboard);
+
+/**
+ * @route   GET /api/analytics/sla-compliance
+ * @desc    Get SLA compliance metrics and current breaches
+ * @access  Management, Admin only
+ * @query   startDate, endDate, preset, category
+ */
+router.get('/sla-compliance', getSLAComplianceDashboard);
+
+/**
+ * @route   GET /api/analytics/additional-metrics
+ * @desc    Get additional metrics (reopen rate, cancellation, comments, etc.)
+ * @access  Technicians, Management, Admin
+ * @query   startDate, endDate, preset
+ */
+router.get('/additional-metrics', getAdditionalMetricsDashboard);
+
+/**
+ * @route   GET /api/analytics/dashboard-summary
+ * @desc    Get complete dashboard summary with all metrics
+ * @access  Technicians (limited), Management, Admin
+ * @query   startDate, endDate, preset
+ */
+router.get('/dashboard-summary', getDashboardSummary);
+
+/**
+ * @route   GET /api/analytics/export
+ * @desc    Export analytics data in CSV or JSON format
+ * @access  Management, Admin only
+ * @query   format (csv|json), type (summary|resolution-time|ticket-volume|tech-performance|categories|sla), startDate, endDate, preset
+ */
+router.get('/export', exportAnalytics);
+
+/**
+ * @route   POST /api/analytics/cache/clear
+ * @desc    Clear analytics cache
+ * @access  Management, Admin only
+ */
+router.post('/cache/clear', clearCache);
+
+/**
+ * @route   GET /api/analytics/tickets-by-filter
+ * @desc    Get paginated list of tickets matching filters (for drill-down)
+ * @access  Technicians (own data), Management, Admin (all data)
+ * @query   startDate, endDate, preset, category, priority, status, techId, slaBreach, page, limit
+ */
+router.get('/tickets-by-filter', getTicketsByFilter);
 
 export default router;

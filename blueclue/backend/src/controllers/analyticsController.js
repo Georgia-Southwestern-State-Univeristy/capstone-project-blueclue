@@ -1,6 +1,7 @@
 // src/controllers/analyticsController.js
 import pool from '../config/database.js';
 import PriorityOverride from '../models/PriorityOverride.js';
+import * as analyticsService from '../services/analyticsService.js';
 
 /**
  * Get AI priority analytics overview
@@ -1182,3 +1183,509 @@ export const getReopenAnalytics = async (req, res) => {
     }
 };
 
+// ============================================================================
+// Comprehensive Analytics Dashboard Endpoints
+// ============================================================================
+
+/**
+ * GET /api/analytics/resolution-time
+ * Get resolution time metrics with filters
+ * @query {string} startDate - Start date (ISO format)
+ * @query {string} endDate - End date (ISO format)
+ * @query {string} preset - Date preset (today, week, month, quarter, year)
+ * @query {string} category - Filter by category
+ * @query {number} techId - Filter by technician (for tech-only view)
+ */
+export const getResolutionTime = async (req, res) => {
+    try {
+        const { startDate, endDate, preset, category, techId } = req.query;
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        
+        // For technicians, they can only view their own performance
+        let effectiveTechId = techId;
+        if (req.user.role === 'technician' || req.user.role === 'senior_technician') {
+            effectiveTechId = req.user.id;
+        }
+        
+        const data = await analyticsService.getResolutionTimeMetrics(
+            start.toISOString(),
+            end.toISOString(),
+            category,
+            effectiveTechId
+        );
+        
+        res.json({
+            status: 'success',
+            data,
+            filters: { startDate: start, endDate: end, category, techId: effectiveTechId }
+        });
+    } catch (error) {
+        console.error('Resolution time analytics error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve resolution time metrics',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/analytics/ticket-volume
+ * Get ticket volume metrics
+ * @query {string} startDate - Start date (ISO format)
+ * @query {string} endDate - End date (ISO format)
+ * @query {string} preset - Date preset (today, week, month, quarter, year)
+ * @query {string} category - Filter by category
+ */
+export const getTicketVolume = async (req, res) => {
+    try {
+        const { startDate, endDate, preset, category, techId } = req.query;
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        
+        // For technicians, they can only view their own tickets
+        let effectiveTechId = techId;
+        if (req.user.role === 'technician' || req.user.role === 'senior_technician') {
+            effectiveTechId = req.user.id;
+        }
+        
+        const data = await analyticsService.getTicketVolumeMetrics(
+            start.toISOString(),
+            end.toISOString(),
+            category,
+            effectiveTechId
+        );
+        
+        res.json({
+            status: 'success',
+            data,
+            filters: { startDate: start, endDate: end, category, techId: effectiveTechId }
+        });
+    } catch (error) {
+        console.error('Ticket volume analytics error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve ticket volume metrics',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/analytics/tech-performance-dashboard
+ * Get comprehensive technician performance metrics
+ * @query {string} startDate - Start date (ISO format)
+ * @query {string} endDate - End date (ISO format)
+ * @query {string} preset - Date preset (today, week, month, quarter, year)
+ * @query {number} techId - Specific technician ID (optional)
+ */
+export const getTechPerformanceDashboard = async (req, res) => {
+    try {
+        const { startDate, endDate, preset, techId } = req.query;
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        
+        // For technicians, they can only view their own performance
+        let effectiveTechId = techId;
+        if (req.user.role === 'technician' || req.user.role === 'senior_technician') {
+            effectiveTechId = req.user.id;
+        }
+        
+        const data = await analyticsService.getTechnicianPerformance(
+            start.toISOString(),
+            end.toISOString(),
+            effectiveTechId
+        );
+        
+        res.json({
+            status: 'success',
+            data,
+            filters: { startDate: start, endDate: end, techId: effectiveTechId }
+        });
+    } catch (error) {
+        console.error('Tech performance analytics error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve technician performance metrics',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/analytics/categories-dashboard
+ * Get issue category analysis
+ * @query {string} startDate - Start date (ISO format)
+ * @query {string} endDate - End date (ISO format)  
+ * @query {string} preset - Date preset (today, week, month, quarter, year)
+ */
+export const getCategoriesDashboard = async (req, res) => {
+    try {
+        const { startDate, endDate, preset } = req.query;
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        
+        // Technicians cannot access full category analytics - management only
+        if (req.user.role === 'technician' || req.user.role === 'senior_technician') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Category analysis is only available to management'
+            });
+        }
+        
+        const data = await analyticsService.getCategoryAnalysis(
+            start.toISOString(),
+            end.toISOString()
+        );
+        
+        res.json({
+            status: 'success',
+            data,
+            filters: { startDate: start, endDate: end }
+        });
+    } catch (error) {
+        console.error('Categories analytics error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve category analysis',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/analytics/sla-compliance
+ * Get SLA compliance metrics
+ * @query {string} startDate - Start date (ISO format)
+ * @query {string} endDate - End date (ISO format)
+ * @query {string} preset - Date preset (today, week, month, quarter, year)
+ * @query {string} category - Filter by category
+ */
+export const getSLAComplianceDashboard = async (req, res) => {
+    try {
+        const { startDate, endDate, preset, category } = req.query;
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        
+        // Technicians cannot access full SLA analytics - management only
+        if (req.user.role === 'technician' || req.user.role === 'senior_technician') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'SLA compliance is only available to management'
+            });
+        }
+        
+        const data = await analyticsService.getSLACompliance(
+            start.toISOString(),
+            end.toISOString(),
+            category
+        );
+        
+        res.json({
+            status: 'success',
+            data,
+            filters: { startDate: start, endDate: end, category }
+        });
+    } catch (error) {
+        console.error('SLA compliance analytics error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve SLA compliance metrics',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/analytics/additional-metrics
+ * Get additional metrics (reopen rate, cancellation rate, comments, collaboration)
+ * @query {string} startDate - Start date (ISO format)
+ * @query {string} endDate - End date (ISO format)
+ * @query {string} preset - Date preset (today, week, month, quarter, year)
+ */
+export const getAdditionalMetricsDashboard = async (req, res) => {
+    try {
+        const { startDate, endDate, preset } = req.query;
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        
+        const data = await analyticsService.getAdditionalMetrics(
+            start.toISOString(),
+            end.toISOString()
+        );
+        
+        res.json({
+            status: 'success',
+            data,
+            filters: { startDate: start, endDate: end }
+        });
+    } catch (error) {
+        console.error('Additional metrics error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve additional metrics',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/analytics/dashboard-summary
+ * Get complete dashboard summary with all metrics
+ * @query {string} startDate - Start date (ISO format)
+ * @query {string} endDate - End date (ISO format)
+ * @query {string} preset - Date preset (today, week, month, quarter, year)
+ */
+export const getDashboardSummary = async (req, res) => {
+    try {
+        const { startDate, endDate, preset } = req.query;
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        
+        const startISO = start.toISOString();
+        const endISO = end.toISOString();
+        
+        // For technicians, restrict to their own data
+        let techId = null;
+        const isTech = req.user.role === 'technician' || req.user.role === 'senior_technician';
+        if (isTech) {
+            techId = req.user.id;
+        }
+        
+        // Fetch all metrics in parallel
+        const [resolutionTime, ticketVolume, techPerformance, additional] = await Promise.all([
+            analyticsService.getResolutionTimeMetrics(startISO, endISO, null, techId),
+            analyticsService.getTicketVolumeMetrics(startISO, endISO, null, techId),
+            analyticsService.getTechnicianPerformance(startISO, endISO, techId),
+            analyticsService.getAdditionalMetrics(startISO, endISO)
+        ]);
+        
+        // Only fetch category and SLA data for management
+        let categories = null;
+        let sla = null;
+        if (!isTech) {
+            [categories, sla] = await Promise.all([
+                analyticsService.getCategoryAnalysis(startISO, endISO),
+                analyticsService.getSLACompliance(startISO, endISO)
+            ]);
+        }
+        
+        res.json({
+            status: 'success',
+            data: {
+                resolution_time: resolutionTime,
+                ticket_volume: ticketVolume,
+                technician_performance: techPerformance,
+                categories,
+                sla,
+                additional
+            },
+            filters: { startDate: start, endDate: end },
+            user_role: req.user.role
+        });
+    } catch (error) {
+        console.error('Dashboard summary error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve dashboard summary',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/analytics/export
+ * Export analytics data in CSV or JSON format
+ * @query {string} format - Export format (csv, json)
+ * @query {string} type - Data type (summary, resolution-time, ticket-volume, tech-performance, categories, sla)
+ * @query {string} startDate - Start date (ISO format)
+ * @query {string} endDate - End date (ISO format)
+ * @query {string} preset - Date preset (today, week, month, quarter, year)
+ */
+export const exportAnalytics = async (req, res) => {
+    try {
+        const { format = 'csv', type = 'summary', startDate, endDate, preset } = req.query;
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        
+        // Only management can export
+        if (req.user.role === 'technician' || req.user.role === 'senior_technician') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Export is only available to management'
+            });
+        }
+        
+        const exportData = await analyticsService.generateExportData(
+            type,
+            start.toISOString().split('T')[0],
+            end.toISOString().split('T')[0],
+            format
+        );
+        
+        res.setHeader('Content-Type', exportData.contentType);
+        res.setHeader('Content-Disposition', `attachment; filename="${exportData.filename}"`);
+        res.send(exportData.content);
+    } catch (error) {
+        console.error('Export analytics error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to export analytics data',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * POST /api/analytics/cache/clear
+ * Clear analytics cache
+ * Management only
+ */
+export const clearCache = async (req, res) => {
+    try {
+        // Only management can clear cache
+        if (req.user.role !== 'management' && req.user.role !== 'admin') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Cache management is only available to management'
+            });
+        }
+        
+        const result = analyticsService.clearAnalyticsCache();
+        res.json(result);
+    } catch (error) {
+        console.error('Clear cache error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to clear cache',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/analytics/tickets-by-filter
+ * Get list of tickets matching specific filter criteria for drill-down
+ * @query {string} startDate - Start date
+ * @query {string} endDate - End date
+ * @query {string} category - Category filter
+ * @query {string} priority - Priority filter
+ * @query {string} status - Status filter
+ * @query {string} techId - Technician filter
+ * @query {boolean} slaBreach - Filter by SLA breach
+ * @query {number} page - Page number
+ * @query {number} limit - Items per page
+ */
+export const getTicketsByFilter = async (req, res) => {
+    try {
+        const { 
+            startDate, endDate, preset, 
+            category, priority, status, techId,
+            slaBreach,
+            page = 1, limit = 20 
+        } = req.query;
+        
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        const offset = (parseInt(page) - 1) * parseInt(limit);
+        
+        let params = [start, end];
+        let paramIndex = 3;
+        let filters = '';
+        
+        // For technicians, restrict to their own tickets
+        let effectiveTechId = techId;
+        if (req.user.role === 'technician' || req.user.role === 'senior_technician') {
+            effectiveTechId = req.user.id;
+        }
+        
+        if (category) {
+            filters += ` AND t.category = $${paramIndex}`;
+            params.push(category);
+            paramIndex++;
+        }
+        
+        if (priority) {
+            filters += ` AND t.priority = $${paramIndex}`;
+            params.push(priority);
+            paramIndex++;
+        }
+        
+        if (status) {
+            filters += ` AND t.status = $${paramIndex}`;
+            params.push(status);
+            paramIndex++;
+        }
+        
+        if (effectiveTechId) {
+            filters += ` AND t.assigned_to = $${paramIndex}`;
+            params.push(parseInt(effectiveTechId));
+            paramIndex++;
+        }
+        
+        if (slaBreach === 'true') {
+            filters += ` AND ((t.response_due_at IS NOT NULL AND t.first_response_at > t.response_due_at) 
+                OR (t.resolution_due_at IS NOT NULL AND t.resolved_at > t.resolution_due_at)
+                OR (t.response_due_at < NOW() AND t.first_response_at IS NULL)
+                OR (t.resolution_due_at < NOW() AND t.resolved_at IS NULL AND t.status NOT IN ('resolved', 'closed', 'cancelled')))`;
+        }
+        
+        // Count total
+        const countQuery = `
+            SELECT COUNT(*) as total
+            FROM tickets t
+            WHERE t.created_at BETWEEN $1 AND $2
+              AND t.deleted_at IS NULL
+              ${filters}
+        `;
+        
+        // Get paginated results
+        const ticketsQuery = `
+            SELECT 
+                t.id,
+                t.ticket_number,
+                t.subject,
+                t.category,
+                t.priority,
+                t.status,
+                t.created_at,
+                t.resolved_at,
+                t.response_due_at,
+                t.resolution_due_at,
+                t.first_response_at,
+                CONCAT(c.first_name, ' ', c.last_name) as customer_name,
+                CONCAT(a.first_name, ' ', a.last_name) as assigned_to_name,
+                ROUND(EXTRACT(EPOCH FROM (COALESCE(t.resolved_at, NOW()) - t.created_at)) / 3600, 2) as hours_open
+            FROM tickets t
+            LEFT JOIN users c ON t.customer_id = c.id
+            LEFT JOIN users a ON t.assigned_to = a.id
+            WHERE t.created_at BETWEEN $1 AND $2
+              AND t.deleted_at IS NULL
+              ${filters}
+            ORDER BY t.created_at DESC
+            LIMIT ${parseInt(limit)} OFFSET ${offset}
+        `;
+        
+        const [countResult, ticketsResult] = await Promise.all([
+            pool.query(countQuery, params),
+            pool.query(ticketsQuery, params)
+        ]);
+        
+        const total = parseInt(countResult.rows[0].total);
+        const totalPages = Math.ceil(total / parseInt(limit));
+        
+        res.json({
+            status: 'success',
+            data: {
+                tickets: ticketsResult.rows,
+                pagination: {
+                    total,
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    totalPages,
+                    hasMore: parseInt(page) < totalPages
+                }
+            },
+            filters: { startDate: start, endDate: end, category, priority, status, techId: effectiveTechId, slaBreach }
+        });
+    } catch (error) {
+        console.error('Tickets by filter error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve filtered tickets',
+            error: error.message
+        });
+    }
+};
