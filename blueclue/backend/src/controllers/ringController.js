@@ -150,20 +150,9 @@ export const sendRingRequest = async (req, res) => {
     );
 
     // Emit real-time WebSocket notification
-    emitNotificationToUser(targetTechId, {
-      type: 'ring_request',
-      notification,
-      ringRequest: {
-        id: ringRequest.id,
-        ticketId: ticketId,
-        ticketSubject: ticket.subject,
-        requestingTechId: requestingTechId,
-        requestingTechName: `${requestingUser.first_name} ${requestingUser.last_name}`,
-        urgencyLevel: urgencyLevel,
-        message: message,
-        createdAt: ringRequest.created_at
-      }
-    });
+    if (req.app.locals.io) {
+      emitNotificationToUser(req.app.locals.io, targetTechId, notification);
+    }
 
     // Send email notification if enabled
     if (targetTech.ring_sound_enabled) {
@@ -364,18 +353,9 @@ export const respondToRingRequest = async (req, res) => {
     );
 
     // Emit real-time WebSocket notification to requester
-    emitNotificationToUser(ringRequest.requesting_tech_id, {
-      type: 'ring_response',
-      notification,
-      response: {
-        action: action,
-        respondingTechId: respondingTechId,
-        respondingTechName: `${respondingUser.first_name} ${respondingUser.last_name}`,
-        ringRequestId: ringRequestId,
-        ticketId: ringRequest.ticket_id,
-        responseTime: updatedRequest.response_time_seconds
-      }
-    });
+    if (req.app.locals.io) {
+      emitNotificationToUser(req.app.locals.io, ringRequest.requesting_tech_id, notification);
+    }
 
     // Send email notification to requester
     const requester = await User.getById(ringRequest.requesting_tech_id);
