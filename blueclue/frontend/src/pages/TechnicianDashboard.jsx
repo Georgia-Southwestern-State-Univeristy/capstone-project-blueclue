@@ -7,6 +7,8 @@ import PieChart from '../components/PieChart'
 import AvailableTickets from '../components/AvailableTickets'
 import TicketDetailView from '../components/TicketDetailView'
 import RingRequestWidget from '../components/RingRequestWidget'
+import UpdateRequestAlert from '../components/UpdateRequestAlert'
+import UpdateResponseModal from '../components/UpdateResponseModal'
 import { getAllTickets, updateTicketStatus, assignTicket } from '../services/ticketService'
 import { getTechnicians } from '../services/userService'
 
@@ -70,6 +72,7 @@ function TechnicianDashboard() {
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [includeCancelled, setIncludeCancelled] = useState(false)
+  const [selectedUpdateRequest, setSelectedUpdateRequest] = useState(null)
 
   // Filter state
   const [filters, setFilters] = useState({
@@ -83,6 +86,16 @@ function TechnicianDashboard() {
     fetchTickets()
     fetchTechnicians()
   }, [])
+
+  // Check for ticket to auto-open from Ring for Help
+  useEffect(() => {
+    const openTicketId = sessionStorage.getItem('openTicketId');
+    if (openTicketId && tickets.length > 0) {
+      sessionStorage.removeItem('openTicketId');
+      setSelectedTicketId(parseInt(openTicketId));
+      setIsDetailOpen(true);
+    }
+  }, [tickets]);
 
   const fetchTickets = async () => {
     setLoading(true)
@@ -363,6 +376,13 @@ function TechnicianDashboard() {
           />
         </div>
       )}
+
+      {/* Update Request Alert Banner */}
+      <div className="mb-6">
+        <UpdateRequestAlert
+          onRespond={(request) => setSelectedUpdateRequest(request)}
+        />
+      </div>
 
       {/* Bar Chart (TicketTimeline) above Pie Charts */}
       <div className="mb-8">
@@ -832,7 +852,12 @@ function TechnicianDashboard() {
       )}
       
       {/* Ring Request Widget - shows incoming help requests */}
-      <RingRequestWidget />
+      <RingRequestWidget 
+        onViewTicket={(ticketId) => {
+          setSelectedTicketId(ticketId);
+          setIsDetailOpen(true);
+        }}
+      />
       
       {/* Ticket Detail View Modal */}
       <TicketDetailView
@@ -841,6 +866,20 @@ function TechnicianDashboard() {
         onClose={() => setIsDetailOpen(false)}
         onTicketUpdated={fetchTickets}
       />
+
+      {/* Update Response Modal */}
+      {selectedUpdateRequest && (
+        <UpdateResponseModal
+          isOpen={!!selectedUpdateRequest}
+          onClose={(success) => {
+            setSelectedUpdateRequest(null)
+            if (success) {
+              fetchTickets()
+            }
+          }}
+          updateRequest={selectedUpdateRequest}
+        />
+      )}
     </div>
   )
 }
