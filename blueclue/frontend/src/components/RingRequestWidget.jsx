@@ -6,7 +6,7 @@ import { getIncomingRingRequests, respondToRingRequest, getUrgencyColor, getUrge
  * RingRequestWidget - Dashboard widget for displaying incoming ring requests
  * Shows pending help requests with Accept/Decline/View actions
  */
-const RingRequestWidget = () => {
+const RingRequestWidget = ({ onViewTicket }) => {
   const [ringRequests, setRingRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -57,7 +57,31 @@ const RingRequestWidget = () => {
   };
 
   const handleViewTicket = (ticketId) => {
-    navigate(`/tickets/${ticketId}`);
+    // If callback provided, use it
+    if (onViewTicket) {
+      onViewTicket(ticketId);
+      return;
+    }
+
+    // Otherwise, fallback to navigation
+    sessionStorage.setItem('openTicketId', ticketId);
+    
+    // Get user role to navigate to appropriate dashboard
+    const userStr = localStorage.getItem('blueclue_user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        if (user.role === 'technician') {
+          navigate('/my-tickets');
+        } else if (user.role === 'management') {
+          navigate('/management-dashboard');
+        } else {
+          navigate('/technician');
+        }
+      } catch (e) {
+        navigate('/technician');
+      }
+    }
   };
 
   const getTimeSince = (createdAt) => {
@@ -83,8 +107,8 @@ const RingRequestWidget = () => {
     return remaining;
   };
 
-  // Don't render if no requests
-  if (!loading && ringRequests.length === 0) {
+  // Don't render if no requests or still loading
+  if (loading || ringRequests.length === 0) {
     return null;
   }
 
