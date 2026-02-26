@@ -8,6 +8,7 @@ import ClientDashboard from './pages/ClientDashboard'
 import TechnicianDashboard from './pages/TechnicianDashboard'
 import ManagementDashboard from './pages/ManagementDashboard'
 import MyAssignedTickets from './pages/MyAssignedTickets'
+import AnalyticsDashboard from './pages/AnalyticsDashboard'
 import Navbar from './components/Navbar'
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
         <Route path="/client-dashboard" element={<ClientDashboard />} />
         <Route path="/technician" element={<TechnicianDashboard />} />
         <Route path="/management-dashboard" element={<ManagementDashboard />} />
+        <Route path="/analytics" element={<AnalyticsDashboard />} />
         <Route path="/my-tickets" element={<MyAssignedTickets />} />
       </Routes>
     </BrowserRouter>
