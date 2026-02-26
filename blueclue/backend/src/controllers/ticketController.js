@@ -256,7 +256,6 @@ export const createTicket = async (req, res) => {
             if (customerResult.rows[0] && customerResult.rows[0].email_notifications) {
                 await sendTicketConfirmation(
                     customerResult.rows[0].email,
-                    customerResult.rows[0].first_name,
                     ticket,
                     customer_id
                 );
