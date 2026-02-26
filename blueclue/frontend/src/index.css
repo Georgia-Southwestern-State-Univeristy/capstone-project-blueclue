@@ -7,3 +7,31 @@ body {
   min-height: 100vh;
   background-color: #030712;
 }
+
+/* react-grid-layout overrides for dark dashboard theme */
+.react-grid-item.react-grid-placeholder {
+  background: rgba(59, 130, 246, 0.25) !important;
+  border: 2px dashed rgba(59, 130, 246, 0.5) !important;
+  border-radius: 0.5rem;
+  opacity: 1 !important;
+}
+
+.react-grid-item > .react-resizable-handle::after {
+  border-right-color: rgba(156, 163, 175, 0.4) !important;
+  border-bottom-color: rgba(156, 163, 175, 0.4) !important;
+}
+
+.react-grid-item {
+  transition: none !important;
+}
+
+.react-grid-item.cssTransforms {
+  transition: transform 200ms ease !important;
+}
+
+.react-grid-item.resizing,
+.react-grid-item.react-draggable-dragging {
+  transition: none !important;
+  z-index: 30;
+  opacity: 0.9;
+}

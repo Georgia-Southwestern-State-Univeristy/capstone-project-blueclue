@@ -118,7 +118,7 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
   }
 
   return (
-    <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-4 md:p-6 h-full flex flex-col">
+    <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-4 md:p-6 h-full flex flex-col overflow-hidden">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base md:text-lg font-semibold text-white">Ticket Timeline</h3>
         <div className="flex items-center gap-3">

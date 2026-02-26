@@ -109,7 +109,7 @@ const PendingRequestsWidget = forwardRef(({ onAction }, ref) => {
   }
 
   return (
-    <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">
+    <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm h-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-700">
         <div className="flex items-center gap-2">
@@ -146,7 +146,7 @@ const PendingRequestsWidget = forwardRef(({ onAction }, ref) => {
       )}
 
       {/* Content */}
-      <div className="p-4 space-y-3 max-h-[480px] overflow-y-auto">
+      <div className="p-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
         {loading && requests.length === 0 ? (
           <div className="text-center py-6">
             <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>

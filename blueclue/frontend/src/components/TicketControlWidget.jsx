@@ -204,7 +204,7 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
   // ──────────────────────────────────────────────────────────────────────
   return (
     <>
-    <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">
+    <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm h-full flex flex-col overflow-hidden">
       {/* Success Toast */}
       {assignSuccess && (
         <div className="mx-6 mt-4 px-4 py-3 bg-green-900/40 border border-green-700 rounded-lg text-green-300 text-sm flex items-center justify-between">
@@ -242,7 +242,7 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
 
       {/* ═══════════════ QUEUE TAB ═══════════════ */}
       {activeTab === 'queue' && (
-        <div>
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {/* Search + Filter Bar */}
           <div className="p-6 border-b border-gray-700">
             <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-4">
@@ -389,9 +389,9 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
             </div>
           )}
 
-          {/* Ticket Cards Grid */}
+          {/* Ticket Cards Grid – scrollable within dashboard widget */}
           {filteredTickets.length > 0 && (
-            <div className="p-6">
+            <div className="p-6 flex-1 min-h-0 overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {sortedTickets.map(ticket => {
                   const statusColor = getStatusColor(ticket.status)

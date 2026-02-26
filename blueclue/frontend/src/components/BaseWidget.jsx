@@ -94,7 +94,7 @@ function BaseWidget({
 
   return (
     <div
-      className={`bg-gray-900 rounded-lg border border-gray-700 shadow-sm flex flex-col ${className}`}
+      className={`bg-gray-900 rounded-lg border border-gray-700 shadow-sm flex flex-col h-full overflow-hidden ${className}`}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4 border-b border-gray-800">
@@ -156,7 +156,7 @@ function BaseWidget({
 
       {/* Body */}
       <div
-        className={`flex-1 relative ${noPadding ? '' : 'p-4 md:p-6'}`}
+        className={`flex-1 relative min-h-0 overflow-y-auto ${noPadding ? '' : 'p-4 md:p-6'}`}
         style={minHeight ? { minHeight } : undefined}
       >
         {/* Loading overlay */}
