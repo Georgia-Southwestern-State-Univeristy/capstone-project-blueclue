@@ -53,7 +53,7 @@ class User {
     }
 
     /**
-     * Get user by email
+     * Get user by email (case-insensitive)
      * @param {string} email - User email
      * @returns {Promise<Object|null>} User object or null
      */
@@ -72,7 +72,7 @@ class User {
                 is_active,
                 force_password_change
             FROM users
-            WHERE email = $1
+            WHERE LOWER(email) = LOWER($1)
         `;
         
         const result = await pool.query(query, [email]);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { verifyEmail, resendVerification } from '../services/authService'
 import logo from '../assets/EditedBlueClueLogo.png'
@@ -11,14 +11,24 @@ function VerifyEmail() {
   const [email, setEmail] = useState('')
   const [resendStatus, setResendStatus] = useState('') // idle, sending, sent, error
   const [resendMessage, setResendMessage] = useState('')
+  const verificationAttempted = useRef(false)
 
   useEffect(() => {
     const verify = async () => {
+      // Prevent multiple verification attempts (React Strict Mode, re-renders)
+      if (verificationAttempted.current) {
+        return
+      }
+
       if (!token) {
+        verificationAttempted.current = true
         setStatus('error')
         setMessage('Invalid verification link. No token provided.')
         return
       }
+
+      // Mark that verification has started
+      verificationAttempted.current = true
 
       try {
         const response = await verifyEmail(token)
