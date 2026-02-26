@@ -474,7 +474,7 @@ function OverviewTab({ data, isTechOnly, onDrillDown }) {
           title="Resolution Time Trend"
           color="#3b82f6"
           formatX={formatDate}
-          formatY={(v) => v?.toFixed(1)}
+          formatY={(v) => v != null ? Number(v).toFixed(1) : '0.0'}
           unit="h"
           yLabel="Avg Hours"
         />
@@ -543,7 +543,7 @@ function ResolutionTimeTab({ data, onDrillDown }) {
         <MetricCard
           title="Target (24h)"
           value={data.goal?.meets_goal ? 'Met' : 'Not Met'}
-          subtitle={`${data.goal?.deviation_hours?.toFixed(1)}h ${data.goal?.deviation_hours > 0 ? 'over' : 'under'}`}
+          subtitle={data.goal?.deviation_hours != null ? `${Number(data.goal.deviation_hours).toFixed(1)}h ${data.goal.deviation_hours > 0 ? 'over' : 'under'}` : 'N/A'}
           color={data.goal?.meets_goal ? 'green' : 'yellow'}
         />
         <MetricCard
@@ -574,7 +574,7 @@ function ResolutionTimeTab({ data, onDrillDown }) {
           xKey="priority"
           yKey="avg_hours"
           title="Resolution Time by Priority"
-          formatValue={(v) => `${v?.toFixed(1)}h`}
+          formatValue={(v) => v != null ? `${Number(v).toFixed(1)}h` : '0.0h'}
           colorMap={{
             critical: '#ef4444',
             high: '#f97316',
@@ -592,7 +592,7 @@ function ResolutionTimeTab({ data, onDrillDown }) {
         yKey="avg_hours"
         title="Resolution Time by Category"
         horizontal
-        formatValue={(v) => `${v?.toFixed(1)}h`}
+        formatValue={(v) => v != null ? `${Number(v).toFixed(1)}h` : '0.0h'}
         onBarClick={(item) => onDrillDown({ category: item.category })}
       />
     </div>
@@ -751,16 +751,16 @@ function TechPerformanceTab({ data, isTechOnly, onDrillDown }) {
                     <span className="px-2 py-1 text-sm text-blue-400">{tech.open_tickets}</span>
                   </td>
                   <td className="px-4 py-3 text-center text-sm text-gray-300">
-                    {tech.avg_resolution_hours ? `${tech.avg_resolution_hours.toFixed(1)}h` : 'N/A'}
+                    {tech.avg_resolution_hours != null ? `${Number(tech.avg_resolution_hours).toFixed(1)}h` : 'N/A'}
                   </td>
                   <td className="px-4 py-3 text-center text-sm text-gray-300">
-                    {tech.avg_first_response_hours ? `${tech.avg_first_response_hours.toFixed(1)}h` : 'N/A'}
+                    {tech.avg_first_response_hours != null ? `${Number(tech.avg_first_response_hours).toFixed(1)}h` : 'N/A'}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <span className={`px-2 py-1 text-sm rounded ${
                       tech.reopen_rate > 10 ? 'text-red-400' : 'text-gray-400'
                     }`}>
-                      {tech.reopen_rate?.toFixed(1)}%
+                      {tech.reopen_rate != null ? `${Number(tech.reopen_rate).toFixed(1)}%` : 'N/A'}
                     </span>
                   </td>
                 </tr>
@@ -803,7 +803,7 @@ function CategoriesTab({ data, onDrillDown }) {
           yKey="avg_resolution_hours"
           title="Avg Resolution Time by Category"
           horizontal
-          formatValue={(v) => v ? `${v.toFixed(1)}h` : 'N/A'}
+          formatValue={(v) => v != null ? `${Number(v).toFixed(1)}h` : 'N/A'}
         />
       </div>
 
@@ -1005,7 +1005,7 @@ function SLATab({ data, onDrillDown }) {
                     </td>
                     <td className="px-4 py-3 text-center text-sm text-gray-300">{ticket.breach_type}</td>
                     <td className="px-4 py-3 text-center text-sm text-red-400 font-semibold">
-                      {ticket.hours_overdue?.toFixed(1)}h
+                      {ticket.hours_overdue != null ? `${Number(ticket.hours_overdue).toFixed(1)}h` : 'N/A'}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-300">{ticket.assigned_to_name || 'Unassigned'}</td>
                   </tr>
@@ -1096,7 +1096,7 @@ function DrillDownModal({ filter, tickets, loading, pagination, onClose, onLoadM
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center text-sm text-gray-300">
-                    {ticket.hours_open?.toFixed(1)}h
+                    {ticket.hours_open != null ? `${Number(ticket.hours_open).toFixed(1)}h` : 'N/A'}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-300">{ticket.customer_name}</td>
                 </tr>
