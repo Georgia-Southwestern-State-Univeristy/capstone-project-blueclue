@@ -106,10 +106,13 @@ initializeTransporter();
  */
 const logEmailAttempt = async (recipientEmail, userId, emailType, subject, status, messageId = null, errorMessage = null, retryCount = 0, metadata = {}) => {
     try {
+        // Ensure status is always a string to avoid type inconsistency
+        const statusValue = status || 'pending';
+        
         await pool.query(
             `INSERT INTO email_logs (recipient_email, recipient_user_id, email_type, subject, status, message_id, error_message, retry_count, metadata, sent_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CASE WHEN $5 = 'success' THEN NOW() ELSE NULL END)`,
-            [recipientEmail, userId, emailType, subject, status, messageId, errorMessage, retryCount, JSON.stringify(metadata)]
+             VALUES ($1, $2, $3, $4, $5::text, $6, $7, $8, $9, CASE WHEN $5::text = 'success' THEN NOW() ELSE NULL END)`,
+            [recipientEmail, userId, emailType, subject, statusValue, messageId, errorMessage, retryCount, JSON.stringify(metadata)]
         );
     } catch (error) {
         console.error('Failed to log email attempt:', error.message);
