@@ -15,6 +15,7 @@ import TicketTimeline from '../components/TicketTimeline'
 import PendingRequestsWidget from '../components/PendingRequestsWidget'
 import DeletedTicketsWidget from '../components/DeletedTicketsWidget'
 import TicketDetailView from '../components/TicketDetailView'
+import UpdateRequestResponseTimeAnalytics from '../components/UpdateRequestResponseTimeAnalytics'
 import { getAllTickets, getCancellationStats } from '../services/ticketService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
 
@@ -96,6 +97,16 @@ function ManagementDashboard() {
     fetchTickets()
     fetchCancellationStats()
   }, [])
+
+  // Check for ticket to auto-open from Ring for Help
+  useEffect(() => {
+    const openTicketId = sessionStorage.getItem('openTicketId');
+    if (openTicketId && tickets.length > 0) {
+      sessionStorage.removeItem('openTicketId');
+      setSelectedTicketId(parseInt(openTicketId));
+      setIsDetailOpen(true);
+    }
+  }, [tickets]);
 
   const calculateStats = useCallback(() => {
     const now = new Date()
@@ -653,6 +664,11 @@ function ManagementDashboard() {
                         Bar chart placeholder
                       </div>
                     </div>
+                  </div>
+
+                  <div className="p-4 bg-gray-800 rounded-lg border border-gray-700">
+                    <h3 className="font-bold text-white mb-4">Update Request Response Times</h3>
+                    <UpdateRequestResponseTimeAnalytics />
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-3">

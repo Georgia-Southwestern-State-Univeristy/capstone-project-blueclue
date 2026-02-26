@@ -255,7 +255,7 @@ class RingRequest {
       );
 
       if (existing.rows.length > 0) {
-        // Update existing record
+        // Update existing record in current window
         await client.query(
           `UPDATE ring_request_rate_limit 
            SET request_count = request_count + 1,
@@ -264,11 +264,16 @@ class RingRequest {
           [existing.rows[0].id]
         );
       } else {
-        // Create new record
+        // Upsert: insert new or reset window if outside 1 hour
         await client.query(
           `INSERT INTO ring_request_rate_limit 
            (user_id, request_count, window_start, last_request_at) 
-           VALUES ($1, 1, NOW(), NOW())`,
+           VALUES ($1, 1, NOW(), NOW())
+           ON CONFLICT (user_id) 
+           DO UPDATE SET 
+             request_count = 1,
+             window_start = NOW(),
+             last_request_at = NOW()`,
           [userId]
         );
       }

@@ -24,7 +24,9 @@ import configRoutes from './routes/config.js';
 import assignmentRequestRoutes from './routes/assignmentRequests.js';
 import commentRoutes from './routes/commentRoutes.js';
 import ringRoutes from './routes/ring.js';
+import updateRequestRoutes from './routes/updateRequestRoutes.js';
 import { initializeSocketHandlers } from './services/socketService.js';
+import { startUpdateRequestReminderJob } from './jobs/updateRequestReminders.js';
 
 dotenv.config();
 
@@ -42,12 +44,19 @@ const PORT = process.env.PORT || 3000;
 // Initialize Socket.IO handlers
 initializeSocketHandlers(io);
 
+// Start scheduled jobs
+startUpdateRequestReminderJob(io);
+
 // Make io accessible to routes/controllers
 app.set('io', io);
+app.locals.io = io;
 
 // Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    credentials: true
+}));
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // For parsing Mailgun webhook form data
@@ -68,6 +77,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/assignment-requests', assignmentRequestRoutes);
 app.use('/api', ringRoutes); // Ring for Help routes
+app.use('/api', updateRequestRoutes); // Ticket Update Request routes
 app.use('/api/dev', devRoutes);
 app.use('/api/admin', adminRoutes);
 

@@ -5,6 +5,8 @@ import DonutChart from '../components/DonutChart'
 import TicketTimeline from '../components/TicketTimeline'
 import PieChart from '../components/PieChart'
 import TicketDetailView from '../components/TicketDetailView'
+import UpdateRequestAlert from '../components/UpdateRequestAlert'
+import UpdateResponseModal from '../components/UpdateResponseModal'
 import { getMyAssignedTickets, updateTicketStatus } from '../services/ticketService'
 
 /**
@@ -63,6 +65,7 @@ function MyAssignedTickets() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const [selectedUpdateRequest, setSelectedUpdateRequest] = useState(null)
 
   // Filter state
   const [filters, setFilters] = useState({
@@ -74,6 +77,26 @@ function MyAssignedTickets() {
   useEffect(() => {
     fetchTickets()
   }, [])
+
+  // Check for ticket to auto-open from Ring for Help
+  useEffect(() => {
+    const openTicketId = sessionStorage.getItem('openTicketId');
+    if (openTicketId && tickets.length > 0) {
+      sessionStorage.removeItem('openTicketId');
+      setSelectedTicketId(parseInt(openTicketId));
+      setIsDetailOpen(true);
+    }
+  }, [tickets]);
+
+  // Check for ticket to auto-open from Ring for Help
+  useEffect(() => {
+    const openTicketId = sessionStorage.getItem('openTicketId');
+    if (openTicketId && tickets.length > 0) {
+      sessionStorage.removeItem('openTicketId');
+      setSelectedTicketId(parseInt(openTicketId));
+      setIsDetailOpen(true);
+    }
+  }, [tickets]);
 
   const fetchTickets = async () => {
     setLoading(true)
@@ -256,6 +279,13 @@ function MyAssignedTickets() {
           />
         </div>
       )}
+
+      {/* Update Request Alert Banner */}
+      <div className="mb-6">
+        <UpdateRequestAlert
+          onRespond={(request) => setSelectedUpdateRequest(request)}
+        />
+      </div>
 
       {/* Bar Chart (TicketTimeline) above Pie Charts */}
       <div className="mb-8">
@@ -585,6 +615,17 @@ function MyAssignedTickets() {
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         onTicketUpdated={fetchTickets}
+      />
+
+      {/* Update Response Modal */}
+      <UpdateResponseModal
+        request={selectedUpdateRequest}
+        isOpen={!!selectedUpdateRequest}
+        onClose={() => setSelectedUpdateRequest(null)}
+        onSuccess={() => {
+          setSelectedUpdateRequest(null)
+          fetchTickets()
+        }}
       />
     </div>
   )

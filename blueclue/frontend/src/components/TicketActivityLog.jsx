@@ -144,6 +144,28 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
           bgColor: 'bg-cyan-900/30',
           label: 'Edited'
         }
+      case 'update_requested':
+        return {
+          icon: (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          ),
+          color: 'text-amber-400',
+          bgColor: 'bg-amber-900/30',
+          label: 'Update Requested'
+        }
+      case 'update_fulfilled':
+        return {
+          icon: (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          ),
+          color: 'text-emerald-400',
+          bgColor: 'bg-emerald-900/30',
+          label: 'Update Provided'
+        }
       default:
         return {
           icon: (
@@ -272,6 +294,74 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
                 <span className="text-gray-400">&ldquo;{entry.old_value.length > 60 ? entry.old_value.slice(0, 60) + '...' : entry.old_value}&rdquo;</span>
                 {' to '}
                 <span className="text-gray-200">&ldquo;{entry.new_value.length > 60 ? entry.new_value.slice(0, 60) + '...' : entry.new_value}&rdquo;</span>
+              </>
+            )}
+          </span>
+        )
+      }
+      case 'update_requested': {
+        const reqDetails = entry.change_details || {}
+        const requestedBy = reqDetails.requested_by_name || entry.changed_by_name || 'Manager'
+        const assignedName = reqDetails.assigned_to_name || 'Technician'
+        const deadline = reqDetails.deadline ? new Date(reqDetails.deadline).toLocaleString('en-US', {
+          month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+        }) : 'N/A'
+        const message = reqDetails.message
+        return (
+          <span>
+            <span className="text-white font-medium">{requestedBy}</span>
+            {' requested a status update from '}
+            <span className="text-amber-300 font-medium">{assignedName}</span>
+            <br />
+            <span className="text-gray-400">Deadline: </span>
+            <span className="text-gray-200">{deadline}</span>
+            {message && (
+              <>
+                <br />
+                <span className="text-gray-400">Request: </span>
+                <span className="text-gray-300">&ldquo;{message}&rdquo;</span>
+              </>
+            )}
+          </span>
+        )
+      }
+      case 'update_fulfilled': {
+        const fulfillDetails = entry.change_details || {}
+        const fulfilledBy = fulfillDetails.fulfilled_by_name || entry.changed_by_name || 'Technician'
+        const responseText = fulfillDetails.response_text || 'No details provided'
+        const isResolved = fulfillDetails.is_resolved
+        const isBlocked = fulfillDetails.is_blocked
+        const needsMoreTime = fulfillDetails.needs_more_time
+        const blockerDesc = fulfillDetails.blocker_description
+        const estimatedCompletion = fulfillDetails.estimated_completion
+        
+        let statusBadge = ''
+        if (isResolved) statusBadge = '✅ Resolved'
+        else if (isBlocked) statusBadge = '🚫 Blocked'
+        else if (needsMoreTime) statusBadge = '⏰ Needs More Time'
+        
+        return (
+          <span>
+            <span className="text-white font-medium">{fulfilledBy}</span>
+            {' provided a status update'}
+            {statusBadge && <span className="ml-2 text-xs font-semibold text-gray-200">({statusBadge})</span>}
+            <br />
+            <span className="text-gray-400">Update: </span>
+            <span className="text-gray-200">&ldquo;{responseText.length > 100 ? responseText.slice(0, 100) + '...' : responseText}&rdquo;</span>
+            {isBlocked && blockerDesc && (
+              <>
+                <br />
+                <span className="text-red-400">⚠️ Blocker: </span>
+                <span className="text-gray-300">{blockerDesc}</span>
+              </>
+            )}
+            {estimatedCompletion && (
+              <>
+                <br />
+                <span className="text-gray-400">Est. Completion: </span>
+                <span className="text-gray-200">{new Date(estimatedCompletion).toLocaleString('en-US', {
+                  month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+                })}</span>
               </>
             )}
           </span>
