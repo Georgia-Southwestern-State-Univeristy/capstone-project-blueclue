@@ -866,7 +866,7 @@ export const getCancellationStats = async (req, res) => {
         const reasonsResult = await pool.query(`
             SELECT
                 COALESCE(
-                    th.metadata->>'cancellation_reason',
+                    th.change_details->>'cancellation_reason',
                     'Unknown'
                 ) AS reason,
                 COUNT(*) AS count
