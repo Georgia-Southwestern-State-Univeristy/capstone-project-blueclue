@@ -105,8 +105,10 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
     setLayouts(prev => {
       const next = {}
       for (const bp of Object.keys(defaultLayouts)) {
-        // Remove any __dropping-elem__ placeholder from previous drop
-        const bpItems = [...(prev[bp] || [])].filter(item => item.i !== '__dropping-elem__')
+        // Remove any placeholder items from previous operations
+        const bpItems = [...(prev[bp] || [])].filter(item =>
+          item.i !== '__dropping-elem__' && item.i !== '__drop_phantom__'
+        )
         const exists = bpItems.some(item => item.i === key)
         if (!exists) {
           const defaultItem = defaultLayouts[bp]?.find(item => item.i === key)

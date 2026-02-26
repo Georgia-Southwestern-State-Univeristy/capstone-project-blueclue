@@ -366,6 +366,7 @@ export default function WidgetGallery({
   activeKeys,
   onAddWidget,
   onClose,
+  onDragStartWidget,
 }) {
   const [expandedKeys, setExpandedKeys] = useState(new Set())
   const available = allWidgets.filter(w => !activeKeys.has(w.key))
@@ -427,6 +428,7 @@ export default function WidgetGallery({
                 onDragStart={(e) => {
                   e.dataTransfer.setData('text/plain', widget.key)
                   e.dataTransfer.effectAllowed = 'copy'
+                  onDragStartWidget?.(widget.key)
                 }}
                 className="group relative bg-gray-800/80 hover:bg-gray-750/90 border border-gray-700
                            hover:border-blue-500/50 rounded-lg overflow-hidden

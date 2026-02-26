@@ -1,14 +1,70 @@
-import { useState, useMemo, useCallback, useRef } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import { ResponsiveGridLayout, useContainerWidth } from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import WidgetGallery from './WidgetGallery'
+
+const PHANTOM_KEY = '__drop_phantom__'
+
+// ── Layout displacement helpers ──────────────────────────────────────────────
+// We run our own compaction so the phantom stays exactly where the cursor is
+// and every other widget shifts to make room, including at y=0.
+
+function itemsCollide(a, b) {
+  if (a.i === b.i) return false
+  if (a.x + a.w <= b.x || a.x >= b.x + b.w) return false   // no column overlap
+  if (a.y + a.h <= b.y || a.y >= b.y + b.h) return false    // no row overlap
+  return true
+}
+
+function firstCollision(item, placed) {
+  for (const p of placed) {
+    if (itemsCollide(item, p)) return p
+  }
+  return null
+}
+
+/**
+ * Compact a layout treating `phantomKey` as an immovable obstacle.
+ * Other items compact upward (vertical compaction) but cannot overlap the phantom.
+ */
+function compactWithPhantom(allItems, phantomKey) {
+  const phantom = allItems.find(i => i.i === phantomKey)
+  if (!phantom) return allItems
+
+  // Phantom is fixed in place — everything else compacts around it
+  const placed = [{ ...phantom }]
+  const others = allItems
+    .filter(i => i.i !== phantomKey)
+    .sort((a, b) => (a.y !== b.y ? a.y - b.y : a.x - b.x))
+
+  for (const orig of others) {
+    const item = { ...orig }
+    // Compact upward as far as possible
+    while (item.y > 0) {
+      item.y--
+      if (firstCollision(item, placed)) {
+        item.y++ // undo — collision
+        break
+      }
+    }
+    // Resolve any remaining overlaps by pushing item below the collider
+    let coll
+    while ((coll = firstCollision(item, placed))) {
+      item.y = coll.y + coll.h
+    }
+    placed.push(item)
+  }
+  return placed
+}
 
 /**
  * DashboardGrid – wraps react-grid-layout v2 with consistent styling,
  * edit-mode toggle, drag handles, widget gallery sidebar, and persistence support.
  *
- * Uses HTML5 drag-and-drop (not RGL's buggy dropConfig) for gallery→grid drops.
- * Shows a positional drop indicator line while dragging.
+ * External drops (gallery→grid) are handled via a "phantom" layout item injected
+ * into the external layouts prop. This avoids RGL's internal dropConfig state which
+ * causes a flash when the placeholder is removed and the real widget is added.
+ * Auto-scrolls the page when dragging near viewport edges.
  */
 export default function DashboardGrid({
   layouts,
@@ -28,11 +84,19 @@ export default function DashboardGrid({
 }) {
   // v2: useContainerWidth replaces WidthProvider HOC
   const { width, containerRef, mounted } = useContainerWidth({ initialWidth: 1200 })
-  const [isDragOver, setIsDragOver] = useState(false)
   const [showGallery, setShowGallery] = useState(true)
-  // Drop indicator position (pixel coords relative to grid container)
-  const [dropIndicator, setDropIndicator] = useState(null)
-  const dragOverCountRef = useRef(0)
+
+  // Track which gallery widget is currently being dragged
+  const draggingKeyRef = useRef(null)
+  // Phantom placeholder for external drops – managed in our state, not RGL's
+  const [phantomItem, setPhantomItem] = useState(null) // { x, y, w, h }
+  const phantomItemRef = useRef(null) // mirror for use in native event listeners
+  const lastGridPosRef = useRef(null)
+
+  // Track drag state for auto-scroll and CSS classes
+  const [isDraggingExternal, setIsDraggingExternal] = useState(false)
+  const [isDraggingWidget, setIsDraggingWidget] = useState(false)
+  const isDragging = isDraggingExternal || isDraggingWidget
 
   // Determine current column count based on container width
   const getCurrentCols = useCallback(() => {
@@ -41,14 +105,6 @@ export default function DashboardGrid({
     if (width >= 768) return cols.sm || 6
     return cols.xs || 1
   }, [width, cols])
-
-  // Grid geometry helpers
-  const getGridGeometry = useCallback(() => {
-    const currentCols = getCurrentCols()
-    const cellWidth = (width - margin[0]) / currentCols
-    const cellHeight = rowHeight + margin[1]
-    return { currentCols, cellWidth, cellHeight }
-  }, [getCurrentCols, width, margin, rowHeight])
 
   // Filter widgetConfig to only show non-hidden widgets
   const activeWidgets = useMemo(() =>
@@ -62,73 +118,203 @@ export default function DashboardGrid({
     [activeWidgets]
   )
 
-  // Convert pixel position to snapped grid indicator position
-  const computeIndicator = useCallback((clientX, clientY, containerRect, draggedKey) => {
-    const { currentCols, cellWidth, cellHeight } = getGridGeometry()
-    const dropX = clientX - containerRect.left
-    const dropY = clientY - containerRect.top
-
-    const gridCol = Math.max(0, Math.min(Math.floor(dropX / cellWidth), currentCols - 1))
-    const gridRow = Math.max(0, Math.floor(dropY / cellHeight))
-
-    // Find the widget being dragged to get its default width
-    const galleryItem = galleryItems.find(g => g.key === draggedKey)
-    const widgetW = galleryItem?.defaultW || 4
-    const widgetH = galleryItem?.defaultH || 4
-    const clampedCol = Math.min(gridCol, currentCols - widgetW)
-
-    // Return pixel positions snapped to grid lines
-    return {
-      x: clampedCol * cellWidth + margin[0],
-      y: gridRow * cellHeight + margin[1],
-      w: widgetW * cellWidth - margin[0],
-      h: widgetH * cellHeight - margin[1],
-      gridX: clampedCol,
-      gridY: gridRow,
+  // Merge phantom into layouts and pre-compute displaced positions ourselves.
+  // This gives us full control: the phantom stays exactly where the cursor is
+  // and every other widget shifts around it (including at y=0).
+  const layoutsWithPhantom = useMemo(() => {
+    if (!phantomItem) return layouts
+    const merged = {}
+    for (const bp of Object.keys(layouts)) {
+      const numCols = cols[bp] || 12
+      const phantomLayout = {
+        i: PHANTOM_KEY,
+        x: Math.min(phantomItem.x, Math.max(0, numCols - phantomItem.w)),
+        y: phantomItem.y,
+        w: Math.min(phantomItem.w, numCols),
+        h: phantomItem.h,
+        isDraggable: false,
+        isResizable: false,
+      }
+      const bpItems = [...(layouts[bp] || []), phantomLayout]
+      merged[bp] = compactWithPhantom(bpItems, PHANTOM_KEY)
     }
-  }, [getGridGeometry, galleryItems, margin])
+    return merged
+  }, [layouts, phantomItem, cols])
 
-  // HTML5 drop zone handlers with positional indicator
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'copy'
-    if (!isDragOver) setIsDragOver(true)
+  // Add phantom component to widget children when dragging
+  const widgetsToRender = useMemo(() => {
+    if (!phantomItem) return activeWidgets
+    return [
+      ...activeWidgets,
+      {
+        key: PHANTOM_KEY,
+        component: (
+          <div className="w-full h-full rounded-lg border-2 border-dashed border-blue-500/60 bg-blue-500/20
+                          flex items-center justify-center animate-pulse">
+            <div className="flex items-center gap-1.5">
+              <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="text-xs text-blue-400 font-medium">Drop here</span>
+            </div>
+          </div>
+        ),
+      },
+    ]
+  }, [activeWidgets, phantomItem])
 
-    const rect = e.currentTarget.getBoundingClientRect()
-    const widgetKey = e.dataTransfer.types.includes('text/plain') ? '__pending__' : null
-    // We can't read dataTransfer data during dragover (security), so use stored key or placeholder
-    const indicator = computeIndicator(e.clientX, e.clientY, rect, widgetKey)
-    setDropIndicator(indicator)
-  }, [isDragOver, computeIndicator])
+  // Filter phantom from layout changes before persisting to parent
+  const handleLayoutChange = useCallback((currentLayout, allLayouts) => {
+    if (phantomItem) return // Don't persist while phantom is active
+    onLayoutChange(currentLayout, allLayouts)
+  }, [onLayoutChange, phantomItem])
 
-  const handleDragEnter = useCallback((e) => {
-    e.preventDefault()
-    dragOverCountRef.current++
-    if (!isDragOver) setIsDragOver(true)
-  }, [isDragOver])
-
-  const handleDragLeave = useCallback((e) => {
-    e.preventDefault()
-    dragOverCountRef.current--
-    if (dragOverCountRef.current <= 0) {
-      dragOverCountRef.current = 0
-      setIsDragOver(false)
-      setDropIndicator(null)
-    }
+  // Called by WidgetGallery when a drag begins (synchronously sets ref)
+  const handleGalleryDragStart = useCallback((widgetKey) => {
+    draggingKeyRef.current = widgetKey
+    setIsDraggingExternal(true)
   }, [])
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault()
-    dragOverCountRef.current = 0
-    setIsDragOver(false)
-    setDropIndicator(null)
-    const widgetKey = e.dataTransfer.getData('text/plain')
-    if (widgetKey && onAddWidget) {
-      const rect = e.currentTarget.getBoundingClientRect()
-      const indicator = computeIndicator(e.clientX, e.clientY, rect, widgetKey)
-      onAddWidget(widgetKey, { x: indicator.gridX, y: indicator.gridY })
+  // Keep phantomItemRef in sync so native listeners always read the latest value
+  useEffect(() => { phantomItemRef.current = phantomItem }, [phantomItem])
+
+  // Native drag event listeners – always attached when in edit mode.
+  // Uses capture phase so events fire before RGL can intercept them.
+  // Handlers check draggingKeyRef to only act during gallery drags.
+  useEffect(() => {
+    if (!isEditMode) return
+    const el = containerRef.current
+    if (!el) return
+
+    const onDragOver = (e) => {
+      if (!draggingKeyRef.current) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'copy'
+
+      // Ensure visual state is active (belt-and-suspenders with handleGalleryDragStart)
+      setIsDraggingExternal(true)
+
+      const rect = el.getBoundingClientRect()
+      const currentCols = getCurrentCols()
+      const containerPad = margin[0]
+      const colWidth = (width - containerPad * 2 - margin[0] * (currentCols - 1)) / currentCols
+      const cellHeight = rowHeight + margin[1]
+
+      const dropX = e.clientX - rect.left - containerPad
+      const dropY = e.clientY - rect.top - containerPad
+
+      const key = draggingKeyRef.current
+      const galleryItem = key ? galleryItems.find(g => g.key === key) : null
+      const widgetW = galleryItem?.defaultW || 4
+      const widgetH = galleryItem?.defaultH || 4
+
+      const gridCol = Math.max(0, Math.min(Math.floor(dropX / (colWidth + margin[0])), currentCols - widgetW))
+      const gridRow = Math.max(0, Math.floor(dropY / cellHeight))
+
+      const posKey = `${gridCol},${gridRow}`
+      if (lastGridPosRef.current === posKey) return
+      lastGridPosRef.current = posKey
+
+      setPhantomItem({ x: gridCol, y: gridRow, w: widgetW, h: widgetH })
     }
-  }, [onAddWidget, computeIndicator])
+
+    const onDragLeave = (e) => {
+      if (!draggingKeyRef.current) return
+      // Only clear phantom if cursor truly left the container bounds
+      const rect = el.getBoundingClientRect()
+      const { clientX, clientY } = e
+      if (clientX <= rect.left || clientX >= rect.right ||
+          clientY <= rect.top || clientY >= rect.bottom) {
+        setPhantomItem(null)
+        lastGridPosRef.current = null
+      }
+    }
+
+    const onDrop = (e) => {
+      if (!draggingKeyRef.current) return
+      e.preventDefault()
+      e.stopPropagation()
+      lastGridPosRef.current = null
+      const widgetKey = e.dataTransfer.getData('text/plain') || draggingKeyRef.current
+      draggingKeyRef.current = null
+      const pos = phantomItemRef.current
+
+      setPhantomItem(null)
+      setIsDraggingExternal(false)
+
+      if (widgetKey && onAddWidget && pos) {
+        onAddWidget(widgetKey, { x: pos.x, y: pos.y })
+      }
+    }
+
+    // Capture phase = fires parent-first, before RGL children can intercept
+    el.addEventListener('dragover', onDragOver, true)
+    el.addEventListener('dragleave', onDragLeave, true)
+    el.addEventListener('drop', onDrop, true)
+
+    return () => {
+      el.removeEventListener('dragover', onDragOver, true)
+      el.removeEventListener('dragleave', onDragLeave, true)
+      el.removeEventListener('drop', onDrop, true)
+    }
+  }, [isEditMode, getCurrentCols, width, margin, rowHeight, galleryItems, onAddWidget])
+
+  // RGL internal drag start/stop – track for auto-scroll
+  const handleWidgetDragStart = useCallback(() => {
+    setIsDraggingWidget(true)
+  }, [])
+
+  const handleWidgetDragStop = useCallback(() => {
+    setIsDraggingWidget(false)
+  }, [])
+
+  // Clean up external drag if it ends without a drop (e.g., escape key, drag out of window)
+  useEffect(() => {
+    if (!isDraggingExternal) return
+    const handleDragEnd = () => {
+      setIsDraggingExternal(false)
+      setPhantomItem(null)
+      draggingKeyRef.current = null
+      lastGridPosRef.current = null
+    }
+    window.addEventListener('dragend', handleDragEnd)
+    return () => window.removeEventListener('dragend', handleDragEnd)
+  }, [isDraggingExternal])
+
+  // Auto-scroll when dragging near viewport edges
+  useEffect(() => {
+    if (!isDragging) return
+    let rafId = null
+
+    const scrollAtEdge = (clientY) => {
+      if (rafId) return
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        const vh = window.innerHeight
+        const EDGE_SIZE = 120
+        const MAX_SPEED = 40
+
+        if (clientY < EDGE_SIZE) {
+          const intensity = 1 - (clientY / EDGE_SIZE)
+          window.scrollBy({ top: -Math.round(MAX_SPEED * intensity), behavior: 'instant' })
+        } else if (clientY > vh - EDGE_SIZE) {
+          const intensity = 1 - ((vh - clientY) / EDGE_SIZE)
+          window.scrollBy({ top: Math.round(MAX_SPEED * intensity), behavior: 'instant' })
+        }
+      })
+    }
+
+    const handleDragOverScroll = (e) => scrollAtEdge(e.clientY)
+    const handleMouseMove = (e) => { if (isDraggingWidget) scrollAtEdge(e.clientY) }
+
+    window.addEventListener('dragover', handleDragOverScroll, { passive: true })
+    window.addEventListener('mousemove', handleMouseMove, { passive: true })
+    return () => {
+      window.removeEventListener('dragover', handleDragOverScroll)
+      window.removeEventListener('mousemove', handleMouseMove)
+      if (rafId) cancelAnimationFrame(rafId)
+    }
+  }, [isDragging, isDraggingWidget])
 
   const hasGallery = galleryItems.length > 0
   const galleryVisible = isEditMode && showGallery && hasGallery
@@ -197,6 +383,7 @@ export default function DashboardGrid({
                 activeKeys={activeKeys}
                 onAddWidget={onAddWidget}
                 onClose={() => setShowGallery(false)}
+                onDragStartWidget={handleGalleryDragStart}
               />
             </div>
           </div>
@@ -228,47 +415,21 @@ export default function DashboardGrid({
         {/* Grid area – shrinks to make room for sidebar */}
         <div
           ref={containerRef}
-          className="flex-1 min-w-0 relative"
-          onDragOver={isEditMode ? handleDragOver : undefined}
-          onDragEnter={isEditMode ? handleDragEnter : undefined}
-          onDragLeave={isEditMode ? handleDragLeave : undefined}
-          onDrop={isEditMode ? handleDrop : undefined}
+          className={`flex-1 min-w-0 relative transition-shadow duration-200
+                      ${isDraggingExternal ? 'external-drop-active ring-2 ring-blue-500/30 ring-inset rounded-lg bg-blue-500/5' : ''}`}
         >
-          {/* Drop position indicator – shows where the widget will land */}
-          {isDragOver && dropIndicator && (
-            <div
-              className="absolute z-40 pointer-events-none transition-[top,left] duration-75 ease-out"
-              style={{
-                top: dropIndicator.y,
-                left: dropIndicator.x,
-                width: dropIndicator.w,
-                height: dropIndicator.h,
-              }}
-            >
-              {/* Ghost outline of the widget */}
-              <div className="w-full h-full rounded-lg border-2 border-blue-400/70 bg-blue-400/10
-                              shadow-[0_0_15px_rgba(59,130,246,0.3)]">
-                <div className="absolute inset-x-3 top-2 flex items-center gap-1.5">
-                  <svg className="w-3.5 h-3.5 text-blue-400/80" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  <span className="text-[10px] text-blue-400/80 font-medium">Drop here</span>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Grid – v2 API: pass width directly, use dragConfig/resizeConfig objects */}
           {mounted && (
             <ResponsiveGridLayout
               className="layout"
               width={width}
-              layouts={layouts}
-              onLayoutChange={onLayoutChange}
+              layouts={layoutsWithPhantom}
+              onLayoutChange={handleLayoutChange}
               breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480 }}
               cols={cols}
               rowHeight={rowHeight}
               margin={margin}
+              compactType={phantomItem ? null : "vertical"}
               dragConfig={{
                 enabled: isEditMode,
                 handle: '.widget-drag-handle',
@@ -276,11 +437,13 @@ export default function DashboardGrid({
               resizeConfig={{
                 enabled: isEditMode,
               }}
+              onDragStart={handleWidgetDragStart}
+              onDragStop={handleWidgetDragStop}
             >
-              {activeWidgets.map(({ key, component }) => (
+              {widgetsToRender.map(({ key, component }) => (
                 <div key={key} className="relative overflow-hidden rounded-lg">
-                  {/* Edit mode: drag handle overlay + remove button */}
-                  {isEditMode && (
+                  {/* Edit mode: drag handle overlay + remove button (not on phantom) */}
+                  {isEditMode && key !== PHANTOM_KEY && (
                     <>
                       <div className="widget-drag-handle absolute inset-x-0 top-0 h-12 z-20 cursor-grab active:cursor-grabbing
                                       flex items-center justify-center rounded-t-lg

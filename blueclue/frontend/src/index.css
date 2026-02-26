@@ -14,6 +14,21 @@ body {
   border: 2px dashed rgba(59, 130, 246, 0.5) !important;
   border-radius: 0.5rem;
   opacity: 1 !important;
+  transition-duration: 150ms !important;
+}
+
+/*
+ * During an external gallery→grid drag, suppress transform transitions on
+ * existing grid items so they snap instantly to new positions.
+ * This prevents jitter as the phantom item causes rapid recompaction.
+ */
+.external-drop-active .react-grid-item.cssTransforms {
+  transition: none !important;
+}
+
+/* Keep a short transition on the placeholder while dragging */
+.external-drop-active .react-grid-item.react-grid-placeholder {
+  transition: all 100ms ease !important;
 }
 
 .react-grid-item > .react-resizable-handle::after {
