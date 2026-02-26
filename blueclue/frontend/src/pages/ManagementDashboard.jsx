@@ -70,6 +70,22 @@ const DEFAULT_LAYOUTS = {
   ],
 }
 
+// Widget metadata for the gallery sidebar
+const WIDGET_GALLERY_ITEMS = [
+  { key: 'timeline', label: 'Ticket Timeline', description: 'Visual timeline of ticket activity and trends over time', defaultW: 12, defaultH: 8 },
+  { key: 'ticketControl', label: 'Ticket Control', description: 'Full ticket management table with search, filters, and actions', defaultW: 12, defaultH: 11 },
+  { key: 'assignedChart', label: 'Assigned vs Unassigned', description: 'Donut chart showing ticket assignment distribution', defaultW: 6, defaultH: 7 },
+  { key: 'categoriesChart', label: 'Ticket Categories', description: 'Category breakdown with drilldown into individual tickets', defaultW: 6, defaultH: 7 },
+  { key: 'overdue', label: 'Overdue Tickets', description: 'Tickets that have passed their SLA due date', defaultW: 6, defaultH: 7 },
+  { key: 'escalations', label: 'Escalations', description: 'Critical and high-priority tickets requiring attention', defaultW: 6, defaultH: 7 },
+  { key: 'todaysActions', label: "Today's Actions", description: 'Action items: overdue, urgent unassigned, and due today', defaultW: 6, defaultH: 7 },
+  { key: 'topRequesters', label: 'Top Requesters', description: 'Most active ticket requesters and their patterns', defaultW: 6, defaultH: 7 },
+  { key: 'techPerformance', label: 'Tech Performance', description: 'Technician resolution times and workload metrics', defaultW: 12, defaultH: 8 },
+  { key: 'deletedTickets', label: 'Deleted Tickets', description: 'Recently soft-deleted tickets with restore option', defaultW: 6, defaultH: 7 },
+  { key: 'pendingRequests', label: 'Pending Requests', description: 'Assignment requests awaiting management approval', defaultW: 6, defaultH: 7 },
+  { key: 'responseTime', label: 'Response Times', description: 'Update request response time analytics and trends', defaultW: 12, defaultH: 7 },
+]
+
 /**
  * ManagementWidgetGrid
  * Renders all dashboard widgets inside a drag-and-drop grid.
@@ -87,6 +103,9 @@ function ManagementWidgetGrid({
     onLayoutChange,
     resetLayout,
     toggleEditMode,
+    hiddenWidgets,
+    addWidget,
+    removeWidget,
   } = useDashboardLayout('management', DEFAULT_LAYOUTS, LAYOUT_VERSION)
 
   // Widget definitions — order doesn't matter, layout positions control placement
@@ -253,6 +272,10 @@ function ManagementWidgetGrid({
         resetLayout={resetLayout}
         widgetConfig={widgetConfig}
         rowHeight={60}
+        galleryItems={WIDGET_GALLERY_ITEMS}
+        hiddenWidgets={hiddenWidgets}
+        onAddWidget={addWidget}
+        onRemoveWidget={removeWidget}
       />
     </>
   )

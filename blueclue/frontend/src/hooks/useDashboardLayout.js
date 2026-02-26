@@ -2,7 +2,8 @@ import { useState, useCallback } from 'react'
 
 /**
  * Custom hook for managing dashboard widget layouts with localStorage persistence.
- * 
+ * Supports hiding/showing widgets via the Widget Gallery.
+ *
  * @param {string} dashboardKey - Unique key for the dashboard (e.g., 'management', 'technician')
  * @param {Object} defaultLayouts - Default responsive layouts { lg: [...], md: [...], sm: [...] }
  * @param {number} [version=1] - Layout version; bump to invalidate stale cached layouts
@@ -11,16 +12,38 @@ import { useState, useCallback } from 'react'
 export default function useDashboardLayout(dashboardKey, defaultLayouts, version = 1) {
   const storageKey = `blueclue_dashboard_layout_${dashboardKey}`
   const versionKey = `${storageKey}_v`
+  const hiddenKey = `${storageKey}_hidden`
+
+  // Load hidden widget keys from localStorage
+  const loadHidden = () => {
+    try {
+      const saved = localStorage.getItem(hiddenKey)
+      return saved ? new Set(JSON.parse(saved)) : new Set()
+    } catch {
+      return new Set()
+    }
+  }
+
+  // Helper: filter hidden widgets from layouts
+  const filterHidden = (layoutsObj, hidden) => {
+    if (hidden.size === 0) return layoutsObj
+    const filtered = {}
+    for (const bp of Object.keys(layoutsObj)) {
+      filtered[bp] = layoutsObj[bp].filter(item => !hidden.has(item.i))
+    }
+    return filtered
+  }
 
   // Load saved layouts from localStorage, falling back to defaults
   const loadLayouts = () => {
+    const hidden = loadHidden()
     try {
       // Check version — if stale, discard saved layout
       const savedVersion = parseInt(localStorage.getItem(versionKey), 10)
       if (savedVersion !== version) {
         localStorage.removeItem(storageKey)
         localStorage.setItem(versionKey, String(version))
-        return defaultLayouts
+        return filterHidden(defaultLayouts, hidden)
       }
 
       const saved = localStorage.getItem(storageKey)
@@ -36,18 +59,28 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
           merged[breakpoint] = [
             ...savedBp,
             ...defaultBp.filter(item => !savedKeys.has(item.i))
-          ]
+          ].filter(item => !hidden.has(item.i))
         }
         return merged
       }
     } catch (e) {
       console.warn('Failed to load dashboard layout:', e)
     }
-    return defaultLayouts
+    return filterHidden(defaultLayouts, hidden)
   }
 
   const [layouts, setLayouts] = useState(loadLayouts)
+  const [hiddenWidgets, setHiddenWidgets] = useState(loadHidden)
   const [isEditMode, setIsEditMode] = useState(false)
+
+  // Persist hidden widgets to localStorage
+  const saveHidden = useCallback((hidden) => {
+    try {
+      localStorage.setItem(hiddenKey, JSON.stringify([...hidden]))
+    } catch (e) {
+      console.warn('Failed to save hidden widgets:', e)
+    }
+  }, [hiddenKey])
 
   // Handle layout change from react-grid-layout
   const onLayoutChange = useCallback((currentLayout, allLayouts) => {
@@ -59,15 +92,73 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
     }
   }, [storageKey])
 
-  // Reset to default layout
+  // Add a widget back to the dashboard
+  const addWidget = useCallback((key, dropPosition = null) => {
+    // Remove from hidden set
+    setHiddenWidgets(prev => {
+      const next = new Set(prev)
+      next.delete(key)
+      saveHidden(next)
+      return next
+    })
+    // Add layout items for all breakpoints
+    setLayouts(prev => {
+      const next = {}
+      for (const bp of Object.keys(defaultLayouts)) {
+        // Remove any __dropping-elem__ placeholder from previous drop
+        const bpItems = [...(prev[bp] || [])].filter(item => item.i !== '__dropping-elem__')
+        const exists = bpItems.some(item => item.i === key)
+        if (!exists) {
+          const defaultItem = defaultLayouts[bp]?.find(item => item.i === key)
+          if (defaultItem) {
+            const maxY = bpItems.length > 0
+              ? Math.max(...bpItems.map(item => item.y + item.h))
+              : 0
+            bpItems.push({
+              ...defaultItem,
+              x: dropPosition?.x ?? defaultItem.x,
+              y: dropPosition?.y ?? maxY,
+            })
+          }
+        }
+        next[bp] = bpItems
+      }
+      try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+  }, [defaultLayouts, storageKey, saveHidden])
+
+  // Remove (hide) a widget from the dashboard
+  const removeWidget = useCallback((key) => {
+    // Add to hidden set
+    setHiddenWidgets(prev => {
+      const next = new Set(prev)
+      next.add(key)
+      saveHidden(next)
+      return next
+    })
+    // Remove from all breakpoint layouts
+    setLayouts(prev => {
+      const next = {}
+      for (const bp of Object.keys(prev)) {
+        next[bp] = prev[bp].filter(item => item.i !== key)
+      }
+      try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+  }, [storageKey, saveHidden])
+
+  // Reset to default layout and clear hidden widgets
   const resetLayout = useCallback(() => {
     setLayouts(defaultLayouts)
+    setHiddenWidgets(new Set())
     try {
       localStorage.removeItem(storageKey)
+      localStorage.removeItem(hiddenKey)
     } catch (e) {
       console.warn('Failed to clear saved layout:', e)
     }
-  }, [defaultLayouts, storageKey])
+  }, [defaultLayouts, storageKey, hiddenKey])
 
   // Toggle edit/lock mode
   const toggleEditMode = useCallback(() => {
@@ -80,5 +171,8 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
     onLayoutChange,
     resetLayout,
     toggleEditMode,
+    hiddenWidgets,
+    addWidget,
+    removeWidget,
   }
 }
