@@ -95,13 +95,13 @@ export const getResolutionTimeMetrics = async (startDate, endDate, category = nu
     let techFilter = '';
     
     if (category) {
-        categoryFilter = `AND t.category = $${paramIndex}`;
+        categoryFilter = `AND t.category = $${paramIndex}::ticket_category`;
         params.push(category);
         paramIndex++;
     }
     
     if (techId) {
-        techFilter = `AND t.assigned_to = $${paramIndex}`;
+        techFilter = `AND t.assigned_to = $${paramIndex}::integer`;
         params.push(parseInt(techId));
         paramIndex++;
     }
@@ -118,7 +118,7 @@ export const getResolutionTimeMetrics = async (startDate, endDate, category = nu
         FROM tickets t
         WHERE t.status IN ('resolved', 'closed')
           AND t.resolved_at IS NOT NULL
-          AND t.resolved_at BETWEEN $1 AND $2
+          AND t.resolved_at BETWEEN $1::timestamp AND $2::timestamp
           AND t.deleted_at IS NULL
           ${categoryFilter}
           ${techFilter}
@@ -134,7 +134,7 @@ export const getResolutionTimeMetrics = async (startDate, endDate, category = nu
         FROM tickets t
         WHERE t.status IN ('resolved', 'closed')
           AND t.resolved_at IS NOT NULL
-          AND t.resolved_at BETWEEN $1 AND $2
+          AND t.resolved_at BETWEEN $1::timestamp AND $2::timestamp
           AND t.deleted_at IS NULL
           ${techFilter}
         GROUP BY t.category
@@ -151,7 +151,7 @@ export const getResolutionTimeMetrics = async (startDate, endDate, category = nu
         FROM tickets t
         WHERE t.status IN ('resolved', 'closed')
           AND t.resolved_at IS NOT NULL
-          AND t.resolved_at BETWEEN $1 AND $2
+          AND t.resolved_at BETWEEN $1::timestamp AND $2::timestamp
           AND t.deleted_at IS NULL
           ${categoryFilter}
           ${techFilter}
@@ -174,7 +174,7 @@ export const getResolutionTimeMetrics = async (startDate, endDate, category = nu
         FROM tickets t
         WHERE t.status IN ('resolved', 'closed')
           AND t.resolved_at IS NOT NULL
-          AND t.resolved_at BETWEEN $1 AND $2
+          AND t.resolved_at BETWEEN $1::timestamp AND $2::timestamp
           AND t.deleted_at IS NULL
           ${categoryFilter}
           ${techFilter}
@@ -193,7 +193,7 @@ export const getResolutionTimeMetrics = async (startDate, endDate, category = nu
         FROM tickets t
         WHERE t.status IN ('resolved', 'closed')
           AND t.resolved_at IS NOT NULL
-          AND t.resolved_at BETWEEN $1 AND $2
+          AND t.resolved_at BETWEEN $1::timestamp AND $2::timestamp
           AND t.deleted_at IS NULL
           ${categoryFilter}
           ${techFilter}
@@ -263,13 +263,13 @@ export const getTicketVolumeMetrics = async (startDate, endDate, category = null
     let techFilter = '';
     
     if (category) {
-        categoryFilter = `AND t.category = $${paramIndex}`;
+        categoryFilter = `AND t.category = $${paramIndex}::ticket_category`;
         params.push(category);
         paramIndex++;
     }
     
     if (techId) {
-        techFilter = `AND t.assigned_to = $${paramIndex}`;
+        techFilter = `AND t.assigned_to = $${paramIndex}::integer`;
         params.push(parseInt(techId));
     }
     
@@ -285,7 +285,7 @@ export const getTicketVolumeMetrics = async (startDate, endDate, category = null
             COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled,
             COUNT(*) FILTER (WHERE status = 'reopened') as reopened
         FROM tickets t
-        WHERE t.created_at BETWEEN $1 AND $2
+        WHERE t.created_at BETWEEN $1::timestamp AND $2::timestamp
           AND t.deleted_at IS NULL
           ${categoryFilter}
           ${techFilter}
@@ -298,7 +298,7 @@ export const getTicketVolumeMetrics = async (startDate, endDate, category = null
             COUNT(*) as created,
             COUNT(*) FILTER (WHERE t.resolved_at::date = DATE(t.created_at)) as resolved_same_day
         FROM tickets t
-        WHERE t.created_at BETWEEN $1 AND $2
+        WHERE t.created_at BETWEEN $1::timestamp AND $2::timestamp
           AND t.deleted_at IS NULL
           ${categoryFilter}
           ${techFilter}
@@ -313,7 +313,7 @@ export const getTicketVolumeMetrics = async (startDate, endDate, category = null
             EXTRACT(HOUR FROM t.created_at) as hour,
             COUNT(*) as count
         FROM tickets t
-        WHERE t.created_at BETWEEN $1 AND $2
+        WHERE t.created_at BETWEEN $1::timestamp AND $2::timestamp
           AND t.deleted_at IS NULL
           ${categoryFilter}
           ${techFilter}
@@ -321,14 +321,14 @@ export const getTicketVolumeMetrics = async (startDate, endDate, category = null
         ORDER BY day_of_week, hour
     `;
     
-    // Month-over-month comparison
+    // Month-over-month comparison (using $1 to maintain parameter sequence)
     const momQuery = `
         SELECT 
             TO_CHAR(t.created_at, 'YYYY-MM') as month,
             COUNT(*) as count
         FROM tickets t
-        WHERE t.created_at >= DATE_TRUNC('month', $2::date) - INTERVAL '6 months'
-          AND t.created_at <= $2
+        WHERE t.created_at >= GREATEST($1::timestamp, DATE_TRUNC('month', $2::timestamp) - INTERVAL '6 months')
+          AND t.created_at <= $2::timestamp
           AND t.deleted_at IS NULL
           ${categoryFilter}
           ${techFilter}
@@ -407,7 +407,7 @@ export const getTechnicianPerformance = async (startDate, endDate, techId = null
     let techFilter = '';
     
     if (techId) {
-        techFilter = `AND t.assigned_to = $3`;
+        techFilter = `AND t.assigned_to = $3::integer`;
         params.push(parseInt(techId));
     }
     
@@ -422,7 +422,7 @@ export const getTechnicianPerformance = async (startDate, endDate, techId = null
             COUNT(t.id) as total_assigned,
             
             -- Tickets resolved in period
-            COUNT(t.id) FILTER (WHERE t.status IN ('resolved', 'closed') AND t.resolved_at BETWEEN $1 AND $2) as resolved,
+            COUNT(t.id) FILTER (WHERE t.status IN ('resolved', 'closed') AND t.resolved_at BETWEEN $1::timestamp AND $2::timestamp) as resolved,
             
             -- Currently open
             COUNT(t.id) FILTER (WHERE t.status NOT IN ('resolved', 'closed', 'cancelled')) as open_tickets,
@@ -451,7 +451,7 @@ export const getTechnicianPerformance = async (startDate, endDate, techId = null
             
         FROM users u
         LEFT JOIN tickets t ON t.assigned_to = u.id 
-            AND t.created_at BETWEEN $1 AND $2
+            AND t.created_at BETWEEN $1::timestamp AND $2::timestamp
             AND t.deleted_at IS NULL
         WHERE u.role IN ('technician', 'senior_technician')
           AND u.is_active = true
@@ -523,7 +523,7 @@ export const getCategoryAnalysis = async (startDate, endDate) => {
                 FILTER (WHERE t.resolved_at IS NOT NULL)::numeric, 2) as avg_resolution_hours
         FROM tickets t
         LEFT JOIN categories c ON c.name = t.category
-        WHERE t.created_at BETWEEN $1 AND $2
+        WHERE t.created_at BETWEEN $1::timestamp AND $2::timestamp
           AND t.deleted_at IS NULL
         GROUP BY t.category, c.display_name, c.color_code
         ORDER BY count DESC
@@ -536,7 +536,7 @@ export const getCategoryAnalysis = async (startDate, endDate) => {
             t.category,
             COUNT(*) as count
         FROM tickets t
-        WHERE t.created_at BETWEEN $1 AND $2
+        WHERE t.created_at BETWEEN $1::timestamp AND $2::timestamp
           AND t.deleted_at IS NULL
         GROUP BY DATE(t.created_at), t.category
         ORDER BY date, t.category
@@ -551,13 +551,13 @@ export const getCategoryAnalysis = async (startDate, endDate) => {
         WITH current_period AS (
             SELECT category, COUNT(*) as count
             FROM tickets
-            WHERE created_at BETWEEN $1 AND $2 AND deleted_at IS NULL
+            WHERE created_at BETWEEN $1::timestamp AND $2::timestamp AND deleted_at IS NULL
             GROUP BY category
         ),
         previous_period AS (
             SELECT category, COUNT(*) as count
             FROM tickets
-            WHERE created_at BETWEEN $3 AND $4 AND deleted_at IS NULL
+            WHERE created_at BETWEEN $3::timestamp AND $4::timestamp AND deleted_at IS NULL
             GROUP BY category
         )
         SELECT 
@@ -629,7 +629,7 @@ export const getSLACompliance = async (startDate, endDate, category = null) => {
     let categoryFilter = '';
     
     if (category) {
-        categoryFilter = `AND t.category = $3`;
+        categoryFilter = `AND t.category = $3::ticket_category`;
         params.push(category);
     }
     
@@ -665,7 +665,7 @@ export const getSLACompliance = async (startDate, endDate, category = null) => {
                 FILTER (WHERE t.resolved_at IS NOT NULL)::numeric, 2) as avg_resolution_hours
             
         FROM tickets t
-        WHERE t.created_at BETWEEN $1 AND $2
+        WHERE t.created_at BETWEEN $1::timestamp AND $2::timestamp
           AND t.deleted_at IS NULL
           ${categoryFilter}
     `;
@@ -677,7 +677,7 @@ export const getSLACompliance = async (startDate, endDate, category = null) => {
             COUNT(*) FILTER (WHERE t.first_response_at > t.response_due_at) as response_breaches,
             COUNT(*) FILTER (WHERE t.resolved_at > t.resolution_due_at) as resolution_breaches
         FROM tickets t
-        WHERE t.created_at BETWEEN $1 AND $2
+        WHERE t.created_at BETWEEN $1::timestamp AND $2::timestamp
           AND t.deleted_at IS NULL
           AND (t.response_due_at IS NOT NULL OR t.resolution_due_at IS NOT NULL)
         GROUP BY t.category
@@ -694,7 +694,7 @@ export const getSLACompliance = async (startDate, endDate, category = null) => {
             COUNT(*) FILTER (WHERE t.first_response_at > t.response_due_at) as response_breaches,
             COUNT(*) FILTER (WHERE t.resolved_at > t.resolution_due_at) as resolution_breaches
         FROM tickets t
-        WHERE t.created_at BETWEEN $1 AND $2
+        WHERE t.created_at BETWEEN $1::timestamp AND $2::timestamp
           AND t.deleted_at IS NULL
           ${categoryFilter}
         GROUP BY DATE(t.created_at)
@@ -720,10 +720,10 @@ export const getSLACompliance = async (startDate, endDate, category = null) => {
                 WHEN t.resolved_at IS NULL AND t.resolution_due_at < NOW() THEN 'resolution'
                 ELSE 'both'
             END as breach_type,
-            GREATEST(
-                EXTRACT(EPOCH FROM (NOW() - t.response_due_at)) / 3600,
-                EXTRACT(EPOCH FROM (NOW() - t.resolution_due_at)) / 3600
-            ) as hours_overdue
+            ROUND(GREATEST(
+                COALESCE(EXTRACT(EPOCH FROM (NOW() - t.response_due_at)) / 3600, 0),
+                COALESCE(EXTRACT(EPOCH FROM (NOW() - t.resolution_due_at)) / 3600, 0)
+            )::numeric, 1) as hours_overdue
         FROM tickets t
         LEFT JOIN users u ON t.assigned_to = u.id
         WHERE t.status NOT IN ('resolved', 'closed', 'cancelled')
@@ -782,7 +782,7 @@ export const getSLACompliance = async (startDate, endDate, category = null) => {
         })),
         current_breaches: currentBreaches.rows.map(r => ({
             ...r,
-            hours_overdue: parseFloat(r.hours_overdue?.toFixed(1)) || 0
+            hours_overdue: parseFloat(r.hours_overdue) || 0
         }))
     };
 };
@@ -809,7 +809,7 @@ export const getAdditionalMetrics = async (startDate, endDate) => {
             COUNT(*) as total_tickets
             
         FROM tickets
-        WHERE created_at BETWEEN $1 AND $2
+        WHERE created_at BETWEEN $1::timestamp AND $2::timestamp
           AND deleted_at IS NULL
     `;
     
@@ -822,7 +822,7 @@ export const getAdditionalMetrics = async (startDate, endDate) => {
             SELECT t.id, COUNT(c.id) as count
             FROM tickets t
             LEFT JOIN ticket_comments c ON t.id = c.ticket_id AND c.deleted_at IS NULL
-            WHERE t.created_at BETWEEN $1 AND $2
+            WHERE t.created_at BETWEEN $1::timestamp AND $2::timestamp
               AND t.deleted_at IS NULL
             GROUP BY t.id
         ) comment_counts
@@ -833,10 +833,10 @@ export const getAdditionalMetrics = async (startDate, endDate) => {
         SELECT 
             COUNT(DISTINCT tc.ticket_id) as collaborated_tickets,
             ROUND(COUNT(DISTINCT tc.ticket_id)::numeric / 
-                NULLIF((SELECT COUNT(*) FROM tickets WHERE created_at BETWEEN $1 AND $2 AND deleted_at IS NULL), 0) * 100, 2) as collaboration_rate
+                NULLIF((SELECT COUNT(*) FROM tickets WHERE created_at BETWEEN $1::timestamp AND $2::timestamp AND deleted_at IS NULL), 0) * 100, 2) as collaboration_rate
         FROM ticket_collaborators tc
         JOIN tickets t ON tc.ticket_id = t.id
-        WHERE t.created_at BETWEEN $1 AND $2
+        WHERE t.created_at BETWEEN $1::timestamp AND $2::timestamp
           AND t.deleted_at IS NULL
     `;
     
@@ -846,7 +846,7 @@ export const getAdditionalMetrics = async (startDate, endDate) => {
             EXTRACT(HOUR FROM created_at) as hour,
             COUNT(*) as count
         FROM tickets
-        WHERE created_at BETWEEN $1 AND $2
+        WHERE created_at BETWEEN $1::timestamp AND $2::timestamp
           AND deleted_at IS NULL
         GROUP BY EXTRACT(HOUR FROM created_at)
         ORDER BY count DESC
