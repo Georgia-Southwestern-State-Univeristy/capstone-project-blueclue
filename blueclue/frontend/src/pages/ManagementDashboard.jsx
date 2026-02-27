@@ -20,6 +20,7 @@ import TicketDetailView from '../components/TicketDetailView'
 import UpdateRequestResponseTimeAnalytics from '../components/UpdateRequestResponseTimeAnalytics'
 import { getAllTickets, getCancellationStats } from '../services/ticketService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
+import { buildGalleryItems, buildWidgetConfig } from '../widgets'
 
 // Default grid layouts for management dashboard widgets
 // 12-column grid, rowHeight=60px.  Height in px ≈ h×60 + (h-1)×16
@@ -70,21 +71,15 @@ const DEFAULT_LAYOUTS = {
   ],
 }
 
-// Widget metadata for the gallery sidebar
-const WIDGET_GALLERY_ITEMS = [
-  { key: 'timeline', label: 'Ticket Timeline', description: 'Visual timeline of ticket activity and trends over time', defaultW: 12, defaultH: 8 },
-  { key: 'ticketControl', label: 'Ticket Control', description: 'Full ticket management table with search, filters, and actions', defaultW: 12, defaultH: 11 },
-  { key: 'assignedChart', label: 'Assigned vs Unassigned', description: 'Donut chart showing ticket assignment distribution', defaultW: 6, defaultH: 7 },
-  { key: 'categoriesChart', label: 'Ticket Categories', description: 'Category breakdown with drilldown into individual tickets', defaultW: 6, defaultH: 7 },
-  { key: 'overdue', label: 'Overdue Tickets', description: 'Tickets that have passed their SLA due date', defaultW: 6, defaultH: 7 },
-  { key: 'escalations', label: 'Escalations', description: 'Critical and high-priority tickets requiring attention', defaultW: 6, defaultH: 7 },
-  { key: 'todaysActions', label: "Today's Actions", description: 'Action items: overdue, urgent unassigned, and due today', defaultW: 6, defaultH: 7 },
-  { key: 'topRequesters', label: 'Top Requesters', description: 'Most active ticket requesters and their patterns', defaultW: 6, defaultH: 7 },
-  { key: 'techPerformance', label: 'Tech Performance', description: 'Technician resolution times and workload metrics', defaultW: 12, defaultH: 8 },
-  { key: 'deletedTickets', label: 'Deleted Tickets', description: 'Recently soft-deleted tickets with restore option', defaultW: 6, defaultH: 7 },
-  { key: 'pendingRequests', label: 'Pending Requests', description: 'Assignment requests awaiting management approval', defaultW: 6, defaultH: 7 },
-  { key: 'responseTime', label: 'Response Times', description: 'Update request response time analytics and trends', defaultW: 12, defaultH: 7 },
+// Widget keys used on the management dashboard (order matches DEFAULT_LAYOUTS)
+const MANAGEMENT_WIDGET_KEYS = [
+  'timeline', 'ticketControl', 'assignedChart', 'categoriesChart',
+  'overdue', 'escalations', 'todaysActions', 'topRequesters',
+  'techPerformance', 'deletedTickets', 'pendingRequests', 'responseTime',
 ]
+
+// Widget metadata for the gallery sidebar — derived from the widget registry
+const WIDGET_GALLERY_ITEMS = buildGalleryItems({ keys: MANAGEMENT_WIDGET_KEYS })
 
 /**
  * ManagementWidgetGrid
@@ -114,24 +109,14 @@ function ManagementWidgetGrid({
     renameCustomLayout,
   } = useDashboardLayout('management', DEFAULT_LAYOUTS, LAYOUT_VERSION)
 
-  // Widget definitions — order doesn't matter, layout positions control placement
-  const widgetConfig = useMemo(() => [
-    {
-      key: 'timeline',
-      label: 'Ticket Timeline',
-      component: (
+  // Widget definitions — build from registry + a component map with live props
+  const widgetConfig = useMemo(() => {
+    const componentMap = {
+      timeline: (
         <TicketTimeline tickets={tickets} onRefresh={fetchTickets} isRefreshing={loading} onTicketClick={handleTicketClick} />
       ),
-    },
-    {
-      key: 'ticketControl',
-      label: 'Ticket Control',
-      component: <TicketControlWidget tickets={tickets} onRefresh={fetchTickets} />,
-    },
-    {
-      key: 'assignedChart',
-      label: 'Assigned vs Unassigned',
-      component: (
+      ticketControl: <TicketControlWidget tickets={tickets} onRefresh={fetchTickets} />,
+      assignedChart: (
         <UnassignedVsAssignedWidget
           tickets={tickets}
           onRefresh={fetchTickets}
@@ -141,11 +126,7 @@ function ManagementWidgetGrid({
           onWidgetFilterChange={handleWidgetFilterChange}
         />
       ),
-    },
-    {
-      key: 'categoriesChart',
-      label: 'Ticket Categories',
-      component: (
+      categoriesChart: (
         <TicketCategoriesWidget
           tickets={tickets}
           onRefresh={fetchTickets}
@@ -154,52 +135,21 @@ function ManagementWidgetGrid({
           onTicketClick={(ticket) => handleTicketClick(ticket.id || ticket.ticket_id)}
         />
       ),
-    },
-    {
-      key: 'overdue',
-      label: 'Overdue Tickets',
-      component: <OverdueTicketsWidget onRefresh={fetchTickets} onTicketClick={(ticket) => handleTicketClick(ticket.id)} />,
-    },
-    {
-      key: 'escalations',
-      label: 'Escalations',
-      component: <EscalationsWidget onRefresh={fetchTickets} onView={(ticket) => handleTicketClick(ticket.id)} />,
-    },
-    {
-      key: 'todaysActions',
-      label: "Today's Actions",
-      component: <TodaysActionsWidget onRefresh={fetchTickets} onAction={(item) => handleTicketClick(item.id || item.ticket_id)} />,
-    },
-    {
-      key: 'topRequesters',
-      label: 'Top Requesters',
-      component: <TopRequestersWidget onRefresh={fetchTickets} />,
-    },
-    {
-      key: 'techPerformance',
-      label: 'Technician Performance',
-      component: <TechPerformanceWidget onRefresh={fetchTickets} />,
-    },
-    {
-      key: 'deletedTickets',
-      label: 'Deleted Tickets',
-      component: <DeletedTicketsWidget onRefresh={fetchTickets} onTicketClick={(ticket) => handleTicketClick(ticket.id)} />,
-    },
-    {
-      key: 'pendingRequests',
-      label: 'Pending Requests',
-      component: <PendingRequestsWidget ref={pendingRequestsRef} onAction={() => fetchTickets()} onTicketClick={(ticketId) => handleTicketClick(ticketId)} />,
-    },
-    {
-      key: 'responseTime',
-      label: 'Update Request Response Times',
-      component: (
+      overdue: <OverdueTicketsWidget onRefresh={fetchTickets} onTicketClick={(ticket) => handleTicketClick(ticket.id)} />,
+      escalations: <EscalationsWidget onRefresh={fetchTickets} onView={(ticket) => handleTicketClick(ticket.id)} />,
+      todaysActions: <TodaysActionsWidget onRefresh={fetchTickets} onAction={(item) => handleTicketClick(item.id || item.ticket_id)} />,
+      topRequesters: <TopRequestersWidget onRefresh={fetchTickets} />,
+      techPerformance: <TechPerformanceWidget onRefresh={fetchTickets} />,
+      deletedTickets: <DeletedTicketsWidget onRefresh={fetchTickets} onTicketClick={(ticket) => handleTicketClick(ticket.id)} />,
+      pendingRequests: <PendingRequestsWidget ref={pendingRequestsRef} onAction={() => fetchTickets()} onTicketClick={(ticketId) => handleTicketClick(ticketId)} />,
+      responseTime: (
         <BaseWidget title="Update Request Response Times" icon="⏱️">
           <UpdateRequestResponseTimeAnalytics />
         </BaseWidget>
       ),
-    },
-  ], [tickets, loading, fetchTickets, assignmentFilter, setAssignmentFilter,
+    }
+    return buildWidgetConfig(MANAGEMENT_WIDGET_KEYS, componentMap)
+  }, [tickets, loading, fetchTickets, assignmentFilter, setAssignmentFilter,
       widgetFilters, handleWidgetFilterChange, categoryFilter, setCategoryFilter,
       handleTicketClick, pendingRequestsRef])
 
