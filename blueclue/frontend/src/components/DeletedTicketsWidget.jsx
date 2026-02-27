@@ -179,7 +179,7 @@ function DeletedTicketsWidget({ onRefresh = null, onTicketClick = null, autoRefr
         ) : null
       }
     >
-      <div className="px-4 py-3 md:px-5">
+      <div className="px-4 py-3 flex-1 flex flex-col min-h-0">
         {/* Success toast */}
         {restoreSuccess && (
           <div className="mb-3 p-2 bg-green-900/40 border border-green-700/50 rounded-lg text-green-400 text-xs flex items-center gap-2">
@@ -260,7 +260,7 @@ function DeletedTicketsWidget({ onRefresh = null, onTicketClick = null, autoRefr
         )}
 
         {/* Ticket list */}
-        <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+        <div className="space-y-2 flex-1 min-h-0 overflow-y-auto pr-1">
           {filteredTickets.length === 0 && !loading ? (
             <p className="text-gray-500 text-xs py-3 text-center">
               {hasActiveFilters ? 'No tickets match your filters.' : 'No deleted tickets.'}

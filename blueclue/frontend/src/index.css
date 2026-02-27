@@ -7,3 +7,145 @@ body {
   min-height: 100vh;
   background-color: #030712;
 }
+
+/* react-grid-layout overrides for dark dashboard theme */
+.react-grid-item.react-grid-placeholder {
+  background: rgba(59, 130, 246, 0.25) !important;
+  border: 2px dashed rgba(59, 130, 246, 0.5) !important;
+  border-radius: 0.5rem;
+  opacity: 1 !important;
+  transition-duration: 150ms !important;
+}
+
+/*
+ * During an external gallery→grid drag, suppress transform transitions on
+ * existing grid items so they snap instantly to new positions.
+ * This prevents jitter as the phantom item causes rapid recompaction.
+ */
+.external-drop-active .react-grid-item.cssTransforms {
+  transition: none !important;
+}
+
+/* Keep a short transition on the placeholder while dragging */
+.external-drop-active .react-grid-item.react-grid-placeholder {
+  transition: all 100ms ease !important;
+}
+
+/* ── Resize handles ───────────────────────────────────────────────────── */
+/* Base handle — always visible in edit mode via rgl-edit-mode, hidden otherwise */
+.react-grid-item > .react-resizable-handle {
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+/* In edit mode: always show handles, brighter on hover */
+.rgl-edit-mode .react-grid-item > .react-resizable-handle {
+  opacity: 0.7;
+}
+.rgl-edit-mode .react-grid-item:hover > .react-resizable-handle {
+  opacity: 1;
+}
+
+/* Corner handle (se) — larger, brighter bottom-right corner grip */
+.react-grid-item > .react-resizable-handle-se {
+  bottom: 2px !important;
+  right: 2px !important;
+  width: 16px !important;
+  height: 16px !important;
+  cursor: se-resize;
+}
+.react-grid-item > .react-resizable-handle-se::after {
+  content: '' !important;
+  position: absolute !important;
+  right: 2px !important;
+  bottom: 2px !important;
+  width: 10px !important;
+  height: 10px !important;
+  border: none !important;
+  border-right: 3px solid rgba(96, 165, 250, 0.85) !important;
+  border-bottom: 3px solid rgba(96, 165, 250, 0.85) !important;
+  border-radius: 0 0 2px 0 !important;
+}
+
+/* Edge handle shared styles */
+.react-grid-item > .react-resizable-handle-s,
+.react-grid-item > .react-resizable-handle-e {
+  background: none !important;
+}
+
+/* South (bottom) edge — wider, thicker bar */
+.react-grid-item > .react-resizable-handle-s {
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px !important;
+  height: 12px !important;
+  cursor: s-resize;
+}
+.react-grid-item > .react-resizable-handle-s::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 48px;
+  height: 4px;
+  border: none !important;
+  border-radius: 4px;
+  background: rgba(96, 165, 250, 0.7);
+  box-shadow: 0 0 6px rgba(96, 165, 250, 0.3);
+}
+
+/* East (right) edge — taller, thicker bar */
+.react-grid-item > .react-resizable-handle-e {
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px !important;
+  height: 60px !important;
+  cursor: e-resize;
+}
+.react-grid-item > .react-resizable-handle-e::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 48px;
+  border: none !important;
+  border-radius: 4px;
+  background: rgba(96, 165, 250, 0.7);
+  box-shadow: 0 0 6px rgba(96, 165, 250, 0.3);
+}
+
+/* Hover highlight for all handles — bright glow */
+.react-grid-item > .react-resizable-handle:hover::after {
+  background: rgba(96, 165, 250, 1) !important;
+  border-color: rgba(96, 165, 250, 1) !important;
+  box-shadow: 0 0 10px rgba(96, 165, 250, 0.5) !important;
+}
+
+.react-grid-item {
+  transition: none !important;
+}
+
+.react-grid-item.cssTransforms {
+  transition: transform 200ms ease !important;
+}
+
+.react-grid-item.resizing,
+.react-grid-item.react-draggable-dragging {
+  transition: none !important;
+  z-index: 30;
+}
+
+/*
+ * In edit mode, disable ALL grid-item transitions so that drag, resize,
+ * and sibling reflows snap instantly instead of animating over 200ms.
+ * This eliminates the perceived lag where items trail behind the mouse.
+ */
+.rgl-edit-mode .react-grid-item,
+.rgl-edit-mode .react-grid-item.cssTransforms {
+  transition: none !important;
+}

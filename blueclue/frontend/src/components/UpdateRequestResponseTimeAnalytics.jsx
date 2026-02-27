@@ -91,7 +91,7 @@ function UpdateRequestResponseTimeAnalytics() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 h-full flex flex-col overflow-hidden">
       {/* Period Selector */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-400">
@@ -109,7 +109,7 @@ function UpdateRequestResponseTimeAnalytics() {
       </div>
 
       {/* Technician List */}
-      <div className="space-y-2 max-h-96 overflow-y-auto">
+      <div className="space-y-2 flex-1 min-h-0 overflow-y-auto">
         {analytics.map((tech) => (
           <div 
             key={tech.tech_id}
@@ -130,7 +130,7 @@ function UpdateRequestResponseTimeAnalytics() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3 text-center text-xs">
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
               <div className="bg-gray-800/50 rounded p-2">
                 <div className="font-semibold text-green-400">{tech.responses_within_1hr}</div>
                 <div className="text-gray-400">≤ 1 hr</div>
@@ -168,7 +168,7 @@ function UpdateRequestResponseTimeAnalytics() {
           </svg>
           Performance Summary
         </h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+        <div className="grid grid-cols-2 gap-4 text-center">
           <div>
             <div className="text-2xl font-bold text-white">
               {analytics.length}

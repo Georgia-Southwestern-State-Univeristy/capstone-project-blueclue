@@ -116,7 +116,7 @@ function EscalationsWidget({
         ) : null
       }
     >
-      <div className="px-4 py-3 md:px-5">
+      <div className="px-4 py-3 flex-1 flex flex-col min-h-0">
         {/* Priority filter tabs */}
         <div className="flex items-center gap-2 mb-3">
           <button
@@ -162,7 +162,7 @@ function EscalationsWidget({
         </div>
 
         {/* Ticket list */}
-        <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+        <div className="space-y-2.5 flex-1 min-h-0 overflow-y-auto pr-1">
           {filtered.length === 0 && !loading ? (
             <p className="text-gray-500 text-xs py-3 text-center">
               No tickets match this filter.
@@ -178,10 +178,11 @@ function EscalationsWidget({
                 <div
                   key={ticket.id}
                   className={`
-                    rounded-lg border p-3 transition-all duration-200
+                    rounded-lg border p-3 transition-all duration-200 cursor-pointer
                     ${style.bg} ${style.ring} ring-1
                     hover:brightness-110
                   `}
+                  onClick={() => onView?.(ticket)}
                 >
                   {/* Row 1: priority badge + ticket number + time */}
                   <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -258,7 +259,7 @@ function EscalationsWidget({
                     {/* Quick action buttons */}
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <button
-                        onClick={() => onView?.(ticket)}
+                        onClick={(e) => { e.stopPropagation(); onView?.(ticket) }}
                         title="View ticket"
                         className="p-1.5 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
                       >
@@ -283,7 +284,7 @@ function EscalationsWidget({
                         </svg>
                       </button>
                       <button
-                        onClick={() => onReassign?.(ticket)}
+                        onClick={(e) => { e.stopPropagation(); onReassign?.(ticket) }}
                         title="Reassign ticket"
                         className="p-1.5 rounded hover:bg-blue-500/20 text-gray-400 hover:text-blue-400 transition-colors"
                       >
@@ -302,7 +303,7 @@ function EscalationsWidget({
                         </svg>
                       </button>
                       <button
-                        onClick={() => onResolve?.(ticket)}
+                        onClick={(e) => { e.stopPropagation(); onResolve?.(ticket) }}
                         title="Mark resolved"
                         className="p-1.5 rounded hover:bg-green-500/20 text-gray-400 hover:text-green-400 transition-colors"
                       >

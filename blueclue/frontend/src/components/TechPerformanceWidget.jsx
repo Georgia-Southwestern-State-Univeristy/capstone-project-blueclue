@@ -197,10 +197,9 @@ export default function TechPerformanceWidget({ onRefresh, onTechClick, autoRefr
         </svg>
       }
       noPadding
-      className="col-span-full"
     >
       {/* Scrollable table */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto flex-1 min-h-0 overflow-y-auto">
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-gray-700/60">
@@ -249,7 +248,7 @@ export default function TechPerformanceWidget({ onRefresh, onTechClick, autoRefr
                       <td colSpan={COLUMNS.length} className="px-4 py-3">
                         <div className="flex flex-wrap items-center gap-4">
                           {/* Quick stats cards */}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1">
+                          <div className="grid grid-cols-2 gap-3 flex-1">
                             <div className="bg-gray-900/60 rounded-lg p-2.5 border border-gray-700/50 text-center">
                               <p className="text-lg font-bold text-white">{tech.total_assigned}</p>
                               <p className="text-[10px] text-gray-500 uppercase tracking-wide">Total Assigned</p>

@@ -161,7 +161,6 @@ export default function TodaysActionsWidget({ onRefresh, onAction, autoRefreshIn
         </svg>
       }
       noPadding
-      className="col-span-full"
     >
       {/* ── Summary filter tabs ── */}
       <div className="flex flex-wrap gap-2 px-4 pt-3 pb-2">
@@ -201,7 +200,7 @@ export default function TodaysActionsWidget({ onRefresh, onAction, autoRefreshIn
       </div>
 
       {/* ── Actions list ── */}
-      <div className="px-4 pb-4 space-y-2 max-h-96 overflow-y-auto">
+      <div className="px-4 pb-4 space-y-2 flex-1 min-h-0 overflow-y-auto">
         {filteredActions.length === 0 ? (
           <p className="text-gray-500 text-sm text-center py-4">No items match this filter.</p>
         ) : (
@@ -210,7 +209,8 @@ export default function TodaysActionsWidget({ onRefresh, onAction, autoRefreshIn
             return (
               <div
                 key={`${item.action_type}-${item.id}`}
-                className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${cfg.row}`}
+                className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer ${cfg.row}`}
+                onClick={() => handleAction(item)}
               >
                 {/* Status dot */}
                 <div className="flex-shrink-0">
@@ -255,7 +255,7 @@ export default function TodaysActionsWidget({ onRefresh, onAction, autoRefreshIn
 
                 {/* Action button */}
                 <button
-                  onClick={() => handleAction(item)}
+                  onClick={(e) => { e.stopPropagation(); handleAction(item) }}
                   className={`flex-shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg transition-all ${cfg.actionBtn}`}
                 >
                   {cfg.actionLabel}

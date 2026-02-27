@@ -126,11 +126,20 @@ function UnassignedVsAssignedWidget({
   return (
     <BaseWidget
       title="Assignment Status"
-      icon="📊"
+      icon={
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+        </svg>
+      }
       onRefresh={onRefresh}
       isEmpty={tickets.length === 0}
       emptyMessage="No tickets to display"
-      emptyIcon="📋"
+      emptyIcon={
+        <svg className="w-10 h-10 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+      }
       noPadding
       headerExtra={
         activeDropdownCount > 0 ? (
@@ -140,7 +149,7 @@ function UnassignedVsAssignedWidget({
         ) : null
       }
     >
-      <div className="flex flex-col items-center gap-4 px-4 py-4 md:px-6">
+      <div className="flex flex-col items-center gap-4 px-4 py-4">
         {/* Filter dropdowns */}
         <div className="w-full flex flex-wrap gap-2">
           {/* Priority filter */}
@@ -260,7 +269,7 @@ function UnassignedVsAssignedWidget({
           </p>
         )}
         {/* Donut Chart */}
-        <div className="relative w-40 h-40 flex-shrink-0">
+        <div className="relative flex-shrink-0" style={{ width: 'clamp(120px, 40%, 160px)', aspectRatio: '1 / 1' }}>
           <svg
             viewBox="0 0 100 100"
             className="w-full h-full"

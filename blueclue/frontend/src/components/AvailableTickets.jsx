@@ -37,7 +37,7 @@ const formatDate = (dateStr) => {
  * Allows filtering by priority, category, and age.
  * Provides a "Request Assignment" button for claiming tickets.
  */
-function AvailableTickets() {
+function AvailableTickets({ onTicketClick }) {
   // Data state
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
@@ -385,7 +385,15 @@ function AvailableTickets() {
                   {/* Header */}
                   <div className="mb-3">
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <h3 className="font-bold text-white text-sm leading-tight flex-1 break-words">
+                      <h3
+                        className={`font-bold text-white text-sm leading-tight flex-1 break-words ${onTicketClick ? 'cursor-pointer hover:text-blue-400 transition-colors' : ''}`}
+                        onClick={(e) => {
+                          if (onTicketClick) {
+                            e.stopPropagation();
+                            onTicketClick(ticket.id);
+                          }
+                        }}
+                      >
                         {ticket.subject}
                       </h3>
                       <span className={`px-2 py-1 rounded text-xs font-semibold whitespace-nowrap flex-shrink-0 ${getPriorityColor(ticket.priority)}`}>

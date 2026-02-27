@@ -890,13 +890,8 @@ BEGIN
         VALUES (NEW.id, NEW.assigned_to, 'category_change', 'category', OLD.category::TEXT, NEW.category::TEXT);
     END IF;
     
-    -- Log assignment changes
-    IF (TG_OP = 'UPDATE' AND OLD.assigned_to IS DISTINCT FROM NEW.assigned_to) THEN
-        INSERT INTO ticket_history (ticket_id, changed_by, change_type, field_name, old_value, new_value)
-        VALUES (NEW.id, NEW.assigned_to, 'assignment', 'assigned_to', 
-                COALESCE(OLD.assigned_to::TEXT, 'unassigned'), 
-                COALESCE(NEW.assigned_to::TEXT, 'unassigned'));
-    END IF;
+    -- Assignment changes are logged by the application layer (ticketController.js)
+    -- with richer metadata (names, bulk vs single, notes). Do NOT log here to avoid duplicates.
     
     RETURN NEW;
 END;

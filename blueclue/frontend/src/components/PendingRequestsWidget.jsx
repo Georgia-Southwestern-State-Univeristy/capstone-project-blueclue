@@ -6,7 +6,7 @@ import { getAssignmentRequests, approveAssignmentRequest, denyAssignmentRequest 
  * Displays pending technician assignment requests with quick approve/deny actions.
  * Designed for the Management Dashboard right sidebar or main area.
  */
-const PendingRequestsWidget = forwardRef(({ onAction }, ref) => {
+const PendingRequestsWidget = forwardRef(({ onAction, onTicketClick }, ref) => {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -109,7 +109,7 @@ const PendingRequestsWidget = forwardRef(({ onAction }, ref) => {
   }
 
   return (
-    <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">
+    <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm h-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-700">
         <div className="flex items-center gap-2">
@@ -146,7 +146,7 @@ const PendingRequestsWidget = forwardRef(({ onAction }, ref) => {
       )}
 
       {/* Content */}
-      <div className="p-4 space-y-3 max-h-[480px] overflow-y-auto">
+      <div className="p-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
         {loading && requests.length === 0 ? (
           <div className="text-center py-6">
             <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
@@ -205,7 +205,10 @@ const PendingRequestsWidget = forwardRef(({ onAction }, ref) => {
               </div>
 
               {/* Ticket info */}
-              <div className="mb-2 p-2 bg-gray-750 bg-opacity-50 rounded border border-gray-700">
+              <div
+                className={`mb-2 p-2 bg-gray-750 bg-opacity-50 rounded border border-gray-700 ${onTicketClick ? 'cursor-pointer hover:border-blue-500 hover:bg-gray-700 transition-colors' : ''}`}
+                onClick={() => onTicketClick?.(request.ticket_id)}
+              >
                 <div className="flex items-center gap-2 mb-1">
                   {request.ticket_priority && (
                     <span className={`w-2 h-2 rounded-full ${priorityColors[request.ticket_priority] || 'bg-gray-500'}`}></span>
