@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import NotificationPreferences from './NotificationPreferences';
 import { getUser } from '../services/authService';
 import { useNavigate } from 'react-router-dom';
+import useTheme from '../hooks/useTheme';
 
 /**
  * Chevron that points right by default, flips to point left when expanded.
@@ -74,13 +75,99 @@ function AccountPanelContent({ onNavigate, onLogout }) {
 }
 
 function AppearancePanelContent() {
+  const { theme, setTheme } = useTheme();
+
   return (
-    <div className="bg-gray-800/40 rounded-lg p-6 text-center">
-      <svg className="w-10 h-10 text-gray-600 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-      </svg>
-      <p className="text-gray-400 text-sm font-medium mb-1">Coming Soon</p>
-      <p className="text-gray-500 text-xs">Theme customization and display options are on the way.</p>
+    <div className="space-y-6">
+      {/* Theme selector */}
+      <div>
+        <p className="text-sm font-medium mb-3" style={{ color: 'var(--text-secondary)' }}>Theme</p>
+        <div className="grid grid-cols-2 gap-3">
+          {/* Dark option */}
+          <button
+            onClick={() => setTheme('dark')}
+            className={`relative rounded-xl p-4 border-2 transition-all duration-200 ${
+              theme === 'dark'
+                ? 'border-blue-500 ring-2 ring-blue-500/30'
+                : 'border-gray-700 hover:border-gray-600'
+            }`}
+            style={{ backgroundColor: 'var(--bg-card)' }}
+          >
+            {/* Dark mode preview */}
+            <div className="rounded-lg overflow-hidden mb-3 border border-gray-700">
+              <div className="bg-gray-950 p-2">
+                <div className="h-2 w-12 bg-gray-700 rounded mb-1.5" />
+                <div className="flex gap-1">
+                  <div className="h-1.5 w-8 bg-gray-800 rounded" />
+                  <div className="h-1.5 w-6 bg-gray-800 rounded" />
+                </div>
+              </div>
+              <div className="bg-gray-900 p-2 space-y-1">
+                <div className="h-1.5 w-full bg-gray-800 rounded" />
+                <div className="h-1.5 w-3/4 bg-gray-800 rounded" />
+                <div className="h-1.5 w-1/2 bg-gray-800 rounded" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+              <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Dark</span>
+            </div>
+            {theme === 'dark' && (
+              <div className="absolute top-2 right-2">
+                <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+            )}
+          </button>
+
+          {/* Light option */}
+          <button
+            onClick={() => setTheme('light')}
+            className={`relative rounded-xl p-4 border-2 transition-all duration-200 ${
+              theme === 'light'
+                ? 'border-blue-500 ring-2 ring-blue-500/30'
+                : 'border-gray-700 hover:border-gray-600'
+            }`}
+            style={{ backgroundColor: 'var(--bg-card)' }}
+          >
+            {/* Light mode preview */}
+            <div className="rounded-lg overflow-hidden mb-3 border border-gray-300">
+              <div className="bg-white p-2">
+                <div className="h-2 w-12 bg-gray-200 rounded mb-1.5" />
+                <div className="flex gap-1">
+                  <div className="h-1.5 w-8 bg-gray-100 rounded" />
+                  <div className="h-1.5 w-6 bg-gray-100 rounded" />
+                </div>
+              </div>
+              <div className="bg-gray-50 p-2 space-y-1">
+                <div className="h-1.5 w-full bg-gray-200 rounded" />
+                <div className="h-1.5 w-3/4 bg-gray-200 rounded" />
+                <div className="h-1.5 w-1/2 bg-gray-200 rounded" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Light</span>
+            </div>
+            {theme === 'light' && (
+              <div className="absolute top-2 right-2">
+                <svg className="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+            )}
+          </button>
+        </div>
+      </div>
+
+      <p className="text-xs text-center" style={{ color: 'var(--text-dimmed)' }}>
+        Your theme preference is saved locally.
+      </p>
     </div>
   );
 }
@@ -242,7 +329,7 @@ function SettingsSidebar({ isOpen, onClose, onLogout }) {
         className={`fixed top-0 right-0 h-full w-[400px] border-l border-gray-700 shadow-2xl z-[70] transform transition-transform duration-300 ease-in-out ${
           isOpen && activePanel ? 'translate-x-[-340px]' : 'translate-x-full'
         }`}
-        style={{ backgroundColor: '#1a1f2e' }}
+        style={{ backgroundColor: 'var(--bg-sub-panel)' }}
       >
         {/* Sub-panel header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-700">
