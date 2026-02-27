@@ -400,7 +400,7 @@ class TimeFeatureExtractor:
         extractor.target_mean = state['target_mean']
         extractor.target_std = state['target_std']
         extractor.is_fitted = state['is_fitted']
-        print(f"✓ Time feature extractor loaded from {filepath}")
+        print(f"[OK] Time feature extractor loaded from {filepath}")
         return extractor
 
 
