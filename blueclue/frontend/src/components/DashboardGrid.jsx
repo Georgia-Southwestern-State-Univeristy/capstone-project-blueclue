@@ -184,10 +184,22 @@ export default function DashboardGrid({
   const phantomItemRef = useRef(null) // mirror for use in native event listeners
   const lastGridPosRef = useRef(null)
 
+  // Track which widget is "selected" (clicked in edit mode) for keyboard shortcuts
+  const [selectedWidget, setSelectedWidget] = useState(null)
+
   // Track drag state for auto-scroll and CSS classes
   const [isDraggingExternal, setIsDraggingExternal] = useState(false)
   const [isDraggingWidget, setIsDraggingWidget] = useState(false)
   const isDragging = isDraggingExternal || isDraggingWidget
+
+  // Detect mobile viewport — hide gallery entirely on small screens
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 767px)')
+    const handler = (e) => setIsMobile(e.matches)
+    mql.addEventListener('change', handler)
+    return () => mql.removeEventListener('change', handler)
+  }, [])
 
   // Track resize state to skip expensive onLayoutChange during active resizes
   const isResizingRef = useRef(false)
@@ -403,6 +415,36 @@ export default function DashboardGrid({
     return () => window.removeEventListener('dragend', handleDragEnd)
   }, [isDraggingExternal])
 
+  // ── Keyboard shortcuts: Delete = remove selected widget, Escape = exit edit mode ──
+  useEffect(() => {
+    if (!isEditMode) return
+    const handleKeyDown = (e) => {
+      // Ignore when user is typing in an input/textarea/contenteditable
+      const tag = e.target.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target.isContentEditable) return
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedWidget && onRemoveWidget) {
+          e.preventDefault()
+          onRemoveWidget(selectedWidget)
+          setSelectedWidget(null)
+        }
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setSelectedWidget(null)
+        toggleEditMode()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isEditMode, selectedWidget, onRemoveWidget, toggleEditMode])
+
+  // Clear selected widget when leaving edit mode
+  useEffect(() => {
+    if (!isEditMode) setSelectedWidget(null)
+  }, [isEditMode])
+
   // Auto-scroll when dragging near viewport edges
   useEffect(() => {
     if (!isDragging) return
@@ -438,7 +480,7 @@ export default function DashboardGrid({
     }
   }, [isDragging, isDraggingWidget])
 
-  const hasGallery = galleryItems.length > 0
+  const hasGallery = galleryItems.length > 0 && !isMobile
   const galleryVisible = isEditMode && showGallery && hasGallery
 
   return (
@@ -447,6 +489,10 @@ export default function DashboardGrid({
       <div className="flex items-center justify-end gap-3 mb-4">
         {isEditMode && (
           <>
+            <span className="hidden sm:flex items-center gap-2 text-[10px] text-gray-500 mr-1 select-none">
+              <kbd className="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-400 font-mono">Esc</kbd> exit
+              <kbd className="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-400 font-mono">Del</kbd> remove
+            </span>
             <SaveLayoutButton onSave={onSaveLayout} />
             <button
               onClick={resetLayout}
@@ -565,7 +611,7 @@ export default function DashboardGrid({
                 handle: '.widget-drag-handle',
               }}
               resizeConfig={{
-                enabled: isEditMode,
+                enabled: isEditMode && !isMobile,
                 handles: ['s', 'e', 'se'],
               }}
               onDragStart={handleWidgetDragStart}
@@ -574,7 +620,11 @@ export default function DashboardGrid({
               onResizeStop={handleResizeStop}
             >
               {widgetsToRender.map(({ key, component }) => (
-                <div key={key} className="relative overflow-hidden rounded-lg">
+                <div
+                  key={key}
+                  className={`relative overflow-hidden rounded-lg ${isEditMode && selectedWidget === key ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-gray-950' : ''}`}
+                  onClick={() => { if (isEditMode && key !== PHANTOM_KEY) setSelectedWidget(prev => prev === key ? null : key) }}
+                >
                   {/* Edit mode: drag handle overlay + remove button (not on phantom) */}
                   {isEditMode && key !== PHANTOM_KEY && (
                     <>
@@ -596,12 +646,13 @@ export default function DashboardGrid({
                           onClick={(e) => {
                             e.stopPropagation()
                             onRemoveWidget(key)
+                            if (selectedWidget === key) setSelectedWidget(null)
                           }}
                           className="absolute top-1.5 right-1.5 z-30 p-1 rounded-md
                                      bg-red-500/20 hover:bg-red-500/40 text-red-400 hover:text-red-300
                                      border border-red-500/30 hover:border-red-400/50
                                      transition-all opacity-60 hover:opacity-100"
-                          title="Remove widget from dashboard"
+                          title="Remove widget (or press Delete)"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
