@@ -119,5 +119,14 @@ body {
 .react-grid-item.react-draggable-dragging {
   transition: none !important;
   z-index: 30;
-  opacity: 0.9;
+}
+
+/*
+ * In edit mode, disable ALL grid-item transitions so that drag, resize,
+ * and sibling reflows snap instantly instead of animating over 200ms.
+ * This eliminates the perceived lag where items trail behind the mouse.
+ */
+.rgl-edit-mode .react-grid-item,
+.rgl-edit-mode .react-grid-item.cssTransforms {
+  transition: none !important;
 }

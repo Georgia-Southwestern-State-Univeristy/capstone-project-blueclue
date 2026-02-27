@@ -189,6 +189,10 @@ export default function DashboardGrid({
   const [isDraggingWidget, setIsDraggingWidget] = useState(false)
   const isDragging = isDraggingExternal || isDraggingWidget
 
+  // Track resize state to skip expensive onLayoutChange during active resizes
+  const isResizingRef = useRef(false)
+  const pendingLayoutRef = useRef(null)
+
   // Determine current column count based on container width
   const getCurrentCols = useCallback(() => {
     if (width >= 1200) return cols.lg || 12
@@ -257,11 +261,16 @@ export default function DashboardGrid({
   // Filter phantom from layout changes before persisting to parent.
   // Also skip the spurious onLayoutChange that fires when edit mode
   // toggles (RGL re-renders due to dragConfig/resizeConfig prop changes).
+  // During active resizes, stash the latest layout and apply it on stop
+  // to avoid expensive per-frame merge + localStorage writes.
   const handleLayoutChange = useCallback((currentLayout, allLayouts) => {
     if (phantomItem) return // Don't persist while phantom is active
     if (editModeToggledRef?.current) {
-      editModeToggledRef.current = false
-      return // Skip the first layout change after edit mode toggle
+      return // Skip layout changes during edit-mode transition window
+    }
+    if (isResizingRef.current) {
+      pendingLayoutRef.current = { currentLayout, allLayouts }
+      return // Stash — will apply on resize stop
     }
     onLayoutChange(currentLayout, allLayouts)
   }, [onLayoutChange, phantomItem, editModeToggledRef])
@@ -364,6 +373,22 @@ export default function DashboardGrid({
   const handleWidgetDragStop = useCallback(() => {
     setIsDraggingWidget(false)
   }, [])
+
+  // Resize start/stop — skip expensive onLayoutChange during active resize
+  const handleResizeStart = useCallback(() => {
+    isResizingRef.current = true
+    pendingLayoutRef.current = null
+  }, [])
+
+  const handleResizeStop = useCallback(() => {
+    isResizingRef.current = false
+    // Apply the last stashed layout change now that resize is complete
+    if (pendingLayoutRef.current) {
+      const { currentLayout, allLayouts } = pendingLayoutRef.current
+      pendingLayoutRef.current = null
+      onLayoutChange(currentLayout, allLayouts)
+    }
+  }, [onLayoutChange])
 
   // Clean up external drag if it ends without a drop (e.g., escape key, drag out of window)
   useEffect(() => {
@@ -520,6 +545,7 @@ export default function DashboardGrid({
         <div
           ref={containerRef}
           className={`flex-1 min-w-0 relative transition-shadow duration-200
+                      ${isEditMode ? 'rgl-edit-mode' : ''}
                       ${isDraggingExternal ? 'external-drop-active ring-2 ring-blue-500/30 ring-inset rounded-lg bg-blue-500/5' : ''}`}
         >
           {/* Grid – v2 API: pass width directly, use dragConfig/resizeConfig objects */}
@@ -544,6 +570,8 @@ export default function DashboardGrid({
               }}
               onDragStart={handleWidgetDragStart}
               onDragStop={handleWidgetDragStop}
+              onResizeStart={handleResizeStart}
+              onResizeStop={handleResizeStop}
             >
               {widgetsToRender.map(({ key, component }) => (
                 <div key={key} className="relative overflow-hidden rounded-lg">
