@@ -184,7 +184,8 @@ $migrationFiles = @(
     "migrations\014_add_ticket_reopen_tracking.sql",
     "migrations\015_add_ticket_collaborators.sql",
     "migrations\016_add_ring_for_help.sql",
-    "migrations\017_add_ticket_update_requests.sql"
+    "migrations\017_add_ticket_update_requests.sql",
+    "migrations\add_response_time_to_update_requests.sql"
 )
 
 $migrationsApplied = 0

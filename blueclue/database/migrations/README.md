@@ -40,8 +40,41 @@ psql -U postgres -d blueclue -c "SELECT * FROM schema_version ORDER BY applied_a
 
 **Current Active Migrations:**
 - `010_consolidate_missing_tables.sql` - Consolidation migration for upgrading v2.1.0 → v2.2.0
+- `add_response_time_to_update_requests.sql` - **NEW** - Adds response time analytics for update requests
 
 **Note:** Most migrations have been consolidated into `schema.sql` v2.3.0 and moved to the `archive/` folder.
+
+### Latest Migration: Response Time Analytics
+
+**Migration:** `add_response_time_to_update_requests.sql`  
+**Date:** 2026-02-26  
+**Required for:** Update request response time analytics dashboard widget
+
+**What it does:**
+- Adds `response_time_seconds` column to `ticket_update_requests` table
+- Creates index for analytics performance
+- Backfills existing fulfilled requests with calculated response times
+
+**Do you need this?**
+Run this query to check:
+```sql
+SELECT column_name FROM information_schema.columns 
+WHERE table_name = 'ticket_update_requests' 
+  AND column_name = 'response_time_seconds';
+```
+
+If it returns empty, apply the migration:
+```powershell
+# Option 1: Run the helper script
+cd blueclue/database/migrations
+.\apply_response_time_migration.ps1
+
+# Option 2: Run manually
+psql -U postgres -d blueclue -f add_response_time_to_update_requests.sql
+```
+
+**Why was this needed?**  
+The `response_time_seconds` column was added to migration `017_add_ticket_update_requests.sql` after some databases were created. This ensures existing databases get the column without needing to rebuild.
 
 ### Archived Migrations (Consolidated into schema.sql v2.3.0)
 
