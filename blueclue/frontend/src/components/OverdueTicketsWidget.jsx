@@ -149,7 +149,7 @@ function OverdueTicketsWidget({
         ) : null
       }
     >
-      <div className="px-4 py-3 md:px-5">
+      <div className="px-4 py-3 flex-1 flex flex-col min-h-0">
         {/* Summary badges — click to filter by alert level */}
         <div className="flex flex-wrap gap-2 mb-3">
           {(['critical', 'high', 'medium', 'warning']).map((level) => {
@@ -187,7 +187,7 @@ function OverdueTicketsWidget({
         </div>
 
         {/* Ticket list */}
-        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+        <div className="space-y-2 flex-1 min-h-0 overflow-y-auto pr-1">
           {filteredData.length === 0 && !loading ? (
             <p className="text-gray-500 text-xs py-3 text-center">
               No tickets match this filter.
@@ -207,7 +207,7 @@ function OverdueTicketsWidget({
                   `}
                 >
                   {/* Row 1: ticket number + days overdue badge */}
-                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <div className="flex items-center flex-wrap justify-between gap-x-2 gap-y-0.5 mb-1.5">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-gray-400 font-mono text-xs flex-shrink-0">
                         {ticket.ticket_number || `#${ticket.id}`}
@@ -222,7 +222,7 @@ function OverdueTicketsWidget({
                         </span>
                       )}
                     </div>
-                    <span className={`text-xs font-semibold whitespace-nowrap ${style.text}`}>
+                    <span className={`text-xs font-semibold ${style.text}`}>
                       {formatDaysOverdue(ticket.days_overdue)} overdue
                     </span>
                   </div>
@@ -233,18 +233,18 @@ function OverdueTicketsWidget({
                   </p>
 
                   {/* Row 3: meta info */}
-                  <div className="flex items-center gap-3 text-[11px] text-gray-400">
-                    <span className={`capitalize ${PRIORITY_COLORS[ticket.priority] || 'text-gray-400'}`}>
+                  <div className="flex items-center gap-1.5 text-[11px] text-gray-400 overflow-hidden">
+                    <span className={`capitalize flex-shrink-0 ${PRIORITY_COLORS[ticket.priority] || 'text-gray-400'}`}>
                       {ticket.priority}
                     </span>
-                    <span>•</span>
+                    <span className="flex-shrink-0">•</span>
                     {ticket.assigned_to_name && ticket.assigned_to_name.trim() ? (
-                      <span className="text-gray-300 truncate">{ticket.assigned_to_name}</span>
+                      <span className="text-gray-300 truncate min-w-0">{ticket.assigned_to_name}</span>
                     ) : (
-                      <span className="text-orange-400">Unassigned</span>
+                      <span className="text-orange-400 flex-shrink-0">Unassigned</span>
                     )}
-                    <span>•</span>
-                    <span className="truncate">{ticket.customer_name || 'Unknown'}</span>
+                    <span className="flex-shrink-0">•</span>
+                    <span className="truncate min-w-0">{ticket.customer_name || 'Unknown'}</span>
                   </div>
                 </button>
               )

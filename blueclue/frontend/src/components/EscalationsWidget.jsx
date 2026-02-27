@@ -116,7 +116,7 @@ function EscalationsWidget({
         ) : null
       }
     >
-      <div className="px-4 py-3 md:px-5">
+      <div className="px-4 py-3 flex-1 flex flex-col min-h-0">
         {/* Priority filter tabs */}
         <div className="flex items-center gap-2 mb-3">
           <button
@@ -162,7 +162,7 @@ function EscalationsWidget({
         </div>
 
         {/* Ticket list */}
-        <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+        <div className="space-y-2.5 flex-1 min-h-0 overflow-y-auto pr-1">
           {filtered.length === 0 && !loading ? (
             <p className="text-gray-500 text-xs py-3 text-center">
               No tickets match this filter.

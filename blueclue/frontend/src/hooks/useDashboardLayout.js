@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 
 /**
  * Custom hook for managing dashboard widget layouts with localStorage persistence.
@@ -55,9 +55,21 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
           const savedBp = parsed[breakpoint] || []
           const defaultBp = defaultLayouts[breakpoint] || []
           const savedKeys = new Set(savedBp.map(item => item.i))
-          // Keep saved positions, add any new widgets from defaults
+          // Keep saved positions but restore constraints from defaults
           merged[breakpoint] = [
-            ...savedBp,
+            ...savedBp.map(item => {
+              const defaultItem = defaultBp.find(d => d.i === item.i)
+              if (defaultItem) {
+                return {
+                  ...item,
+                  minW: item.minW ?? defaultItem.minW,
+                  minH: item.minH ?? defaultItem.minH,
+                  maxW: item.maxW ?? defaultItem.maxW,
+                  maxH: item.maxH ?? defaultItem.maxH,
+                }
+              }
+              return item
+            }),
             ...defaultBp.filter(item => !savedKeys.has(item.i))
           ].filter(item => !hidden.has(item.i))
         }
@@ -73,6 +85,11 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
   const [hiddenWidgets, setHiddenWidgets] = useState(loadHidden)
   const [isEditMode, setIsEditMode] = useState(false)
 
+  // Ref used by DashboardGrid to skip the spurious onLayoutChange
+  // that fires when edit mode toggles (RGL re-renders due to
+  // dragConfig/resizeConfig prop changes)
+  const editModeToggledRef = useRef(false)
+
   // Persist hidden widgets to localStorage
   const saveHidden = useCallback((hidden) => {
     try {
@@ -83,14 +100,38 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
   }, [hiddenKey])
 
   // Handle layout change from react-grid-layout
+  // Merges incoming layouts with current state to preserve constraints
+  // (minW/minH/maxW/maxH) and breakpoints not present in the callback.
   const onLayoutChange = useCallback((currentLayout, allLayouts) => {
-    setLayouts(allLayouts)
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(allLayouts))
-    } catch (e) {
-      console.warn('Failed to save dashboard layout:', e)
-    }
-  }, [storageKey])
+    setLayouts(prev => {
+      const merged = {}
+      // Merge each breakpoint from allLayouts with constraints from prev/defaults
+      for (const bp of Object.keys(allLayouts)) {
+        const incoming = allLayouts[bp] || []
+        merged[bp] = incoming.map(item => {
+          const existing = (prev[bp] || []).find(e => e.i === item.i) ||
+                           defaultLayouts[bp]?.find(d => d.i === item.i)
+          return {
+            ...item,
+            minW: item.minW ?? existing?.minW,
+            minH: item.minH ?? existing?.minH,
+            maxW: item.maxW ?? existing?.maxW,
+            maxH: item.maxH ?? existing?.maxH,
+          }
+        })
+      }
+      // Preserve breakpoints from previous state not present in allLayouts
+      for (const bp of Object.keys(prev)) {
+        if (!merged[bp]) merged[bp] = prev[bp]
+      }
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(merged))
+      } catch (e) {
+        console.warn('Failed to save dashboard layout:', e)
+      }
+      return merged
+    })
+  }, [storageKey, defaultLayouts])
 
   // Add a widget back to the dashboard
   const addWidget = useCallback((key, dropPosition = null) => {
@@ -164,12 +205,14 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
 
   // Toggle edit/lock mode
   const toggleEditMode = useCallback(() => {
+    editModeToggledRef.current = true
     setIsEditMode(prev => !prev)
   }, [])
 
   return {
     layouts,
     isEditMode,
+    editModeToggledRef,
     onLayoutChange,
     resetLayout,
     toggleEditMode,

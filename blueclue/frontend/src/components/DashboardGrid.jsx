@@ -70,6 +70,7 @@ export default function DashboardGrid({
   layouts,
   onLayoutChange,
   isEditMode,
+  editModeToggledRef,
   toggleEditMode,
   resetLayout,
   widgetConfig,
@@ -163,11 +164,17 @@ export default function DashboardGrid({
     ]
   }, [activeWidgets, phantomItem])
 
-  // Filter phantom from layout changes before persisting to parent
+  // Filter phantom from layout changes before persisting to parent.
+  // Also skip the spurious onLayoutChange that fires when edit mode
+  // toggles (RGL re-renders due to dragConfig/resizeConfig prop changes).
   const handleLayoutChange = useCallback((currentLayout, allLayouts) => {
     if (phantomItem) return // Don't persist while phantom is active
+    if (editModeToggledRef?.current) {
+      editModeToggledRef.current = false
+      return // Skip the first layout change after edit mode toggle
+    }
     onLayoutChange(currentLayout, allLayouts)
-  }, [onLayoutChange, phantomItem])
+  }, [onLayoutChange, phantomItem, editModeToggledRef])
 
   // Called by WidgetGallery when a drag begins (synchronously sets ref)
   const handleGalleryDragStart = useCallback((widgetKey) => {
@@ -436,6 +443,7 @@ export default function DashboardGrid({
               }}
               resizeConfig={{
                 enabled: isEditMode,
+                handles: ['s', 'e', 'se'],
               }}
               onDragStart={handleWidgetDragStart}
               onDragStop={handleWidgetDragStop}

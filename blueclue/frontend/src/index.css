@@ -31,9 +31,80 @@ body {
   transition: all 100ms ease !important;
 }
 
-.react-grid-item > .react-resizable-handle::after {
-  border-right-color: rgba(156, 163, 175, 0.4) !important;
-  border-bottom-color: rgba(156, 163, 175, 0.4) !important;
+/* ── Resize handles ───────────────────────────────────────────────────── */
+/* Base handle — hidden by default, shown only when edit-mode classes apply */
+.react-grid-item > .react-resizable-handle {
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+/* Show handles on hover in edit mode (the widget-drag-handle parent signals edit) */
+.react-grid-item:hover > .react-resizable-handle {
+  opacity: 1;
+}
+
+/* Corner handle (se) — bottom-right dot */
+.react-grid-item > .react-resizable-handle-se::after {
+  border-right-color: rgba(96, 165, 250, 0.6) !important;
+  border-bottom-color: rgba(96, 165, 250, 0.6) !important;
+  width: 7px !important;
+  height: 7px !important;
+}
+
+/* Edge handle shared styles */
+.react-grid-item > .react-resizable-handle-s,
+.react-grid-item > .react-resizable-handle-e {
+  background: none !important;
+}
+
+/* South (bottom) edge */
+.react-grid-item > .react-resizable-handle-s {
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px !important;
+  height: 8px !important;
+  cursor: s-resize;
+}
+.react-grid-item > .react-resizable-handle-s::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 32px;
+  height: 3px;
+  border: none !important;
+  border-radius: 2px;
+  background: rgba(96, 165, 250, 0.5);
+}
+
+/* East (right) edge */
+.react-grid-item > .react-resizable-handle-e {
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px !important;
+  height: 40px !important;
+  cursor: e-resize;
+}
+.react-grid-item > .react-resizable-handle-e::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 3px;
+  height: 32px;
+  border: none !important;
+  border-radius: 2px;
+  background: rgba(96, 165, 250, 0.5);
+}
+
+/* Hover highlight for all handles */
+.react-grid-item > .react-resizable-handle:hover::after {
+  background: rgba(96, 165, 250, 0.8) !important;
+  border-color: rgba(96, 165, 250, 0.8) !important;
 }
 
 .react-grid-item {

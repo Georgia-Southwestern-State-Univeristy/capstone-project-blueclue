@@ -118,11 +118,11 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
   }
 
   return (
-    <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-4 md:p-6 h-full flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base md:text-lg font-semibold text-white">Ticket Timeline</h3>
+    <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-4 h-full flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h3 className="text-base font-semibold text-white">Ticket Timeline</h3>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-3 text-xs text-gray-500">
+          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
             <span className="flex items-center gap-1">
               <span className="w-2.5 h-2.5 rounded-sm bg-blue-400 inline-block" />
               Submissions ({total})
@@ -162,7 +162,7 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
         className="flex-1 flex flex-col justify-end min-h-0 overflow-x-visible overflow-y-hidden pt-16 pr-8 scrollbar-hide md:scrollbar-default"
         style={{ WebkitOverflowScrolling: 'touch', position: 'relative', zIndex: 1 }}
       >
-        <div className="flex items-end gap-1 h-36 md:min-w-0" style={{ minWidth: '500px' }}>
+        <div className="flex items-end gap-1 h-36 md:min-w-0">
           {buckets.map((bucket, i) => {
             const totalHeight = bucket.count + bucket.assignCount + bucket.updateCount + bucket.cancelCount
             const submitPct = totalHeight > 0 ? Math.max((bucket.count / maxCount) * 100, bucket.count > 0 ? 3 : 0) : 0
@@ -252,7 +252,7 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
         </div>
 
         {/* Day labels below chart */}
-        <div className="relative h-5 mt-2 border-t border-gray-800 md:min-w-0 overflow-hidden" style={{ minWidth: '500px' }}>
+        <div className="relative h-5 mt-2 border-t border-gray-800 md:min-w-0 overflow-hidden">
           {dayLabels.map((d, i) => (
             <span
               key={i}
@@ -266,10 +266,10 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
       </div>
 
       {/* Assignment Activity Feed */}
-      <div className="mt-4 border-t border-gray-700 pt-3">
+      <div className="mt-4 border-t border-gray-700 pt-3 flex flex-col min-h-0" style={{ maxHeight: '40%' }}>
         <button
           onClick={() => setShowActivity(!showActivity)}
-          className="flex items-center gap-2 text-sm font-semibold text-gray-300 hover:text-white transition-colors mb-2 w-full"
+          className="flex items-center gap-2 text-sm font-semibold text-gray-300 hover:text-white transition-colors mb-2 w-full flex-shrink-0"
         >
           <svg className={`w-4 h-4 transition-transform ${showActivity ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -281,7 +281,7 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
         </button>
 
         {showActivity && (
-          <div className="max-h-56 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 space-y-0 pr-1">
+          <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 space-y-0 pr-1" style={{ maxHeight: '100%' }}>
             {activityLoading ? (
               <div className="flex items-center justify-center py-4">
                 <div className="animate-spin w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full" />

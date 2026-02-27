@@ -161,7 +161,6 @@ export default function TodaysActionsWidget({ onRefresh, onAction, autoRefreshIn
         </svg>
       }
       noPadding
-      className="col-span-full"
     >
       {/* ── Summary filter tabs ── */}
       <div className="flex flex-wrap gap-2 px-4 pt-3 pb-2">
@@ -201,7 +200,7 @@ export default function TodaysActionsWidget({ onRefresh, onAction, autoRefreshIn
       </div>
 
       {/* ── Actions list ── */}
-      <div className="px-4 pb-4 space-y-2 max-h-96 overflow-y-auto">
+      <div className="px-4 pb-4 space-y-2 flex-1 min-h-0 overflow-y-auto">
         {filteredActions.length === 0 ? (
           <p className="text-gray-500 text-sm text-center py-4">No items match this filter.</p>
         ) : (

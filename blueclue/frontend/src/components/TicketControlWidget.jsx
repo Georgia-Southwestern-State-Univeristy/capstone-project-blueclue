@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { getTechnicians, bulkAssignTickets, assignTicket as assignTicketApi } from '../services/ticketService'
 import TicketDetailView from './TicketDetailView'
+import useContainerSize from '../hooks/useContainerSize'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -35,6 +36,12 @@ const getWorkloadTier = (count) => {
 // ── Component ────────────────────────────────────────────────────────────
 
 function TicketControlWidget({ tickets = [], onRefresh }) {
+  // ── Container-responsive sizing ──
+  const [containerRef, { width: containerWidth }] = useContainerSize()
+  const ticketCols = containerWidth >= 900 ? 3 : containerWidth >= 550 ? 2 : 1
+  const filterCols = containerWidth >= 600 ? 3 : 1
+  const headerRow = containerWidth >= 700
+
   // ── Tab state ──
   const [activeTab, setActiveTab] = useState('queue')
 
@@ -204,7 +211,7 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
   // ──────────────────────────────────────────────────────────────────────
   return (
     <>
-    <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm h-full flex flex-col overflow-hidden">
+    <div ref={containerRef} className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm h-full flex flex-col overflow-hidden">
       {/* Success Toast */}
       {assignSuccess && (
         <div className="mx-6 mt-4 px-4 py-3 bg-green-900/40 border border-green-700 rounded-lg text-green-300 text-sm flex items-center justify-between">
@@ -245,7 +252,7 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {/* Search + Filter Bar */}
           <div className="p-6 border-b border-gray-700">
-            <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-4">
+            <div className={`flex gap-4 mb-4 ${headerRow ? 'flex-row justify-between items-center' : 'flex-col'}`}>
               {/* Title with Assignment Counts */}
               <div className="flex items-center gap-4">
                 <h2 className="text-2xl font-bold text-white">Ticket Queue</h2>
@@ -303,7 +310,7 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
             {/* Filter Panel */}
             {showFilters && (
               <div className="bg-gray-800 p-4 rounded-lg border border-gray-600">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${filterCols}, minmax(0, 1fr))` }}>
                   {/* Status */}
                   <div>
                     <h3 className="font-semibold text-white mb-2">Status</h3>
@@ -392,7 +399,7 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
           {/* Ticket Cards Grid – scrollable within dashboard widget */}
           {filteredTickets.length > 0 && (
             <div className="p-6 flex-1 min-h-0 overflow-y-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${ticketCols}, minmax(0, 1fr))` }}>
                 {sortedTickets.map(ticket => {
                   const statusColor = getStatusColor(ticket.status)
                   const isSelected = selectedTickets.includes(ticket.id)

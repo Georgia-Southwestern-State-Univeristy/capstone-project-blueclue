@@ -24,49 +24,49 @@ import { useNotificationSocket } from '../hooks/useNotificationSocket'
 // Default grid layouts for management dashboard widgets
 // 12-column grid, rowHeight=60px.  Height in px ≈ h×60 + (h-1)×16
 // Each item: { i: key, x, y, w, h, minW, minH }
-const LAYOUT_VERSION = 2 // bump to force stale localStorage reset
+const LAYOUT_VERSION = 4 // bump to force stale localStorage reset
 const DEFAULT_LAYOUTS = {
   lg: [
-    { i: 'timeline',       x: 0,  y: 0,  w: 12, h: 8,  minW: 6,  minH: 5 },
-    { i: 'ticketControl',  x: 0,  y: 8,  w: 12, h: 11, minW: 6,  minH: 8 },
-    { i: 'assignedChart',  x: 0,  y: 19, w: 6,  h: 7,  minW: 4,  minH: 5 },
-    { i: 'categoriesChart',x: 6,  y: 19, w: 6,  h: 7,  minW: 4,  minH: 5 },
-    { i: 'overdue',        x: 0,  y: 26, w: 6,  h: 7,  minW: 4,  minH: 4 },
-    { i: 'escalations',    x: 6,  y: 26, w: 6,  h: 7,  minW: 4,  minH: 4 },
-    { i: 'todaysActions',  x: 0,  y: 33, w: 6,  h: 7,  minW: 4,  minH: 4 },
-    { i: 'topRequesters',  x: 6,  y: 33, w: 6,  h: 7,  minW: 4,  minH: 4 },
-    { i: 'techPerformance',x: 0,  y: 40, w: 12, h: 8,  minW: 6,  minH: 5 },
-    { i: 'deletedTickets', x: 0,  y: 48, w: 6,  h: 7,  minW: 4,  minH: 4 },
-    { i: 'pendingRequests',x: 6,  y: 48, w: 6,  h: 7,  minW: 4,  minH: 4 },
-    { i: 'responseTime',   x: 0,  y: 55, w: 12, h: 7,  minW: 6,  minH: 4 },
+    { i: 'timeline',       x: 0,  y: 0,  w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
+    { i: 'ticketControl',  x: 0,  y: 8,  w: 12, h: 11, minW: 4,  minH: 8, maxW: 12, maxH: 20 },
+    { i: 'assignedChart',  x: 0,  y: 19, w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 12, maxH: 14 },
+    { i: 'categoriesChart',x: 6,  y: 19, w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 12, maxH: 14 },
+    { i: 'overdue',        x: 0,  y: 26, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'escalations',    x: 6,  y: 26, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'todaysActions',  x: 0,  y: 33, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'topRequesters',  x: 6,  y: 33, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'techPerformance',x: 0,  y: 40, w: 12, h: 8,  minW: 5,  minH: 5, maxW: 12, maxH: 16 },
+    { i: 'deletedTickets', x: 0,  y: 48, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'pendingRequests',x: 6,  y: 48, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'responseTime',   x: 0,  y: 55, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
   ],
   md: [
-    { i: 'timeline',       x: 0,  y: 0,  w: 12, h: 8,  minW: 6,  minH: 5 },
-    { i: 'ticketControl',  x: 0,  y: 8,  w: 12, h: 11, minW: 6,  minH: 8 },
-    { i: 'assignedChart',  x: 0,  y: 19, w: 6,  h: 7,  minW: 4,  minH: 5 },
-    { i: 'categoriesChart',x: 6,  y: 19, w: 6,  h: 7,  minW: 4,  minH: 5 },
-    { i: 'overdue',        x: 0,  y: 26, w: 12, h: 7,  minW: 6,  minH: 4 },
-    { i: 'escalations',    x: 0,  y: 33, w: 12, h: 7,  minW: 6,  minH: 4 },
-    { i: 'todaysActions',  x: 0,  y: 40, w: 12, h: 7,  minW: 4,  minH: 4 },
-    { i: 'topRequesters',  x: 0,  y: 47, w: 12, h: 7,  minW: 4,  minH: 4 },
-    { i: 'techPerformance',x: 0,  y: 54, w: 12, h: 8,  minW: 6,  minH: 5 },
-    { i: 'deletedTickets', x: 0,  y: 62, w: 12, h: 7,  minW: 6,  minH: 4 },
-    { i: 'pendingRequests',x: 0,  y: 69, w: 12, h: 7,  minW: 6,  minH: 4 },
-    { i: 'responseTime',   x: 0,  y: 76, w: 12, h: 7,  minW: 6,  minH: 4 },
+    { i: 'timeline',       x: 0,  y: 0,  w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
+    { i: 'ticketControl',  x: 0,  y: 8,  w: 12, h: 11, minW: 4,  minH: 8, maxW: 12, maxH: 20 },
+    { i: 'assignedChart',  x: 0,  y: 19, w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 12, maxH: 14 },
+    { i: 'categoriesChart',x: 6,  y: 19, w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 12, maxH: 14 },
+    { i: 'overdue',        x: 0,  y: 26, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'escalations',    x: 0,  y: 33, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'todaysActions',  x: 0,  y: 40, w: 12, h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'topRequesters',  x: 0,  y: 47, w: 12, h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'techPerformance',x: 0,  y: 54, w: 12, h: 8,  minW: 5,  minH: 5, maxW: 12, maxH: 16 },
+    { i: 'deletedTickets', x: 0,  y: 62, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'pendingRequests',x: 0,  y: 69, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'responseTime',   x: 0,  y: 76, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
   ],
   sm: [
-    { i: 'timeline',       x: 0,  y: 0,  w: 6,  h: 8,  minW: 3,  minH: 5 },
-    { i: 'ticketControl',  x: 0,  y: 8,  w: 6,  h: 12, minW: 3,  minH: 8 },
-    { i: 'assignedChart',  x: 0,  y: 20, w: 6,  h: 7,  minW: 3,  minH: 5 },
-    { i: 'categoriesChart',x: 0,  y: 27, w: 6,  h: 7,  minW: 3,  minH: 5 },
-    { i: 'overdue',        x: 0,  y: 34, w: 6,  h: 7,  minW: 3,  minH: 4 },
-    { i: 'escalations',    x: 0,  y: 41, w: 6,  h: 7,  minW: 3,  minH: 4 },
-    { i: 'todaysActions',  x: 0,  y: 48, w: 6,  h: 7,  minW: 3,  minH: 4 },
-    { i: 'topRequesters',  x: 0,  y: 55, w: 6,  h: 7,  minW: 3,  minH: 4 },
-    { i: 'techPerformance',x: 0,  y: 62, w: 6,  h: 8,  minW: 3,  minH: 5 },
-    { i: 'deletedTickets', x: 0,  y: 70, w: 6,  h: 7,  minW: 3,  minH: 4 },
-    { i: 'pendingRequests',x: 0,  y: 77, w: 6,  h: 7,  minW: 3,  minH: 4 },
-    { i: 'responseTime',   x: 0,  y: 84, w: 6,  h: 7,  minW: 3,  minH: 4 },
+    { i: 'timeline',       x: 0,  y: 0,  w: 6,  h: 8,  minW: 3,  minH: 6, maxW: 6, maxH: 16 },
+    { i: 'ticketControl',  x: 0,  y: 8,  w: 6,  h: 12, minW: 3,  minH: 8, maxW: 6, maxH: 20 },
+    { i: 'assignedChart',  x: 0,  y: 20, w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 6, maxH: 14 },
+    { i: 'categoriesChart',x: 0,  y: 27, w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 6, maxH: 14 },
+    { i: 'overdue',        x: 0,  y: 34, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
+    { i: 'escalations',    x: 0,  y: 41, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
+    { i: 'todaysActions',  x: 0,  y: 48, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
+    { i: 'topRequesters',  x: 0,  y: 55, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
+    { i: 'techPerformance',x: 0,  y: 62, w: 6,  h: 8,  minW: 3,  minH: 5, maxW: 6, maxH: 16 },
+    { i: 'deletedTickets', x: 0,  y: 70, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
+    { i: 'pendingRequests',x: 0,  y: 77, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
+    { i: 'responseTime',   x: 0,  y: 84, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
   ],
 }
 
@@ -100,6 +100,7 @@ function ManagementWidgetGrid({
   const {
     layouts,
     isEditMode,
+    editModeToggledRef,
     onLayoutChange,
     resetLayout,
     toggleEditMode,
@@ -268,6 +269,7 @@ function ManagementWidgetGrid({
         layouts={layouts}
         onLayoutChange={onLayoutChange}
         isEditMode={isEditMode}
+        editModeToggledRef={editModeToggledRef}
         toggleEditMode={toggleEditMode}
         resetLayout={resetLayout}
         widgetConfig={widgetConfig}

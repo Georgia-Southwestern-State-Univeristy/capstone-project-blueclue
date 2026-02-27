@@ -149,7 +149,7 @@ function UnassignedVsAssignedWidget({
         ) : null
       }
     >
-      <div className="flex flex-col items-center gap-4 px-4 py-4 md:px-6">
+      <div className="flex flex-col items-center gap-4 px-4 py-4">
         {/* Filter dropdowns */}
         <div className="w-full flex flex-wrap gap-2">
           {/* Priority filter */}
@@ -269,7 +269,7 @@ function UnassignedVsAssignedWidget({
           </p>
         )}
         {/* Donut Chart */}
-        <div className="relative w-40 h-40 flex-shrink-0">
+        <div className="relative flex-shrink-0" style={{ width: 'clamp(120px, 40%, 160px)', aspectRatio: '1 / 1' }}>
           <svg
             viewBox="0 0 100 100"
             className="w-full h-full"
