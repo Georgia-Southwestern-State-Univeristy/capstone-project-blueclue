@@ -16,18 +16,33 @@ This module provides utilities for:
 __version__ = "1.0.0"
 __author__ = "BlueClue Team"
 
-from .data_exporter import DataExporter
-from .synthetic_generator import SyntheticDataGenerator
+# Lazy imports – heavy / DB-dependent modules are only loaded when accessed
+# so the inference server can start without psycopg2 installed.
 from .preprocessor import DataPreprocessor
 from .feature_extractor import FeatureExtractor
-from .data_splitter import DataSplitter
-from .eda import EDAReporter
 
 __all__ = [
     "DataExporter",
-    "SyntheticDataGenerator", 
+    "SyntheticDataGenerator",
     "DataPreprocessor",
     "FeatureExtractor",
     "DataSplitter",
-    "EDAReporter"
+    "EDAReporter",
 ]
+
+
+def __getattr__(name: str):
+    """Lazy-load modules that require optional dependencies (e.g. psycopg2)."""
+    if name == "DataExporter":
+        from .data_exporter import DataExporter
+        return DataExporter
+    if name == "SyntheticDataGenerator":
+        from .synthetic_generator import SyntheticDataGenerator
+        return SyntheticDataGenerator
+    if name == "DataSplitter":
+        from .data_splitter import DataSplitter
+        return DataSplitter
+    if name == "EDAReporter":
+        from .eda import EDAReporter
+        return EDAReporter
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
