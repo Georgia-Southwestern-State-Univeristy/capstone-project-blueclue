@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { getTicketById, updateTicketStatus, updateTicket, deleteTicket, getTechnicians, assignSingleTicket, reassignTicket, cancelTicket, reopenTicket } from '../services/ticketService'
 import { getUserRole, getUser, getUserId } from '../services/authService'
 import TicketActivityLog from './TicketActivityLog'
@@ -642,7 +643,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
 
   // ─── Minimized bar ───────────────────────────────────────────────
   if (minimized) {
-    return (
+    return createPortal(
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 border-t border-gray-700 shadow-2xl px-4 py-3 flex items-center justify-between">
         <button
           onClick={() => setMinimized(false)}
@@ -678,18 +679,19 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
             </svg>
           </button>
         </div>
-      </div>
+      </div>,
+      document.body
     )
   }
 
   // ─── Full modal overlay ──────────────────────────────────────────
-  return (
+  return createPortal(
     <div
       ref={modalRef}
       onClick={handleBackdropClick}
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-stretch justify-center overflow-hidden"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-stretch md:items-center md:justify-center overflow-hidden md:p-6"
     >
-      <div className="bg-gray-950 w-full max-w-6xl mx-auto flex flex-col h-full md:my-4 md:mx-4 md:rounded-xl md:border md:border-gray-700 md:h-auto md:max-h-[calc(100vh-2rem)] shadow-2xl">
+      <div className="bg-gray-950 w-full max-w-6xl flex flex-col h-full md:h-auto md:max-h-full md:rounded-xl md:border md:border-gray-700 shadow-2xl">
         {/* ── Top bar ─────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-4 md:px-6 py-3 border-b border-gray-800 flex-shrink-0 bg-gray-900/80 md:rounded-t-xl">
           <div className="flex items-center gap-3 min-w-0">
@@ -1822,7 +1824,8 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   )
 }
 

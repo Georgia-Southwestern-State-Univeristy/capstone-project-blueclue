@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { getUserRole, getCurrentUser } from '../services/authService';
 import { getSocket } from '../services/socketService';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
 const getAuthHeaders = () => {
   const token = localStorage.getItem('blueclue_token');
   return {
@@ -43,7 +45,7 @@ function TicketComments({ ticketId }) {
     const fetchComments = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/tickets/${ticketId}/comments`, {
+        const response = await fetch(`${API_BASE_URL}/tickets/${ticketId}/comments`, {
           headers: getAuthHeaders(),
           credentials: 'include',
         });
@@ -215,7 +217,7 @@ function TicketComments({ ticketId }) {
 
     try {
       setSubmitting(true);
-      const response = await fetch(`/api/tickets/${ticketId}/comments`, {
+      const response = await fetch(`${API_BASE_URL}/tickets/${ticketId}/comments`, {
         method: 'POST',
         headers: getAuthHeaders(),
         credentials: 'include',
@@ -246,7 +248,7 @@ function TicketComments({ ticketId }) {
     if (!confirm('Delete this comment?')) return;
 
     try {
-      const response = await fetch(`/api/comments/${commentId}`, {
+      const response = await fetch(`${API_BASE_URL}/comments/${commentId}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
         credentials: 'include',
@@ -271,7 +273,7 @@ function TicketComments({ ticketId }) {
     if (!editContent.trim()) return;
 
     try {
-      const response = await fetch(`/api/comments/${commentId}`, {
+      const response = await fetch(`${API_BASE_URL}/comments/${commentId}`, {
         method: 'PATCH',
         headers: getAuthHeaders(),
         credentials: 'include',
@@ -294,7 +296,7 @@ function TicketComments({ ticketId }) {
   // Add reaction
   const addReaction = async (commentId, emoji) => {
     try {
-      const response = await fetch(`/api/comments/${commentId}/reactions`, {
+      const response = await fetch(`${API_BASE_URL}/comments/${commentId}/reactions`, {
         method: 'POST',
         headers: getAuthHeaders(),
         credentials: 'include',
@@ -315,7 +317,7 @@ function TicketComments({ ticketId }) {
   // Remove reaction
   const removeReaction = async (commentId, emoji) => {
     try {
-      const response = await fetch(`/api/comments/${commentId}/reactions/${emoji}`, {
+      const response = await fetch(`${API_BASE_URL}/comments/${commentId}/reactions/${emoji}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
         credentials: 'include',
