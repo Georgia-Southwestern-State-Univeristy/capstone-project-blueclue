@@ -27,6 +27,7 @@ import {
     clearCache,
     getTicketsByFilter
 } from '../controllers/analyticsController.js';
+import { getTemplateAnalytics } from '../controllers/templateController.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -223,5 +224,12 @@ router.post('/cache/clear', clearCache);
  * @query   startDate, endDate, preset, category, priority, status, techId, slaBreach, page, limit
  */
 router.get('/tickets-by-filter', getTicketsByFilter);
+
+/**
+ * @route   GET /api/analytics/template-usage
+ * @desc    Get template usage analytics and effectiveness metrics
+ * @access  Management, Admin only
+ */
+router.get('/template-usage', getTemplateAnalytics);
 
 export default router;
