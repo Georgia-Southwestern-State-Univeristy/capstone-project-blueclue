@@ -67,16 +67,13 @@ function Navbar() {
                     Client Dashboard
                   </Link>
                 )}
-                {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
+                {['technician', 'senior_technician', 'admin'].includes(user?.role) && (
                   <>
                     <Link to="/technician" className="text-gray-300 hover:text-white transition-colors">
                       All Tickets
                     </Link>
                     <Link to="/my-tickets" className="text-gray-300 hover:text-white transition-colors">
                       My Tickets
-                    </Link>
-                    <Link to="/analytics" className="text-gray-300 hover:text-white transition-colors">
-                      Analytics
                     </Link>
                   </>
                 )}
@@ -89,6 +86,11 @@ function Navbar() {
                       Templates
                     </Link>
                   </>
+                )}
+                {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
+                  <Link to="/analytics" className="text-gray-300 hover:text-white transition-colors">
+                    Analytics
+                  </Link>
                 )}
               </>
             )}
@@ -217,7 +219,7 @@ function Navbar() {
               Client Dashboard
             </Link>
           )}
-          {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
+          {['technician', 'senior_technician', 'admin'].includes(user?.role) && (
             <>
               <Link
                 to="/technician"
@@ -232,13 +234,6 @@ function Navbar() {
                 className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
               >
                 My Tickets
-              </Link>
-              <Link
-                to="/analytics"
-                onClick={() => setMobileMenuOpen(false)}
-                className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
-              >
-                Analytics
               </Link>
             </>
           )}
@@ -259,6 +254,15 @@ function Navbar() {
                 Templates
               </Link>
             </>
+          )}
+          {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
+            <Link
+              to="/analytics"
+              onClick={() => setMobileMenuOpen(false)}
+              className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+            >
+              Analytics
+            </Link>
           )}
           
           {!user?.isGuest && (
