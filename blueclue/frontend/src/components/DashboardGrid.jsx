@@ -544,140 +544,139 @@ export default function DashboardGrid({
         </button>
       </div>
 
-      {/* Gallery Sidebar + Grid Layout */}
-      <div className="flex gap-0 relative">
-        {/* Widget Gallery Sidebar – slides in when edit mode is active */}
-        {hasGallery && isEditMode && (
-          <div
-            className={`shrink-0 self-start sticky top-4 z-30 transition-[width,opacity] duration-300 ease-in-out overflow-hidden
-                        ${galleryVisible ? 'w-72 opacity-100' : 'w-0 opacity-0'}`}
+      {/* Grid area – always full width, never affected by gallery */}
+      <div
+        ref={containerRef}
+        className={`relative transition-shadow duration-200
+                    ${isEditMode ? 'rgl-edit-mode' : ''}
+                    ${isDraggingExternal ? 'external-drop-active ring-2 ring-blue-500/30 ring-inset rounded-lg bg-blue-500/5' : ''}`}
+        style={galleryVisible ? { paddingBottom: '240px' } : undefined}
+      >
+        {/* Grid – v2 API: pass width directly, use dragConfig/resizeConfig objects */}
+        {mounted && (
+          <ResponsiveGridLayout
+            className="layout"
+            width={width}
+            layouts={layoutsWithPhantom}
+            onLayoutChange={handleLayoutChange}
+            breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480 }}
+            cols={cols}
+            rowHeight={rowHeight}
+            margin={margin}
+            compactType={phantomItem ? null : "vertical"}
+            dragConfig={{
+              enabled: isEditMode,
+              handle: '.widget-drag-handle',
+            }}
+            resizeConfig={{
+              enabled: isEditMode && !isMobile,
+              handles: ['s', 'e', 'se'],
+            }}
+            onDragStart={handleWidgetDragStart}
+            onDragStop={handleWidgetDragStop}
+            onResizeStart={handleResizeStart}
+            onResizeStop={handleResizeStop}
           >
-            <div className={`w-72 bg-gray-900/95 backdrop-blur-sm border border-gray-700/50 rounded-xl
-                            max-h-[calc(100vh-8rem)] flex flex-col mr-4 overflow-hidden
-                            transition-transform duration-300 ease-in-out
-                            ${galleryVisible ? 'translate-x-0' : '-translate-x-full'}`}>
-              <WidgetGallery
-                allWidgets={galleryItems}
-                activeKeys={activeKeys}
-                onAddWidget={onAddWidget}
-                onClose={() => setShowGallery(false)}
-                onDragStartWidget={handleGalleryDragStart}
-                savedLayouts={savedLayouts}
-                onLoadLayout={onLoadLayout}
-                onDeleteLayout={onDeleteLayout}
-                onRenameLayout={onRenameLayout}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Pull-out tab when gallery is hidden during edit mode */}
-        {hasGallery && isEditMode && !showGallery && (
-          <div className="shrink-0 self-start sticky top-4 z-50 w-0">
-            <button
-              onClick={() => setShowGallery(true)}
-              className="flex items-center gap-1 pl-2 pr-2.5 py-3 rounded-r-lg
-                         bg-gray-800/95 hover:bg-gray-700/95 backdrop-blur-sm
-                         border border-l-0 border-gray-600/50 hover:border-blue-500/50
-                         text-gray-400 hover:text-blue-400 transition-all shadow-lg
-                         group"
-              title="Show Widget Gallery"
-            >
-            <svg className="w-4 h-4 transition-transform group-hover:translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-            </svg>
-            <span className="text-[10px] font-medium writing-mode-vertical"
-                  style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', letterSpacing: '0.05em' }}>
-              WIDGETS
-            </span>
-            </button>
-          </div>
-        )}
-
-        {/* Grid area – shrinks to make room for sidebar */}
-        <div
-          ref={containerRef}
-          className={`flex-1 min-w-0 relative transition-shadow duration-200
-                      ${isEditMode ? 'rgl-edit-mode' : ''}
-                      ${isDraggingExternal ? 'external-drop-active ring-2 ring-blue-500/30 ring-inset rounded-lg bg-blue-500/5' : ''}`}
-        >
-          {/* Grid – v2 API: pass width directly, use dragConfig/resizeConfig objects */}
-          {mounted && (
-            <ResponsiveGridLayout
-              className="layout"
-              width={width}
-              layouts={layoutsWithPhantom}
-              onLayoutChange={handleLayoutChange}
-              breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480 }}
-              cols={cols}
-              rowHeight={rowHeight}
-              margin={margin}
-              compactType={phantomItem ? null : "vertical"}
-              dragConfig={{
-                enabled: isEditMode,
-                handle: '.widget-drag-handle',
-              }}
-              resizeConfig={{
-                enabled: isEditMode && !isMobile && !galleryVisible,
-                handles: ['s', 'e', 'se'],
-              }}
-              onDragStart={handleWidgetDragStart}
-              onDragStop={handleWidgetDragStop}
-              onResizeStart={handleResizeStart}
-              onResizeStop={handleResizeStop}
-            >
-              {widgetsToRender.map(({ key, component }) => (
-                <div
-                  key={key}
-                  className={`relative overflow-hidden rounded-lg ${isEditMode && selectedWidget === key ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-gray-950' : ''}`}
-                  onClick={() => { if (isEditMode && key !== PHANTOM_KEY) setSelectedWidget(prev => prev === key ? null : key) }}
-                >
-                  {/* Edit mode: drag handle overlay + remove button (not on phantom) */}
-                  {isEditMode && key !== PHANTOM_KEY && (
-                    <>
-                      <div className="widget-drag-handle absolute inset-x-0 top-0 h-12 z-20 cursor-grab active:cursor-grabbing
-                                      flex items-center justify-center rounded-t-lg
-                                      bg-blue-500/10 border-2 border-dashed border-blue-500/40
-                                      hover:bg-blue-500/20 hover:border-blue-400/60 transition-colors">
-                        <div className="flex items-center gap-1.5 text-blue-400 text-xs font-medium pointer-events-none select-none">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                              d="M4 8h16M4 16h16" />
-                          </svg>
-                          Drag to move
-                        </div>
+            {widgetsToRender.map(({ key, component }) => (
+              <div
+                key={key}
+                className={`relative overflow-hidden rounded-lg ${isEditMode && selectedWidget === key ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-gray-950' : ''}`}
+                onClick={() => { if (isEditMode && key !== PHANTOM_KEY) setSelectedWidget(prev => prev === key ? null : key) }}
+              >
+                {/* Edit mode: drag handle overlay + remove button (not on phantom) */}
+                {isEditMode && key !== PHANTOM_KEY && (
+                  <>
+                    <div className="widget-drag-handle absolute inset-x-0 top-0 h-12 z-20 cursor-grab active:cursor-grabbing
+                                    flex items-center justify-center rounded-t-lg
+                                    bg-blue-500/10 border-2 border-dashed border-blue-500/40
+                                    hover:bg-blue-500/20 hover:border-blue-400/60 transition-colors">
+                      <div className="flex items-center gap-1.5 text-blue-400 text-xs font-medium pointer-events-none select-none">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M4 8h16M4 16h16" />
+                        </svg>
+                        Drag to move
                       </div>
-                      {/* Remove widget button */}
-                      {onRemoveWidget && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onRemoveWidget(key)
-                            if (selectedWidget === key) setSelectedWidget(null)
-                          }}
-                          className="absolute top-1.5 right-1.5 z-30 p-1 rounded-md
-                                     bg-red-500/20 hover:bg-red-500/40 text-red-400 hover:text-red-300
-                                     border border-red-500/30 hover:border-red-400/50
-                                     transition-all opacity-60 hover:opacity-100"
-                          title="Remove widget (or press Delete)"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      )}
-                    </>
-                  )}
-                  {/* Widget content – fill grid cell and scroll if needed */}
-                  <div className={`h-full overflow-y-auto ${isEditMode ? 'pointer-events-none select-none' : ''}`}>
-                    {component}
-                  </div>
+                    </div>
+                    {/* Remove widget button */}
+                    {onRemoveWidget && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onRemoveWidget(key)
+                          if (selectedWidget === key) setSelectedWidget(null)
+                        }}
+                        className="absolute top-1.5 right-1.5 z-30 p-1 rounded-md
+                                   bg-red-500/20 hover:bg-red-500/40 text-red-400 hover:text-red-300
+                                   border border-red-500/30 hover:border-red-400/50
+                                   transition-all opacity-60 hover:opacity-100"
+                        title="Remove widget (or press Delete)"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </>
+                )}
+                {/* Widget content – fill grid cell and scroll if needed */}
+                <div className={`h-full overflow-y-auto ${isEditMode ? 'pointer-events-none select-none' : ''}`}>
+                  {component}
                 </div>
-              ))}
-            </ResponsiveGridLayout>
-          )}
-        </div>
+              </div>
+            ))}
+          </ResponsiveGridLayout>
+        )}
       </div>
+
+      {/* ── Bottom overlay gallery panel ── */}
+      {hasGallery && isEditMode && (
+        <div
+          className={`fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 ease-in-out
+                      ${galleryVisible ? 'translate-y-0' : 'translate-y-full'}`}
+          style={{ height: '220px' }}
+        >
+          {/* Resize handle / grab bar at top */}
+          <div className="flex items-center justify-center h-6 bg-gray-900/95 backdrop-blur-sm
+                          border-t border-x border-gray-700/60 rounded-t-xl cursor-default select-none">
+            <div className="w-10 h-1 rounded-full bg-gray-600" />
+          </div>
+          {/* Gallery content */}
+          <div className="h-[calc(100%-1.5rem)] bg-gray-900/95 backdrop-blur-sm border-x border-gray-700/60 overflow-hidden">
+            <WidgetGallery
+              allWidgets={galleryItems}
+              activeKeys={activeKeys}
+              onAddWidget={onAddWidget}
+              onClose={() => setShowGallery(false)}
+              onDragStartWidget={handleGalleryDragStart}
+              savedLayouts={savedLayouts}
+              onLoadLayout={onLoadLayout}
+              onDeleteLayout={onDeleteLayout}
+              onRenameLayout={onRenameLayout}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Pull-up button when gallery is hidden during edit mode */}
+      {hasGallery && isEditMode && !showGallery && (
+        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 z-50">
+          <button
+            onClick={() => setShowGallery(true)}
+            className="flex items-center gap-2 px-5 py-2 rounded-t-lg
+                       bg-gray-800/95 hover:bg-gray-700/95 backdrop-blur-sm
+                       border border-b-0 border-gray-600/50 hover:border-blue-500/50
+                       text-gray-400 hover:text-blue-400 transition-all shadow-lg
+                       group"
+            title="Show Widget Gallery"
+          >
+            <svg className="w-4 h-4 transition-transform group-hover:-translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+            </svg>
+            <span className="text-[11px] font-semibold tracking-wide">WIDGETS</span>
+          </button>
+        </div>
+      )}
     </div>
   )
 }
