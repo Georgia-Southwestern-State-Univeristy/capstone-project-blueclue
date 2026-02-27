@@ -1,8 +1,24 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { getUserId } from '../services/authService'
+import {
+  fetchActiveLayout,
+  saveActiveLayout as saveActiveLayoutApi,
+  deleteActiveLayout as deleteActiveLayoutApi,
+  fetchSavedLayouts,
+  createSavedLayout as createSavedLayoutApi,
+  renameSavedLayoutApi,
+  deleteSavedLayoutApi,
+} from '../services/dashboardLayoutService'
+
+const DB_SAVE_DEBOUNCE_MS = 2000
 
 /**
- * Custom hook for managing dashboard widget layouts with localStorage persistence.
+ * Custom hook for managing dashboard widget layouts with localStorage + database persistence.
  * Supports hiding/showing widgets via the Widget Gallery.
+ * Supports saving/loading named custom layouts.
+ *
+ * localStorage serves as instant cache; database is the source of truth.
+ * Layout changes are auto-saved to the DB with a debounce.
  *
  * @param {string} dashboardKey - Unique key for the dashboard (e.g., 'management', 'technician')
  * @param {Object} defaultLayouts - Default responsive layouts { lg: [...], md: [...], sm: [...] }
@@ -13,6 +29,7 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
   const storageKey = `blueclue_dashboard_layout_${dashboardKey}`
   const versionKey = `${storageKey}_v`
   const hiddenKey = `${storageKey}_hidden`
+  const savedLayoutsKey = `${storageKey}_saved`
 
   // Load hidden widget keys from localStorage
   const loadHidden = () => {
@@ -90,6 +107,95 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
   // dragConfig/resizeConfig prop changes)
   const editModeToggledRef = useRef(false)
 
+  // ─── Database sync refs ────────────────────────────────────────
+  const dbSaveTimerRef = useRef(null)
+  const latestLayoutRef = useRef(layouts)
+  const latestHiddenRef = useRef(hiddenWidgets)
+  const dbLoadedRef = useRef(false) // prevent auto-save from triggering during initial DB load
+  const mountedRef = useRef(true)
+
+  // Keep refs in sync with state
+  useEffect(() => { latestLayoutRef.current = layouts }, [layouts])
+  useEffect(() => { latestHiddenRef.current = hiddenWidgets }, [hiddenWidgets])
+  useEffect(() => { return () => { mountedRef.current = false } }, [])
+
+  // Debounced save to database
+  const scheduleDatabaseSave = useCallback(() => {
+    if (!getUserId()) return // not logged in
+    if (!dbLoadedRef.current) return // skip until initial DB load completes
+
+    if (dbSaveTimerRef.current) clearTimeout(dbSaveTimerRef.current)
+    dbSaveTimerRef.current = setTimeout(async () => {
+      try {
+        await saveActiveLayoutApi(
+          dashboardKey,
+          latestLayoutRef.current,
+          [...latestHiddenRef.current],
+          version
+        )
+      } catch (e) {
+        console.warn('Failed to save layout to database:', e)
+      }
+    }, DB_SAVE_DEBOUNCE_MS)
+  }, [dashboardKey, version])
+
+  // Load layout from database on mount
+  useEffect(() => {
+    let cancelled = false
+    const loadFromDb = async () => {
+      if (!getUserId()) {
+        dbLoadedRef.current = true
+        return
+      }
+      try {
+        const dbLayout = await fetchActiveLayout(dashboardKey)
+        if (cancelled) return
+        if (dbLayout && dbLayout.layoutData) {
+          const hiddenArr = dbLayout.hiddenWidgets || []
+          const hidden = new Set(hiddenArr)
+
+          // Merge DB layout with defaults (handle new widgets added since save)
+          const merged = {}
+          for (const breakpoint of Object.keys(defaultLayouts)) {
+            const savedBp = dbLayout.layoutData[breakpoint] || []
+            const defaultBp = defaultLayouts[breakpoint] || []
+            const savedKeys = new Set(savedBp.map(item => item.i))
+            merged[breakpoint] = [
+              ...savedBp.map(item => {
+                const defaultItem = defaultBp.find(d => d.i === item.i)
+                if (defaultItem) {
+                  return {
+                    ...item,
+                    minW: item.minW ?? defaultItem.minW,
+                    minH: item.minH ?? defaultItem.minH,
+                    maxW: item.maxW ?? defaultItem.maxW,
+                    maxH: item.maxH ?? defaultItem.maxH,
+                  }
+                }
+                return item
+              }),
+              ...defaultBp.filter(item => !savedKeys.has(item.i))
+            ].filter(item => !hidden.has(item.i))
+          }
+
+          setLayouts(merged)
+          setHiddenWidgets(hidden)
+          // Update localStorage cache
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(merged))
+            localStorage.setItem(hiddenKey, JSON.stringify([...hidden]))
+          } catch { /* ignore */ }
+        }
+      } catch (e) {
+        console.warn('Failed to load layout from database, using localStorage fallback:', e)
+      } finally {
+        if (!cancelled) dbLoadedRef.current = true
+      }
+    }
+    loadFromDb()
+    return () => { cancelled = true }
+  }, [dashboardKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Persist hidden widgets to localStorage
   const saveHidden = useCallback((hidden) => {
     try {
@@ -131,7 +237,8 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
       }
       return merged
     })
-  }, [storageKey, defaultLayouts])
+    scheduleDatabaseSave()
+  }, [storageKey, defaultLayouts, scheduleDatabaseSave])
 
   // Add a widget back to the dashboard
   const addWidget = useCallback((key, dropPosition = null) => {
@@ -169,7 +276,8 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
       try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* ignore */ }
       return next
     })
-  }, [defaultLayouts, storageKey, saveHidden])
+    scheduleDatabaseSave()
+  }, [defaultLayouts, storageKey, saveHidden, scheduleDatabaseSave])
 
   // Remove (hide) a widget from the dashboard
   const removeWidget = useCallback((key) => {
@@ -189,7 +297,8 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
       try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* ignore */ }
       return next
     })
-  }, [storageKey, saveHidden])
+    scheduleDatabaseSave()
+  }, [storageKey, saveHidden, scheduleDatabaseSave])
 
   // Reset to default layout and clear hidden widgets
   const resetLayout = useCallback(() => {
@@ -201,7 +310,161 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
     } catch (e) {
       console.warn('Failed to clear saved layout:', e)
     }
-  }, [defaultLayouts, storageKey, hiddenKey])
+    // Also delete from database
+    if (getUserId()) {
+      deleteActiveLayoutApi(dashboardKey).catch(e =>
+        console.warn('Failed to delete layout from database:', e)
+      )
+    }
+  }, [defaultLayouts, storageKey, hiddenKey, dashboardKey])
+
+  // ─── Saved custom layouts (database-backed) ────────────────────
+
+  const [savedLayouts, setSavedLayouts] = useState([])
+
+  // Load saved layouts from database on mount
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      if (!getUserId()) return
+      try {
+        const dbSaved = await fetchSavedLayouts(dashboardKey)
+        if (cancelled) return
+        // Map API response to the shape used by the UI
+        const mapped = dbSaved.map(s => ({
+          id: s.id,
+          name: s.name,
+          createdAt: s.createdAt,
+          layouts: s.layoutData,
+          hidden: s.hiddenWidgets || [],
+        }))
+        setSavedLayouts(mapped)
+        // Also cache in localStorage
+        try { localStorage.setItem(savedLayoutsKey, JSON.stringify(mapped)) } catch { /* ignore */ }
+      } catch (e) {
+        console.warn('Failed to load saved layouts from database, using localStorage fallback:', e)
+        // Fallback to localStorage
+        try {
+          const raw = localStorage.getItem(savedLayoutsKey)
+          if (raw && !cancelled) setSavedLayouts(JSON.parse(raw))
+        } catch { /* ignore */ }
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [dashboardKey, savedLayoutsKey])
+
+  // Save the current layout + hidden state under a user-chosen name
+  const saveCustomLayout = useCallback(async (name) => {
+    if (!name || !name.trim()) return false
+    try {
+      if (getUserId()) {
+        const created = await createSavedLayoutApi(dashboardKey, name.trim(), layouts, [...hiddenWidgets])
+        const entry = {
+          id: created.id,
+          name: created.name,
+          createdAt: created.createdAt,
+          layouts: created.layoutData,
+          hidden: created.hiddenWidgets || [],
+        }
+        setSavedLayouts(prev => {
+          const next = [entry, ...prev]
+          try { localStorage.setItem(savedLayoutsKey, JSON.stringify(next)) } catch { /* ignore */ }
+          return next
+        })
+      } else {
+        // Fallback to localStorage-only
+        const entry = {
+          id: `layout_${Date.now()}`,
+          name: name.trim(),
+          createdAt: new Date().toISOString(),
+          layouts: layouts,
+          hidden: [...hiddenWidgets],
+        }
+        setSavedLayouts(prev => {
+          const next = [entry, ...prev]
+          try { localStorage.setItem(savedLayoutsKey, JSON.stringify(next)) } catch { /* ignore */ }
+          return next
+        })
+      }
+      return true
+    } catch (e) {
+      console.warn('Failed to save custom layout:', e)
+      return false
+    }
+  }, [layouts, hiddenWidgets, savedLayoutsKey, dashboardKey])
+
+  // Load a previously saved layout by id
+  const loadCustomLayout = useCallback((id) => {
+    const entry = savedLayouts.find(e => e.id === id)
+    if (!entry) return false
+
+    const hidden = new Set(entry.hidden || [])
+    setHiddenWidgets(hidden)
+    saveHidden(hidden)
+
+    // Merge saved layouts with defaults to handle any new widgets added since save
+    const merged = {}
+    for (const breakpoint of Object.keys(defaultLayouts)) {
+      const savedBp = entry.layouts[breakpoint] || []
+      const defaultBp = defaultLayouts[breakpoint] || []
+      const savedKeys = new Set(savedBp.map(item => item.i))
+      merged[breakpoint] = [
+        ...savedBp.map(item => {
+          const defaultItem = defaultBp.find(d => d.i === item.i)
+          if (defaultItem) {
+            return {
+              ...item,
+              minW: item.minW ?? defaultItem.minW,
+              minH: item.minH ?? defaultItem.minH,
+              maxW: item.maxW ?? defaultItem.maxW,
+              maxH: item.maxH ?? defaultItem.maxH,
+            }
+          }
+          return item
+        }),
+        ...defaultBp.filter(item => !savedKeys.has(item.i))
+      ].filter(item => !hidden.has(item.i))
+    }
+
+    setLayouts(merged)
+    try { localStorage.setItem(storageKey, JSON.stringify(merged)) } catch { /* ignore */ }
+    scheduleDatabaseSave()
+    return true
+  }, [defaultLayouts, storageKey, saveHidden, savedLayouts, scheduleDatabaseSave])
+
+  // Delete a saved layout by id
+  const deleteCustomLayout = useCallback(async (id) => {
+    try {
+      if (getUserId()) {
+        await deleteSavedLayoutApi(id)
+      }
+    } catch (e) {
+      console.warn('Failed to delete saved layout from database:', e)
+    }
+    setSavedLayouts(prev => {
+      const next = prev.filter(e => e.id !== id)
+      try { localStorage.setItem(savedLayoutsKey, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+  }, [savedLayoutsKey])
+
+  // Rename a saved layout
+  const renameCustomLayout = useCallback(async (id, newName) => {
+    if (!newName || !newName.trim()) return
+    try {
+      if (getUserId()) {
+        await renameSavedLayoutApi(id, newName.trim())
+      }
+    } catch (e) {
+      console.warn('Failed to rename saved layout in database:', e)
+    }
+    setSavedLayouts(prev => {
+      const next = prev.map(e => e.id === id ? { ...e, name: newName.trim() } : e)
+      try { localStorage.setItem(savedLayoutsKey, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+  }, [savedLayoutsKey])
 
   // Toggle edit/lock mode
   const toggleEditMode = useCallback(() => {
@@ -219,5 +482,11 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
     hiddenWidgets,
     addWidget,
     removeWidget,
+    // Saved layouts
+    savedLayouts,
+    saveCustomLayout,
+    loadCustomLayout,
+    deleteCustomLayout,
+    renameCustomLayout,
   }
 }

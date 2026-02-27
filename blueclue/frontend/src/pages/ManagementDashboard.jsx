@@ -107,6 +107,11 @@ function ManagementWidgetGrid({
     hiddenWidgets,
     addWidget,
     removeWidget,
+    savedLayouts,
+    saveCustomLayout,
+    loadCustomLayout,
+    deleteCustomLayout,
+    renameCustomLayout,
   } = useDashboardLayout('management', DEFAULT_LAYOUTS, LAYOUT_VERSION)
 
   // Widget definitions — order doesn't matter, layout positions control placement
@@ -278,6 +283,11 @@ function ManagementWidgetGrid({
         hiddenWidgets={hiddenWidgets}
         onAddWidget={addWidget}
         onRemoveWidget={removeWidget}
+        savedLayouts={savedLayouts}
+        onSaveLayout={saveCustomLayout}
+        onLoadLayout={loadCustomLayout}
+        onDeleteLayout={deleteCustomLayout}
+        onRenameLayout={renameCustomLayout}
       />
     </>
   )
