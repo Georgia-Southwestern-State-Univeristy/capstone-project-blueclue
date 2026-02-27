@@ -249,6 +249,32 @@ if ($lifecycleApplied -eq $lifecycleMigrations.Count) {
 
 Write-Host ""
 
+# Step 4.7: Apply dashboard layouts migration
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Step 4.7: Applying dashboard layout migration..." -ForegroundColor Yellow
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Adding user dashboard layouts and saved layouts tables..." -ForegroundColor White
+
+$dashboardMigration = "migrations\018_add_user_dashboard_layouts.sql"
+if (Test-Path $dashboardMigration) {
+    Write-Host "  Applying $dashboardMigration..." -ForegroundColor White
+    $null = psql -U postgres -d blueclue -f $dashboardMigration -q 2>&1
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Dashboard layout migration applied successfully" -ForegroundColor Green
+        Write-Host "  [OK] user_dashboard_layouts table" -ForegroundColor Green
+        Write-Host "  [OK] user_saved_layouts table" -ForegroundColor Green
+        Write-Host "  [OK] Auto-update timestamp triggers" -ForegroundColor Green
+    } else {
+        Write-Host "WARNING: Failed to apply dashboard layout migration" -ForegroundColor Yellow
+        Write-Host "Dashboard customization will fall back to localStorage only" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "WARNING: $dashboardMigration not found" -ForegroundColor Yellow
+}
+
+Write-Host ""
+
 # Step 5: Load sample data (optional)
 if (-not $SkipSeed) {
     Write-Host "============================================================================" -ForegroundColor Cyan
@@ -369,6 +395,11 @@ Write-Host "  [OK] Threaded comments with reply support" -ForegroundColor Green
 Write-Host "  [OK] Internal (tech-only) comments" -ForegroundColor Green
 Write-Host "  [OK] Emoji reactions (6 types)" -ForegroundColor Green
 Write-Host "  [OK] Real-time updates via WebSocket" -ForegroundColor Green
+Write-Host ""
+Write-Host "Dashboard Customization Enabled:" -ForegroundColor Yellow
+Write-Host "  [OK] Drag-and-drop widget grid layouts" -ForegroundColor Green
+Write-Host "  [OK] Per-user layout persistence (database-backed)" -ForegroundColor Green
+Write-Host "  [OK] Named saved layouts with load/rename/delete" -ForegroundColor Green
 Write-Host ""
 Write-Host "Connection String:" -ForegroundColor Yellow
 Write-Host "postgresql://postgres:PASSWORD@localhost:5432/blueclue" -ForegroundColor White
