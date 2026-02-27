@@ -359,7 +359,7 @@ class PriorityFeatureExtractor:
         extractor.categories = state['categories']
         extractor.feature_names = state['feature_names']
         extractor.is_fitted = state['is_fitted']
-        print(f"✓ Priority feature extractor loaded from {filepath}")
+        print(f"[OK] Priority feature extractor loaded from {filepath}")
         return extractor
 
 
