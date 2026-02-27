@@ -75,11 +75,53 @@ function AccountPanelContent({ onNavigate, onLogout }) {
 }
 
 function AppearancePanelContent() {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, accent, setAccent, customSlots, setCustomSlot, resetCustomSlots, customOverride, setCustomOverride } = useTheme();
+
+  const ACCENT_OPTIONS = [
+    { key: 'blue',         label: 'Default Blue',   color: '#2563eb', ring: 'ring-blue-400/50' },
+    { key: 'green',        label: 'Green',           color: '#16a34a', ring: 'ring-green-400/50' },
+    { key: 'purple',       label: 'Purple',          color: '#9333ea', ring: 'ring-purple-400/50' },
+    { key: 'highcontrast', label: 'High Contrast',   color: '#eab308', ring: 'ring-yellow-400/50', icon: 'hc' },
+  ];
+
+  /* Organised into visual groups for the UI */
+  const CUSTOM_SLOT_GROUPS = [
+    {
+      heading: 'Accent',
+      slots: [
+        { key: 'accent', label: 'Accent Color', desc: 'Buttons, links, focus rings, gradients' },
+      ],
+    },
+    {
+      heading: 'Backgrounds',
+      slots: [
+        { key: 'pageBg',    label: 'Page Background',    desc: 'Main body / page background' },
+        { key: 'cardBg',    label: 'Card Background',    desc: 'Cards, panels, inputs, modals' },
+        { key: 'sidebarBg', label: 'Sidebar Background', desc: 'Sidebar & secondary areas' },
+      ],
+    },
+    {
+      heading: 'Text & Borders',
+      slots: [
+        { key: 'textColor',   label: 'Text Color',   desc: 'Primary text; secondary & muted auto-derived' },
+        { key: 'borderColor', label: 'Border Color',  desc: 'Borders, dividers, outlines' },
+      ],
+    },
+  ];
+
+  /* Colour swatches contextual to each slot type */
+  const SLOT_SWATCHES = {
+    accent:      ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899','#6366f1','#14b8a6'],
+    pageBg:      ['#030712','#0a0a0a','#0f172a','#1a1a2e','#0d1117','#18181b','#1e1b4b','#1c1917','#f3f4f6','#ffffff'],
+    cardBg:      ['#1f2937','#1e293b','#27272a','#292524','#1e1b4b','#2d2d3f','#374151','#f9fafb','#f3f4f6','#e5e7eb'],
+    sidebarBg:   ['#111827','#0f172a','#18181b','#1c1917','#1e1b4b','#172554','#1e293b','#ffffff','#f9fafb','#f3f4f6'],
+    textColor:   ['#ffffff','#f9fafb','#f3f4f6','#e5e7eb','#d4d4d8','#111827','#1f2937','#374151','#000000','#fbbf24'],
+    borderColor: ['#374151','#4b5563','#3f3f46','#44403c','#312e81','#1e3a5f','#6b7280','#e5e7eb','#d1d5db','#9ca3af'],
+  };
 
   return (
     <div className="space-y-6">
-      {/* Theme selector */}
+      {/* ── Theme selector (dark / light) ── */}
       <div>
         <p className="text-sm font-medium mb-3" style={{ color: 'var(--text-secondary)' }}>Theme</p>
         <div className="grid grid-cols-2 gap-3">
@@ -93,7 +135,6 @@ function AppearancePanelContent() {
             }`}
             style={{ backgroundColor: 'var(--bg-card)' }}
           >
-            {/* Dark mode preview */}
             <div className="rounded-lg overflow-hidden mb-3 border border-gray-700">
               <div className="bg-gray-950 p-2">
                 <div className="h-2 w-12 bg-gray-700 rounded mb-1.5" />
@@ -133,7 +174,6 @@ function AppearancePanelContent() {
             }`}
             style={{ backgroundColor: 'var(--bg-card)' }}
           >
-            {/* Light mode preview */}
             <div className="rounded-lg overflow-hidden mb-3 border border-gray-300">
               <div className="bg-white p-2">
                 <div className="h-2 w-12 bg-gray-200 rounded mb-1.5" />
@@ -163,6 +203,213 @@ function AppearancePanelContent() {
             )}
           </button>
         </div>
+      </div>
+
+      {/* ── Colour Scheme selector ── */}
+      <div>
+        <p className="text-sm font-medium mb-3" style={{ color: 'var(--text-secondary)' }}>Color Scheme</p>
+        <div className="grid grid-cols-2 gap-3">
+          {ACCENT_OPTIONS.map(opt => (
+            <button
+              key={opt.key}
+              onClick={() => setAccent(opt.key)}
+              className={`relative rounded-xl p-3 border-2 transition-all duration-200 text-left ${
+                accent === opt.key
+                  ? `border-current ring-2 ${opt.ring}`
+                  : 'border-gray-700 hover:border-gray-600'
+              }`}
+              style={{
+                backgroundColor: 'var(--bg-card)',
+                borderColor: accent === opt.key ? opt.color : undefined,
+              }}
+            >
+              <div className="flex items-center gap-3">
+                {opt.icon === 'hc' ? (
+                  <span
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0"
+                    style={{ backgroundColor: opt.color, color: '#000' }}
+                  >HC</span>
+                ) : (
+                  <span
+                    className="w-8 h-8 rounded-full shrink-0 border-2"
+                    style={{ backgroundColor: opt.color, borderColor: 'transparent' }}
+                  />
+                )}
+                <span className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                  {opt.label}
+                </span>
+              </div>
+              {accent === opt.key && (
+                <div className="absolute top-1.5 right-1.5">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" style={{ color: opt.color }}>
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              )}
+            </button>
+          ))}
+
+          {/* Custom colour picker trigger */}
+          <button
+            onClick={() => setAccent('custom')}
+            className={`relative rounded-xl p-3 border-2 transition-all duration-200 text-left col-span-2 ${
+              accent === 'custom'
+                ? 'ring-2 ring-gray-400/50'
+                : 'border-gray-700 hover:border-gray-600'
+            }`}
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              borderColor: accent === 'custom' ? customSlots.accent : undefined,
+            }}
+          >
+            <div className="flex items-center gap-3">
+              {/* Multi-colour swatch preview */}
+              <span className="w-8 h-8 rounded-full shrink-0 overflow-hidden grid grid-cols-3 grid-rows-2" style={{ border: '2px solid transparent' }}>
+                <span style={{ backgroundColor: customSlots.accent }} />
+                <span style={{ backgroundColor: customSlots.pageBg }} />
+                <span style={{ backgroundColor: customSlots.cardBg }} />
+                <span style={{ backgroundColor: customSlots.sidebarBg }} />
+                <span style={{ backgroundColor: customSlots.textColor }} />
+                <span style={{ backgroundColor: customSlots.borderColor }} />
+              </span>
+              <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Custom</span>
+            </div>
+            {accent === 'custom' && (
+              <div className="absolute top-1.5 right-1.5">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" style={{ color: customSlots.accent }}>
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+            )}
+          </button>
+        </div>
+
+        {/* ── Full custom colour editor ── */}
+        {accent === 'custom' && (
+          <div className="mt-3 rounded-lg overflow-hidden" style={{ border: '1px solid var(--border-primary, #374151)' }}>
+            {/* Header */}
+            <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: 'var(--bg-card)' }}>
+              <p className="text-xs font-semibold tracking-wide uppercase" style={{ color: 'var(--text-secondary)' }}>
+                Customize All Colors
+              </p>
+              <button
+                onClick={resetCustomSlots}
+                className="text-xs px-2 py-1 rounded hover:bg-gray-700 transition-colors"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                Reset All
+              </button>
+            </div>
+
+            {/* Override toggle */}
+            <div
+              className="px-4 py-2.5 flex items-center justify-between"
+              style={{ backgroundColor: 'var(--bg-body)', borderTop: '1px solid var(--border-primary, #374151)' }}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Override all themes</p>
+                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Custom colours replace dark/light mode</p>
+              </div>
+              <button
+                onClick={() => setCustomOverride(!customOverride)}
+                className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out`}
+                style={{ backgroundColor: customOverride ? 'var(--accent-500, #2563eb)' : 'var(--bg-hover, #374151)' }}
+                role="switch"
+                aria-checked={customOverride}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    customOverride ? 'translate-x-4' : 'translate-x-0.5'
+                  } mt-0.5`}
+                />
+              </button>
+            </div>
+
+            {/* Grouped colour slots */}
+            {CUSTOM_SLOT_GROUPS.map(group => (
+              <div key={group.heading}>
+                {/* Group heading */}
+                <div className="px-4 py-1.5" style={{ backgroundColor: 'var(--bg-card)' }}>
+                  <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: 'var(--text-dimmed)' }}>
+                    {group.heading}
+                  </p>
+                </div>
+
+                {group.slots.map(slot => (
+                  <div key={slot.key} className="px-4 py-2.5" style={{ backgroundColor: 'var(--bg-body)', borderTop: '1px solid var(--border-primary, #374151)' }}>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{slot.label}</p>
+                        <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>{slot.desc}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 ml-3">
+                        <input
+                          type="color"
+                          value={customSlots[slot.key]}
+                          onChange={(e) => setCustomSlot(slot.key, e.target.value)}
+                          className="w-7 h-7 rounded cursor-pointer border-0 p-0"
+                          style={{ backgroundColor: 'transparent' }}
+                        />
+                        <input
+                          type="text"
+                          value={customSlots[slot.key]}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (/^#[0-9A-Fa-f]{6}$/.test(v)) setCustomSlot(slot.key, v);
+                          }}
+                          onBlur={(e) => {
+                            let v = e.target.value.trim();
+                            if (!v.startsWith('#')) v = '#' + v;
+                            if (/^#[0-9A-Fa-f]{6}$/.test(v)) setCustomSlot(slot.key, v);
+                          }}
+                          className="w-[72px] px-1.5 py-0.5 rounded text-[11px] font-mono"
+                          style={{
+                            backgroundColor: 'var(--bg-card)',
+                            color: 'var(--text-primary)',
+                            border: '1px solid var(--border-primary, #374151)',
+                          }}
+                          maxLength={7}
+                        />
+                      </div>
+                    </div>
+                    {/* Quick-pick swatches */}
+                    <div className="flex gap-1 mt-1.5">
+                      {(SLOT_SWATCHES[slot.key] || []).map(c => (
+                        <button
+                          key={c}
+                          onClick={() => setCustomSlot(slot.key, c)}
+                          className={`w-4 h-4 rounded-full transition-transform duration-150 hover:scale-125 ${customSlots[slot.key] === c ? 'ring-2 ring-white/60 scale-125' : ''}`}
+                          style={{ backgroundColor: c }}
+                          title={c}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+
+            {/* Live preview strip */}
+            <div className="px-4 py-3" style={{ backgroundColor: customSlots.pageBg, borderTop: '1px solid var(--border-primary, #374151)' }}>
+              <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: customSlots.textColor, opacity: 0.5 }}>
+                Live Preview
+              </p>
+              <div className="rounded-lg p-3 flex items-center gap-3" style={{ backgroundColor: customSlots.cardBg, border: `1px solid ${customSlots.borderColor}` }}>
+                <span
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0"
+                  style={{ backgroundColor: customSlots.accent, color: '#fff' }}
+                >Button</span>
+                <span
+                  className="text-xs font-medium underline shrink-0"
+                  style={{ color: customSlots.accent }}
+                >Link</span>
+                <span className="text-xs" style={{ color: customSlots.textColor }}>
+                  Sample text
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <p className="text-xs text-center" style={{ color: 'var(--text-dimmed)' }}>
