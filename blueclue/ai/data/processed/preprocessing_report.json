@@ -1,0 +1,43 @@
+{
+  "preprocessing_stats": {
+    "original_count": 2500,
+    "pii_removed": 106,
+    "missing_handled": 0,
+    "duplicates_removed": 109,
+    "invalid_labels_fixed": 0,
+    "final_count": 2391
+  },
+  "pii_patterns_used": [
+    "email",
+    "phone",
+    "ssn",
+    "credit_card",
+    "ip_address",
+    "date_of_birth"
+  ],
+  "valid_categories": [
+    "general",
+    "technical",
+    "billing",
+    "account",
+    "feature_request",
+    "hardware",
+    "software",
+    "network",
+    "login",
+    "other"
+  ],
+  "valid_priorities": [
+    "low",
+    "medium",
+    "high",
+    "critical"
+  ],
+  "settings": {
+    "remove_pii": true,
+    "handle_missing": "impute",
+    "remove_duplicates": true,
+    "min_description_length": 10,
+    "max_description_length": 10000
+  }
+}
