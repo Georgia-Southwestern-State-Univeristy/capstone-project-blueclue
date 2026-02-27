@@ -9,6 +9,7 @@ import TechnicianDashboard from './pages/TechnicianDashboard'
 import ManagementDashboard from './pages/ManagementDashboard'
 import MyAssignedTickets from './pages/MyAssignedTickets'
 import AnalyticsDashboard from './pages/AnalyticsDashboard'
+import TemplateManager from './pages/TemplateManager'
 import Navbar from './components/Navbar'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -46,6 +47,11 @@ function App() {
         <Route path="/my-tickets" element={
           <ProtectedRoute allowedRoles={['technician', 'senior_technician', 'management', 'admin']}>
             <MyAssignedTickets />
+          </ProtectedRoute>
+        } />
+        <Route path="/template-manager" element={
+          <ProtectedRoute allowedRoles={['management', 'admin']}>
+            <TemplateManager />
           </ProtectedRoute>
         } />
       </Routes>
