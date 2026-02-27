@@ -67,7 +67,7 @@ function Navbar() {
                     Client Dashboard
                   </Link>
                 )}
-                {user?.role === 'technician' && (
+                {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
                   <>
                     <Link to="/technician" className="text-gray-300 hover:text-white transition-colors">
                       All Tickets
@@ -75,12 +75,20 @@ function Navbar() {
                     <Link to="/my-tickets" className="text-gray-300 hover:text-white transition-colors">
                       My Tickets
                     </Link>
+                    <Link to="/analytics" className="text-gray-300 hover:text-white transition-colors">
+                      Analytics
+                    </Link>
                   </>
                 )}
                 {(user?.role === 'management' || user?.role === 'admin') && (
-                  <Link to="/management-dashboard" className="text-gray-300 hover:text-white transition-colors">
-                    Management Dashboard
-                  </Link>
+                  <>
+                    <Link to="/management-dashboard" className="text-gray-300 hover:text-white transition-colors">
+                      Management Dashboard
+                    </Link>
+                    <Link to="/template-manager" className="text-gray-300 hover:text-white transition-colors">
+                      Templates
+                    </Link>
+                  </>
                 )}
               </>
             )}
@@ -209,7 +217,7 @@ function Navbar() {
               Client Dashboard
             </Link>
           )}
-          {user?.role === 'technician' && (
+          {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
             <>
               <Link
                 to="/technician"
@@ -225,16 +233,32 @@ function Navbar() {
               >
                 My Tickets
               </Link>
+              <Link
+                to="/analytics"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+              >
+                Analytics
+              </Link>
             </>
           )}
           {(user?.role === 'management' || user?.role === 'admin') && (
-            <Link
-              to="/management-dashboard"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
-            >
-              Management Dashboard
-            </Link>
+            <>
+              <Link
+                to="/management-dashboard"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+              >
+                Management Dashboard
+              </Link>
+              <Link
+                to="/template-manager"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+              >
+                Templates
+              </Link>
+            </>
           )}
           
           {!user?.isGuest && (
