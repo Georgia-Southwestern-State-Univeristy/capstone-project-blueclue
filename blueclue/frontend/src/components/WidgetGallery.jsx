@@ -372,6 +372,7 @@ export default function WidgetGallery({
   onDeleteLayout,
   onRenameLayout,
 }) {
+  const [activeTab, setActiveTab] = useState('widgets') // 'widgets' | 'saved'
   const [expandedKeys, setExpandedKeys] = useState(new Set())
   const [renamingId, setRenamingId] = useState(null)
   const [renameValue, setRenameValue] = useState('')
@@ -391,7 +392,7 @@ export default function WidgetGallery({
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header with close button */}
-      <div className="shrink-0 p-4 border-b border-gray-700/50">
+      <div className="shrink-0 p-4 pb-0 border-b border-gray-700/50">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -413,12 +414,46 @@ export default function WidgetGallery({
             </button>
           )}
         </div>
-        <p className="text-[11px] text-gray-500 mt-1">
-          Drag onto dashboard to add
-        </p>
+
+        {/* Tab bar */}
+        <div className="flex mt-3 -mb-px">
+          <button
+            onClick={() => setActiveTab('widgets')}
+            className={`flex-1 py-2 text-[11px] font-semibold text-center border-b-2 transition-colors ${
+              activeTab === 'widgets'
+                ? 'text-blue-400 border-blue-400'
+                : 'text-gray-500 border-transparent hover:text-gray-300 hover:border-gray-600'
+            }`}
+          >
+            <span className="flex items-center justify-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+              </svg>
+              Widgets
+            </span>
+          </button>
+          <button
+            onClick={() => setActiveTab('saved')}
+            className={`flex-1 py-2 text-[11px] font-semibold text-center border-b-2 transition-colors ${
+              activeTab === 'saved'
+                ? 'text-purple-400 border-purple-400'
+                : 'text-gray-500 border-transparent hover:text-gray-300 hover:border-gray-600'
+            }`}
+          >
+            <span className="flex items-center justify-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+              </svg>
+              Saved{savedLayouts.length > 0 ? ` (${savedLayouts.length})` : ''}
+            </span>
+          </button>
+        </div>
       </div>
 
-      {/* Scrollable content */}
+      {/* ── Widgets Tab ─────────────────────────────────────── */}
+      {activeTab === 'widgets' && (
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-2.5"
            style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 transparent' }}>
         {/* Available widgets */}
@@ -526,19 +561,18 @@ export default function WidgetGallery({
             </p>
           </div>
         )}
+      </div>
+      )}
 
-        {/* ── Saved Layouts ───────────────────────────────────── */}
-        {savedLayouts.length > 0 && (
+      {/* ── Saved Layouts Tab ───────────────────────────────── */}
+      {activeTab === 'saved' && (
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-2.5"
+           style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 transparent' }}>
+        {savedLayouts.length > 0 ? (
           <>
-            <div className="border-t border-gray-700/50 mt-3 pt-3">
-              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-1 mb-2 flex items-center gap-1.5">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                </svg>
-                Saved Layouts ({savedLayouts.length})
-              </p>
-            </div>
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-1 mb-1">
+              Saved Layouts ({savedLayouts.length})
+            </p>
             {savedLayouts.map((entry) => (
               <div
                 key={entry.id}
@@ -651,8 +685,21 @@ export default function WidgetGallery({
               </div>
             ))}
           </>
+        ) : (
+          <div className="text-center py-10">
+            <svg className="w-10 h-10 mx-auto mb-3 text-purple-500/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
+            <p className="text-xs text-gray-400 font-medium">No saved layouts</p>
+            <p className="text-[10px] text-gray-500 mt-1.5 leading-relaxed px-4">
+              Use the <span className="text-purple-400 font-medium">Save Layout</span> button<br />
+              to save your current arrangement
+            </p>
+          </div>
         )}
       </div>
+      )}
     </div>
   )
 }
