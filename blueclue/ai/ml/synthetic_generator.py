@@ -128,6 +128,12 @@ class SyntheticDataGenerator:
                 ("Internet works intermittently", "My internet connection works for a few minutes then stops. Have to unplug and replug ethernet cable to fix temporarily.", ["connectivity"], "high"),
                 ("Can't access specific website", "I can't access {website} from my computer. It worked yesterday but now I get a timeout error.", ["connectivity"], "medium"),
                 ("Network drive not accessible", "I can't access the shared network drive \\\\server\\{share}. It says the path doesn't exist.", ["lan"], "high"),
+                ("Request access to shared folder", "I need access to the {share} shared folder on the network. I am a new employee and require access for my work.", ["lan"], "low"),
+                ("Request access to public share", "I need access to the public share folder. I am an intern and I am in training.", ["lan"], "low"),
+                ("Cannot access network share", "I'm unable to access the \\\\{share} network share. I get 'Access is denied' when I try to open it.", ["lan"], "medium"),
+                ("Need access to team shared drive", "I've just joined the {share} team and need access to the shared network drive to do my job.", ["lan"], "low"),
+                ("New hire needs network share access", "I started this week and need to be granted access to the shared folders on the network as part of onboarding.", ["lan"], "low"),
+                ("Shared folder permission request", "Can you please grant me read access to the {share} shared folder? My manager has approved this request.", ["lan"], "low"),
                 
                 # VPN issues  
                 ("VPN won't connect", "I'm trying to connect to the company VPN from home but it keeps timing out. I can access the internet fine without VPN.", ["vpn"], "high"),

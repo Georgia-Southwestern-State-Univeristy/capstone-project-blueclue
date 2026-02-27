@@ -1,11 +1,11 @@
 {
   "preprocessing_stats": {
-    "original_count": 2500,
-    "pii_removed": 106,
+    "original_count": 2000,
+    "pii_removed": 91,
     "missing_handled": 0,
-    "duplicates_removed": 109,
+    "duplicates_removed": 79,
     "invalid_labels_fixed": 0,
-    "final_count": 2391
+    "final_count": 1921
   },
   "pii_patterns_used": [
     "email",
