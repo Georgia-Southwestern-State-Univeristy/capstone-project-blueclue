@@ -288,7 +288,7 @@ class FeatureExtractor:
         
         self.is_fitted = True
         
-        print(f"✓ Feature extractor fitted on {len(tickets)} tickets")
+        print(f"[OK] Feature extractor fitted on {len(tickets)} tickets")
         print(f"  - TF-IDF features: {len(self.tfidf_vectorizer.get_feature_names_out())}")
         print(f"  - Total features: {len(self.feature_names)}")
         
@@ -353,7 +353,9 @@ class FeatureExtractor:
         
         feature_matrix = np.array(features_list)
         
-        print(f"✓ Transformed {len(tickets)} tickets into {feature_matrix.shape} feature matrix")
+        # Only log transform stats for batch operations, not single-ticket inference
+        if len(tickets) > 1:
+            print(f"[OK] Transformed {len(tickets)} tickets into {feature_matrix.shape} feature matrix")
         
         return feature_matrix
     
@@ -460,7 +462,7 @@ class FeatureExtractor:
         with open(filepath, 'wb') as f:
             pickle.dump(state, f)
         
-        print(f"✓ Feature extractor saved to {filepath}")
+        print(f"[OK] Feature extractor saved to {filepath}")
     
     @classmethod
     def load(cls, filepath: str) -> 'FeatureExtractor':
@@ -482,7 +484,7 @@ class FeatureExtractor:
         extractor.word_count_std = state['word_count_std']
         extractor.is_fitted = state['is_fitted']
         
-        print(f"✓ Feature extractor loaded from {filepath}")
+        print(f"[OK] Feature extractor loaded from {filepath}")
         
         return extractor
     
@@ -505,7 +507,7 @@ class FeatureExtractor:
         if format == 'npz':
             np.savez(filepath, features=features, labels=labels, 
                      feature_names=self.feature_names)
-            print(f"✓ Saved feature matrix ({features.shape}) to {filepath}")
+            print(f"[OK] Saved feature matrix ({features.shape}) to {filepath}")
         elif format == 'csv':
             # Create DataFrame-like structure
             header = self.feature_names + ['label']
@@ -515,7 +517,7 @@ class FeatureExtractor:
                 for i in range(len(features)):
                     row = list(features[i]) + [labels[i]]
                     writer.writerow(row)
-            print(f"✓ Saved feature matrix ({features.shape}) to {filepath}")
+            print(f"[OK] Saved feature matrix ({features.shape}) to {filepath}")
 
 
 if __name__ == "__main__":
