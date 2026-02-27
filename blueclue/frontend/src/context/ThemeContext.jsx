@@ -1,4 +1,12 @@
-import { createContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useState, useEffect, useCallback, useRef } from 'react';
+import { isAuthenticated } from '../services/authService';
+import {
+  fetchThemePreferences,
+  updateThemePreferences,
+  saveTheme as apiSaveTheme,
+  deleteSavedTheme as apiDeleteSavedTheme,
+  renameSavedTheme as apiRenameSavedTheme,
+} from '../services/themeService';
 
 export const ThemeContext = createContext();
 
@@ -157,7 +165,7 @@ function clearStructuralVars() {
 
 /**
  * ThemeProvider — manages dark/light theme + accent colour scheme + full custom colours.
- * Persists to localStorage and applies `data-theme` / `data-accent` attributes on <html>.
+ * Persists to localStorage always and syncs to server when authenticated.
  */
 export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState(() => {
@@ -187,11 +195,77 @@ export function ThemeProvider({ children }) {
     try { return localStorage.getItem('blueclue-custom-override') === 'true'; } catch { return false; }
   });
 
+  // ── Saved themes from the server ──
+  const [savedThemes, setSavedThemes] = useState([]);
+
+  // Guard: skip server sync while we're loading FROM server to avoid echo
+  const loadingFromServer = useRef(false);
+  // Debounce timer ref for server sync
+  const syncTimer = useRef(null);
+  // Track whether we've loaded from server in this session
+  const serverLoaded = useRef(false);
+
+  // ── Load preferences from server on mount (if authenticated) ──
+  useEffect(() => {
+    let cancelled = false;
+    const loadFromServer = async () => {
+      if (!isAuthenticated()) return;
+      try {
+        loadingFromServer.current = true;
+        const data = await fetchThemePreferences();
+        if (cancelled) return;
+        if (data) {
+          if (data.theme)       { setThemeState(data.theme);       try { localStorage.setItem('blueclue-theme', data.theme); } catch {} }
+          if (data.accent)      { setAccentState(data.accent);     try { localStorage.setItem('blueclue-accent', data.accent); } catch {} }
+          if (typeof data.customOverride === 'boolean') {
+            setCustomOverrideState(data.customOverride);
+            try { localStorage.setItem('blueclue-custom-override', String(data.customOverride)); } catch {}
+          }
+          if (data.customSlots && typeof data.customSlots === 'object' && data.customSlots.pageBg) {
+            setCustomSlotsState(data.customSlots);
+            try { localStorage.setItem('blueclue-custom-slots', JSON.stringify(data.customSlots)); } catch {}
+          }
+          if (Array.isArray(data.savedThemes)) {
+            setSavedThemes(data.savedThemes);
+          }
+          serverLoaded.current = true;
+        }
+      } catch (err) {
+        console.warn('Failed to load theme preferences from server:', err.message);
+      } finally {
+        // Small delay so the state updates settle before we start syncing
+        setTimeout(() => { loadingFromServer.current = false; }, 300);
+      }
+    };
+    loadFromServer();
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Debounced sync to server whenever active prefs change ──
+  const syncToServer = useCallback(() => {
+    if (loadingFromServer.current) return;
+    if (!isAuthenticated()) return;
+    if (syncTimer.current) clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(async () => {
+      try {
+        await updateThemePreferences({
+          theme: document.documentElement.getAttribute('data-theme') || 'dark',
+          accent: document.documentElement.getAttribute('data-accent') || 'blue',
+          customOverride: localStorage.getItem('blueclue-custom-override') === 'true',
+          customSlots: JSON.parse(localStorage.getItem('blueclue-custom-slots') || '{}'),
+        });
+      } catch (err) {
+        console.warn('Theme sync failed:', err.message);
+      }
+    }, 800);
+  }, []);
+
   // Apply theme
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     try { localStorage.setItem('blueclue-theme', theme); } catch { /* noop */ }
-  }, [theme]);
+    syncToServer();
+  }, [theme, syncToServer]);
 
   // Apply accent + custom vars (merged with override logic)
   useEffect(() => {
@@ -211,7 +285,8 @@ export function ThemeProvider({ children }) {
       clearCustomVars();
       document.documentElement.removeAttribute('data-custom-override');
     }
-  }, [accent, customSlots, customOverride]);
+    syncToServer();
+  }, [accent, customSlots, customOverride, syncToServer]);
 
   // Persist custom override preference
   useEffect(() => {
@@ -258,6 +333,51 @@ export function ThemeProvider({ children }) {
     }
   }, []);
 
+  // ── Saved themes CRUD ──
+
+  /** Save the current active config under a given name. */
+  const saveCurrentTheme = useCallback(async (name) => {
+    if (!isAuthenticated()) throw new Error('Not authenticated');
+    const data = await apiSaveTheme(name, {
+      theme, accent, customOverride, customSlots,
+    });
+    if (data?.savedThemes) setSavedThemes(data.savedThemes);
+    return data;
+  }, [theme, accent, customOverride, customSlots]);
+
+  /** Load a saved theme's settings into the active state. */
+  const loadSavedTheme = useCallback((themeData) => {
+    loadingFromServer.current = true; // suppress echo sync while applying
+    if (themeData.theme)  setThemeState(themeData.theme);
+    if (themeData.accent) setAccentState(themeData.accent);
+    if (typeof themeData.customOverride === 'boolean') setCustomOverrideState(themeData.customOverride);
+    if (themeData.customSlots && themeData.customSlots.pageBg) {
+      setCustomSlotsState(themeData.customSlots);
+      try { localStorage.setItem('blueclue-custom-slots', JSON.stringify(themeData.customSlots)); } catch {}
+    }
+    // Sync after a brief delay so all state has settled
+    setTimeout(() => {
+      loadingFromServer.current = false;
+      syncToServer();
+    }, 400);
+  }, [syncToServer]);
+
+  /** Delete a saved theme by id. */
+  const deleteTheme = useCallback(async (themeId) => {
+    if (!isAuthenticated()) throw new Error('Not authenticated');
+    const data = await apiDeleteSavedTheme(themeId);
+    if (data?.savedThemes) setSavedThemes(data.savedThemes);
+    return data;
+  }, []);
+
+  /** Rename a saved theme. */
+  const renameTheme = useCallback(async (themeId, newName) => {
+    if (!isAuthenticated()) throw new Error('Not authenticated');
+    const data = await apiRenameSavedTheme(themeId, newName);
+    if (data?.savedThemes) setSavedThemes(data.savedThemes);
+    return data;
+  }, []);
+
   return (
     <ThemeContext.Provider
       value={{
@@ -265,6 +385,7 @@ export function ThemeProvider({ children }) {
         accent, setAccent,
         customSlots, setCustomSlot, resetCustomSlots,
         customOverride, setCustomOverride,
+        savedThemes, saveCurrentTheme, loadSavedTheme, deleteTheme, renameTheme,
       }}
     >
       {children}

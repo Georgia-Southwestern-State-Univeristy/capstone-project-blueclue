@@ -75,7 +75,18 @@ function AccountPanelContent({ onNavigate, onLogout }) {
 }
 
 function AppearancePanelContent() {
-  const { theme, setTheme, accent, setAccent, customSlots, setCustomSlot, resetCustomSlots, customOverride, setCustomOverride } = useTheme();
+  const {
+    theme, setTheme, accent, setAccent,
+    customSlots, setCustomSlot, resetCustomSlots,
+    customOverride, setCustomOverride,
+    savedThemes, saveCurrentTheme, loadSavedTheme, deleteTheme, renameTheme,
+  } = useTheme();
+
+  const [saveThemeName, setSaveThemeName] = useState('');
+  const [savingTheme, setSavingTheme] = useState(false);
+  const [renamingId, setRenamingId] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [themeMessage, setThemeMessage] = useState('');
 
   const ACCENT_OPTIONS = [
     { key: 'blue',         label: 'Default Blue',   color: '#2563eb', ring: 'ring-blue-400/50' },
@@ -412,11 +423,193 @@ function AppearancePanelContent() {
         )}
       </div>
 
+      {/* ── Saved Themes ── */}
+      <div>
+        <p className="text-sm font-medium mb-3" style={{ color: 'var(--text-secondary)' }}>Saved Themes</p>
+
+        {/* Save current theme */}
+        <div className="flex gap-2 mb-3">
+          <input
+            type="text"
+            value={saveThemeName}
+            onChange={(e) => setSaveThemeName(e.target.value)}
+            placeholder="Theme name…"
+            maxLength={50}
+            className="flex-1 px-3 py-2 rounded-lg text-sm"
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-primary, #374151)',
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && saveThemeName.trim()) {
+                e.preventDefault();
+                handleSaveTheme();
+              }
+            }}
+          />
+          <button
+            onClick={handleSaveTheme}
+            disabled={!saveThemeName.trim() || savingTheme}
+            className="px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-40"
+            style={{
+              backgroundColor: 'var(--accent-600, #2563eb)',
+              color: 'var(--accent-text-on-bg, #fff)',
+            }}
+          >
+            {savingTheme ? '…' : 'Save'}
+          </button>
+        </div>
+
+        {/* Status message */}
+        {themeMessage && (
+          <p className="text-xs mb-2 text-center" style={{ color: 'var(--accent-400, #60a5fa)' }}>
+            {themeMessage}
+          </p>
+        )}
+
+        {/* List of saved themes */}
+        {savedThemes.length === 0 ? (
+          <p className="text-xs text-center py-3" style={{ color: 'var(--text-dimmed)' }}>
+            No saved themes yet. Save your current setup above.
+          </p>
+        ) : (
+          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+            {savedThemes.map((st) => (
+              <div
+                key={st.id}
+                className="rounded-lg p-3 flex items-center gap-2 group"
+                style={{
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-primary, #374151)',
+                }}
+              >
+                {/* Preview swatch (6 colours) */}
+                <span className="w-7 h-7 rounded-full shrink-0 overflow-hidden grid grid-cols-3 grid-rows-2"
+                  style={{ border: '1px solid var(--border-primary, #374151)' }}
+                >
+                  <span style={{ backgroundColor: st.customSlots?.accent || '#2563eb' }} />
+                  <span style={{ backgroundColor: st.customSlots?.pageBg || '#030712' }} />
+                  <span style={{ backgroundColor: st.customSlots?.cardBg || '#1f2937' }} />
+                  <span style={{ backgroundColor: st.customSlots?.sidebarBg || '#111827' }} />
+                  <span style={{ backgroundColor: st.customSlots?.textColor || '#ffffff' }} />
+                  <span style={{ backgroundColor: st.customSlots?.borderColor || '#374151' }} />
+                </span>
+
+                {/* Name or rename input */}
+                <div className="flex-1 min-w-0">
+                  {renamingId === st.id ? (
+                    <input
+                      autoFocus
+                      type="text"
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onBlur={() => handleRename(st.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleRename(st.id);
+                        if (e.key === 'Escape') setRenamingId(null);
+                      }}
+                      maxLength={50}
+                      className="w-full px-1 py-0.5 rounded text-sm"
+                      style={{
+                        backgroundColor: 'var(--bg-body)',
+                        color: 'var(--text-primary)',
+                        border: '1px solid var(--accent-500, #2563eb)',
+                      }}
+                    />
+                  ) : (
+                    <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                      {st.name}
+                    </p>
+                  )}
+                  <p className="text-[10px]" style={{ color: 'var(--text-dimmed)' }}>
+                    {st.theme} / {st.accent}{st.customOverride ? ' / override' : ''}
+                  </p>
+                </div>
+
+                {/* Actions — Load / Rename / Delete */}
+                <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
+                  {/* Load */}
+                  <button
+                    onClick={() => loadSavedTheme(st)}
+                    className="p-1 rounded hover:bg-green-900/40 transition-colors"
+                    title="Load this theme"
+                  >
+                    <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                  </button>
+                  {/* Rename */}
+                  <button
+                    onClick={() => { setRenamingId(st.id); setRenameValue(st.name); }}
+                    className="p-1 rounded hover:bg-blue-900/40 transition-colors"
+                    title="Rename"
+                  >
+                    <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                  {/* Delete */}
+                  <button
+                    onClick={() => handleDelete(st.id)}
+                    className="p-1 rounded hover:bg-red-900/40 transition-colors"
+                    title="Delete"
+                  >
+                    <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <p className="text-xs text-center" style={{ color: 'var(--text-dimmed)' }}>
-        Your theme preference is saved locally.
+        Theme preferences sync across devices when signed in.
       </p>
     </div>
   );
+
+  /* ── Handler helpers ── */
+  async function handleSaveTheme() {
+    if (!saveThemeName.trim() || savingTheme) return;
+    setSavingTheme(true);
+    try {
+      await saveCurrentTheme(saveThemeName.trim());
+      setSaveThemeName('');
+      setThemeMessage('Theme saved!');
+      setTimeout(() => setThemeMessage(''), 2500);
+    } catch (err) {
+      setThemeMessage('Save failed — ' + err.message);
+      setTimeout(() => setThemeMessage(''), 3000);
+    } finally {
+      setSavingTheme(false);
+    }
+  }
+
+  async function handleRename(id) {
+    if (renameValue.trim() && renameValue.trim().length <= 50) {
+      try {
+        await renameTheme(id, renameValue.trim());
+      } catch (err) {
+        console.warn('Rename failed:', err.message);
+      }
+    }
+    setRenamingId(null);
+  }
+
+  async function handleDelete(id) {
+    try {
+      await deleteTheme(id);
+      setThemeMessage('Theme deleted');
+      setTimeout(() => setThemeMessage(''), 2000);
+    } catch (err) {
+      setThemeMessage('Delete failed');
+      setTimeout(() => setThemeMessage(''), 2500);
+    }
+  }
 }
 
 function AboutPanelContent() {

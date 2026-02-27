@@ -27,6 +27,7 @@ import ringRoutes from './routes/ring.js';
 import updateRequestRoutes from './routes/updateRequestRoutes.js';
 import dashboardLayoutRoutes from './routes/dashboardLayouts.js';
 import templateRoutes from './routes/templates.js';
+import themeRoutes from './routes/themes.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 import { startUpdateRequestReminderJob } from './jobs/updateRequestReminders.js';
 
@@ -82,6 +83,7 @@ app.use('/api', ringRoutes); // Ring for Help routes
 app.use('/api', updateRequestRoutes); // Ticket Update Request routes
 app.use('/api/dashboard-layouts', dashboardLayoutRoutes); // Dashboard layout persistence
 app.use('/api/templates', templateRoutes); // Ticket templates
+app.use('/api/themes', themeRoutes); // User theme preferences
 app.use('/api/dev', devRoutes);
 app.use('/api/admin', adminRoutes);
 
