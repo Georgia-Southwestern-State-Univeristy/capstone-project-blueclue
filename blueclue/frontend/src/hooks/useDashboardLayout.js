@@ -467,22 +467,19 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
   }, [savedLayoutsKey])
 
   // Toggle edit/lock mode
-  // Only suppress onLayoutChange when LOCKING (exiting edit mode).
-  // When locking, the gallery sidebar collapses → container widens →
-  // RGL fires onLayoutChange with re-flowed positions that would
-  // overwrite the user's saved layout. The 600ms window absorbs both
-  // the initial prop-change event and the subsequent width-change event.
-  // When UNLOCKING we must NOT suppress, because the grid needs to
-  // adapt its layout to the narrower container (gallery sidebar appears).
+  // Suppress onLayoutChange during BOTH transitions (lock ↔ unlock).
+  // The gallery sidebar (w-72 ≈ 288px) shares a flex row with the grid.
+  //   • Unlocking — sidebar appears → container narrows → RGL reflows
+  //   • Locking   — sidebar hides  → container widens  → RGL reflows
+  // In both cases the reflow fires onLayoutChange with positions adapted
+  // to the new width, which would overwrite the user's saved layout.
+  // The 600ms window absorbs the initial prop-change event plus the
+  // subsequent width-change event from useContainerWidth, without
+  // blocking intentional drag/resize edits that happen later.
   const toggleEditMode = useCallback(() => {
-    setIsEditMode(prev => {
-      if (prev) {
-        // Locking — suppress layout changes during the transition
-        editModeToggledRef.current = true
-        setTimeout(() => { editModeToggledRef.current = false }, 600)
-      }
-      return !prev
-    })
+    editModeToggledRef.current = true
+    setTimeout(() => { editModeToggledRef.current = false }, 600)
+    setIsEditMode(prev => !prev)
   }, [])
 
   return {

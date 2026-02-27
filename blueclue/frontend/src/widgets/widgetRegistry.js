@@ -56,7 +56,7 @@ const WIDGET_REGISTRY = [
     description: 'Visual timeline of ticket activity and trends over time',
     icon: '📊',
     category: CATEGORIES.ANALYTICS,
-    permissions: ROLE_GROUPS.STAFF,
+    permissions: ROLE_GROUPS.ALL,
     size: {
       defaultW: 12, defaultH: 8,
       minW: 6, minH: 6,
@@ -236,7 +236,7 @@ const WIDGET_REGISTRY = [
     description: 'Incoming ring-for-help requests from technicians',
     icon: '🔔',
     category: CATEGORIES.MANAGEMENT,
-    permissions: ROLE_GROUPS.MANAGERS,
+    permissions: ROLE_GROUPS.STAFF,
     size: {
       defaultW: 6, defaultH: 7,
       minW: 3, minH: 4,
@@ -274,6 +274,68 @@ const WIDGET_REGISTRY = [
     },
     component: () => import('../components/QuickActionsPanel'),
     previewPattern: 'list-actions',
+  },
+  // ── Technician-specific widgets ──────────────────────────────────────────
+  {
+    key: 'statusDonut',
+    name: 'Status Overview',
+    description: 'Donut chart showing ticket status distribution',
+    icon: '📊',
+    category: CATEGORIES.ANALYTICS,
+    permissions: ROLE_GROUPS.STAFF,
+    size: {
+      defaultW: 6, defaultH: 7,
+      minW: 3, minH: 5,
+      maxW: 12, maxH: 14,
+    },
+    component: () => import('../components/DonutChart'),
+    previewPattern: 'chart-donut',
+  },
+  {
+    key: 'priorityPie',
+    name: 'Priority Breakdown',
+    description: 'Pie chart showing ticket priority distribution',
+    icon: '📈',
+    category: CATEGORIES.ANALYTICS,
+    permissions: ROLE_GROUPS.STAFF,
+    size: {
+      defaultW: 6, defaultH: 7,
+      minW: 3, minH: 5,
+      maxW: 12, maxH: 14,
+    },
+    component: () => import('../components/PieChart'),
+    previewPattern: 'chart-pie',
+  },
+  {
+    key: 'ticketQueue',
+    name: 'Ticket Queue',
+    description: 'Ticket queue with search, filters, and management actions',
+    icon: '📋',
+    category: CATEGORIES.TICKETS,
+    permissions: ROLE_GROUPS.STAFF,
+    size: {
+      defaultW: 12, defaultH: 14,
+      minW: 6, minH: 8,
+      maxW: 12, maxH: 24,
+    },
+    component: () => import('../components/TechTicketQueueWidget'),
+    previewPattern: 'card-grid',
+  },
+  // ── Client-specific widgets ──────────────────────────────────────────────
+  {
+    key: 'clientTickets',
+    name: 'My Tickets',
+    description: 'Your submitted tickets with status tracking',
+    icon: '🎫',
+    category: CATEGORIES.TICKETS,
+    permissions: [ROLES.CUSTOMER, ROLES.GUEST],
+    size: {
+      defaultW: 12, defaultH: 12,
+      minW: 6, minH: 6,
+      maxW: 12, maxH: 20,
+    },
+    component: () => import('../components/ClientTicketListWidget'),
+    previewPattern: 'data-table',
   },
 ]
 

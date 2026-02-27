@@ -470,12 +470,19 @@ export default function DashboardGrid({
 
     const handleDragOverScroll = (e) => scrollAtEdge(e.clientY)
     const handleMouseMove = (e) => { if (isDraggingWidget) scrollAtEdge(e.clientY) }
+    const handleTouchMove = (e) => {
+      if (isDraggingWidget && e.touches.length > 0) {
+        scrollAtEdge(e.touches[0].clientY)
+      }
+    }
 
     window.addEventListener('dragover', handleDragOverScroll, { passive: true })
     window.addEventListener('mousemove', handleMouseMove, { passive: true })
+    window.addEventListener('touchmove', handleTouchMove, { passive: true })
     return () => {
       window.removeEventListener('dragover', handleDragOverScroll)
       window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('touchmove', handleTouchMove)
       if (rafId) cancelAnimationFrame(rafId)
     }
   }, [isDragging, isDraggingWidget])
@@ -611,7 +618,7 @@ export default function DashboardGrid({
                 handle: '.widget-drag-handle',
               }}
               resizeConfig={{
-                enabled: isEditMode && !isMobile,
+                enabled: isEditMode && !isMobile && !galleryVisible,
                 handles: ['s', 'e', 'se'],
               }}
               onDragStart={handleWidgetDragStart}
