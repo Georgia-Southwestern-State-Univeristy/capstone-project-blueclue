@@ -195,7 +195,7 @@ function TemplateSelector({ onTemplateSelect, disabled }) {
                                             ? 'text-white'
                                             : 'text-gray-300 hover:bg-gray-600'
                                     }`}
-                                    style={selectedCategory === key ? { backgroundColor: cat.color } : { backgroundColor: 'rgb(55, 65, 81)' }}
+                                    style={selectedCategory === key ? { backgroundColor: cat.color } : { backgroundColor: 'var(--bg-hover)' }}
                                 >
                                     {cat.icon}
                                 </button>

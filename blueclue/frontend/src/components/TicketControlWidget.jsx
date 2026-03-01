@@ -479,7 +479,8 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
 
       {/* ═══════════════ ASSIGN TAB ═══════════════ */}
       {activeTab === 'assign' && (
-        <div className="p-6 space-y-6">
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Selected Tickets Summary */}
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -670,8 +671,10 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
             </div>
           )}
 
-          {/* Assign Button */}
-          <div className="flex items-center justify-between pt-2">
+          </div>
+
+          {/* Assign Button — pinned at bottom */}
+          <div className="flex items-center justify-between p-4 border-t border-gray-700 bg-gray-900 flex-shrink-0">
             <button onClick={() => setActiveTab('queue')} className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors">
               &larr; Back to Queue
             </button>

@@ -373,211 +373,165 @@ export default function WidgetGallery({
   onRenameLayout,
 }) {
   const [activeTab, setActiveTab] = useState('widgets') // 'widgets' | 'saved'
-  const [expandedKeys, setExpandedKeys] = useState(new Set())
   const [renamingId, setRenamingId] = useState(null)
   const [renameValue, setRenameValue] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const available = allWidgets.filter(w => !activeKeys.has(w.key))
   const placed = allWidgets.filter(w => activeKeys.has(w.key))
 
-  const toggleExpanded = (key) => {
-    setExpandedKeys(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
-
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Header with close button */}
-      <div className="shrink-0 p-4 pb-0 border-b border-gray-700/50">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {/* ── Compact header bar (horizontal for bottom panel) ── */}
+      <div className="shrink-0 flex items-center gap-3 px-4 py-2 border-b border-gray-700/50">
+        {/* Title */}
+        <h3 className="text-sm font-bold text-white flex items-center gap-2 shrink-0">
+          <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+          </svg>
+          Widget Gallery
+        </h3>
+
+        {/* Inline tab buttons */}
+        <div className="flex border border-gray-700/60 rounded-lg overflow-hidden">
+          <button
+            onClick={() => setActiveTab('widgets')}
+            className={`px-3 py-1 text-[11px] font-semibold transition-colors flex items-center gap-1.5 ${
+              activeTab === 'widgets'
+                ? 'bg-blue-600/30 text-blue-400'
+                : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
             </svg>
-            Widget Gallery
-          </h3>
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-gray-700/60 transition-colors"
-              title="Hide gallery"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M11 19l-7-7 7-7" />
-              </svg>
-            </button>
-          )}
-        </div>
-
-        {/* Tab bar */}
-        <div className="flex mt-3 -mb-px">
-          <button
-            onClick={() => setActiveTab('widgets')}
-            className={`flex-1 py-2 text-[11px] font-semibold text-center border-b-2 transition-colors ${
-              activeTab === 'widgets'
-                ? 'text-blue-400 border-blue-400'
-                : 'text-gray-500 border-transparent hover:text-gray-300 hover:border-gray-600'
-            }`}
-          >
-            <span className="flex items-center justify-center gap-1.5">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
-              </svg>
-              Widgets
-            </span>
+            Widgets
           </button>
           <button
             onClick={() => setActiveTab('saved')}
-            className={`flex-1 py-2 text-[11px] font-semibold text-center border-b-2 transition-colors ${
+            className={`px-3 py-1 text-[11px] font-semibold transition-colors flex items-center gap-1.5 border-l border-gray-700/60 ${
               activeTab === 'saved'
-                ? 'text-purple-400 border-purple-400'
-                : 'text-gray-500 border-transparent hover:text-gray-300 hover:border-gray-600'
+                ? 'bg-purple-600/30 text-purple-400'
+                : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'
             }`}
           >
-            <span className="flex items-center justify-center gap-1.5">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-              </svg>
-              Saved{savedLayouts.length > 0 ? ` (${savedLayouts.length})` : ''}
-            </span>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
+            Saved{savedLayouts.length > 0 ? ` (${savedLayouts.length})` : ''}
           </button>
         </div>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Close button */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-gray-700/60 transition-colors shrink-0"
+            title="Hide gallery"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        )}
       </div>
 
-      {/* ── Widgets Tab ─────────────────────────────────────── */}
+      {/* ── Widgets Tab (horizontal scroll) ─────────────────── */}
       {activeTab === 'widgets' && (
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-2.5"
+      <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden overscroll-contain px-3 py-2"
            style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 transparent' }}>
-        {/* Available widgets */}
-        {available.length > 0 && (
-          <>
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-1 mb-1">
-              Available ({available.length})
-            </p>
-            {available.map((widget) => (
-              <div
-                key={widget.key}
-                draggable
-                unselectable="on"
-                onDragStart={(e) => {
-                  e.dataTransfer.setData('text/plain', widget.key)
-                  e.dataTransfer.effectAllowed = 'copy'
-                  onDragStartWidget?.(widget.key)
-                }}
-                className="group relative bg-gray-800/80 hover:bg-gray-750/90 border border-gray-700
-                           hover:border-blue-500/50 rounded-lg overflow-hidden
-                           cursor-grab active:cursor-grabbing
-                           transition-all duration-150 hover:shadow-lg hover:shadow-blue-500/5"
-              >
-                {/* Visual preview */}
-                <WidgetPreview
-                  pattern={PREVIEW_PATTERNS[widget.key]}
-                />
+        <div className="flex gap-3 h-full items-start">
+          {/* Available widgets */}
+          {available.length > 0 && available.map((widget) => (
+            <div
+              key={widget.key}
+              draggable
+              unselectable="on"
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', widget.key)
+                e.dataTransfer.effectAllowed = 'copy'
+                onDragStartWidget?.(widget.key)
+              }}
+              className="group relative bg-gray-800/80 hover:bg-gray-750/90 border border-gray-700
+                         hover:border-blue-500/50 rounded-lg overflow-hidden shrink-0
+                         cursor-grab active:cursor-grabbing
+                         transition-all duration-150 hover:shadow-lg hover:shadow-blue-500/5"
+              style={{ width: '200px' }}
+            >
+              {/* Visual preview */}
+              <WidgetPreview pattern={PREVIEW_PATTERNS[widget.key]} />
+              {/* Info bar */}
+              <div className="p-2">
+                <h4 className="text-[11px] font-semibold text-white truncate leading-tight">
+                  {widget.label}
+                </h4>
+                <p className="text-[10px] text-gray-400 mt-0.5 leading-relaxed line-clamp-2">
+                  {widget.description}
+                </p>
+              </div>
+              {/* Drag hint border */}
+              <div className="absolute inset-0 rounded-lg border-2 border-dashed border-blue-400/0
+                             group-hover:border-blue-400/20 transition-colors pointer-events-none" />
+            </div>
+          ))}
 
-                {/* Info bar */}
-                <div className="p-2.5">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-[11px] font-semibold text-white truncate leading-tight">
-                        {widget.label}
-                      </h4>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        e.preventDefault()
-                        toggleExpanded(widget.key)
-                      }}
-                      className="p-1 rounded-md text-gray-400 hover:text-white
-                                 hover:bg-gray-700/60 transition-all flex-shrink-0"
-                      title={expandedKeys.has(widget.key) ? 'Collapse' : 'Expand description'}
-                    >
-                      <svg
-                        className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                          expandedKeys.has(widget.key) ? 'rotate-180' : ''
-                        }`}
-                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
+          {/* Already placed widgets (compact chips) */}
+          {placed.length > 0 && (
+            <div className="shrink-0 flex flex-col gap-1.5 min-w-[140px] pt-1">
+              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-1">
+                On Dashboard ({placed.length})
+              </p>
+              {placed.map((widget) => (
+                <div
+                  key={widget.key}
+                  className="bg-gray-800/30 border border-gray-700/40 rounded-md px-2 py-1 opacity-50"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-gray-400 truncate flex-1">{widget.label}</span>
+                    <svg className="w-2.5 h-2.5 text-green-500/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
                   </div>
-                  {/* Description – truncated by default, full when expanded */}
-                  <p className={`text-[10px] text-gray-400 mt-1 leading-relaxed ${
-                    expandedKeys.has(widget.key) ? '' : 'line-clamp-1'
-                  }`}>
-                    {widget.description}
-                  </p>
                 </div>
+              ))}
+            </div>
+          )}
 
-                {/* Drag hint border */}
-                <div className="absolute inset-0 rounded-lg border-2 border-dashed border-blue-400/0
-                               group-hover:border-blue-400/20 transition-colors pointer-events-none" />
+          {/* All placed message */}
+          {available.length === 0 && (
+            <div className="flex items-center gap-3 py-2 px-4">
+              <svg className="w-8 h-8 text-green-500/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <p className="text-xs text-gray-400 font-medium">All widgets placed!</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">Remove widgets from the dashboard to see them here</p>
               </div>
-            ))}
-          </>
-        )}
-
-        {/* Already placed widgets */}
-        {placed.length > 0 && (
-          <>
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-1 mt-3 mb-1">
-              On Dashboard ({placed.length})
-            </p>
-            {placed.map((widget) => (
-              <div
-                key={widget.key}
-                className="bg-gray-800/30 border border-gray-700/40 rounded-lg p-2 opacity-50"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-gray-400 truncate flex-1">{widget.label}</span>
-                  <svg className="w-3 h-3 text-green-500/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-              </div>
-            ))}
-          </>
-        )}
-
-        {/* All placed message */}
-        {available.length === 0 && (
-          <div className="text-center py-8">
-            <svg className="w-10 h-10 mx-auto mb-2 text-green-500/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-xs text-gray-400 font-medium">All widgets placed!</p>
-            <p className="text-[10px] text-gray-500 mt-1">
-              Remove widgets from the dashboard<br />to see them here
-            </p>
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
       )}
 
-      {/* ── Saved Layouts Tab ───────────────────────────────── */}
+      {/* ── Saved Layouts Tab (horizontal scroll) ───────────── */}
       {activeTab === 'saved' && (
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-2.5"
+      <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden overscroll-contain px-3 py-2"
            style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 transparent' }}>
         {savedLayouts.length > 0 ? (
-          <>
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-1 mb-1">
-              Saved Layouts ({savedLayouts.length})
-            </p>
+          <div className="flex gap-3 h-full items-start">
             {savedLayouts.map((entry) => (
               <div
                 key={entry.id}
                 className="group bg-gray-800/60 hover:bg-gray-800/90 border border-gray-700/50
-                           hover:border-purple-500/40 rounded-lg p-2.5 transition-all duration-150"
+                           hover:border-purple-500/40 rounded-lg p-3 transition-all duration-150 shrink-0"
+                style={{ width: '220px' }}
               >
                 {renamingId === entry.id ? (
                   <div className="flex items-center gap-1.5">
@@ -613,7 +567,7 @@ export default function WidgetGallery({
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-2 mb-1.5">
+                    <div className="flex items-center gap-2 mb-2">
                       <div className="flex-1 min-w-0">
                         <h4 className="text-[11px] font-semibold text-white truncate leading-tight flex items-center gap-1.5">
                           <svg className="w-3 h-3 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -684,18 +638,19 @@ export default function WidgetGallery({
                 )}
               </div>
             ))}
-          </>
+          </div>
         ) : (
-          <div className="text-center py-10">
-            <svg className="w-10 h-10 mx-auto mb-3 text-purple-500/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-center gap-3 py-4 px-4">
+            <svg className="w-8 h-8 text-purple-500/30 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                 d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
             </svg>
-            <p className="text-xs text-gray-400 font-medium">No saved layouts</p>
-            <p className="text-[10px] text-gray-500 mt-1.5 leading-relaxed px-4">
-              Use the <span className="text-purple-400 font-medium">Save Layout</span> button<br />
-              to save your current arrangement
-            </p>
+            <div>
+              <p className="text-xs text-gray-400 font-medium">No saved layouts</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                Use the <span className="text-purple-400 font-medium">Save Layout</span> button to save your current arrangement
+              </p>
+            </div>
           </div>
         )}
       </div>

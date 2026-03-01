@@ -156,8 +156,9 @@ export const getUserNotifications = async ({ page = 1, limit = 20, unreadOnly = 
  */
 export const getUnreadCount = async () => {
   try {
-    const data = await getUserNotifications({ limit: 1, unreadOnly: true });
-    return data.pagination?.total || 0;
+    const data = await getUserNotifications({ limit: 1 });
+    // Use the dedicated unread_count field from the API (not pagination.total which is ALL notifications)
+    return data.unread_count ?? data.pagination?.total ?? 0;
   } catch (error) {
     console.error('Failed to get unread count:', error);
     return 0;
