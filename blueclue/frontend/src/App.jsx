@@ -9,6 +9,10 @@ import TechnicianDashboard from './pages/TechnicianDashboard'
 import ManagementDashboard from './pages/ManagementDashboard'
 import MyAssignedTickets from './pages/MyAssignedTickets'
 import AnalyticsDashboard from './pages/AnalyticsDashboard'
+import KnowledgeBaseManagement from './pages/KnowledgeBaseManagement'
+import FAQ from './pages/FAQ'
+import ArticlePublicView from './pages/ArticlePublicView'
+import FAQSearch from './pages/FAQSearch'
 import Navbar from './components/Navbar'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -23,6 +27,13 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email/:token" element={<VerifyEmail />} />
         <Route path="/change-password" element={<ChangePassword />} />
+        
+        {/* Public FAQ Routes */}
+        <Route path="/faq" element={<FAQ />} />
+        <Route path="/faq/search" element={<FAQSearch />} />
+        <Route path="/faq/article/:id" element={<ArticlePublicView />} />
+        <Route path="/help" element={<FAQ />} />
+        
         <Route path="/client-dashboard" element={
           <ProtectedRoute allowedRoles={['customer', 'guest']}>
             <ClientDashboard />
@@ -46,6 +57,11 @@ function App() {
         <Route path="/my-tickets" element={
           <ProtectedRoute allowedRoles={['technician', 'senior_technician', 'management', 'admin']}>
             <MyAssignedTickets />
+          </ProtectedRoute>
+        } />
+        <Route path="/knowledge-base" element={
+          <ProtectedRoute allowedRoles={['technician', 'senior_technician', 'management', 'admin']}>
+            <KnowledgeBaseManagement />
           </ProtectedRoute>
         } />
       </Routes>
