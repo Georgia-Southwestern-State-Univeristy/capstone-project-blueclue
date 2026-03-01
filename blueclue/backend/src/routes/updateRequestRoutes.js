@@ -12,28 +12,25 @@ import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// All routes require authentication
-router.use(authenticateToken);
-
 // Request update on a specific ticket (management only)
-router.post('/tickets/:id/request-update', requestUpdate);
+router.post('/tickets/:id/request-update', authenticateToken, requestUpdate);
 
 // Get update requests (filtered by user role)
-router.get('/update-requests', getUpdateRequests);
+router.get('/update-requests', authenticateToken, getUpdateRequests);
 
 // Fulfill an update request
-router.post('/update-requests/:id/fulfill', fulfillUpdateRequest);
+router.post('/update-requests/:id/fulfill', authenticateToken, fulfillUpdateRequest);
 
 // Request deadline extension
-router.post('/update-requests/:id/request-extension', requestExtension);
+router.post('/update-requests/:id/request-extension', authenticateToken, requestExtension);
 
 // Cancel an update request
-router.delete('/update-requests/:id', cancelUpdateRequest);
+router.delete('/update-requests/:id', authenticateToken, cancelUpdateRequest);
 
 // Get technician statistics
-router.get('/update-requests/stats/:techId', getTechStats);
+router.get('/update-requests/stats/:techId', authenticateToken, getTechStats);
 
 // Get response time analytics (management only)
-router.get('/update-requests/analytics/response-times', getResponseTimeAnalytics);
+router.get('/update-requests/analytics/response-times', authenticateToken, getResponseTimeAnalytics);
 
 export default router;
