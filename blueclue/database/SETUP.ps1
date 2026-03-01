@@ -172,7 +172,7 @@ Write-Host ""
 Write-Host "============================================================================" -ForegroundColor Cyan
 Write-Host "Step 4.5: Applying feature migrations..." -ForegroundColor Yellow
 Write-Host "============================================================================" -ForegroundColor Cyan
-Write-Host "Adding email tracking, thread management, spam protection, and comment system..." -ForegroundColor White
+Write-Host "Adding email tracking, thread management, spam protection, comment system, and KB seeding..." -ForegroundColor White
 
 $migrationFiles = @(
     "migrations\004_add_email_created_flag.sql",
@@ -185,6 +185,13 @@ $migrationFiles = @(
     "migrations\015_add_ticket_collaborators.sql",
     "migrations\016_add_ring_for_help.sql",
     "migrations\017_add_ticket_update_requests.sql",
+    "migrations\019_add_knowledge_base.sql",
+    "migrations\020_add_kb_version_control.sql",
+    "migrations\021_seed_kb_articles.sql",
+    "migrations\022_seed_kb_articles_part2.sql",
+    "migrations\023_seed_kb_articles_part3.sql",
+    "migrations\024_seed_kb_articles_part4.sql",
+    "migrations\025_add_fulltext_search.sql"
     "migrations\add_response_time_to_update_requests.sql"
 )
 
@@ -208,6 +215,8 @@ if ($migrationsApplied -eq $migrationFiles.Count) {
     Write-Host "  [OK] Spam detection and filtering" -ForegroundColor Green
     Write-Host "  [OK] Admin management features" -ForegroundColor Green
     Write-Host "  [OK] Comment reactions and threading" -ForegroundColor Green
+    Write-Host "  [OK] Knowledge base seeded with 15 starter articles" -ForegroundColor Green
+    Write-Host "  [OK] Full-text search with PostgreSQL tsvector" -ForegroundColor Green
 } else {
     Write-Host "WARNING: Some migrations failed to apply ($migrationsApplied/$($migrationFiles.Count))" -ForegroundColor Yellow
     Write-Host "Email-to-ticket features may not work correctly" -ForegroundColor Yellow
@@ -455,6 +464,14 @@ Write-Host "Dashboard Customization Enabled:" -ForegroundColor Yellow
 Write-Host "  [OK] Drag-and-drop widget grid layouts" -ForegroundColor Green
 Write-Host "  [OK] Per-user layout persistence (database-backed)" -ForegroundColor Green
 Write-Host "  [OK] Named saved layouts with load/rename/delete" -ForegroundColor Green
+Write-Host ""
+Write-Host "Knowledge Base Enabled:" -ForegroundColor Yellow
+Write-Host "  [OK] Article management with version control" -ForegroundColor Green
+Write-Host "  [OK] 15 starter support articles seeded" -ForegroundColor Green
+Write-Host "  [OK] Categories: Account, Network, Software, Hardware, Security, Support, Troubleshooting" -ForegroundColor Green
+Write-Host "  [OK] Markdown editing with tags and difficulty levels" -ForegroundColor Green
+Write-Host "  [OK] Full-text search with autocomplete and filtering" -ForegroundColor Green
+Write-Host "  [OK] Related articles recommendations" -ForegroundColor Green
 Write-Host ""
 Write-Host "Connection String:" -ForegroundColor Yellow
 Write-Host "postgresql://postgres:PASSWORD@localhost:5432/blueclue" -ForegroundColor White
