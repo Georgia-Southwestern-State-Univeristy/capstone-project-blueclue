@@ -192,6 +192,7 @@ $migrationFiles = @(
     "migrations\023_seed_kb_articles_part3.sql",
     "migrations\024_seed_kb_articles_part4.sql",
     "migrations\025_add_fulltext_search.sql"
+    "migrations\add_response_time_to_update_requests.sql"
 )
 
 $migrationsApplied = 0
@@ -280,6 +281,60 @@ if (Test-Path $dashboardMigration) {
     }
 } else {
     Write-Host "WARNING: $dashboardMigration not found" -ForegroundColor Yellow
+}
+
+Write-Host ""
+
+# Step 4.8: Apply ticket templates migration
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Step 4.8: Applying ticket templates migration..." -ForegroundColor Yellow
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Adding ticket templates with versioning and usage tracking..." -ForegroundColor White
+
+$templatesMigration = "migrations\019_add_ticket_templates.sql"
+if (Test-Path $templatesMigration) {
+    Write-Host "  Applying $templatesMigration..." -ForegroundColor White
+    $null = psql -U postgres -d blueclue -f $templatesMigration -q 2>&1
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Ticket templates migration applied successfully" -ForegroundColor Green
+        Write-Host "  [OK] ticket_templates table" -ForegroundColor Green
+        Write-Host "  [OK] template_versions table" -ForegroundColor Green
+        Write-Host "  [OK] ticket_template_usage table" -ForegroundColor Green
+        Write-Host "  [OK] template_category ENUM type" -ForegroundColor Green
+        Write-Host "  [OK] Default templates seeded" -ForegroundColor Green
+    } else {
+        Write-Host "WARNING: Failed to apply ticket templates migration" -ForegroundColor Yellow
+        Write-Host "Template features will not be available" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "WARNING: $templatesMigration not found" -ForegroundColor Yellow
+}
+
+Write-Host ""
+
+# Step 4.9: Update existing templates with content and categories
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Step 4.9: Updating existing templates..." -ForegroundColor Yellow
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Fixing template content and categories..." -ForegroundColor White
+
+$templatesUpdateMigration = "migrations\020_update_existing_templates.sql"
+if (Test-Path $templatesUpdateMigration) {
+    Write-Host "  Applying $templatesUpdateMigration..." -ForegroundColor White
+    $null = psql -U postgres -d blueclue -f $templatesUpdateMigration -q 2>&1
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Template updates applied successfully" -ForegroundColor Green
+        Write-Host "  [OK] Template categories updated" -ForegroundColor Green
+        Write-Host "  [OK] Template content filled" -ForegroundColor Green
+        Write-Host "  [OK] Missing fields populated" -ForegroundColor Green
+    } else {
+        Write-Host "WARNING: Failed to apply template updates" -ForegroundColor Yellow
+        Write-Host "Some templates may be missing content" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "WARNING: $templatesUpdateMigration not found" -ForegroundColor Yellow
 }
 
 Write-Host ""

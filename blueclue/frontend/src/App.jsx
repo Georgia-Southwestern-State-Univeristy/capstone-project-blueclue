@@ -13,6 +13,7 @@ import KnowledgeBaseManagement from './pages/KnowledgeBaseManagement'
 import FAQ from './pages/FAQ'
 import ArticlePublicView from './pages/ArticlePublicView'
 import FAQSearch from './pages/FAQSearch'
+import TemplateManager from './pages/TemplateManager'
 import Navbar from './components/Navbar'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -62,6 +63,9 @@ function App() {
         <Route path="/knowledge-base" element={
           <ProtectedRoute allowedRoles={['technician', 'senior_technician', 'management', 'admin']}>
             <KnowledgeBaseManagement />
+        <Route path="/template-manager" element={
+          <ProtectedRoute allowedRoles={['management', 'admin']}>
+            <TemplateManager />
           </ProtectedRoute>
         } />
       </Routes>

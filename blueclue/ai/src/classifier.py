@@ -234,6 +234,21 @@ class TicketClassifier:
                 "dhcp": (2.0, "configuration"),
                 "subnet": (2.0, "configuration"),
                 "proxy": (2.5, "configuration"),
+                
+                # Network Shares & File Access (weight 3.0)
+                "network share": (4.0, "share"),
+                "shared folder": (4.0, "share"),
+                "share folder": (4.0, "share"),
+                "public share": (4.0, "share"),
+                "public folder": (3.5, "share"),
+                "file share": (4.0, "share"),
+                "shared drive": (3.5, "share"),
+                "mapped drive": (3.5, "share"),
+                "network drive": (4.0, "share"),
+                "shared resource": (3.0, "share"),
+                "folder access": (3.5, "share"),
+                "drive access": (3.5, "share"),
+                "share": (2.0, "share"),
             },
             
             "login": {
@@ -267,7 +282,6 @@ class TicketClassifier:
                 "access denied": (3.5, "account"),
                 "can't access": (3.5, "account"),
                 "no access": (3.5, "account"),
-                "access": (2.0, "account"),
                 "permissions": (2.5, "account"),
                 
                 # Credentials (weight 3.0)
@@ -333,7 +347,10 @@ class TicketClassifier:
                 "slow internet", "can't connect", "won't connect", "no internet",
                 "keeps disconnecting", "losing connection", "wifi password",
                 "can't find wifi", "can't connect to vpn", "vpn not working",
-                "slow connection", "network cable", "access point"
+                "slow connection", "network cable", "access point",
+                "network share", "shared folder", "share folder", "public share",
+                "public folder", "file share", "shared drive", "mapped drive",
+                "network drive", "folder access", "drive access"
             ],
             "login": [
                 "can't login", "can't log in", "unable to login", "cannot login",

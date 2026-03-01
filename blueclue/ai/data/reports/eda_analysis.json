@@ -1,0 +1,268 @@
+{
+  "dataset_overview": {
+    "total_records": 1921,
+    "unique_categories": 8,
+    "unique_priorities": 4,
+    "fields_present": [
+      "id",
+      "ticket_number",
+      "subject",
+      "description",
+      "category",
+      "priority",
+      "user_priority",
+      "ai_priority",
+      "status",
+      "ai_classified",
+      "ai_confidence",
+      "ai_recommended_priority",
+      "priority_overridden",
+      "resolution",
+      "resolved_at",
+      "created_at",
+      "updated_at",
+      "time_to_resolution_hours",
+      "customer_company",
+      "user_previous_tickets",
+      "comment_count",
+      "reopen_count",
+      "subcategory"
+    ],
+    "records_with_resolution": 1524,
+    "records_ai_classified": 1619,
+    "date_range": {
+      "earliest": "2025-02-27T11:48:58.562192",
+      "latest": "2026-02-27T14:59:58.515935",
+      "span_days": 365
+    }
+  },
+  "category_analysis": {
+    "distribution": {
+      "software": {
+        "count": 392,
+        "percentage": 20.41
+      },
+      "network": {
+        "count": 345,
+        "percentage": 17.96
+      },
+      "hardware": {
+        "count": 291,
+        "percentage": 15.15
+      },
+      "login": {
+        "count": 278,
+        "percentage": 14.47
+      },
+      "other": {
+        "count": 194,
+        "percentage": 10.1
+      },
+      "billing": {
+        "count": 154,
+        "percentage": 8.02
+      },
+      "account": {
+        "count": 147,
+        "percentage": 7.65
+      },
+      "feature_request": {
+        "count": 120,
+        "percentage": 6.25
+      }
+    },
+    "total_categories": 8,
+    "most_common": [
+      [
+        "software",
+        392
+      ],
+      [
+        "network",
+        345
+      ],
+      [
+        "hardware",
+        291
+      ]
+    ],
+    "least_common": [
+      [
+        "billing",
+        154
+      ],
+      [
+        "account",
+        147
+      ],
+      [
+        "feature_request",
+        120
+      ]
+    ],
+    "imbalance_ratio": 3.2666666666666666,
+    "class_balance_status": "imbalanced"
+  },
+  "priority_analysis": {
+    "distribution": {
+      "low": {
+        "count": 714,
+        "percentage": 37.17
+      },
+      "medium": {
+        "count": 595,
+        "percentage": 30.97
+      },
+      "high": {
+        "count": 488,
+        "percentage": 25.4
+      },
+      "critical": {
+        "count": 124,
+        "percentage": 6.45
+      }
+    },
+    "ordered_distribution": {
+      "critical": 124,
+      "high": 488,
+      "medium": 595,
+      "low": 714
+    },
+    "total_priorities": 4,
+    "most_common": [
+      "low",
+      714
+    ],
+    "critical_percentage": 6.45,
+    "high_priority_percentage": 31.86
+  },
+  "text_analysis": {
+    "description": {
+      "avg_length": 152.3,
+      "std_length": 36.51,
+      "min_length": 40,
+      "max_length": 320,
+      "median_length": 150.0,
+      "avg_word_count": 26.03,
+      "empty_count": 0
+    },
+    "subject": {
+      "avg_length": 25.0,
+      "std_length": 5.27,
+      "min_length": 14,
+      "max_length": 40,
+      "empty_count": 0
+    },
+    "combined_empty": 0
+  },
+  "temporal_analysis": {
+    "by_hour": {
+      "0": 79,
+      "1": 80,
+      "2": 61,
+      "3": 76,
+      "4": 79,
+      "5": 71,
+      "6": 86,
+      "7": 76,
+      "8": 68,
+      "9": 70,
+      "10": 98,
+      "11": 83,
+      "12": 78,
+      "13": 95,
+      "14": 99,
+      "15": 89,
+      "16": 62,
+      "17": 82,
+      "18": 72,
+      "19": 73,
+      "20": 92,
+      "21": 78,
+      "22": 76,
+      "23": 98
+    },
+    "by_day_of_month": {
+      "1": 38,
+      "2": 69,
+      "3": 46,
+      "4": 50,
+      "5": 60,
+      "6": 51,
+      "7": 57,
+      "8": 78,
+      "9": 49,
+      "10": 68,
+      "11": 73,
+      "12": 64,
+      "13": 63,
+      "14": 61,
+      "15": 70,
+      "16": 64,
+      "17": 72,
+      "18": 72,
+      "19": 59,
+      "20": 72,
+      "21": 68,
+      "22": 53,
+      "23": 68,
+      "24": 74,
+      "25": 74,
+      "26": 77,
+      "27": 72,
+      "28": 47,
+      "29": 52,
+      "30": 54,
+      "31": 46
+    },
+    "by_month": {
+      "1": 486,
+      "2": 669,
+      "4": 5,
+      "5": 6,
+      "6": 7,
+      "7": 18,
+      "8": 43,
+      "9": 57,
+      "10": 123,
+      "11": 166,
+      "12": 341
+    },
+    "by_weekday": {
+      "Monday": 303,
+      "Tuesday": 273,
+      "Wednesday": 297,
+      "Thursday": 260,
+      "Friday": 266,
+      "Saturday": 263,
+      "Sunday": 259
+    },
+    "business_hours_percentage": 39.35,
+    "after_hours_percentage": 60.65,
+    "weekday_percentage": 72.83,
+    "weekend_percentage": 27.17,
+    "peak_hour": 14,
+    "peak_day": "Monday"
+  },
+  "quality_issues": {
+    "missing_descriptions": 0,
+    "missing_subjects": 0,
+    "missing_categories": 0,
+    "missing_priorities": 0,
+    "short_descriptions": 0,
+    "invalid_categories": 0,
+    "invalid_priorities": 0,
+    "potential_duplicates": 1043,
+    "summary": [
+      "Potential duplicates detected: 1043 (54.3%)"
+    ],
+    "total_issues": 0,
+    "data_quality_score": 100.0
+  },
+  "key_insights": [
+    "\u2713 Good dataset size (1921 records) for initial ML training.",
+    "\u26a0 Category classes are imbalanced (ratio: 3.3:1). Consider oversampling or weighted training.",
+    "\u2713 Data quality score is good (100.0/100)."
+  ],
+  "generated_at": "2026-02-27T15:48:05.083226"
+}

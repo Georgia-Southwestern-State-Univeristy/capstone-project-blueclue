@@ -72,7 +72,7 @@ function Navbar() {
                     </Link>
                   </>
                 )}
-                {user?.role === 'technician' && (
+                {['technician', 'senior_technician', 'admin'].includes(user?.role) && (
                   <>
                     <Link to="/technician" className="text-gray-300 hover:text-white transition-colors">
                       All Tickets
@@ -94,6 +94,15 @@ function Navbar() {
                       Knowledge Base
                     </Link>
                   </>
+                    <Link to="/template-manager" className="text-gray-300 hover:text-white transition-colors">
+                      Templates
+                    </Link>
+                  </>
+                )}
+                {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
+                  <Link to="/analytics" className="text-gray-300 hover:text-white transition-colors">
+                    Analytics
+                  </Link>
                 )}
               </>
             )}
@@ -231,7 +240,7 @@ function Navbar() {
               </Link>
             </>
           )}
-          {user?.role === 'technician' && (
+          {['technician', 'senior_technician', 'admin'].includes(user?.role) && (
             <>
               <Link
                 to="/technician"
@@ -250,12 +259,30 @@ function Navbar() {
             </>
           )}
           {(user?.role === 'management' || user?.role === 'admin') && (
+            <>
+              <Link
+                to="/management-dashboard"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+              >
+                Management Dashboard
+              </Link>
+              <Link
+                to="/template-manager"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+              >
+                Templates
+              </Link>
+            </>
+          )}
+          {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
             <Link
-              to="/management-dashboard"
+              to="/analytics"
               onClick={() => setMobileMenuOpen(false)}
               className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
             >
-              Management Dashboard
+              Analytics
             </Link>
           )}
           
