@@ -26,6 +26,7 @@ import {
  *  - onMinimize: () => void
  *  - onFeedback: (messageId, rating) => void
  *  - isTyping: boolean
+ *  - suggestions: Array<{ label, value }> | undefined — quick-reply chips from the backend
  */
 function ChatWindow({
   isOpen,
@@ -35,6 +36,7 @@ function ChatWindow({
   onMinimize,
   onFeedback,
   isTyping = false,
+  suggestions,
 }) {
   const messagesEndRef = useRef(null);
   const prevMessageCount = useRef(messages.length);
@@ -58,9 +60,10 @@ function ChatWindow({
     prevMessageCount.current = messages.length;
   }, [messages]);
 
-  // Show quick replies only before user's first message
+  // Show quick replies: on welcome (first message only) or when backend provides suggestions
   const showQuickReplies =
-    messages.length === 1 && messages[0]?.sender === 'bot' && !isTyping;
+    (messages.length === 1 && messages[0]?.sender === 'bot' && !isTyping) ||
+    (suggestions && !isTyping);
 
   return (
     <div
@@ -131,7 +134,7 @@ function ChatWindow({
         {/* Quick reply chips */}
         {showQuickReplies && (
           <div className="animate-fade-in">
-            <QuickReplyButtons onSelect={onSend} disabled={isTyping} />
+            <QuickReplyButtons options={suggestions} onSelect={onSend} disabled={isTyping} />
           </div>
         )}
 

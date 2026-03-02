@@ -24,7 +24,7 @@ function MessageBubble({ id, sender, text, timestamp, onFeedback }) {
     <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
       {/* Bubble */}
       <div
-        className={`max-w-[80%] px-3 py-2 rounded-lg text-sm leading-relaxed ${
+        className={`max-w-[80%] px-3 py-2 rounded-lg text-sm leading-relaxed whitespace-pre-wrap break-words ${
           isUser
             ? 'bg-blue-600 text-white rounded-br-none'
             : 'bg-gray-800 text-gray-200 rounded-bl-none'

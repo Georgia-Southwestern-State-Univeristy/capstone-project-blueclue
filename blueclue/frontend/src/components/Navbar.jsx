@@ -9,6 +9,7 @@ import SettingsSidebar from './SettingsSidebar'
 import TicketDetailView from './TicketDetailView'
 import useChatStore from '../hooks/useChatStore'
 import { requestNotificationPermission } from '../utils/chatNotifications'
+import { sendChatMessage, submitChatFeedback, clearChatHistory } from '../services/chatService'
 import logo from '../assets/EditedBlueClueLogo.png'
 
 function Navbar() {
@@ -18,9 +19,11 @@ function Navbar() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const [ticketDetailId, setTicketDetailId] = useState(null)
+  const [suggestions, setSuggestions] = useState(null)
 
   // Persistent chat state
   const chat = useChatStore()
+  const conversationIdRef = useRef(null)
   const [ticketDetailOpen, setTicketDetailOpen] = useState(false)
   const notificationDropdownRef = useRef(null)
   const notificationBellRef = useRef(null)
@@ -39,29 +42,62 @@ function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Send a message and simulate a bot reply (placeholder until backend)
-  const handleChatSend = useCallback((text) => {
+  // Send a message to the backend and display the bot reply
+  const handleChatSend = useCallback(async (text) => {
     // Request notification permission on first interaction (user-initiated)
     requestNotificationPermission()
     chat.addMessage({ id: Date.now(), sender: 'user', text, timestamp: new Date() })
     setIsTyping(true)
-    setTimeout(() => {
+    setSuggestions(null)
+
+    try {
+      const data = await sendChatMessage(text, conversationIdRef.current)
+      conversationIdRef.current = data.conversationId ?? conversationIdRef.current
+      setIsTyping(false)
+
+      // Map backend suggestions to {label, value} for QuickReplyButtons
+      if (data.suggestions?.length) {
+        setSuggestions(data.suggestions.map((s) => ({ label: s, value: s })))
+      }
+
+      chat.addMessage({
+        id: data.messageId ?? Date.now() + 1,
+        sender: 'bot',
+        text: data.response,
+        timestamp: new Date(),
+      })
+    } catch (err) {
       setIsTyping(false)
       chat.addMessage({
         id: Date.now() + 1,
         sender: 'bot',
-        text: 'Thanks for your message! This is a placeholder response. The AI backend will be integrated soon.',
+        text: 'Sorry, something went wrong. Please try again.',
         timestamp: new Date(),
       })
-    }, 1500)
+      console.error('Chat error:', err)
+    }
   }, [chat])
 
-  // Feedback handler — placeholder until backend integration
-  const handleChatFeedback = useCallback((messageId, rating) => {
-    console.log(`Feedback for message ${messageId}: ${rating}`)
+  // Feedback handler — sends rating to backend
+  const handleChatFeedback = useCallback(async (messageId, rating) => {
+    try {
+      const helpful = rating === 'positive'
+      await submitChatFeedback(messageId, helpful)
+    } catch (err) {
+      console.error('Feedback error:', err)
+    }
   }, [])
 
   const handleLogout = async () => {
+    try {
+      if (conversationIdRef.current) {
+        await clearChatHistory(conversationIdRef.current)
+      }
+    } catch {
+      // silently ignore — logout should always proceed
+    }
+    conversationIdRef.current = null
+    setSuggestions(null)
     chat.clearChat()
     await logout()
     navigate('/login')
@@ -314,6 +350,7 @@ function Navbar() {
         onMinimize={chat.closeChat}
         onFeedback={handleChatFeedback}
         isTyping={isTyping}
+        suggestions={suggestions || undefined}
       />
 
       {/* Ticket Detail View - opened from notification clicks */}
