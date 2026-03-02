@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import MessageBubble from './MessageBubble';
 import ChatInput from './ChatInput';
+import QuickReplyButtons from './QuickReplyButtons';
 
 /**
  * ChatWindow — Collapsible chat panel for the BlueClue Assistant.
@@ -117,6 +118,11 @@ function ChatWindow({ isOpen, onClose, onMinimize }) {
             timestamp={msg.timestamp}
           />
         ))}
+
+        {/* Quick reply chips — visible only before user's first message */}
+        {messages.length === 1 && messages[0].sender === 'bot' && !isTyping && (
+          <QuickReplyButtons onSelect={handleSend} disabled={isTyping} />
+        )}
 
         {/* Typing indicator */}
         {isTyping && (
