@@ -57,9 +57,14 @@ function Navbar() {
             {authenticated && (
               <>
                 {user?.role === 'customer' && (
-                  <Link to="/client-dashboard" className="text-gray-300 hover:text-white transition-colors">
-                    Client Dashboard
-                  </Link>
+                  <>
+                    <Link to="/client-dashboard" className="text-gray-300 hover:text-white transition-colors">
+                      Client Dashboard
+                    </Link>
+                    <Link to="/faq" className="text-gray-300 hover:text-white transition-colors">
+                      Help Center
+                    </Link>
+                  </>
                 )}
                 {['technician', 'senior_technician', 'admin'].includes(user?.role) && (
                   <>
@@ -69,12 +74,18 @@ function Navbar() {
                     <Link to="/my-tickets" className="text-gray-300 hover:text-white transition-colors">
                       My Tickets
                     </Link>
+                    <Link to="/knowledge-base" className="text-gray-300 hover:text-white transition-colors">
+                      Knowledge Base
+                    </Link>
                   </>
                 )}
                 {(user?.role === 'management' || user?.role === 'admin') && (
                   <>
                     <Link to="/management-dashboard" className="text-gray-300 hover:text-white transition-colors">
                       Management Dashboard
+                    </Link>
+                    <Link to="/knowledge-base" className="text-gray-300 hover:text-white transition-colors">
+                      Knowledge Base
                     </Link>
                     <Link to="/template-manager" className="text-gray-300 hover:text-white transition-colors">
                       Templates
@@ -183,13 +194,22 @@ function Navbar() {
           </div>
           
           {(user?.role === 'customer' || user?.role === 'guest') && (
-            <Link
-              to="/client-dashboard"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
-            >
-              Client Dashboard
-            </Link>
+            <>
+              <Link
+                to="/client-dashboard"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+              >
+                Client Dashboard
+              </Link>
+              <Link
+                to="/faq"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+              >
+                ❓ Help Center
+              </Link>
+            </>
           )}
           {['technician', 'senior_technician', 'admin'].includes(user?.role) && (
             <>

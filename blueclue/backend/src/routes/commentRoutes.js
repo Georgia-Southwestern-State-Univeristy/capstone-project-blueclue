@@ -13,20 +13,17 @@ import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// All routes require authentication
-router.use(authenticateToken);
-
-// Ticket comments
-router.get('/tickets/:ticketId/comments', getCommentsByTicket);
-router.post('/tickets/:ticketId/comments', createComment);
-router.get('/tickets/:ticketId/comments/search', searchComments);
+// Ticket comments (all require authentication)
+router.get('/tickets/:ticketId/comments', authenticateToken, getCommentsByTicket);
+router.post('/tickets/:ticketId/comments', authenticateToken, createComment);
+router.get('/tickets/:ticketId/comments/search', authenticateToken, searchComments);
 
 // Individual comment operations
-router.patch('/comments/:commentId', updateComment);
-router.delete('/comments/:commentId', deleteComment);
+router.patch('/comments/:commentId', authenticateToken, updateComment);
+router.delete('/comments/:commentId', authenticateToken, deleteComment);
 
 // Comment reactions
-router.post('/comments/:commentId/reactions', addReaction);
-router.delete('/comments/:commentId/reactions/:emoji', removeReaction);
+router.post('/comments/:commentId/reactions', authenticateToken, addReaction);
+router.delete('/comments/:commentId/reactions/:emoji', authenticateToken, removeReaction);
 
 export default router;
