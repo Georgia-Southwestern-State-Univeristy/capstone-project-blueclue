@@ -63,6 +63,8 @@ function App() {
         <Route path="/knowledge-base" element={
           <ProtectedRoute allowedRoles={['technician', 'senior_technician', 'management', 'admin']}>
             <KnowledgeBaseManagement />
+          </ProtectedRoute>
+        } />
         <Route path="/template-manager" element={
           <ProtectedRoute allowedRoles={['management', 'admin']}>
             <TemplateManager />
