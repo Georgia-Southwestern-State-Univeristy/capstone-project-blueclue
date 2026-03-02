@@ -101,9 +101,15 @@ export const normalizeNotification = (notification) => ({
   ...notification,
   isRead: notification.is_read,
   createdAt: notification.created_at,
+  ticketId: notification.ticket_id,
+  userId: notification.user_id,
   // Keep original snake_case for backend operations
   is_read: notification.is_read,
   created_at: notification.created_at,
+  ticket_id: notification.ticket_id,
+  user_id: notification.user_id,
+  // Preserve metadata field
+  metadata: notification.metadata || {},
 });
 
 /**
