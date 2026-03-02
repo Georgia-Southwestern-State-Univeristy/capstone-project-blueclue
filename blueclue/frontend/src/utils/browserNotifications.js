@@ -37,6 +37,7 @@ export const canShowBrowserNotification = () => {
  * @param {string} options.body - Notification body text
  * @param {string} options.icon - Notification icon URL
  * @param {string} options.tag - Notification tag (for grouping/replacing)
+ * @param {boolean} options.requireInteraction - Keep notification visible until user interacts
  * @param {Function} options.onClick - Click handler
  * @returns {Notification|null} Notification instance or null
  */
@@ -50,6 +51,7 @@ export const showBrowserNotification = (title, options = {}) => {
     body = '',
     icon = '/blueclue-icon.png',
     tag = 'blueclue-notification',
+    requireInteraction = false,
     onClick = null
   } = options;
 
@@ -59,7 +61,7 @@ export const showBrowserNotification = (title, options = {}) => {
       icon,
       tag,
       badge: icon,
-      requireInteraction: false,
+      requireInteraction,
       silent: false
     });
 
@@ -72,8 +74,10 @@ export const showBrowserNotification = (title, options = {}) => {
       };
     }
 
-    // Auto-close after 5 seconds
-    setTimeout(() => notification.close(), 5000);
+    // Auto-close after 5 seconds unless requireInteraction is true
+    if (!requireInteraction) {
+      setTimeout(() => notification.close(), 5000);
+    }
 
     return notification;
   } catch (error) {
@@ -87,20 +91,28 @@ export const showBrowserNotification = (title, options = {}) => {
  * @param {Object} notification - Notification data
  */
 export const showNotificationAlert = (notification) => {
-  const { type, message } = notification;
+  const { type, message, metadata } = notification;
 
   const titles = {
     assignment: '🎫 New Ticket Assignment',
     overdue: '⏰ Overdue Ticket',
     update_request: '💬 Update Request',
-    mention: '👤 You were mentioned'
+    mention: '👤 You were mentioned',
+    ring_request: '🔔 Urgent Help Request!'
   };
 
   const title = titles[type] || '🔔 New Notification';
 
+  // For ring requests, include urgency level in the body
+  let notificationBody = message;
+  if (type === 'ring_request' && metadata?.urgency_level) {
+    notificationBody = `${metadata.urgency_level} Priority - ${message}`;
+  }
+
   return showBrowserNotification(title, {
-    body: message,
+    body: notificationBody,
     tag: `blueclue-${type}`,
+    requireInteraction: type === 'ring_request', // Keep ring requests visible until clicked
     onClick: () => {
       // Focus the app when notification is clicked
       window.focus();

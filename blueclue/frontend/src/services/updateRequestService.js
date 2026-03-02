@@ -87,6 +87,24 @@ export const requestExtension = async (id, data) => {
 };
 
 /**
+ * Handle extension request (approve or deny)
+ * @param {number} id - Update request ID
+ * @param {boolean} approved - Whether to approve the extension
+ * @returns {Promise} API response
+ */
+export const handleExtensionRequest = async (id, approved) => {
+  const response = await axios.post(
+    `${API_URL}/update-requests/${id}/handle-extension`,
+    { approved },
+    { 
+      headers: getAuthHeaders(),
+      withCredentials: true 
+    }
+  );
+  return response.data;
+};
+
+/**
  * Cancel an update request
  * @param {number} id - Update request ID
  * @returns {Promise} API response

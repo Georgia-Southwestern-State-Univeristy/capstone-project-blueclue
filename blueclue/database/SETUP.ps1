@@ -193,7 +193,8 @@ $migrationFiles = @(
     "migrations\022_seed_kb_articles_part2.sql",
     "migrations\023_seed_kb_articles_part3.sql",
     "migrations\024_seed_kb_articles_part4.sql",
-    "migrations\025_add_fulltext_search.sql"
+    "migrations\025_add_fulltext_search.sql",
+    "migrations\026_add_notification_metadata.sql",
     "migrations\add_response_time_to_update_requests.sql"
 )
 

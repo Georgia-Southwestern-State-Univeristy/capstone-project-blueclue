@@ -270,15 +270,18 @@ function MyAssignedTickets() {
       />
 
       {/* Update Response Modal */}
-      <UpdateResponseModal
-        request={selectedUpdateRequest}
-        isOpen={!!selectedUpdateRequest}
-        onClose={() => setSelectedUpdateRequest(null)}
-        onSuccess={() => {
-          setSelectedUpdateRequest(null)
-          fetchTickets()
-        }}
-      />
+      {selectedUpdateRequest && (
+        <UpdateResponseModal
+          isOpen={!!selectedUpdateRequest}
+          onClose={(success) => {
+            setSelectedUpdateRequest(null)
+            if (success) {
+              fetchTickets()
+            }
+          }}
+          updateRequest={selectedUpdateRequest}
+        />
+      )}
     </div>
   )
 }

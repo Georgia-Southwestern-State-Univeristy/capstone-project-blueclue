@@ -415,7 +415,7 @@ export const requestExtension = async (req, res) => {
       type: 'update_request',
       priority: 'medium',
       title: '⏰ Extension Requested',
-      message: `${req.user.first_name} ${req.user.last_name} has requested a deadline extension for Ticket #${updateRequest.ticket_id}`,
+      message: `${req.user.firstName} ${req.user.lastName} has requested a deadline extension for Ticket #${updateRequest.ticket_id}`,
       ticket_id: updateRequest.ticket_id,
       link: `/tickets/${updateRequest.ticket_id}`,
       metadata: {
@@ -435,6 +435,74 @@ export const requestExtension = async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Failed to request extension',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Handle extension request (approve or deny)
+ * POST /api/update-requests/:id/handle-extension
+ */
+export const handleExtensionRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { approved } = req.body;
+
+    // Verify user is management
+    if (req.user.role !== 'management') {
+      return res.status(403).json({
+        status: 'error',
+        message: 'Only management can approve/deny extension requests'
+      });
+    }
+
+    if (typeof approved !== 'boolean') {
+      return res.status(400).json({
+        status: 'error',
+        message: 'approved field is required and must be boolean'
+      });
+    }
+
+    const updateRequest = await UpdateRequest.getById(id);
+    if (!updateRequest || !updateRequest.extension_requested) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'Update request with extension request not found'
+      });
+    }
+
+    // Handle the extension
+    const updated = await UpdateRequest.handleExtension(id, approved);
+
+    // Notify the technician
+    const notification = await Notification.create({
+      user_id: updateRequest.assigned_to,
+      type: 'update_request',
+      priority: approved ? 'low' : 'medium',
+      title: approved ? '✅ Extension Approved' : '❌ Extension Denied',
+      message: approved
+        ? `Your deadline extension request for Ticket #${updateRequest.ticket_id} has been approved by ${req.user.firstName} ${req.user.lastName}`
+        : `Your deadline extension request for Ticket #${updateRequest.ticket_id} has been denied by ${req.user.firstName} ${req.user.lastName}`,
+      ticket_id: updateRequest.ticket_id,
+      link: `/tickets/${updateRequest.ticket_id}`
+    });
+
+    // Emit real-time notification
+    if (req.app.locals.io) {
+      emitNotificationToUser(req.app.locals.io, updateRequest.assigned_to, notification);
+    }
+
+    res.status(200).json({
+      status: 'success',
+      message: approved ? 'Extension approved' : 'Extension denied',
+      data: { updateRequest: updated }
+    });
+  } catch (error) {
+    console.error('Error handling extension request:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to handle extension request',
       error: error.message
     });
   }
