@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import MessageBubble from './MessageBubble';
+import ChatInput from './ChatInput';
 
 /**
  * ChatWindow — Collapsible chat panel for the BlueClue Assistant.
@@ -16,7 +17,6 @@ import MessageBubble from './MessageBubble';
  *  - onMinimize: () => void — called when the minimize (—) button is pressed
  */
 function ChatWindow({ isOpen, onClose, onMinimize }) {
-  const [inputValue, setInputValue] = useState('');
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -27,7 +27,6 @@ function ChatWindow({ isOpen, onClose, onMinimize }) {
   ]);
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef(null);
-  const inputRef = useRef(null);
 
   // Auto-scroll to newest message
   useEffect(() => {
@@ -36,26 +35,15 @@ function ChatWindow({ isOpen, onClose, onMinimize }) {
     }
   }, [messages, isTyping]);
 
-  // Focus input when panel opens
-  useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isOpen]);
-
-  const handleSend = () => {
-    const trimmed = inputValue.trim();
-    if (!trimmed) return;
-
+  const handleSend = (text) => {
     const userMessage = {
       id: Date.now(),
       sender: 'user',
-      text: trimmed,
+      text,
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    setInputValue('');
 
     // Simulate bot typing then responding
     setIsTyping(true);
@@ -71,13 +59,6 @@ function ChatWindow({ isOpen, onClose, onMinimize }) {
         },
       ]);
     }, 1500);
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
   };
 
   if (!isOpen) return null;
@@ -153,31 +134,7 @@ function ChatWindow({ isOpen, onClose, onMinimize }) {
       </div>
 
       {/* ── Input area ─────────────────────────────────────────────── */}
-      <div className="border-t border-gray-700 px-3 py-2">
-        <div className="flex items-center gap-2">
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message…"
-            className="flex-1 bg-gray-800 text-white text-sm rounded-lg px-3 py-2 placeholder-gray-500 border border-gray-700 focus:outline-none focus:border-blue-500 transition-colors"
-            aria-label="Chat message input"
-          />
-          <button
-            onClick={handleSend}
-            disabled={!inputValue.trim()}
-            className="w-9 h-9 flex items-center justify-center rounded-lg bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white transition-colors"
-            aria-label="Send message"
-            title="Send"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19V5m0 0l-7 7m7-7l7 7" />
-            </svg>
-          </button>
-        </div>
-      </div>
+      <ChatInput onSend={handleSend} disabled={isTyping} autoFocus={isOpen} />
     </div>
   );
 }
