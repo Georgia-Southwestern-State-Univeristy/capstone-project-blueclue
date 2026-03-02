@@ -4,6 +4,7 @@ import {
   getUpdateRequests,
   fulfillUpdateRequest,
   requestExtension,
+  handleExtensionRequest,
   cancelUpdateRequest,
   getTechStats,
   getResponseTimeAnalytics
@@ -23,6 +24,9 @@ router.post('/update-requests/:id/fulfill', authenticateToken, fulfillUpdateRequ
 
 // Request deadline extension
 router.post('/update-requests/:id/request-extension', authenticateToken, requestExtension);
+
+// Handle extension request (approve/deny)
+router.post('/update-requests/:id/handle-extension', authenticateToken, handleExtensionRequest);
 
 // Cancel an update request
 router.delete('/update-requests/:id', authenticateToken, cancelUpdateRequest);
