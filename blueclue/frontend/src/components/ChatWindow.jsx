@@ -35,6 +35,10 @@ function ChatWindow({ isOpen, onClose, onMinimize }) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, isTyping]);
+  // Feedback handler — placeholder until backend integration
+  const handleFeedback = (messageId, rating) => {
+    console.log(`Feedback for message ${messageId}: ${rating}`);
+  };
 
   const handleSend = (text) => {
     const userMessage = {
@@ -113,9 +117,11 @@ function ChatWindow({ isOpen, onClose, onMinimize }) {
         {messages.map((msg) => (
           <MessageBubble
             key={msg.id}
+            id={msg.id}
             sender={msg.sender}
             text={msg.text}
             timestamp={msg.timestamp}
+            onFeedback={handleFeedback}
           />
         ))}
 

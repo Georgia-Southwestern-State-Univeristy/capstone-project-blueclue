@@ -1,47 +1,94 @@
-import { useState } from 'react'
+import { useState } from 'react';
 
-// FeedbackButtons – thumbs-up / thumbs-down shown on bot messages
-
-export default function FeedbackButtons({ messageId, onFeedback }) {
-  const [selected, setSelected] = useState(null) // 'up' | 'down' | null
+/**
+ * FeedbackButtons — Thumbs-up / thumbs-down rating for a bot message.
+ *
+ * Displays inline under a bot bubble. Once the user selects a rating the
+ * choice is highlighted and the buttons become non-interactive.
+ *
+ * Props:
+ *  - messageId: number | string — id of the message being rated
+ *  - onFeedback: (messageId, rating: 'positive' | 'negative') => void
+ */
+function FeedbackButtons({ messageId, onFeedback }) {
+  const [rating, setRating] = useState(null); // null | 'positive' | 'negative'
 
   const handleClick = (value) => {
-    if (selected) return // already voted
-    setSelected(value)
-    onFeedback(messageId, value === 'up')
-  }
+    if (rating) return; // already rated
+    setRating(value);
+    if (onFeedback) onFeedback(messageId, value);
+  };
 
   return (
-    <div className="flex items-center gap-2 mt-1.5">
+    <div className="flex items-center gap-1 mt-1">
+      {/* Thumbs up */}
       <button
-        onClick={() => handleClick('up')}
-        disabled={!!selected}
-        className={`p-0.5 rounded transition-colors ${
-          selected === 'up' ? 'text-green-400' : 'text-gray-500 hover:text-green-400'
-        } disabled:cursor-default`}
+        onClick={() => handleClick('positive')}
+        disabled={rating !== null}
+        className={`p-1 rounded transition-colors ${
+          rating === 'positive'
+            ? 'text-green-400'
+            : rating === null
+              ? 'text-gray-500 hover:text-green-400 hover:bg-gray-800'
+              : 'text-gray-600 opacity-40'
+        }`}
         aria-label="Helpful"
         title="Helpful"
       >
-        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z" />
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"
+          />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"
+          />
         </svg>
       </button>
+
+      {/* Thumbs down */}
       <button
-        onClick={() => handleClick('down')}
-        disabled={!!selected}
-        className={`p-0.5 rounded transition-colors ${
-          selected === 'down' ? 'text-red-400' : 'text-gray-500 hover:text-red-400'
-        } disabled:cursor-default`}
+        onClick={() => handleClick('negative')}
+        disabled={rating !== null}
+        className={`p-1 rounded transition-colors ${
+          rating === 'negative'
+            ? 'text-red-400'
+            : rating === null
+              ? 'text-gray-500 hover:text-red-400 hover:bg-gray-800'
+              : 'text-gray-600 opacity-40'
+        }`}
         aria-label="Not helpful"
         title="Not helpful"
       >
-        <svg className="w-3.5 h-3.5 rotate-180" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M2 10.5a1.5 1.5 0 113 0v6a1.5 1.5 0 01-3 0v-6zM6 10.333v5.43a2 2 0 001.106 1.79l.05.025A4 4 0 008.943 18h5.416a2 2 0 001.962-1.608l1.2-6A2 2 0 0015.56 8H12V4a2 2 0 00-2-2 1 1 0 00-1 1v.667a4 4 0 01-.8 2.4L6.8 7.933a4 4 0 00-.8 2.4z" />
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10z"
+          />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M17 2h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17"
+          />
         </svg>
       </button>
-      {selected && (
-        <span className="text-[10px] text-gray-500">Thanks for the feedback!</span>
+
+      {/* Confirmation text */}
+      {rating && (
+        <span className="text-[10px] text-gray-500 ml-1">
+          Thanks for the feedback!
+        </span>
       )}
     </div>
-  )
+  );
 }
+
+export default FeedbackButtons;
