@@ -1,0 +1,7 @@
+# This directory contains ML training data
+# Subdirectories will be created by the pipeline:
+# - raw/       : Raw exported/generated data
+# - processed/ : Cleaned and preprocessed data
+# - splits/    : Train/val/test splits
+# - features/  : Feature matrices for ML
+# - reports/   : EDA reports and visualizations

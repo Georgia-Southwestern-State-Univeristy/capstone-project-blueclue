@@ -64,18 +64,32 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
 
       const assignCount = activity.filter(a => {
         const d = new Date(a.created_at)
-        return d >= hourStart && d < hourEnd
+        return d >= hourStart && d < hourEnd && 
+               !['ticket_cancelled', 'update_requested', 'update_fulfilled'].includes(a.change_type)
       }).length
 
-      data.push({ hourStart, count, assignCount })
+      const updateCount = activity.filter(a => {
+        const d = new Date(a.created_at)
+        return d >= hourStart && d < hourEnd && 
+               ['update_requested', 'update_fulfilled'].includes(a.change_type)
+      }).length
+
+      const cancelCount = activity.filter(a => {
+        const d = new Date(a.created_at)
+        return d >= hourStart && d < hourEnd && a.change_type === 'ticket_cancelled'
+      }).length
+
+      data.push({ hourStart, count, assignCount, updateCount, cancelCount })
     }
 
     return data
   }, [tickets, activity])
 
-  const maxCount = Math.max(...buckets.map(b => b.count + b.assignCount), 1)
+  const maxCount = Math.max(...buckets.map(b => b.count + b.assignCount + b.updateCount + b.cancelCount), 1)
   const total = buckets.reduce((sum, b) => sum + b.count, 0)
   const totalAssignments = buckets.reduce((sum, b) => sum + b.assignCount, 0)
+  const totalUpdates = buckets.reduce((sum, b) => sum + b.updateCount, 0)
+  const totalCancellations = buckets.reduce((sum, b) => sum + b.cancelCount, 0)
 
   // Day boundary labels — deduplicate and enforce minimum spacing
   const dayLabels = useMemo(() => {
@@ -104,11 +118,11 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
   }
 
   return (
-    <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-4 md:p-6 h-full flex flex-col">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base md:text-lg font-semibold text-white">Ticket Timeline</h3>
+    <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-4 h-full flex flex-col overflow-visible">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h3 className="text-base font-semibold text-white">Ticket Timeline</h3>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-3 text-xs text-gray-500">
+          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
             <span className="flex items-center gap-1">
               <span className="w-2.5 h-2.5 rounded-sm bg-blue-400 inline-block" />
               Submissions ({total})
@@ -116,6 +130,14 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
             <span className="flex items-center gap-1">
               <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400 inline-block" />
               Assignments ({totalAssignments})
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block" />
+              Updates ({totalUpdates})
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm bg-gray-400 inline-block" />
+              Cancellations ({totalCancellations})
             </span>
             <span>Last 3 days</span>
           </div>
@@ -140,11 +162,13 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
         className="flex-1 flex flex-col justify-end min-h-0 overflow-x-visible overflow-y-hidden pt-16 pr-8 scrollbar-hide md:scrollbar-default"
         style={{ WebkitOverflowScrolling: 'touch', position: 'relative', zIndex: 1 }}
       >
-        <div className="flex items-end gap-1 h-36 md:min-w-0" style={{ minWidth: '500px' }}>
+        <div className="flex items-end gap-1 h-36 md:min-w-0">
           {buckets.map((bucket, i) => {
-            const totalHeight = bucket.count + bucket.assignCount
+            const totalHeight = bucket.count + bucket.assignCount + bucket.updateCount + bucket.cancelCount
             const submitPct = totalHeight > 0 ? Math.max((bucket.count / maxCount) * 100, bucket.count > 0 ? 3 : 0) : 0
             const assignPct = totalHeight > 0 ? Math.max((bucket.assignCount / maxCount) * 100, bucket.assignCount > 0 ? 3 : 0) : 0
+            const updatePct = totalHeight > 0 ? Math.max((bucket.updateCount / maxCount) * 100, bucket.updateCount > 0 ? 3 : 0) : 0
+            const cancelPct = totalHeight > 0 ? Math.max((bucket.cancelCount / maxCount) * 100, bucket.cancelCount > 0 ? 3 : 0) : 0
             const isHovered = hoveredIndex === i
 
             // Adjust tooltip position for right-most bar
@@ -158,11 +182,31 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
                 onMouseEnter={() => setHoveredIndex(i)}
                 onMouseLeave={() => setHoveredIndex(null)}
               >
-                {/* Stacked bar: submissions (bottom, blue) + assignments (top, green) */}
+                {/* Stacked bar: submissions (bottom, blue) + assignments (green) + updates (amber) + cancellations (top, gray) */}
                 <div className="absolute bottom-0 left-0 right-0 flex flex-col items-stretch justify-end h-full">
-                  {bucket.assignCount > 0 && (
+                  {bucket.cancelCount > 0 && (
                     <div
                       className="w-full rounded-t-sm transition-all duration-150"
+                      style={{
+                        height: `${cancelPct}%`,
+                        backgroundColor: isHovered ? '#9ca3af' : '#6b7280',
+                        opacity: hoveredIndex !== null && !isHovered ? 0.3 : 1,
+                      }}
+                    />
+                  )}
+                  {bucket.updateCount > 0 && (
+                    <div
+                      className={`w-full transition-all duration-150 ${bucket.cancelCount === 0 ? 'rounded-t-sm' : ''}`}
+                      style={{
+                        height: `${updatePct}%`,
+                        backgroundColor: isHovered ? '#f59e0b' : '#fbbf24',
+                        opacity: hoveredIndex !== null && !isHovered ? 0.3 : 1,
+                      }}
+                    />
+                  )}
+                  {bucket.assignCount > 0 && (
+                    <div
+                      className={`w-full transition-all duration-150 ${bucket.updateCount === 0 && bucket.cancelCount === 0 ? 'rounded-t-sm' : ''}`}
                       style={{
                         height: `${assignPct}%`,
                         backgroundColor: isHovered ? '#34d399' : '#6ee7b7',
@@ -172,7 +216,7 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
                   )}
                   {bucket.count > 0 && (
                     <div
-                      className={`w-full transition-all duration-150 ${bucket.assignCount === 0 ? 'rounded-t-sm' : ''}`}
+                      className={`w-full transition-all duration-150 ${bucket.assignCount === 0 && bucket.updateCount === 0 && bucket.cancelCount === 0 ? 'rounded-t-sm' : ''}`}
                       style={{
                         height: `${submitPct}%`,
                         backgroundColor: isHovered ? '#3b82f6' : '#60a5fa',
@@ -198,6 +242,8 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
                     </p>
                     <p className="text-blue-400">{bucket.count} {bucket.count === 1 ? 'submission' : 'submissions'}</p>
                     <p className="text-emerald-400">{bucket.assignCount} {bucket.assignCount === 1 ? 'assignment' : 'assignments'}</p>
+                    <p className="text-amber-400">{bucket.updateCount} {bucket.updateCount === 1 ? 'update' : 'updates'}</p>
+                    <p className="text-gray-400">{bucket.cancelCount} {bucket.cancelCount === 1 ? 'cancellation' : 'cancellations'}</p>
                   </div>
                 )}
               </div>
@@ -206,7 +252,7 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
         </div>
 
         {/* Day labels below chart */}
-        <div className="relative h-5 mt-2 border-t border-gray-800 md:min-w-0 overflow-hidden" style={{ minWidth: '500px' }}>
+        <div className="relative h-5 mt-2 border-t border-gray-800 md:min-w-0 overflow-hidden">
           {dayLabels.map((d, i) => (
             <span
               key={i}
@@ -220,10 +266,10 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
       </div>
 
       {/* Assignment Activity Feed */}
-      <div className="mt-4 border-t border-gray-700 pt-3">
+      <div className="mt-4 border-t border-gray-700 pt-3 flex flex-col min-h-0" style={{ maxHeight: '40%' }}>
         <button
           onClick={() => setShowActivity(!showActivity)}
-          className="flex items-center gap-2 text-sm font-semibold text-gray-300 hover:text-white transition-colors mb-2 w-full"
+          className="flex items-center gap-2 text-sm font-semibold text-gray-300 hover:text-white transition-colors mb-2 w-full flex-shrink-0"
         >
           <svg className={`w-4 h-4 transition-transform ${showActivity ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -235,7 +281,7 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
         </button>
 
         {showActivity && (
-          <div className="max-h-56 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 space-y-0 pr-1">
+          <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 space-y-0 pr-1" style={{ maxHeight: '100%' }}>
             {activityLoading ? (
               <div className="flex items-center justify-center py-4">
                 <div className="animate-spin w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full" />
@@ -252,7 +298,82 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
                 let icon, color, bgColor, description
                 const isUnassignLegacy = entry.change_type === 'assignment' && (entry.new_value === 'unassigned' || entry.new_value === null)
 
-                if (entry.change_type === 'ticket_unassigned' || isUnassignLegacy) {
+                if (entry.change_type === 'ticket_cancelled') {
+                  color = 'text-gray-400'
+                  bgColor = 'bg-gray-700'
+                  icon = (
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                    </svg>
+                  )
+                  const cancelInfo = details
+                  const cancelledBy = cancelInfo.cancelled_by_name || entry.changed_by_name || 'Unknown'
+                  const cancelReason = cancelInfo.reason || 'No reason provided'
+                  const cancelExtra = cancelInfo.details
+                  description = (
+                    <span>
+                      <span className="text-white font-medium">{cancelledBy}</span>
+                      {' cancelled '}
+                      {onTicketClick ? (
+                        <button onClick={() => onTicketClick(entry.ticket_id)} className="text-blue-300 hover:text-blue-200 hover:underline font-medium">#{entry.ticket_number || details.ticket_number || entry.ticket_id}</button>
+                      ) : (
+                        <span className="text-blue-300">#{entry.ticket_number || details.ticket_number || entry.ticket_id}</span>
+                      )}
+                      {' — '}
+                      <span className="text-gray-300">{cancelReason}</span>
+                      {cancelExtra && <span className="text-gray-500"> — {cancelExtra}</span>}
+                    </span>
+                  )
+                } else if (entry.change_type === 'update_requested') {
+                  color = 'text-amber-400'
+                  bgColor = 'bg-amber-900/30'
+                  icon = (
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  )
+                  const requester = details.requested_by_name || entry.changed_by_name || 'Manager'
+                  const assignee = details.assigned_to_name || 'Technician'
+                  description = (
+                    <span>
+                      <span className="text-white font-medium">{requester}</span>
+                      {' requested update from '}
+                      <span className="text-amber-300 font-medium">{assignee}</span>
+                      {' on '}
+                      {onTicketClick ? (
+                        <button onClick={() => onTicketClick(entry.ticket_id)} className="text-blue-300 hover:text-blue-200 hover:underline font-medium">#{entry.ticket_number || details.ticket_number || entry.ticket_id}</button>
+                      ) : (
+                        <span className="text-blue-300">#{entry.ticket_number || details.ticket_number || entry.ticket_id}</span>
+                      )}
+                      {details.message && <span className="text-gray-400"> — "{details.message}"</span>}
+                    </span>
+                  )
+                } else if (entry.change_type === 'update_fulfilled') {
+                  color = 'text-emerald-400'
+                  bgColor = 'bg-emerald-900/30'
+                  icon = (
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  )
+                  const fulfiller = details.fulfilled_by_name || entry.changed_by_name || 'Technician'
+                  const statusBadge = details.is_resolved ? '✅ Resolved' : 
+                                     details.is_blocked ? '🚫 Blocked' : 
+                                     details.needs_more_time ? '⏰ Needs Time' : 'Updated'
+                  description = (
+                    <span>
+                      <span className="text-white font-medium">{fulfiller}</span>
+                      {' provided update on '}
+                      {onTicketClick ? (
+                        <button onClick={() => onTicketClick(entry.ticket_id)} className="text-blue-300 hover:text-blue-200 hover:underline font-medium">#{entry.ticket_number || details.ticket_number || entry.ticket_id}</button>
+                      ) : (
+                        <span className="text-blue-300">#{entry.ticket_number || details.ticket_number || entry.ticket_id}</span>
+                      )}
+                      {' — '}
+                      <span className="text-emerald-300">{statusBadge}</span>
+                    </span>
+                  )
+                } else if (entry.change_type === 'ticket_unassigned' || isUnassignLegacy) {
                   color = 'text-red-400'
                   bgColor = 'bg-red-900/30'
                   icon = (

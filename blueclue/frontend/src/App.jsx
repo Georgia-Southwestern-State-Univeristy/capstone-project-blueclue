@@ -8,7 +8,14 @@ import ClientDashboard from './pages/ClientDashboard'
 import TechnicianDashboard from './pages/TechnicianDashboard'
 import ManagementDashboard from './pages/ManagementDashboard'
 import MyAssignedTickets from './pages/MyAssignedTickets'
+import AnalyticsDashboard from './pages/AnalyticsDashboard'
+import KnowledgeBaseManagement from './pages/KnowledgeBaseManagement'
+import FAQ from './pages/FAQ'
+import ArticlePublicView from './pages/ArticlePublicView'
+import FAQSearch from './pages/FAQSearch'
+import TemplateManager from './pages/TemplateManager'
 import Navbar from './components/Navbar'
+import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
   return (
@@ -21,10 +28,48 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email/:token" element={<VerifyEmail />} />
         <Route path="/change-password" element={<ChangePassword />} />
-        <Route path="/client-dashboard" element={<ClientDashboard />} />
-        <Route path="/technician" element={<TechnicianDashboard />} />
-        <Route path="/management-dashboard" element={<ManagementDashboard />} />
-        <Route path="/my-tickets" element={<MyAssignedTickets />} />
+        
+        {/* Public FAQ Routes */}
+        <Route path="/faq" element={<FAQ />} />
+        <Route path="/faq/search" element={<FAQSearch />} />
+        <Route path="/faq/article/:id" element={<ArticlePublicView />} />
+        <Route path="/help" element={<FAQ />} />
+        
+        <Route path="/client-dashboard" element={
+          <ProtectedRoute allowedRoles={['customer', 'guest']}>
+            <ClientDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/technician" element={
+          <ProtectedRoute allowedRoles={['technician', 'senior_technician', 'management', 'admin']}>
+            <TechnicianDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/management-dashboard" element={
+          <ProtectedRoute allowedRoles={['management', 'admin']}>
+            <ManagementDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/analytics" element={
+          <ProtectedRoute allowedRoles={['technician', 'senior_technician', 'management', 'admin']}>
+            <AnalyticsDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/my-tickets" element={
+          <ProtectedRoute allowedRoles={['technician', 'senior_technician', 'management', 'admin']}>
+            <MyAssignedTickets />
+          </ProtectedRoute>
+        } />
+        <Route path="/knowledge-base" element={
+          <ProtectedRoute allowedRoles={['technician', 'senior_technician', 'management', 'admin']}>
+            <KnowledgeBaseManagement />
+          </ProtectedRoute>
+        } />
+        <Route path="/template-manager" element={
+          <ProtectedRoute allowedRoles={['management', 'admin']}>
+            <TemplateManager />
+          </ProtectedRoute>
+        } />
       </Routes>
     </BrowserRouter>
   )

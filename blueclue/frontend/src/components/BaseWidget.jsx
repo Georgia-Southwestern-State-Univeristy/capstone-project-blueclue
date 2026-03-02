@@ -31,7 +31,7 @@ function BaseWidget({
   error = null,
   isEmpty = false,
   emptyMessage = 'No data available',
-  emptyIcon = '📭',
+  emptyIcon = null,
   headerExtra = null,
   className = '',
   noPadding = false,
@@ -94,13 +94,13 @@ function BaseWidget({
 
   return (
     <div
-      className={`bg-gray-900 rounded-lg border border-gray-700 shadow-sm flex flex-col ${className}`}
+      className={`bg-gray-900 rounded-lg border border-gray-700 shadow-sm flex flex-col h-full overflow-hidden ${className}`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4 border-b border-gray-800">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
         <div className="flex items-center gap-2 min-w-0">
           {icon && <span className="text-lg flex-shrink-0">{icon}</span>}
-          <h3 className="text-base md:text-lg font-semibold text-white truncate">{title}</h3>
+          <h3 className="text-base font-semibold text-white truncate">{title}</h3>
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -156,7 +156,7 @@ function BaseWidget({
 
       {/* Body */}
       <div
-        className={`flex-1 relative ${noPadding ? '' : 'p-4 md:p-6'}`}
+        className={`flex-1 relative min-h-0 overflow-y-auto ${noPadding ? '' : 'p-4'}`}
         style={minHeight ? { minHeight } : undefined}
       >
         {/* Loading overlay */}
@@ -197,7 +197,14 @@ function BaseWidget({
         ) : isEmpty && !isLoading ? (
           /* Empty state */
           <div className="flex flex-col items-center justify-center h-full py-8 text-center">
-            <span className="text-3xl mb-3">{emptyIcon}</span>
+            {emptyIcon ? (
+              <span className="text-3xl mb-3">{emptyIcon}</span>
+            ) : (
+              <svg className="w-10 h-10 text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                  d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+              </svg>
+            )}
             <p className="text-gray-400 text-sm">{emptyMessage}</p>
           </div>
         ) : (

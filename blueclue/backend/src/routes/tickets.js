@@ -9,12 +9,23 @@ import {
     getTicketById,
     updateTicket,
     deleteTicket,
+    restoreTicket,
+    getDeletedTickets,
     updateTicketStatus,
     bulkAssignTickets,
     assignTicket,
     reassignTicket,
-    getTicketHistory
+    getTicketHistory,
+    cancelTicket,
+    reopenTicket
 } from '../controllers/ticketController.js';
+import {
+    addCollaborator,
+    removeCollaborator,
+    transferPrimary,
+    getCollaborators,
+    getTechnicianWorkload
+} from '../controllers/collaboratorController.js';
 import { optionalAuth, authenticateToken } from '../middleware/auth.js';
 import { checkPrivilege } from '../middleware/rbac.js';
 
@@ -100,11 +111,46 @@ router.get('/timeline', async (req, res) => {
 });
 
 /**
+ * @route   GET /api/tickets/deleted
+ * @desc    Get all soft-deleted tickets (management/admin only)
+ * @access  Private (requires CAN_DELETE_TICKETS privilege or admin)
+ */
+router.get('/deleted', authenticateToken, checkPrivilege('CAN_DELETE_TICKETS'), getDeletedTickets);
+
+/**
  * @route   GET /api/tickets/:id
  * @desc    Get a single ticket by ID
  * @access  Private (authenticated, respects category access)
  */
 router.get('/:id', optionalAuth, getTicketById);
+
+/**
+ * @route   GET /api/tickets/:id/collaborators
+ * @desc    Get all collaborators for a ticket
+ * @access  Private (authenticated users)
+ */
+router.get('/:id/collaborators', authenticateToken, getCollaborators);
+
+/**
+ * @route   POST /api/tickets/:id/collaborators
+ * @desc    Add a collaborator to a ticket
+ * @access  Private (primary technician or management)
+ */
+router.post('/:id/collaborators', authenticateToken, addCollaborator);
+
+/**
+ * @route   DELETE /api/tickets/:id/collaborators/:userId
+ * @desc    Remove a collaborator from a ticket
+ * @access  Private (primary technician or management)
+ */
+router.delete('/:id/collaborators/:userId', authenticateToken, removeCollaborator);
+
+/**
+ * @route   PATCH /api/tickets/:id/transfer
+ * @desc    Transfer primary assignment to another technician
+ * @access  Private (current primary or management)
+ */
+router.patch('/:id/transfer', authenticateToken, transferPrimary);
 
 /**
  * @route   POST /api/tickets/:id/request-assignment
@@ -149,6 +195,20 @@ router.patch('/:id/reassign', authenticateToken, reassignTicket);
 router.patch('/:id/status', authenticateToken, updateTicketStatus);
 
 /**
+ * @route   PATCH /api/tickets/:id/cancel
+ * @desc    Cancel a ticket (customer can cancel their own open/pending tickets; staff can cancel any active ticket)
+ * @access  Private (ticket owner or staff)
+ */
+router.patch('/:id/cancel', authenticateToken, cancelTicket);
+
+/**
+ * @route   POST /api/tickets/:id/reopen
+ * @desc    Reopen a closed or cancelled ticket (within 30 days)
+ * @access  Private (ticket requester or management only)
+ */
+router.post('/:id/reopen', authenticateToken, reopenTicket);
+
+/**
  * @route   PUT /api/tickets/:id
  * @desc    Update a ticket
  * @access  Private (authenticated users, respects category access and assignment privileges)
@@ -161,5 +221,12 @@ router.put('/:id', authenticateToken, updateTicket);
  * @access  Private (requires CAN_DELETE_TICKETS privilege or admin)
  */
 router.delete('/:id', authenticateToken, checkPrivilege('CAN_DELETE_TICKETS'), deleteTicket);
+
+/**
+ * @route   PATCH /api/tickets/:id/restore
+ * @desc    Restore a soft-deleted ticket
+ * @access  Private (requires CAN_DELETE_TICKETS privilege or admin)
+ */
+router.patch('/:id/restore', authenticateToken, checkPrivilege('CAN_DELETE_TICKETS'), restoreTicket);
 
 export default router;

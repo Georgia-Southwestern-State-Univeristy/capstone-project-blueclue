@@ -140,11 +140,11 @@ export const login = async (req, res) => {
                 });
             }
 
-            // Find customer or admin by email
+            // Find customer or admin by email (case-insensitive)
             const result = await pool.query(
                 `SELECT id, email, password_hash, first_name, last_name, role, is_active, email_verified 
                  FROM users 
-                 WHERE email = $1 AND role IN ('customer', 'admin')`,
+                 WHERE LOWER(email) = LOWER($1) AND role IN ('customer', 'admin')`,
                 [email]
             );
 
@@ -292,9 +292,9 @@ export const register = async (req, res) => {
             });
         }
 
-        // Check if email already exists
+        // Check if email already exists (case-insensitive)
         const existingUser = await pool.query(
-            'SELECT id FROM users WHERE email = $1',
+            'SELECT id FROM users WHERE LOWER(email) = LOWER($1)',
             [email]
         );
 
@@ -408,6 +408,15 @@ export const changePassword = async (req, res) => {
         }
 
         const user = result.rows[0];
+
+        // Check if new password is the same as current password
+        const isSamePassword = await bcrypt.compare(newPassword, user.password_hash);
+        if (isSamePassword) {
+            return res.status(400).json({
+                success: false,
+                message: 'New password must be different from your current password.'
+            });
+        }
 
         // Verify current password (only if not forcing password change AND current password provided)
         if (!user.force_password_change) {
@@ -714,11 +723,11 @@ export const resendVerification = async (req, res) => {
             });
         }
 
-        // Find user by email
+        // Find user by email (case-insensitive)
         const result = await pool.query(
             `SELECT id, email, first_name, email_verified, email_verification_token
              FROM users
-             WHERE email = $1`,
+             WHERE LOWER(email) = LOWER($1)`,
             [email]
         );
 

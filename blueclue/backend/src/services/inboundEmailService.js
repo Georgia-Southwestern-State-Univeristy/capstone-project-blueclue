@@ -680,6 +680,13 @@ export const createTicketFromEmail = async (emailData) => {
 
         // Send confirmation email to sender
         try {
+            // Verify ticket.id exists before sending email
+            if (!ticket.id) {
+                console.error('❌ Cannot send confirmation email: ticket.id is undefined');
+                console.error('Ticket object:', JSON.stringify(ticket, null, 2));
+                throw new Error('Ticket ID is missing');
+            }
+
             // Get user details
             const userResult = await pool.query(
                 'SELECT email, first_name, email_notifications FROM users WHERE id = $1',

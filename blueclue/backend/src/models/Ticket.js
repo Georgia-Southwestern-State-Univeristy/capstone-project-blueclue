@@ -22,16 +22,17 @@ class Ticket {
         ai_classified = false,
         ai_confidence = null,
         ai_fallback_used = false,
-        ai_keywords_matched = null
+        ai_keywords_matched = null,
+        email_message_id = null
     }) {
         const query = `
             INSERT INTO tickets (
                 subject, description, customer_id, priority, user_priority, ai_priority, 
                 ai_recommended_priority, priority_overridden, priority_override_reason,
                 priority_calculation_method, category, ai_classified, ai_confidence, 
-                ai_fallback_used, ai_keywords_matched
+                ai_fallback_used, ai_keywords_matched, email_message_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
             RETURNING *
         `;
         
@@ -50,7 +51,8 @@ class Ticket {
             ai_classified,
             ai_confidence,
             ai_fallback_used,
-            ai_keywords_matched ? JSON.stringify(ai_keywords_matched) : null
+            ai_keywords_matched ? JSON.stringify(ai_keywords_matched) : null,
+            email_message_id
         ];
         const result = await pool.query(query, values);
         return result.rows[0];
@@ -71,6 +73,7 @@ class Ticket {
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
             LEFT JOIN users assigned ON t.assigned_to = assigned.id
+            WHERE t.deleted_at IS NULL
             ORDER BY t.created_at DESC
         `;
         
@@ -94,7 +97,7 @@ class Ticket {
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
             LEFT JOIN users assigned ON t.assigned_to = assigned.id
-            WHERE t.customer_id = $1
+            WHERE t.customer_id = $1 AND t.deleted_at IS NULL
             ORDER BY t.created_at DESC
         `;
         
@@ -118,7 +121,7 @@ class Ticket {
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
             LEFT JOIN users assigned ON t.assigned_to = assigned.id
-            WHERE customer.email = $1
+            WHERE customer.email = $1 AND t.deleted_at IS NULL
             ORDER BY t.created_at DESC
         `;
         
@@ -142,7 +145,7 @@ class Ticket {
             FROM tickets t
             LEFT JOIN users customer ON t.customer_id = customer.id
             LEFT JOIN users assigned ON t.assigned_to = assigned.id
-            WHERE t.assigned_to = $1
+            WHERE t.assigned_to = $1 AND t.deleted_at IS NULL
             ORDER BY t.created_at DESC
         `;
         
@@ -182,7 +185,7 @@ class Ticket {
      * @returns {Promise<Object|null>} Updated ticket or null
      */
     static async update(id, updates) {
-        const allowedFields = ['subject', 'description', 'status', 'priority', 'category', 'assigned_to', 'resolved_at'];
+        const allowedFields = ['subject', 'description', 'status', 'priority', 'category', 'assigned_to', 'resolved_at', 'resolution'];
         const fields = [];
         const values = [];
         let paramCount = 1;
@@ -213,24 +216,185 @@ class Ticket {
     }
 
     /**
-     * Delete a ticket (soft delete)
+     * Soft-delete a ticket by setting deleted_at
      * @param {number} id - Ticket ID
+     * @param {number|null} deletedBy - User ID who deleted the ticket
      * @returns {Promise<Object|null>} Deleted ticket or null
      */
-    static async delete(id) {
+    static async delete(id, deletedBy = null) {
         const query = `
             UPDATE tickets 
-            SET status = 'closed',
-                resolved_at = CASE WHEN status NOT IN ('resolved', 'closed') THEN CURRENT_TIMESTAMP ELSE resolved_at END,
-                resolved_by = CASE WHEN status NOT IN ('resolved', 'closed') THEN customer_id ELSE resolved_by END,
-                closed_at = CURRENT_TIMESTAMP,
+            SET deleted_at = CURRENT_TIMESTAMP,
+                deleted_by = $2,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1
+            WHERE id = $1 AND deleted_at IS NULL
+            RETURNING *
+        `;
+        
+        const result = await pool.query(query, [id, deletedBy]);
+        return result.rows[0] || null;
+    }
+
+    /**
+     * Restore a soft-deleted ticket
+     * @param {number} id - Ticket ID
+     * @returns {Promise<Object|null>} Restored ticket or null
+     */
+    static async restore(id) {
+        const query = `
+            UPDATE tickets 
+            SET deleted_at = NULL,
+                deleted_by = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1 AND deleted_at IS NOT NULL
             RETURNING *
         `;
         
         const result = await pool.query(query, [id]);
         return result.rows[0] || null;
+    }
+
+    /**
+     * Get all soft-deleted tickets (management/admin only)
+     * @returns {Promise<Array>} Array of deleted tickets
+     */
+    static async getDeleted() {
+        const query = `
+            SELECT 
+                t.*,
+                customer.first_name || ' ' || customer.last_name as customer_name,
+                customer.email as customer_email,
+                assigned.first_name || ' ' || assigned.last_name as assigned_to_name,
+                assigned.email as assigned_to_email,
+                deleter.first_name || ' ' || deleter.last_name as deleted_by_name
+            FROM tickets t
+            LEFT JOIN users customer ON t.customer_id = customer.id
+            LEFT JOIN users assigned ON t.assigned_to = assigned.id
+            LEFT JOIN users deleter ON t.deleted_by = deleter.id
+            WHERE t.deleted_at IS NOT NULL
+            ORDER BY t.deleted_at DESC
+        `;
+        
+        const result = await pool.query(query);
+        return result.rows;
+    }
+
+    /**
+     * Reopen a closed ticket
+     * @param {number} id - Ticket ID
+     * @param {string} reason - Reason for reopening
+     * @returns {Promise<Object>} Result object with status and updated ticket
+     */
+    static async reopen(id, reason) {
+        // Get the ticket to validate and determine reassignment
+        const ticket = await this.getById(id);
+        
+        if (!ticket) {
+            return { success: false, error: 'Ticket not found' };
+        }
+
+        // Validate ticket status
+        if (!['closed', 'cancelled'].includes(ticket.status)) {
+            return { success: false, error: 'Only closed or cancelled tickets can be reopened' };
+        }
+
+        // Validate 30-day window
+        if (ticket.closed_at) {
+            const daysSinceClosure = (Date.now() - new Date(ticket.closed_at).getTime()) / (1000 * 60 * 60 * 24);
+            if (daysSinceClosure > 30) {
+                return { success: false, error: 'Tickets can only be reopened within 30 days of closure' };
+            }
+        }
+
+        // Store previous assigned tech and determine new status
+        const previousTech = ticket.assigned_to;
+        let newStatus = 'reopened';
+        let newAssignedTo = null;
+
+        // If ticket had a tech assigned, try to reassign to them
+        if (previousTech) {
+            // Check if tech still exists and is active
+            const techQuery = `
+                SELECT id, is_active, role 
+                FROM users 
+                WHERE id = $1 
+                AND role IN ('technician', 'senior_technician', 'management')
+            `;
+            const techResult = await pool.query(techQuery, [previousTech]);
+            
+            if (techResult.rows.length > 0 && techResult.rows[0].is_active) {
+                // Tech is available, reassign to them
+                newAssignedTo = previousTech;
+                newStatus = 'open'; // or 'reopened' - keeping as reopened for distinction
+            }
+            // If tech not available, leave unassigned and status will be 'reopened'
+        }
+
+        // Update the ticket
+        const updateQuery = `
+            UPDATE tickets 
+            SET 
+                status = $1,
+                assigned_to = $2,
+                previous_assigned_tech = $3,
+                reopen_count = reopen_count + 1,
+                last_reopened_at = CURRENT_TIMESTAMP,
+                resolved_at = NULL,
+                resolved_by = NULL,
+                closed_at = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $4
+            RETURNING *
+        `;
+
+        const result = await pool.query(updateQuery, [
+            newStatus,
+            newAssignedTo,
+            previousTech,
+            id
+        ]);
+
+        return {
+            success: true,
+            ticket: result.rows[0],
+            reassigned: newAssignedTo !== null,
+            previousTech: previousTech,
+            reason: reason
+        };
+    }
+
+    /**
+     * Check if a ticket can be reopened
+     * @param {number} id - Ticket ID
+     * @param {number} userId - ID of user requesting reopen
+     * @returns {Promise<Object>} Result with canReopen boolean and reason
+     */
+    static async canReopen(id, userId) {
+        const ticket = await this.getById(id);
+
+        if (!ticket) {
+            return { canReopen: false, reason: 'Ticket not found' };
+        }
+
+        // Check if user is the requester
+        if (ticket.customer_id !== userId) {
+            return { canReopen: false, reason: 'Only the ticket requester can reopen this ticket' };
+        }
+
+        // Check status
+        if (!['closed', 'cancelled'].includes(ticket.status)) {
+            return { canReopen: false, reason: 'Ticket is not closed or cancelled' };
+        }
+
+        // Check 30-day window
+        if (ticket.closed_at) {
+            const daysSinceClosure = (Date.now() - new Date(ticket.closed_at).getTime()) / (1000 * 60 * 60 * 24);
+            if (daysSinceClosure > 30) {
+                return { canReopen: false, reason: 'Reopening window expired (>30 days)' };
+            }
+        }
+
+        return { canReopen: true };
     }
 }
 

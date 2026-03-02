@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { getTechnicians, bulkAssignTickets, assignTicket as assignTicketApi } from '../services/ticketService'
 import TicketDetailView from './TicketDetailView'
+import useContainerSize from '../hooks/useContainerSize'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -11,6 +12,7 @@ const getStatusColor = (status) => {
     waiting_on_customer: { bg: 'bg-purple-950',  border: 'border-purple-700', text: 'text-purple-400', badge: 'bg-purple-900 text-purple-300' },
     resolved:            { bg: 'bg-green-950',   border: 'border-green-700',  text: 'text-green-400',  badge: 'bg-green-900 text-green-300' },
     closed:              { bg: 'bg-gray-800',    border: 'border-gray-600',   text: 'text-gray-400',   badge: 'bg-gray-700 text-gray-300' },
+    cancelled:           { bg: 'bg-gray-900',    border: 'border-gray-600',   text: 'text-gray-400',   badge: 'bg-gray-700 text-gray-300' },
   }
   return m[status] || m.open
 }
@@ -34,6 +36,12 @@ const getWorkloadTier = (count) => {
 // ── Component ────────────────────────────────────────────────────────────
 
 function TicketControlWidget({ tickets = [], onRefresh }) {
+  // ── Container-responsive sizing ──
+  const [containerRef, { width: containerWidth }] = useContainerSize()
+  const ticketCols = containerWidth >= 900 ? 3 : containerWidth >= 550 ? 2 : 1
+  const filterCols = containerWidth >= 600 ? 3 : 1
+  const headerRow = containerWidth >= 700
+
   // ── Tab state ──
   const [activeTab, setActiveTab] = useState('queue')
 
@@ -203,7 +211,7 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
   // ──────────────────────────────────────────────────────────────────────
   return (
     <>
-    <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm">
+    <div ref={containerRef} className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm h-full flex flex-col overflow-hidden">
       {/* Success Toast */}
       {assignSuccess && (
         <div className="mx-6 mt-4 px-4 py-3 bg-green-900/40 border border-green-700 rounded-lg text-green-300 text-sm flex items-center justify-between">
@@ -241,10 +249,10 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
 
       {/* ═══════════════ QUEUE TAB ═══════════════ */}
       {activeTab === 'queue' && (
-        <div>
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
           {/* Search + Filter Bar */}
           <div className="p-6 border-b border-gray-700">
-            <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-4">
+            <div className={`flex gap-4 mb-4 ${headerRow ? 'flex-row justify-between items-center' : 'flex-col'}`}>
               {/* Title with Assignment Counts */}
               <div className="flex items-center gap-4">
                 <h2 className="text-2xl font-bold text-white">Ticket Queue</h2>
@@ -302,12 +310,12 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
             {/* Filter Panel */}
             {showFilters && (
               <div className="bg-gray-800 p-4 rounded-lg border border-gray-600">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${filterCols}, minmax(0, 1fr))` }}>
                   {/* Status */}
                   <div>
                     <h3 className="font-semibold text-white mb-2">Status</h3>
                     <div className="space-y-1">
-                      {['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed'].map(s => (
+                      {['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed', 'cancelled'].map(s => (
                         <label key={s} className="flex items-center gap-2 cursor-pointer hover:bg-gray-700 px-2 py-1.5 rounded">
                           <input type="checkbox" checked={filters.status.includes(s)} onChange={() => handleFilterChange('status', s)} className="w-4 h-4 accent-blue-500 cursor-pointer" />
                           <span className="text-sm text-gray-300">{formatStatus(s)}</span>
@@ -388,10 +396,10 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
             </div>
           )}
 
-          {/* Ticket Cards Grid */}
+          {/* Ticket Cards Grid – scrollable within dashboard widget */}
           {filteredTickets.length > 0 && (
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="p-6 flex-1 min-h-0 overflow-y-auto">
+              <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${ticketCols}, minmax(0, 1fr))` }}>
                 {sortedTickets.map(ticket => {
                   const statusColor = getStatusColor(ticket.status)
                   const isSelected = selectedTickets.includes(ticket.id)
@@ -471,7 +479,8 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
 
       {/* ═══════════════ ASSIGN TAB ═══════════════ */}
       {activeTab === 'assign' && (
-        <div className="p-6 space-y-6">
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Selected Tickets Summary */}
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -662,8 +671,10 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
             </div>
           )}
 
-          {/* Assign Button */}
-          <div className="flex items-center justify-between pt-2">
+          </div>
+
+          {/* Assign Button — pinned at bottom */}
+          <div className="flex items-center justify-between p-4 border-t border-gray-700 bg-gray-900 flex-shrink-0">
             <button onClick={() => setActiveTab('queue')} className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors">
               &larr; Back to Queue
             </button>

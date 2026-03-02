@@ -1,0 +1,77 @@
+# BlueClue Docker Compose
+# =======================
+# Runs the full BlueClue stack: ML service, backend API, and frontend.
+#
+# Usage:
+#   docker compose up --build        # build & start all services
+#   docker compose up ml-service     # start only the ML service
+#   docker compose down              # stop everything
+
+services:
+
+  # ---- ML Inference Service (FastAPI) ----------------------------------- #
+  ml-service:
+    build:
+      context: ./blueclue/ai
+      dockerfile: Dockerfile
+    container_name: blueclue-ml-service
+    ports:
+      - "${ML_SERVICE_PORT:-5000}:5000"
+    environment:
+      - ML_SERVICE_PORT=5000
+      - ML_SERVICE_HOST=0.0.0.0
+      - ML_ENV=production
+      - ML_WORKERS=${ML_WORKERS:-2}
+      - CONFIDENCE_THRESHOLD=${CONFIDENCE_THRESHOLD:-0.5}
+      - CACHE_MAX_SIZE=${CACHE_MAX_SIZE:-1024}
+      - CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-3600}
+    volumes:
+      # Mount models directory so you can update models without rebuilding
+      - ./blueclue/ai/models:/app/models:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+
+  # ---- Backend API (Node.js / Express) ---------------------------------- #
+  backend:
+    build:
+      context: ./blueclue/backend
+      dockerfile: Dockerfile
+    container_name: blueclue-backend
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - AI_SERVICE_URL=http://ml-service:5000
+      - AI_SERVICE_TIMEOUT=5000
+      - AI_MAX_RETRIES=2
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+    depends_on:
+      ml-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---- Frontend (Vite dev / nginx prod) --------------------------------- #
+  # Uncomment below when you have a frontend Dockerfile
+  # frontend:
+  #   build:
+  #     context: ./blueclue/frontend
+  #     dockerfile: Dockerfile
+  #   container_name: blueclue-frontend
+  #   ports:
+  #     - "${FRONTEND_PORT:-5173}:80"
+  #   depends_on:
+  #     - backend
+  #   restart: unless-stopped

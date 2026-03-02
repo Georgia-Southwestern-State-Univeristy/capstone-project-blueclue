@@ -1,6 +1,7 @@
 // src/controllers/analyticsController.js
 import pool from '../config/database.js';
 import PriorityOverride from '../models/PriorityOverride.js';
+import * as analyticsService from '../services/analyticsService.js';
 
 /**
  * Get AI priority analytics overview
@@ -214,10 +215,202 @@ export const getCategoryInsights = async (req, res) => {
     }
 };
 
+/**
+ * Get collaboration analytics
+ * GET /api/analytics/collaboration
+ * @query {number} days - Number of days to analyze (default: 30)
+ */
+export const getCollaborationAnalytics = async (req, res) => {
+    try {
+        const days = parseInt(req.query.days) || 30;
+
+        // Overall collaboration statistics
+        const overallStatsQuery = `
+            SELECT 
+                COUNT(DISTINCT tc.ticket_id) as total_collaborated_tickets,
+                COUNT(DISTINCT CASE WHEN tc.role = 'primary' THEN tc.user_id END) as unique_primary_techs,
+                COUNT(DISTINCT CASE WHEN tc.role = 'assisting' THEN tc.user_id END) as unique_assisting_techs,
+                ROUND(AVG(collab_counts.count)::numeric, 2) as avg_collaborators_per_ticket,
+                COUNT(DISTINCT CASE WHEN collab_counts.count >= 3 THEN tc.ticket_id END) as tickets_with_3plus_techs
+            FROM ticket_collaborators tc
+            JOIN (
+                SELECT ticket_id, COUNT(*) as count
+                FROM ticket_collaborators
+                WHERE added_at >= NOW() - INTERVAL '${days} days'
+                GROUP BY ticket_id
+            ) collab_counts ON tc.ticket_id = collab_counts.ticket_id
+            WHERE tc.added_at >= NOW() - INTERVAL '${days} days'
+        `;
+        
+        const overallStats = await pool.query(overallStatsQuery);
+
+        // Collaboration rate (% of tickets with collaborators)
+        const collaborationRateQuery = `
+            SELECT 
+                COUNT(DISTINCT t.id) as total_tickets,
+                COUNT(DISTINCT tc.ticket_id) as collaborated_tickets,
+                ROUND((COUNT(DISTINCT tc.ticket_id)::numeric / NULLIF(COUNT(DISTINCT t.id), 0) * 100), 2) as collaboration_rate_percent
+            FROM tickets t
+            LEFT JOIN ticket_collaborators tc ON t.id = tc.ticket_id
+            WHERE t.created_at >= NOW() - INTERVAL '${days} days'
+        `;
+        
+        const collaborationRate = await pool.query(collaborationRateQuery);
+
+        // Most collaborative technicians
+        const mostCollaborativeQuery = `
+            SELECT 
+                u.id,
+                u.first_name,
+                u.last_name,
+                u.email,
+                COUNT(CASE WHEN tc.role = 'primary' THEN 1 END) as primary_count,
+                COUNT(CASE WHEN tc.role = 'assisting' THEN 1 END) as assisting_count,
+                COUNT(*) as total_collaborations
+            FROM ticket_collaborators tc
+            JOIN users u ON tc.user_id = u.id
+            WHERE tc.added_at >= NOW() - INTERVAL '${days} days'
+            GROUP BY u.id, u.first_name, u.last_name, u.email
+            HAVING COUNT(*) >= 3
+            ORDER BY total_collaborations DESC
+            LIMIT 10
+        `;
+        
+        const mostCollaborative = await pool.query(mostCollaborativeQuery);
+
+        // Collaboration by category
+        const categoryCollaborationQuery = `
+            SELECT 
+                t.category,
+                COUNT(DISTINCT tc.ticket_id) as collaborated_tickets,
+                COUNT(DISTINCT t.id) as total_tickets,
+                ROUND((COUNT(DISTINCT tc.ticket_id)::numeric / NULLIF(COUNT(DISTINCT t.id), 0) * 100), 2) as collaboration_rate_percent,
+                ROUND(AVG(collab_counts.count)::numeric, 2) as avg_techs_per_ticket
+            FROM tickets t
+            LEFT JOIN ticket_collaborators tc ON t.id = tc.ticket_id AND tc.added_at >= NOW() - INTERVAL '${days} days'
+            LEFT JOIN (
+                SELECT ticket_id, COUNT(*) as count
+                FROM ticket_collaborators
+                WHERE added_at >= NOW() - INTERVAL '${days} days'
+                GROUP BY ticket_id
+            ) collab_counts ON t.id = collab_counts.ticket_id
+            WHERE t.created_at >= NOW() - INTERVAL '${days} days'
+            GROUP BY t.category
+            ORDER BY collaboration_rate_percent DESC
+        `;
+        
+        const categoryCollaboration = await pool.query(categoryCollaborationQuery);
+
+        // Resolution time comparison: collaborated vs non-collaborated
+        const resolutionComparisonQuery = `
+            SELECT 
+                CASE 
+                    WHEN tc.ticket_id IS NOT NULL THEN 'Collaborated'
+                    ELSE 'Single Tech'
+                END as ticket_type,
+                COUNT(t.id) as ticket_count,
+                ROUND(AVG(EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600)::numeric, 2) as avg_resolution_hours,
+                ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600)::numeric, 2) as median_resolution_hours
+            FROM tickets t
+            LEFT JOIN ticket_collaborators tc ON t.id = tc.ticket_id AND tc.added_at >= NOW() - INTERVAL '${days} days'
+            WHERE t.created_at >= NOW() - INTERVAL '${days} days'
+              AND t.resolved_at IS NOT NULL
+              AND t.status IN ('resolved', 'closed')
+            GROUP BY 
+                CASE 
+                    WHEN tc.ticket_id IS NOT NULL THEN 'Collaborated'
+                    ELSE 'Single Tech'
+                END
+        `;
+        
+        const resolutionComparison = await pool.query(resolutionComparisonQuery);
+
+        // Collaboration over time (daily trend)
+        const collaborationTrendQuery = `
+            SELECT 
+                DATE(tc.added_at) as date,
+                COUNT(DISTINCT tc.ticket_id) as tickets_with_new_collaborators,
+                COUNT(*) as total_collaborators_added
+            FROM ticket_collaborators tc
+            WHERE tc.added_at >= NOW() - INTERVAL '${days} days'
+            GROUP BY DATE(tc.added_at)
+            ORDER BY date DESC
+        `;
+        
+        const collaborationTrend = await pool.query(collaborationTrendQuery);
+
+        // Tickets needing collaboration (high priority or overdue with only 1 tech)
+        const needsCollaborationQuery = `
+            SELECT 
+                t.id,
+                t.ticket_number,
+                t.title,
+                t.priority,
+                t.category,
+                t.status,
+                t.created_at,
+                EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 3600 as age_hours,
+                u.first_name as primary_tech_first_name,
+                u.last_name as primary_tech_last_name,
+                collab_count.count as current_collaborator_count
+            FROM tickets t
+            JOIN (
+                SELECT ticket_id, COUNT(*) as count
+                FROM ticket_collaborators
+                WHERE role = 'primary'
+                GROUP BY ticket_id
+            ) collab_count ON t.id = collab_count.ticket_id
+            LEFT JOIN ticket_collaborators tc ON t.id = tc.ticket_id AND tc.role = 'primary'
+            LEFT JOIN users u ON tc.user_id = u.id
+            WHERE collab_count.count = 1
+              AND t.status NOT IN ('resolved', 'closed', 'cancelled')
+              AND (
+                  t.priority IN ('critical', 'high')
+                  OR EXTRACT(EPOCH FROM (NOW() - t.created_at)) / 3600 > 48
+              )
+            ORDER BY 
+                CASE t.priority
+                    WHEN 'critical' THEN 1
+                    WHEN 'high' THEN 2
+                    WHEN 'medium' THEN 3
+                    WHEN 'low' THEN 4
+                END,
+                t.created_at ASC
+            LIMIT 20
+        `;
+        
+        const needsCollaboration = await pool.query(needsCollaborationQuery);
+
+        // Response structure
+        res.status(200).json({
+            status: 'success',
+            data: {
+                time_period_days: days,
+                overall: overallStats.rows[0],
+                collaboration_rate: collaborationRate.rows[0],
+                most_collaborative_techs: mostCollaborative.rows,
+                by_category: categoryCollaboration.rows,
+                resolution_comparison: resolutionComparison.rows,
+                trend: collaborationTrend.rows,
+                needs_collaboration: needsCollaboration.rows
+            }
+        });
+
+    } catch (error) {
+        console.error('Get collaboration analytics error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve collaboration analytics',
+            error: error.message
+        });
+    }
+};
+
 export default {
     getAIPriorityAnalytics,
     getAIPerformanceMetrics,
-    getCategoryInsights
+    getCategoryInsights,
+    getCollaborationAnalytics
 };
 
 // ============================================================================
@@ -624,6 +817,119 @@ export const getTopRequesters = async (req, res) => {
 };
 
 /**
+ * GET /api/analytics/cancellation-stats
+ * Returns cancellation metrics: total cancelled, rate, trends, top reasons, by category
+ */
+export const getCancellationStats = async (req, res) => {
+    try {
+        const { timeRange = '30d' } = req.query;
+        const intervalMap = { '7d': '7 days', '30d': '30 days', '90d': '90 days' };
+        const interval = intervalMap[timeRange]; // null for 'all'
+
+        let dateFilter = '';
+        const params = [];
+        if (interval) {
+            dateFilter = `AND t.created_at >= NOW() - $1::INTERVAL`;
+            params.push(interval);
+        }
+
+        // Overall cancellation counts and rate
+        const overviewResult = await pool.query(`
+            SELECT
+                COUNT(*) AS total_tickets,
+                COUNT(*) FILTER (WHERE t.status = 'cancelled') AS cancelled_count,
+                CASE WHEN COUNT(*) > 0
+                    THEN ROUND(
+                        COUNT(*) FILTER (WHERE t.status = 'cancelled')::NUMERIC
+                        / COUNT(*)::NUMERIC * 100, 1
+                    )
+                    ELSE 0
+                END AS cancellation_rate
+            FROM tickets t
+            WHERE 1=1 ${dateFilter}
+        `, params);
+
+        const overview = overviewResult.rows[0];
+
+        // Daily cancellation trend (last 30 days regardless of timeRange)
+        const trendResult = await pool.query(`
+            SELECT
+                DATE(t.updated_at) AS date,
+                COUNT(*) AS cancelled_count
+            FROM tickets t
+            WHERE t.status = 'cancelled'
+              AND t.updated_at >= NOW() - INTERVAL '30 days'
+            GROUP BY DATE(t.updated_at)
+            ORDER BY date ASC
+        `);
+
+        // Top cancellation reasons from ticket history
+        const reasonsResult = await pool.query(`
+            SELECT
+                COALESCE(
+                    th.change_details->>'cancellation_reason',
+                    'Unknown'
+                ) AS reason,
+                COUNT(*) AS count
+            FROM ticket_history th
+            WHERE th.change_type = 'ticket_cancelled'
+              ${interval ? `AND th.created_at >= NOW() - $${params.length}::INTERVAL` : ''}
+            GROUP BY reason
+            ORDER BY count DESC
+            LIMIT 10
+        `, params);
+
+        // Cancellations by category
+        const byCategoryResult = await pool.query(`
+            SELECT
+                t.category,
+                COUNT(*) AS total_in_category,
+                COUNT(*) FILTER (WHERE t.status = 'cancelled') AS cancelled_in_category,
+                CASE WHEN COUNT(*) > 0
+                    THEN ROUND(
+                        COUNT(*) FILTER (WHERE t.status = 'cancelled')::NUMERIC
+                        / COUNT(*)::NUMERIC * 100, 1
+                    )
+                    ELSE 0
+                END AS category_cancellation_rate
+            FROM tickets t
+            WHERE 1=1 ${dateFilter}
+            GROUP BY t.category
+            HAVING COUNT(*) FILTER (WHERE t.status = 'cancelled') > 0
+            ORDER BY cancelled_in_category DESC
+        `, params);
+
+        res.json({
+            status: 'success',
+            data: {
+                overview: {
+                    total_tickets: parseInt(overview.total_tickets),
+                    cancelled_count: parseInt(overview.cancelled_count),
+                    cancellation_rate: parseFloat(overview.cancellation_rate)
+                },
+                trend_30_days: trendResult.rows.map(r => ({
+                    date: r.date,
+                    cancelled_count: parseInt(r.cancelled_count)
+                })),
+                top_reasons: reasonsResult.rows.map(r => ({
+                    reason: r.reason,
+                    count: parseInt(r.count)
+                })),
+                by_category: byCategoryResult.rows.map(r => ({
+                    category: r.category,
+                    total: parseInt(r.total_in_category),
+                    cancelled: parseInt(r.cancelled_in_category),
+                    rate: parseFloat(r.category_cancellation_rate)
+                }))
+            }
+        });
+    } catch (error) {
+        console.error('Cancellation stats error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to retrieve cancellation stats', error: error.message });
+    }
+};
+
+/**
  * GET /api/analytics/tech-performance
  * Returns per-technician performance metrics:
  *  - avg resolution time, first response time, tickets resolved (30d), satisfaction placeholder
@@ -700,5 +1006,686 @@ export const getTechPerformance = async (req, res) => {
     } catch (error) {
         console.error('Tech performance error:', error);
         res.status(500).json({ status: 'error', message: 'Failed to retrieve tech performance', error: error.message });
+    }
+};
+
+/**
+ * Get ticket reopen analytics
+ * GET /api/analytics/reopens
+ */
+export const getReopenAnalytics = async (req, res) => {
+    try {
+        const { days = 30 } = req.query;
+
+        // Overall reopen statistics
+        const overallQuery = `
+            SELECT 
+                COUNT(*) FILTER (WHERE reopen_count > 0) as total_reopened_tickets,
+                COUNT(*) FILTER (WHERE reopen_count >= 3) as high_reopen_tickets,
+                COUNT(*) as total_closed_tickets,
+                ROUND(
+                    COUNT(*) FILTER (WHERE reopen_count > 0)::numeric / 
+                    NULLIF(COUNT(*), 0) * 100, 
+                    2
+                ) as reopen_rate_percent,
+                AVG(reopen_count) FILTER (WHERE reopen_count > 0) as avg_reopens_when_reopened
+            FROM tickets
+            WHERE closed_at >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'
+        `;
+        const overallResult = await pool.query(overallQuery);
+
+        // Reopen count distribution
+        const distributionQuery = `
+            SELECT 
+                reopen_count,
+                COUNT(*) as ticket_count,
+                ROUND(
+                    COUNT(*)::numeric / SUM(COUNT(*)) OVER() * 100,
+                    2
+                ) as percentage
+            FROM tickets
+            WHERE closed_at >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'
+              AND reopen_count > 0
+            GROUP BY reopen_count
+            ORDER BY reopen_count
+        `;
+        const distributionResult = await pool.query(distributionQuery);
+
+        // Reopens by category
+        const categoryQuery = `
+            SELECT 
+                category,
+                COUNT(*) as total_tickets,
+                COUNT(*) FILTER (WHERE reopen_count > 0) as reopened_tickets,
+                AVG(reopen_count) as avg_reopen_count,
+                ROUND(
+                    COUNT(*) FILTER (WHERE reopen_count > 0)::numeric / 
+                    NULLIF(COUNT(*), 0) * 100,
+                    2
+                ) as reopen_rate_percent
+            FROM tickets
+            WHERE closed_at >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'
+            GROUP BY category
+            HAVING COUNT(*) >= 5
+            ORDER BY reopen_rate_percent DESC
+        `;
+        const categoryResult = await pool.query(categoryQuery);
+
+        // Tickets with high reopen counts (3+) - these need attention
+        const highReopenQuery = `
+            SELECT 
+                t.id,
+                t.ticket_number,
+                t.subject,
+                t.category,
+                t.priority,
+                t.status,
+                t.reopen_count,
+                t.last_reopened_at,
+                c.first_name || ' ' || c.last_name as customer_name,
+                c.email as customer_email,
+                a.first_name || ' ' || a.last_name as assigned_tech_name
+            FROM tickets t
+            LEFT JOIN users c ON t.customer_id = c.id
+            LEFT JOIN users a ON t.assigned_to = a.id
+            WHERE t.reopen_count >= 3
+            ORDER BY t.reopen_count DESC, t.last_reopened_at DESC
+            LIMIT 20
+        `;
+        const highReopenResult = await pool.query(highReopenQuery);
+
+        // Reopen trend over time (daily for the specified period)
+        const trendQuery = `
+            SELECT 
+                DATE(last_reopened_at) as date,
+                COUNT(*) as reopen_count,
+                COUNT(DISTINCT id) as unique_tickets
+            FROM tickets
+            WHERE last_reopened_at >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'
+            GROUP BY DATE(last_reopened_at)
+            ORDER BY date
+        `;
+        const trendResult = await pool.query(trendQuery);
+
+        // Technician reopen rates
+        const techQuery = `
+            SELECT 
+                u.id as tech_id,
+                u.first_name || ' ' || u.last_name as tech_name,
+                COUNT(*) as total_tickets_handled,
+                COUNT(*) FILTER (WHERE t.reopen_count > 0) as reopened_tickets,
+                ROUND(
+                    COUNT(*) FILTER (WHERE t.reopen_count > 0)::numeric / 
+                    NULLIF(COUNT(*), 0) * 100,
+                    2
+                ) as reopen_rate_percent,
+                AVG(t.reopen_count) FILTER (WHERE t.reopen_count > 0) as avg_reopens
+            FROM users u
+            JOIN tickets t ON t.previous_assigned_tech = u.id OR t.assigned_to = u.id
+            WHERE u.role IN ('technician', 'senior_technician', 'management')
+              AND t.closed_at >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'
+            GROUP BY u.id, u.first_name, u.last_name
+            HAVING COUNT(*) >= 5
+            ORDER BY reopen_rate_percent DESC
+            LIMIT 15
+        `;
+        const techResult = await pool.query(techQuery);
+
+        res.json({
+            status: 'success',
+            data: {
+                period_days: parseInt(days),
+                overall: {
+                    total_reopened_tickets: parseInt(overallResult.rows[0].total_reopened_tickets) || 0,
+                    high_reopen_tickets: parseInt(overallResult.rows[0].high_reopen_tickets) || 0,
+                    total_closed_tickets: parseInt(overallResult.rows[0].total_closed_tickets) || 0,
+                    reopen_rate_percent: parseFloat(overallResult.rows[0].reopen_rate_percent) || 0,
+                    avg_reopens_when_reopened: parseFloat(overallResult.rows[0].avg_reopens_when_reopened) || 0
+                },
+                distribution: distributionResult.rows.map(r => ({
+                    reopen_count: parseInt(r.reopen_count),
+                    ticket_count: parseInt(r.ticket_count),
+                    percentage: parseFloat(r.percentage)
+                })),
+                by_category: categoryResult.rows.map(r => ({
+                    category: r.category,
+                    total_tickets: parseInt(r.total_tickets),
+                    reopened_tickets: parseInt(r.reopened_tickets),
+                    avg_reopen_count: parseFloat(r.avg_reopen_count),
+                    reopen_rate_percent: parseFloat(r.reopen_rate_percent)
+                })),
+                high_reopen_tickets: highReopenResult.rows.map(r => ({
+                    ...r,
+                    reopen_count: parseInt(r.reopen_count)
+                })),
+                trend: trendResult.rows.map(r => ({
+                    date: r.date,
+                    reopen_count: parseInt(r.reopen_count),
+                    unique_tickets: parseInt(r.unique_tickets)
+                })),
+                by_technician: techResult.rows.map(r => ({
+                    tech_id: parseInt(r.tech_id),
+                    tech_name: r.tech_name,
+                    total_tickets_handled: parseInt(r.total_tickets_handled),
+                    reopened_tickets: parseInt(r.reopened_tickets),
+                    reopen_rate_percent: parseFloat(r.reopen_rate_percent),
+                    avg_reopens: parseFloat(r.avg_reopens)
+                }))
+            }
+        });
+    } catch (error) {
+        console.error('Reopen analytics error:', error);
+        res.status(500).json({ 
+            status: 'error', 
+            message: 'Failed to retrieve reopen analytics', 
+            error: error.message 
+        });
+    }
+};
+
+// ============================================================================
+// Comprehensive Analytics Dashboard Endpoints
+// ============================================================================
+
+/**
+ * GET /api/analytics/resolution-time
+ * Get resolution time metrics with filters
+ * @query {string} startDate - Start date (ISO format)
+ * @query {string} endDate - End date (ISO format)
+ * @query {string} preset - Date preset (today, week, month, quarter, year)
+ * @query {string} category - Filter by category
+ * @query {number} techId - Filter by technician (for tech-only view)
+ */
+export const getResolutionTime = async (req, res) => {
+    try {
+        const { startDate, endDate, preset, category, techId } = req.query;
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        
+        // For technicians, they can only view their own performance
+        let effectiveTechId = techId;
+        if (req.user.role === 'technician' || req.user.role === 'senior_technician') {
+            effectiveTechId = req.user.id;
+        }
+        
+        const data = await analyticsService.getResolutionTimeMetrics(
+            start.toISOString(),
+            end.toISOString(),
+            category,
+            effectiveTechId
+        );
+        
+        res.json({
+            status: 'success',
+            data,
+            filters: { startDate: start, endDate: end, category, techId: effectiveTechId }
+        });
+    } catch (error) {
+        console.error('Resolution time analytics error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve resolution time metrics',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/analytics/ticket-volume
+ * Get ticket volume metrics
+ * @query {string} startDate - Start date (ISO format)
+ * @query {string} endDate - End date (ISO format)
+ * @query {string} preset - Date preset (today, week, month, quarter, year)
+ * @query {string} category - Filter by category
+ */
+export const getTicketVolume = async (req, res) => {
+    try {
+        const { startDate, endDate, preset, category, techId } = req.query;
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        
+        // For technicians, they can only view their own tickets
+        let effectiveTechId = techId;
+        if (req.user.role === 'technician' || req.user.role === 'senior_technician') {
+            effectiveTechId = req.user.id;
+        }
+        
+        const data = await analyticsService.getTicketVolumeMetrics(
+            start.toISOString(),
+            end.toISOString(),
+            category,
+            effectiveTechId
+        );
+        
+        res.json({
+            status: 'success',
+            data,
+            filters: { startDate: start, endDate: end, category, techId: effectiveTechId }
+        });
+    } catch (error) {
+        console.error('Ticket volume analytics error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve ticket volume metrics',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/analytics/tech-performance-dashboard
+ * Get comprehensive technician performance metrics
+ * @query {string} startDate - Start date (ISO format)
+ * @query {string} endDate - End date (ISO format)
+ * @query {string} preset - Date preset (today, week, month, quarter, year)
+ * @query {number} techId - Specific technician ID (optional)
+ */
+export const getTechPerformanceDashboard = async (req, res) => {
+    try {
+        const { startDate, endDate, preset, techId } = req.query;
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        
+        // For technicians, they can only view their own performance
+        let effectiveTechId = techId;
+        if (req.user.role === 'technician' || req.user.role === 'senior_technician') {
+            effectiveTechId = req.user.id;
+        }
+        
+        const data = await analyticsService.getTechnicianPerformance(
+            start.toISOString(),
+            end.toISOString(),
+            effectiveTechId
+        );
+        
+        res.json({
+            status: 'success',
+            data,
+            filters: { startDate: start, endDate: end, techId: effectiveTechId }
+        });
+    } catch (error) {
+        console.error('Tech performance analytics error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve technician performance metrics',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/analytics/categories-dashboard
+ * Get issue category analysis
+ * @query {string} startDate - Start date (ISO format)
+ * @query {string} endDate - End date (ISO format)  
+ * @query {string} preset - Date preset (today, week, month, quarter, year)
+ */
+export const getCategoriesDashboard = async (req, res) => {
+    try {
+        const { startDate, endDate, preset } = req.query;
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        
+        // Technicians cannot access full category analytics - management only
+        if (req.user.role === 'technician' || req.user.role === 'senior_technician') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Category analysis is only available to management'
+            });
+        }
+        
+        const data = await analyticsService.getCategoryAnalysis(
+            start.toISOString(),
+            end.toISOString()
+        );
+        
+        res.json({
+            status: 'success',
+            data,
+            filters: { startDate: start, endDate: end }
+        });
+    } catch (error) {
+        console.error('Categories analytics error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve category analysis',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/analytics/sla-compliance
+ * Get SLA compliance metrics
+ * @query {string} startDate - Start date (ISO format)
+ * @query {string} endDate - End date (ISO format)
+ * @query {string} preset - Date preset (today, week, month, quarter, year)
+ * @query {string} category - Filter by category
+ */
+export const getSLAComplianceDashboard = async (req, res) => {
+    try {
+        const { startDate, endDate, preset, category } = req.query;
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        
+        // Technicians cannot access full SLA analytics - management only
+        if (req.user.role === 'technician' || req.user.role === 'senior_technician') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'SLA compliance is only available to management'
+            });
+        }
+        
+        const data = await analyticsService.getSLACompliance(
+            start.toISOString(),
+            end.toISOString(),
+            category
+        );
+        
+        res.json({
+            status: 'success',
+            data,
+            filters: { startDate: start, endDate: end, category }
+        });
+    } catch (error) {
+        console.error('SLA compliance analytics error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve SLA compliance metrics',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/analytics/additional-metrics
+ * Get additional metrics (reopen rate, cancellation rate, comments, collaboration)
+ * @query {string} startDate - Start date (ISO format)
+ * @query {string} endDate - End date (ISO format)
+ * @query {string} preset - Date preset (today, week, month, quarter, year)
+ */
+export const getAdditionalMetricsDashboard = async (req, res) => {
+    try {
+        const { startDate, endDate, preset } = req.query;
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        
+        const data = await analyticsService.getAdditionalMetrics(
+            start.toISOString(),
+            end.toISOString()
+        );
+        
+        res.json({
+            status: 'success',
+            data,
+            filters: { startDate: start, endDate: end }
+        });
+    } catch (error) {
+        console.error('Additional metrics error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve additional metrics',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/analytics/dashboard-summary
+ * Get complete dashboard summary with all metrics
+ * @query {string} startDate - Start date (ISO format)
+ * @query {string} endDate - End date (ISO format)
+ * @query {string} preset - Date preset (today, week, month, quarter, year)
+ */
+export const getDashboardSummary = async (req, res) => {
+    try {
+        const { startDate, endDate, preset } = req.query;
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        
+        const startISO = start.toISOString();
+        const endISO = end.toISOString();
+        
+        // For technicians, restrict to their own data
+        let techId = null;
+        const isTech = req.user.role === 'technician' || req.user.role === 'senior_technician';
+        if (isTech) {
+            techId = req.user.id;
+        }
+        
+        // Fetch all metrics in parallel
+        const [resolutionTime, ticketVolume, techPerformance, additional] = await Promise.all([
+            analyticsService.getResolutionTimeMetrics(startISO, endISO, null, techId),
+            analyticsService.getTicketVolumeMetrics(startISO, endISO, null, techId),
+            analyticsService.getTechnicianPerformance(startISO, endISO, techId),
+            analyticsService.getAdditionalMetrics(startISO, endISO)
+        ]);
+        
+        // Only fetch category and SLA data for management
+        let categories = null;
+        let sla = null;
+        if (!isTech) {
+            [categories, sla] = await Promise.all([
+                analyticsService.getCategoryAnalysis(startISO, endISO),
+                analyticsService.getSLACompliance(startISO, endISO)
+            ]);
+        }
+        
+        res.json({
+            status: 'success',
+            data: {
+                resolution_time: resolutionTime,
+                ticket_volume: ticketVolume,
+                technician_performance: techPerformance,
+                categories,
+                sla,
+                additional
+            },
+            filters: { startDate: start, endDate: end },
+            user_role: req.user.role
+        });
+    } catch (error) {
+        console.error('Dashboard summary error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve dashboard summary',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/analytics/export
+ * Export analytics data in CSV or JSON format
+ * @query {string} format - Export format (csv, json)
+ * @query {string} type - Data type (summary, resolution-time, ticket-volume, tech-performance, categories, sla)
+ * @query {string} startDate - Start date (ISO format)
+ * @query {string} endDate - End date (ISO format)
+ * @query {string} preset - Date preset (today, week, month, quarter, year)
+ */
+export const exportAnalytics = async (req, res) => {
+    try {
+        const { format = 'csv', type = 'summary', startDate, endDate, preset } = req.query;
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        
+        // Only management can export
+        if (req.user.role === 'technician' || req.user.role === 'senior_technician') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Export is only available to management'
+            });
+        }
+        
+        const exportData = await analyticsService.generateExportData(
+            type,
+            start.toISOString().split('T')[0],
+            end.toISOString().split('T')[0],
+            format
+        );
+        
+        res.setHeader('Content-Type', exportData.contentType);
+        res.setHeader('Content-Disposition', `attachment; filename="${exportData.filename}"`);
+        res.send(exportData.content);
+    } catch (error) {
+        console.error('Export analytics error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to export analytics data',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * POST /api/analytics/cache/clear
+ * Clear analytics cache
+ * Management only
+ */
+export const clearCache = async (req, res) => {
+    try {
+        // Only management can clear cache
+        if (req.user.role !== 'management' && req.user.role !== 'admin') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'Cache management is only available to management'
+            });
+        }
+        
+        const result = analyticsService.clearAnalyticsCache();
+        res.json(result);
+    } catch (error) {
+        console.error('Clear cache error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to clear cache',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/analytics/tickets-by-filter
+ * Get list of tickets matching specific filter criteria for drill-down
+ * @query {string} startDate - Start date
+ * @query {string} endDate - End date
+ * @query {string} category - Category filter
+ * @query {string} priority - Priority filter
+ * @query {string} status - Status filter
+ * @query {string} techId - Technician filter
+ * @query {boolean} slaBreach - Filter by SLA breach
+ * @query {number} page - Page number
+ * @query {number} limit - Items per page
+ */
+export const getTicketsByFilter = async (req, res) => {
+    try {
+        const { 
+            startDate, endDate, preset, 
+            category, priority, status, techId,
+            slaBreach,
+            page = 1, limit = 20 
+        } = req.query;
+        
+        const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
+        const offset = (parseInt(page) - 1) * parseInt(limit);
+        
+        let params = [start, end];
+        let paramIndex = 3;
+        let filters = '';
+        
+        // For technicians, restrict to their own tickets
+        let effectiveTechId = techId;
+        if (req.user.role === 'technician' || req.user.role === 'senior_technician') {
+            effectiveTechId = req.user.id;
+        }
+        
+        if (category) {
+            filters += ` AND t.category = $${paramIndex}`;
+            params.push(category);
+            paramIndex++;
+        }
+        
+        if (priority) {
+            filters += ` AND t.priority = $${paramIndex}`;
+            params.push(priority);
+            paramIndex++;
+        }
+        
+        if (status) {
+            filters += ` AND t.status = $${paramIndex}`;
+            params.push(status);
+            paramIndex++;
+        }
+        
+        if (effectiveTechId) {
+            filters += ` AND t.assigned_to = $${paramIndex}`;
+            params.push(parseInt(effectiveTechId));
+            paramIndex++;
+        }
+        
+        if (slaBreach === 'true') {
+            filters += ` AND ((t.response_due_at IS NOT NULL AND t.first_response_at > t.response_due_at) 
+                OR (t.resolution_due_at IS NOT NULL AND t.resolved_at > t.resolution_due_at)
+                OR (t.response_due_at < NOW() AND t.first_response_at IS NULL)
+                OR (t.resolution_due_at < NOW() AND t.resolved_at IS NULL AND t.status NOT IN ('resolved', 'closed', 'cancelled')))`;
+        }
+        
+        // Count total
+        const countQuery = `
+            SELECT COUNT(*) as total
+            FROM tickets t
+            WHERE t.created_at BETWEEN $1 AND $2
+              AND t.deleted_at IS NULL
+              ${filters}
+        `;
+        
+        // Get paginated results
+        const ticketsQuery = `
+            SELECT 
+                t.id,
+                t.ticket_number,
+                t.subject,
+                t.category,
+                t.priority,
+                t.status,
+                t.created_at,
+                t.resolved_at,
+                t.response_due_at,
+                t.resolution_due_at,
+                t.first_response_at,
+                CONCAT(c.first_name, ' ', c.last_name) as customer_name,
+                CONCAT(a.first_name, ' ', a.last_name) as assigned_to_name,
+                ROUND(EXTRACT(EPOCH FROM (COALESCE(t.resolved_at, NOW()) - t.created_at)) / 3600, 2) as hours_open
+            FROM tickets t
+            LEFT JOIN users c ON t.customer_id = c.id
+            LEFT JOIN users a ON t.assigned_to = a.id
+            WHERE t.created_at BETWEEN $1 AND $2
+              AND t.deleted_at IS NULL
+              ${filters}
+            ORDER BY t.created_at DESC
+            LIMIT ${parseInt(limit)} OFFSET ${offset}
+        `;
+        
+        const [countResult, ticketsResult] = await Promise.all([
+            pool.query(countQuery, params),
+            pool.query(ticketsQuery, params)
+        ]);
+        
+        const total = parseInt(countResult.rows[0].total);
+        const totalPages = Math.ceil(total / parseInt(limit));
+        
+        res.json({
+            status: 'success',
+            data: {
+                tickets: ticketsResult.rows,
+                pagination: {
+                    total,
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    totalPages,
+                    hasMore: parseInt(page) < totalPages
+                }
+            },
+            filters: { startDate: start, endDate: end, category, priority, status, techId: effectiveTechId, slaBreach }
+        });
+    } catch (error) {
+        console.error('Tickets by filter error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve filtered tickets',
+            error: error.message
+        });
     }
 };

@@ -2,15 +2,18 @@
 -- BlueClue Support Ticket System - PostgreSQL Database Schema
 -- ============================================================================
 -- Description: Complete database schema for the BlueClue ticket management system
--- Version: 1.0.0
+-- Version: 2.3.0
 -- Created: 2026-02-02
 -- ============================================================================
 
 -- Drop existing tables if they exist (for clean reinstalls)
+DROP TABLE IF EXISTS priority_overrides CASCADE;
+DROP TABLE IF EXISTS ticket_assignment_requests CASCADE;
 DROP TABLE IF EXISTS role_category_defaults CASCADE;
 DROP TABLE IF EXISTS category_access CASCADE;
 DROP TABLE IF EXISTS user_privileges CASCADE;
 DROP TABLE IF EXISTS privilege_types CASCADE;
+DROP TABLE IF EXISTS refresh_tokens CASCADE;
 DROP TABLE IF EXISTS notifications CASCADE;
 DROP TABLE IF EXISTS ai_classifications CASCADE;
 DROP TABLE IF EXISTS ticket_comments CASCADE;
@@ -34,7 +37,8 @@ CREATE TYPE ticket_status AS ENUM ('open', 'in_progress', 'waiting_on_customer',
 CREATE TYPE ticket_priority AS ENUM ('low', 'medium', 'high', 'critical');
 CREATE TYPE ticket_category AS ENUM ('general', 'technical', 'billing', 'account', 'feature_request', 'hardware', 'software', 'network', 'login', 'other');
 CREATE TYPE access_level AS ENUM ('view', 'edit', 'assign');
-CREATE TYPE notification_type AS ENUM ('assignment', 'overdue', 'update_request', 'mention');
+CREATE TYPE notification_type AS ENUM ('assignment', 'overdue', 'update_request', 'mention', 'ticket_cancelled');
+CREATE TYPE request_status AS ENUM ('pending', 'approved', 'denied');
 
 -- ============================================================================
 -- TABLE: users
@@ -57,6 +61,7 @@ CREATE TABLE users (
     email_verification_token VARCHAR(255),
     email_verification_expires TIMESTAMP WITH TIME ZONE,
     email_notifications BOOLEAN NOT NULL DEFAULT true,
+    email_created BOOLEAN NOT NULL DEFAULT false, -- Track accounts created from email submission
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login TIMESTAMP WITH TIME ZONE,
@@ -74,6 +79,7 @@ CREATE INDEX idx_users_active ON users(is_active) WHERE is_active = true;
 CREATE INDEX idx_users_created_at ON users(created_at);
 CREATE INDEX idx_users_force_password_change ON users(force_password_change) WHERE force_password_change = true;
 CREATE INDEX idx_users_email_verified ON users(email_verified) WHERE email_verified = false;
+CREATE INDEX idx_users_email_created ON users(email_created) WHERE email_created = true;
 CREATE INDEX idx_users_email_verification_token ON users(email_verification_token) WHERE email_verification_token IS NOT NULL;
 
 -- ============================================================================
@@ -144,6 +150,19 @@ CREATE TABLE tickets (
     reopen_count INTEGER NOT NULL DEFAULT 0,
     last_reopened_at TIMESTAMP WITH TIME ZONE,
     
+    -- Email thread tracking
+    email_message_id VARCHAR(500), -- Original email Message-ID for reply tracking
+    
+    -- AI priority influence fields
+    ai_recommended_priority ticket_priority, -- Original AI recommendation
+    priority_overridden BOOLEAN DEFAULT false, -- True if user explicitly overrode AI
+    priority_override_reason TEXT, -- User-provided reason for override
+    priority_calculation_method VARCHAR(50), -- Method used (ai_direct, weighted_average, user_override)
+    
+    -- Soft-delete support
+    deleted_at TIMESTAMP WITH TIME ZONE DEFAULT NULL, -- NULL = not deleted
+    deleted_by INTEGER REFERENCES users(id) ON DELETE SET NULL, -- Who deleted the ticket
+    
     -- Constraints
     CONSTRAINT ai_confidence_range CHECK (ai_confidence IS NULL OR (ai_confidence >= 0 AND ai_confidence <= 1)),
     CONSTRAINT resolved_fields_consistency CHECK (
@@ -164,9 +183,16 @@ CREATE INDEX idx_tickets_ai_priority ON tickets(ai_priority) WHERE ai_priority I
 CREATE INDEX idx_tickets_category ON tickets(category);
 CREATE INDEX idx_tickets_created_at ON tickets(created_at DESC);
 CREATE INDEX idx_tickets_number ON tickets(ticket_number);
+CREATE INDEX idx_tickets_email_message_id ON tickets(email_message_id) WHERE email_message_id IS NOT NULL;
+CREATE INDEX idx_tickets_ai_recommended_priority ON tickets(ai_recommended_priority) WHERE ai_recommended_priority IS NOT NULL;
+CREATE INDEX idx_tickets_priority_overridden ON tickets(priority_overridden) WHERE priority_overridden = true;
 CREATE INDEX idx_tickets_ai_classified ON tickets(ai_classified);
 CREATE INDEX idx_tickets_open_assigned ON tickets(assigned_to, status) 
     WHERE status IN ('open', 'in_progress');
+
+-- Soft-delete indexes
+CREATE INDEX idx_tickets_deleted_at ON tickets(deleted_at) WHERE deleted_at IS NOT NULL;
+CREATE INDEX idx_tickets_not_deleted ON tickets(id) WHERE deleted_at IS NULL;
 
 -- GIN index for JSON keyword matching
 CREATE INDEX idx_tickets_ai_keywords ON tickets USING GIN (ai_keywords_matched);
@@ -339,6 +365,465 @@ CREATE INDEX idx_ai_classifications_fallback ON ai_classifications(fallback_used
 CREATE INDEX idx_ai_classifications_keywords ON ai_classifications USING GIN (keywords_matched);
 
 -- ============================================================================
+-- TABLE: notifications
+-- ============================================================================
+-- User notifications for ticket assignments, updates, and mentions
+
+CREATE TABLE notifications (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type notification_type NOT NULL,
+    message TEXT NOT NULL,
+    ticket_id INTEGER REFERENCES tickets(id) ON DELETE CASCADE,
+    is_read BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Constraints
+    CONSTRAINT notification_message_length CHECK (LENGTH(message) <= 1000)
+);
+
+-- Indexes for notifications
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX idx_notifications_ticket_id ON notifications(ticket_id);
+CREATE INDEX idx_notifications_type ON notifications(type);
+CREATE INDEX idx_notifications_is_read ON notifications(is_read) WHERE is_read = false;
+CREATE INDEX idx_notifications_created_at ON notifications(created_at DESC);
+CREATE INDEX idx_notifications_user_unread ON notifications(user_id, is_read) WHERE is_read = false;
+
+-- ============================================================================
+-- TABLE: refresh_tokens
+-- ============================================================================
+-- Stores JWT refresh tokens for secure authentication
+
+CREATE TABLE refresh_tokens (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token VARCHAR(500) NOT NULL UNIQUE,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_revoked BOOLEAN NOT NULL DEFAULT false,
+    
+    -- Constraints
+    CONSTRAINT refresh_tokens_user_id_idx UNIQUE (user_id, token)
+);
+
+-- Indexes for refresh_tokens
+CREATE INDEX idx_refresh_tokens_token ON refresh_tokens(token);
+CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+CREATE INDEX idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
+CREATE INDEX idx_refresh_tokens_active ON refresh_tokens(user_id, expires_at) 
+    WHERE is_revoked = false AND expires_at > CURRENT_TIMESTAMP;
+
+-- ============================================================================
+-- TABLE: ticket_assignment_requests
+-- ============================================================================
+-- Tracks technician requests to be assigned to tickets
+
+CREATE TABLE ticket_assignment_requests (
+    id SERIAL PRIMARY KEY,
+    ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    requested_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    note TEXT,
+    status request_status NOT NULL DEFAULT 'pending',
+    reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    reviewed_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Constraints
+    CONSTRAINT unique_pending_request UNIQUE (ticket_id, requested_by)
+);
+
+-- Indexes for ticket_assignment_requests
+CREATE INDEX idx_tar_ticket ON ticket_assignment_requests(ticket_id);
+CREATE INDEX idx_tar_requested ON ticket_assignment_requests(requested_by);
+CREATE INDEX idx_tar_status ON ticket_assignment_requests(status);
+CREATE INDEX idx_tar_reviewed_by ON ticket_assignment_requests(reviewed_by);
+CREATE INDEX idx_tar_created ON ticket_assignment_requests(created_at DESC);
+CREATE INDEX idx_tar_pending ON ticket_assignment_requests(ticket_id, requested_by) 
+    WHERE status = 'pending';
+
+-- ============================================================================
+-- TABLE: priority_overrides
+-- ============================================================================
+-- Tracks AI priority recommendation overrides for analytics
+
+CREATE TABLE priority_overrides (
+    id SERIAL PRIMARY KEY,
+    ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- Priority values
+    user_priority ticket_priority NOT NULL,
+    ai_recommended_priority ticket_priority NOT NULL,
+    final_priority ticket_priority NOT NULL,
+    
+    -- AI information
+    ai_confidence DECIMAL(3, 2),
+    confidence_level VARCHAR(20), -- 'high', 'medium', 'low'
+    
+    -- Override details
+    override_reason TEXT,
+    significant_difference BOOLEAN DEFAULT false,
+    
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Constraints
+    CONSTRAINT priority_override_confidence_range CHECK (
+        ai_confidence IS NULL OR (ai_confidence >= 0 AND ai_confidence <= 1)
+    ),
+    CONSTRAINT confidence_level_valid CHECK (
+        confidence_level IS NULL OR confidence_level IN ('high', 'medium', 'low')
+    )
+);
+
+-- Indexes for priority_overrides
+CREATE INDEX idx_priority_overrides_ticket ON priority_overrides(ticket_id);
+CREATE INDEX idx_priority_overrides_user ON priority_overrides(user_id);
+CREATE INDEX idx_priority_overrides_user_priority ON priority_overrides(user_priority);
+CREATE INDEX idx_priority_overrides_ai_priority ON priority_overrides(ai_recommended_priority);
+CREATE INDEX idx_priority_overrides_significant ON priority_overrides(significant_difference) 
+    WHERE significant_difference = true;
+CREATE INDEX idx_priority_overrides_created_at ON priority_overrides(created_at DESC);
+
+-- Comments for priority_overrides table
+COMMENT ON TABLE priority_overrides IS 'Tracks AI priority recommendations and user overrides for analytics';
+COMMENT ON COLUMN priority_overrides.user_priority IS 'Priority selected by the user';
+COMMENT ON COLUMN priority_overrides.ai_recommended_priority IS 'Priority recommended by AI';
+COMMENT ON COLUMN priority_overrides.final_priority IS 'Final calculated priority after weighted calculation';
+COMMENT ON COLUMN priority_overrides.significant_difference IS 'True if diff between user and AI priorities is >= 2 levels';
+
+-- ============================================================================
+-- TABLE: ai_configuration
+-- ============================================================================
+-- Stores AI system configuration and admin settings
+
+CREATE TABLE ai_configuration (
+    id SERIAL PRIMARY KEY,
+    config_key VARCHAR(100) NOT NULL UNIQUE,
+    config_value JSONB NOT NULL,
+    description TEXT,
+    updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for ai_configuration
+CREATE INDEX idx_ai_configuration_key ON ai_configuration(config_key);
+
+-- Insert default AI priority configuration
+INSERT INTO ai_configuration (config_key, config_value, description) VALUES 
+    ('priority_weights', 
+     '{"aiWeight": 0.7, "userWeight": 0.3, "highConfidenceThreshold": 0.8, "mediumConfidenceThreshold": 0.5, "enableAIPriority": true, "showWarningOnOverride": true}'::jsonb,
+     'Configuration for AI-influenced priority calculation algorithm'),
+    ('ai_analytics', 
+     '{"trackOverrides": true, "trackAccuracy": true, "minimumSampleSize": 50}'::jsonb,
+     'Configuration for AI analytics and tracking')
+ON CONFLICT (config_key) DO NOTHING;
+
+-- Comments for ai_configuration table
+COMMENT ON TABLE ai_configuration IS 'Stores AI system configuration and admin-configurable settings';
+COMMENT ON COLUMN ai_configuration.config_value IS 'JSON configuration data';
+
+-- ============================================================================
+-- TABLE: email_spam_logs
+-- ============================================================================
+-- Tracks all inbound emails for spam analysis and audit trail
+
+CREATE TABLE email_spam_logs (
+    id SERIAL PRIMARY KEY,
+    sender_email VARCHAR(255) NOT NULL,
+    sender_domain VARCHAR(255),
+    subject TEXT,
+    body_preview TEXT, -- First 500 chars for analysis
+    spam_score INTEGER DEFAULT 0, -- 0-100, higher = more likely spam
+    is_spam BOOLEAN DEFAULT FALSE,
+    is_blocked BOOLEAN DEFAULT FALSE,
+    block_reason VARCHAR(255), -- Why it was blocked
+    spf_result VARCHAR(50), -- pass, fail, softfail, neutral, none
+    dkim_result VARCHAR(50), -- pass, fail, none
+    content_filters_triggered TEXT[], -- Array of triggered filters
+    ip_address INET,
+    user_agent TEXT,
+    ticket_id INTEGER REFERENCES tickets(id) ON DELETE SET NULL,
+    processing_error TEXT, -- Error message if parsing/processing failed
+    processing_status VARCHAR(20) DEFAULT 'success', -- success, failed, retried
+    retry_count INTEGER DEFAULT 0,
+    last_retry_at TIMESTAMP WITH TIME ZONE,
+    raw_email_data JSONB, -- Store full email for retry
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Constraints
+    CONSTRAINT valid_spam_score CHECK (spam_score >= 0 AND spam_score <= 100)
+);
+
+-- Indexes for email_spam_logs
+CREATE INDEX idx_email_spam_logs_sender ON email_spam_logs(sender_email);
+CREATE INDEX idx_email_spam_logs_domain ON email_spam_logs(sender_domain);
+CREATE INDEX idx_email_spam_logs_created ON email_spam_logs(created_at);
+CREATE INDEX idx_email_spam_logs_is_spam ON email_spam_logs(is_spam);
+CREATE INDEX idx_email_spam_logs_is_blocked ON email_spam_logs(is_blocked);
+CREATE INDEX idx_email_spam_logs_status ON email_spam_logs(processing_status);
+CREATE INDEX idx_email_spam_logs_ticket ON email_spam_logs(ticket_id);
+
+-- Comments for email_spam_logs table
+COMMENT ON TABLE email_spam_logs IS 'Audit log of all inbound emails with spam analysis results';
+COMMENT ON COLUMN email_spam_logs.spam_score IS 'Calculated spam likelihood score (0-100)';
+COMMENT ON COLUMN email_spam_logs.content_filters_triggered IS 'Array of spam keywords/patterns detected';
+COMMENT ON COLUMN email_spam_logs.processing_error IS 'Error message if parsing/processing failed';
+COMMENT ON COLUMN email_spam_logs.processing_status IS 'Processing outcome: success, failed, retried';
+COMMENT ON COLUMN email_spam_logs.raw_email_data IS 'Full original email data for manual retry';
+
+-- ============================================================================
+-- TABLE: email_rate_limits
+-- ============================================================================
+-- Tracks email sending rates per address (max 10 tickets/day by default)
+
+CREATE TABLE email_rate_limits (
+    id SERIAL PRIMARY KEY,
+    email_address VARCHAR(255) NOT NULL UNIQUE,
+    ticket_count_today INTEGER DEFAULT 0,
+    last_ticket_at TIMESTAMP WITH TIME ZONE,
+    reset_at TIMESTAMP WITH TIME ZONE, -- When counter resets (midnight)
+    is_rate_limited BOOLEAN DEFAULT FALSE,
+    rate_limit_expires_at TIMESTAMP WITH TIME ZONE,
+    total_tickets_all_time INTEGER DEFAULT 0,
+    first_ticket_at TIMESTAMP WITH TIME ZONE,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for email_rate_limits
+CREATE INDEX idx_email_rate_limits_email ON email_rate_limits(email_address);
+CREATE INDEX idx_email_rate_limits_is_limited ON email_rate_limits(is_rate_limited);
+CREATE INDEX idx_email_rate_limits_reset ON email_rate_limits(reset_at);
+
+-- Comments for email_rate_limits table
+COMMENT ON TABLE email_rate_limits IS 'Tracks ticket creation rate per email address';
+COMMENT ON COLUMN email_rate_limits.ticket_count_today IS 'Number of tickets created today (resets at midnight)';
+COMMENT ON COLUMN email_rate_limits.reset_at IS 'Timestamp when daily counter resets';
+
+-- ============================================================================
+-- TABLE: domain_blacklist
+-- ============================================================================
+-- Blocks known spam domains
+
+CREATE TABLE domain_blacklist (
+    id SERIAL PRIMARY KEY,
+    domain VARCHAR(255) NOT NULL UNIQUE,
+    reason TEXT NOT NULL,
+    added_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    added_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE,
+    block_count INTEGER DEFAULT 0, -- How many emails blocked
+    last_blocked_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Indexes for domain_blacklist
+CREATE INDEX idx_domain_blacklist_domain ON domain_blacklist(domain);
+CREATE INDEX idx_domain_blacklist_active ON domain_blacklist(is_active) WHERE is_active = TRUE;
+
+-- Comments for domain_blacklist table
+COMMENT ON TABLE domain_blacklist IS 'List of domains blocked from creating tickets';
+COMMENT ON COLUMN domain_blacklist.block_count IS 'Number of emails blocked from this domain';
+
+-- Insert common spam domains to blacklist
+INSERT INTO domain_blacklist (domain, reason, is_active) VALUES
+    ('example-spam.com', 'Known spam domain', TRUE),
+    ('test-spam.org', 'Test spam domain for development', TRUE),
+    ('tempmail.com', 'Temporary email service commonly used for spam', TRUE),
+    ('guerrillamail.com', 'Temporary email service', TRUE),
+    ('10minutemail.com', 'Temporary email service', TRUE)
+ON CONFLICT (domain) DO NOTHING;
+
+-- ============================================================================
+-- TABLE: domain_allowlist
+-- ============================================================================
+-- Trusted domains that bypass spam checks (optional whitelist)
+
+CREATE TABLE domain_allowlist (
+    id SERIAL PRIMARY KEY,
+    domain VARCHAR(255) NOT NULL UNIQUE,
+    reason TEXT,
+    added_by VARCHAR(255), -- Admin username/email
+    is_active BOOLEAN DEFAULT TRUE,
+    allow_count INTEGER DEFAULT 0, -- How many emails passed from this domain
+    last_used_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for domain_allowlist
+CREATE INDEX idx_domain_allowlist_domain ON domain_allowlist(domain);
+CREATE INDEX idx_domain_allowlist_active ON domain_allowlist(is_active);
+CREATE INDEX idx_domain_allowlist_created ON domain_allowlist(created_at DESC);
+
+-- Comments for domain_allowlist table
+COMMENT ON TABLE domain_allowlist IS 'Trusted domains that bypass spam filters';
+COMMENT ON COLUMN domain_allowlist.allow_count IS 'Number of emails processed from this domain';
+
+-- Pre-populate some trusted domains
+INSERT INTO domain_allowlist (domain, reason, added_by, is_active) VALUES
+    ('example.com', 'Testing domain - trusted for development', 'system', TRUE),
+    ('yourdomain.com', 'Company domain - always trusted', 'system', TRUE)
+ON CONFLICT (domain) DO NOTHING;
+
+-- ============================================================================
+-- TABLE: email_verification_challenges
+-- ============================================================================
+-- Stores verification challenges for suspicious senders
+
+CREATE TABLE email_verification_challenges (
+    id SERIAL PRIMARY KEY,
+    email_address VARCHAR(255) NOT NULL,
+    challenge_token VARCHAR(255) NOT NULL UNIQUE,
+    is_verified BOOLEAN DEFAULT FALSE,
+    verified_at TIMESTAMP WITH TIME ZONE,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    attempts INTEGER DEFAULT 0,
+    max_attempts INTEGER DEFAULT 3,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    ip_address INET,
+    original_email_data JSONB, -- Store original email to process after verification
+    spam_score INTEGER, -- Score that triggered challenge
+    
+    -- Constraints
+    CONSTRAINT valid_challenge_attempts CHECK (attempts <= max_attempts)
+);
+
+-- Indexes for email_verification_challenges
+CREATE INDEX idx_verification_challenges_email ON email_verification_challenges(email_address);
+CREATE INDEX idx_verification_challenges_token ON email_verification_challenges(challenge_token);
+CREATE INDEX idx_verification_challenges_expires ON email_verification_challenges(expires_at);
+CREATE INDEX idx_verification_challenges_verified ON email_verification_challenges(is_verified);
+
+-- Comments for email_verification_challenges table
+COMMENT ON TABLE email_verification_challenges IS 'Email verification challenges for suspicious senders';
+COMMENT ON COLUMN email_verification_challenges.challenge_token IS 'Unique token sent via email for verification';
+COMMENT ON COLUMN email_verification_challenges.original_email_data IS 'Original email content to process after verification';
+
+-- ============================================================================
+-- TABLE: spam_keywords
+-- ============================================================================
+-- Configurable list of spam keywords/patterns
+
+CREATE TABLE spam_keywords (
+    id SERIAL PRIMARY KEY,
+    keyword VARCHAR(255) NOT NULL,
+    pattern_type VARCHAR(50) DEFAULT 'exact', -- exact, contains, regex
+    weight INTEGER DEFAULT 10, -- Points added to spam score
+    category VARCHAR(100), -- e.g., 'pharmacy', 'financial', 'adult'
+    is_active BOOLEAN DEFAULT TRUE,
+    added_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    hit_count INTEGER DEFAULT 0, -- How many times matched
+    last_hit_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Indexes for spam_keywords
+CREATE INDEX idx_spam_keywords_active ON spam_keywords(is_active) WHERE is_active = TRUE;
+CREATE INDEX idx_spam_keywords_category ON spam_keywords(category);
+
+-- Comments for spam_keywords table
+COMMENT ON TABLE spam_keywords IS 'Configurable spam keyword patterns with weighted scoring';
+COMMENT ON COLUMN spam_keywords.weight IS 'Points added to spam score when matched';
+
+-- Insert default spam keywords
+INSERT INTO spam_keywords (keyword, pattern_type, weight, category) VALUES
+    -- Pharmacy spam
+    ('viagra', 'contains', 15, 'pharmacy'),
+    ('cialis', 'contains', 15, 'pharmacy'),
+    ('pharmacy', 'contains', 10, 'pharmacy'),
+    ('prescription', 'contains', 8, 'pharmacy'),
+    -- Financial spam
+    ('nigerian prince', 'contains', 25, 'financial'),
+    ('lottery winner', 'contains', 25, 'financial'),
+    ('million dollars', 'contains', 15, 'financial'),
+    ('wire transfer', 'contains', 12, 'financial'),
+    ('bank account', 'contains', 10, 'financial'),
+    ('paypal', 'contains', 8, 'financial'),
+    -- Generic spam
+    ('click here now', 'contains', 15, 'generic'),
+    ('act now', 'contains', 12, 'generic'),
+    ('limited time', 'contains', 10, 'generic'),
+    ('free money', 'contains', 20, 'generic'),
+    ('congratulations', 'contains', 8, 'generic'),
+    ('you have won', 'contains', 15, 'generic'),
+    -- Adult content
+    ('xxx', 'contains', 20, 'adult'),
+    ('adult content', 'contains', 20, 'adult'),
+    -- Phishing indicators
+    ('verify your account', 'contains', 15, 'phishing'),
+    ('confirm your identity', 'contains', 15, 'phishing'),
+    ('suspended account', 'contains', 15, 'phishing'),
+    ('unusual activity', 'contains', 12, 'phishing')
+ON CONFLICT DO NOTHING;
+
+-- ============================================================================
+-- TABLE: security_alerts
+-- ============================================================================
+-- Logs suspicious activity for admin review
+
+CREATE TABLE security_alerts (
+    id SERIAL PRIMARY KEY,
+    alert_type VARCHAR(100) NOT NULL, -- 'rate_limit', 'spam_detected', 'invalid_domain', etc.
+    severity VARCHAR(50) DEFAULT 'medium', -- low, medium, high, critical
+    email_address VARCHAR(255),
+    domain VARCHAR(255),
+    description TEXT NOT NULL,
+    metadata JSONB, -- Additional context
+    is_resolved BOOLEAN DEFAULT FALSE,
+    resolved_at TIMESTAMP WITH TIME ZONE,
+    resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    spam_log_id INTEGER REFERENCES email_spam_logs(id) ON DELETE CASCADE
+);
+
+-- Indexes for security_alerts
+CREATE INDEX idx_security_alerts_type ON security_alerts(alert_type);
+CREATE INDEX idx_security_alerts_severity ON security_alerts(severity);
+CREATE INDEX idx_security_alerts_resolved ON security_alerts(is_resolved);
+CREATE INDEX idx_security_alerts_created ON security_alerts(created_at);
+CREATE INDEX idx_security_alerts_email ON security_alerts(email_address);
+
+-- Comments for security_alerts table
+COMMENT ON TABLE security_alerts IS 'Security alerts for admin monitoring and incident response';
+COMMENT ON COLUMN security_alerts.severity IS 'Alert severity level for prioritization';
+
+-- ============================================================================
+-- TABLE: system_settings
+-- ============================================================================
+-- Stores global configuration (test mode, thresholds, etc.)
+
+CREATE TABLE system_settings (
+    id SERIAL PRIMARY KEY,
+    setting_key VARCHAR(100) NOT NULL UNIQUE,
+    setting_value TEXT NOT NULL,
+    setting_type VARCHAR(20) DEFAULT 'string', -- string, number, boolean, json
+    description TEXT,
+    is_public BOOLEAN DEFAULT FALSE, -- Can non-admins read this?
+    updated_by VARCHAR(255), -- Admin who last updated
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for system_settings
+CREATE INDEX idx_system_settings_key ON system_settings(setting_key);
+CREATE INDEX idx_system_settings_public ON system_settings(is_public);
+
+-- Comments for system_settings table
+COMMENT ON TABLE system_settings IS 'Global system configuration settings';
+COMMENT ON COLUMN system_settings.is_public IS 'Whether non-admin users can read this setting';
+
+-- Pre-populate default settings
+INSERT INTO system_settings (setting_key, setting_value, setting_type, description, is_public) VALUES
+    ('email_test_mode', 'false', 'boolean', 'When true, only accept emails from allowlisted domains', FALSE),
+    ('spam_score_threshold', '50', 'number', 'Spam score threshold for blocking (0-100)', FALSE),
+    ('verification_threshold', '30', 'number', 'Spam score threshold for verification challenge', FALSE),
+    ('rate_limit_max_per_day', '10', 'number', 'Maximum tickets per email address per day', FALSE),
+    ('admin_notification_email', '', 'string', 'Email address for security alerts', FALSE),
+    ('enable_spam_protection', 'true', 'boolean', 'Master switch for spam protection features', FALSE)
+ON CONFLICT (setting_key) DO NOTHING;
+
+-- ============================================================================
 -- FUNCTIONS AND TRIGGERS
 -- ============================================================================
 
@@ -405,13 +890,8 @@ BEGIN
         VALUES (NEW.id, NEW.assigned_to, 'category_change', 'category', OLD.category::TEXT, NEW.category::TEXT);
     END IF;
     
-    -- Log assignment changes
-    IF (TG_OP = 'UPDATE' AND OLD.assigned_to IS DISTINCT FROM NEW.assigned_to) THEN
-        INSERT INTO ticket_history (ticket_id, changed_by, change_type, field_name, old_value, new_value)
-        VALUES (NEW.id, NEW.assigned_to, 'assignment', 'assigned_to', 
-                COALESCE(OLD.assigned_to::TEXT, 'unassigned'), 
-                COALESCE(NEW.assigned_to::TEXT, 'unassigned'));
-    END IF;
+    -- Assignment changes are logged by the application layer (ticketController.js)
+    -- with richer metadata (names, bulk vs single, notes). Do NOT log here to avoid duplicates.
     
     RETURN NEW;
 END;
@@ -813,10 +1293,16 @@ COMMENT ON TABLE categories IS 'Predefined ticket categories synchronized with A
 COMMENT ON TABLE tickets IS 'Main table for support tickets with AI classification metadata';
 COMMENT ON TABLE ticket_assignments IS 'Assignment history tracking for tickets';
 COMMENT ON TABLE ticket_history IS 'Audit trail for all ticket changes and updates';
+COMMENT ON TABLE notifications IS 'User notifications for ticket assignments, updates, and mentions';
+COMMENT ON TABLE refresh_tokens IS 'JWT refresh tokens for secure authentication';
+COMMENT ON TABLE ticket_assignment_requests IS 'Tracks technician requests to be assigned to tickets';
+COMMENT ON TABLE priority_overrides IS 'Analytics table tracking AI priority recommendation overrides';
 
 COMMENT ON COLUMN tickets.ai_confidence IS 'AI classification confidence score (0.00 to 1.00)';
 COMMENT ON COLUMN tickets.ai_fallback_used IS 'Indicates if AI classifier used fallback behavior';
 COMMENT ON COLUMN tickets.ai_keywords_matched IS 'JSON object containing matched keywords from AI classification';
+COMMENT ON COLUMN ticket_assignment_requests.status IS 'pending = awaiting review, approved = assigned, denied = rejected';
+COMMENT ON COLUMN priority_overrides.significant_difference IS 'True when override differs significantly from AI recommendation';
 
 -- ============================================================================
 -- GRANTS AND PERMISSIONS
@@ -895,8 +1381,159 @@ $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION cleanup_old_email_logs() IS 'Removes successful email logs older than 90 days to manage database size';
 
+-- Cleanup function for expired refresh tokens
+CREATE OR REPLACE FUNCTION cleanup_expired_refresh_tokens()
+RETURNS INTEGER AS $$
+DECLARE
+    deleted_count INTEGER;
+BEGIN
+    -- Delete expired or revoked refresh tokens
+    DELETE FROM refresh_tokens 
+    WHERE expires_at < CURRENT_TIMESTAMP OR is_revoked = true;
+    
+    GET DIAGNOSTICS deleted_count = ROW_COUNT;
+    RETURN deleted_count;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION cleanup_expired_refresh_tokens() IS 'Removes expired and revoked refresh tokens for security and performance';
+
+-- Function to auto-reset daily rate limits at midnight
+CREATE OR REPLACE FUNCTION reset_daily_rate_limits()
+RETURNS void AS $$
+BEGIN
+    UPDATE email_rate_limits
+    SET ticket_count_today = 0,
+        reset_at = CURRENT_DATE + INTERVAL '1 day',
+        updated_at = CURRENT_TIMESTAMP
+    WHERE reset_at < CURRENT_TIMESTAMP;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION reset_daily_rate_limits() IS 'Resets daily ticket counters at midnight for rate limiting';
+
+-- Function to clean up expired verification challenges
+CREATE OR REPLACE FUNCTION cleanup_expired_challenges()
+RETURNS INTEGER AS $$
+DECLARE
+    deleted_count INTEGER;
+BEGIN
+    DELETE FROM email_verification_challenges
+    WHERE expires_at < CURRENT_TIMESTAMP
+    AND is_verified = FALSE;
+    
+    GET DIAGNOSTICS deleted_count = ROW_COUNT;
+    RETURN deleted_count;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION cleanup_expired_challenges() IS 'Removes expired verification challenges to maintain database cleanliness';
+
+-- Function to update allowlist hit count
+CREATE OR REPLACE FUNCTION increment_allowlist_hit_count(p_domain VARCHAR)
+RETURNS VOID AS $$
+BEGIN
+    UPDATE domain_allowlist
+    SET allow_count = allow_count + 1,
+        last_used_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE domain = p_domain AND is_active = TRUE;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION increment_allowlist_hit_count IS 'Increment the usage counter for an allowlisted domain';
+
+-- Function to get system setting value
+CREATE OR REPLACE FUNCTION get_system_setting(p_key VARCHAR)
+RETURNS TEXT AS $$
+DECLARE
+    v_value TEXT;
+BEGIN
+    SELECT setting_value INTO v_value
+    FROM system_settings
+    WHERE setting_key = p_key;
+    
+    RETURN v_value;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION get_system_setting IS 'Retrieve a system setting value by key';
+
+-- Trigger to update updated_at on ai_configuration
+CREATE OR REPLACE FUNCTION update_ai_configuration_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_ai_configuration_timestamp
+    BEFORE UPDATE ON ai_configuration
+    FOR EACH ROW
+    EXECUTE FUNCTION update_ai_configuration_updated_at();
+
 -- ============================================================================
--- SCHEMA VERSION INFO
+-- VIEWS FOR ANALYTICS AND REPORTING
+-- ============================================================================
+
+-- View: Priority analytics for AI system monitoring
+CREATE OR REPLACE VIEW v_priority_analytics AS
+SELECT 
+    po.confidence_level,
+    po.significant_difference,
+    COUNT(*) as override_count,
+    AVG(po.ai_confidence) as avg_confidence,
+    COUNT(CASE WHEN po.final_priority = po.ai_recommended_priority THEN 1 END) as ai_accepted,
+    COUNT(CASE WHEN po.final_priority = po.user_priority THEN 1 END) as user_accepted,
+    ARRAY_AGG(DISTINCT u.username) as users_who_overrode
+FROM priority_overrides po
+JOIN users u ON po.user_id = u.id
+GROUP BY po.confidence_level, po.significant_difference;
+
+COMMENT ON VIEW v_priority_analytics IS 'AI priority override analytics showing confidence levels and user acceptance rates';
+
+-- View: AI accuracy tracking for resolved tickets
+CREATE OR REPLACE VIEW v_ai_priority_accuracy AS
+SELECT 
+    t.category,
+    t.ai_recommended_priority,
+    t.priority as final_priority,
+    COUNT(*) as ticket_count,
+    AVG(EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600) as avg_resolution_hours,
+    AVG(t.ai_confidence) as avg_confidence,
+    COUNT(CASE WHEN t.priority_overridden THEN 1 END) as overridden_count,
+    ROUND(
+        COUNT(CASE WHEN t.priority_overridden THEN 1 END)::NUMERIC / 
+        COUNT(*)::NUMERIC * 100, 
+        2
+    ) as override_rate_percentage
+FROM tickets t
+WHERE t.ai_classified = true
+  AND t.status IN ('resolved', 'closed')
+GROUP BY t.category, t.ai_recommended_priority, t.priority
+ORDER BY t.category, ticket_count DESC;
+
+COMMENT ON VIEW v_ai_priority_accuracy IS 'AI accuracy tracking showing resolution times and override rates per category';
+
+-- View: Admin email dashboard summary
+CREATE OR REPLACE VIEW admin_email_dashboard AS
+SELECT 
+    DATE(created_at) as date,
+    COUNT(*) as total_emails,
+    COUNT(*) FILTER (WHERE is_blocked = TRUE) as blocked_count,
+    COUNT(*) FILTER (WHERE is_spam = TRUE) as spam_count,
+    COUNT(*) FILTER (WHERE ticket_id IS NOT NULL) as tickets_created,
+    COUNT(*) FILTER (WHERE processing_status = 'failed') as failed_parses,
+    AVG(spam_score) as avg_spam_score,
+    COUNT(DISTINCT sender_email) as unique_senders
+FROM email_spam_logs
+GROUP BY DATE(created_at)
+ORDER BY date DESC;
+
+COMMENT ON VIEW admin_email_dashboard IS 'Daily summary statistics for admin email management dashboard';
+
+-- ============================================================================ -- SCHEMA VERSION INFO
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -906,7 +1543,8 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 INSERT INTO schema_version (version, description) 
-VALUES ('2.1.0', 'Complete email system: verification, notifications, monitoring, and admin management with email_logs table and automatic cleanup');
+VALUES ('2.3.0', 'Fully consolidated schema: added AI configuration, spam protection tables, email tracking, and all remaining migrations (002, 004, 005, 006, 007)')
+ON CONFLICT (version) DO NOTHING;
 
 -- ============================================================================
 -- END OF SCHEMA

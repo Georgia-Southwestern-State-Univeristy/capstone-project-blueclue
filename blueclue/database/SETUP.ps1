@@ -21,6 +21,8 @@ if ($Help) {
     Write-Host "  -SkipSeed    Skip loading sample data (customers, admin)" -ForegroundColor White
     Write-Host "  -Help        Show this help message" -ForegroundColor White
     Write-Host ""
+    Write-Host "Note: You will be prompted to optionally fix admin password or create manager account" -ForegroundColor Yellow
+    Write-Host ""
     Write-Host "What this script does:" -ForegroundColor Yellow
     Write-Host "  1. Drops existing 'blueclue' database (if exists)" -ForegroundColor White
     Write-Host "  2. Creates fresh 'blueclue' database" -ForegroundColor White
@@ -79,12 +81,25 @@ Write-Host "====================================================================
 Write-Host "Step 1: Dropping existing database (if exists)..." -ForegroundColor Yellow
 Write-Host "============================================================================" -ForegroundColor Cyan
 
-$null = psql -U postgres -c "DROP DATABASE IF EXISTS blueclue;" 2>&1
+# First, terminate all active connections to the database
+Write-Host "Terminating active connections to blueclue database..." -ForegroundColor White
+$terminateQuery = @"
+SELECT pg_terminate_backend(pid) 
+FROM pg_stat_activity 
+WHERE datname = 'blueclue' 
+  AND pid <> pg_backend_pid();
+"@
+
+$null = psql -U postgres -c $terminateQuery 2>&1
+
+# Now drop the database
+$dropResult = psql -U postgres -c "DROP DATABASE IF EXISTS blueclue;" 2>&1
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Existing database dropped successfully" -ForegroundColor Green
 } else {
-    Write-Host "No existing database to drop (OK)" -ForegroundColor Yellow
+    Write-Host "Note: Could not drop database (may not exist)" -ForegroundColor Yellow
+    Write-Host $dropResult -ForegroundColor Gray
 }
 
 Write-Host ""
@@ -155,15 +170,31 @@ Write-Host ""
 
 # Step 4.5: Apply email-to-ticket migrations
 Write-Host "============================================================================" -ForegroundColor Cyan
-Write-Host "Step 4.5: Applying email-to-ticket migrations..." -ForegroundColor Yellow
+Write-Host "Step 4.5: Applying feature migrations..." -ForegroundColor Yellow
 Write-Host "============================================================================" -ForegroundColor Cyan
-Write-Host "Adding email tracking, thread management, and spam protection..." -ForegroundColor White
+Write-Host "Adding email tracking, thread management, spam protection, comment system, and KB seeding..." -ForegroundColor White
 
 $migrationFiles = @(
     "migrations\004_add_email_created_flag.sql",
     "migrations\005_add_email_thread_tracking.sql",
     "migrations\006_add_spam_protection.sql",
-    "migrations\007_add_admin_management.sql"
+    "migrations\007_add_admin_management.sql",
+    "migrations\012_add_comment_reactions.sql",
+    "migrations\013_add_comment_notification_type.sql",
+    "migrations\014_add_ticket_reopen_tracking.sql",
+    "migrations\015_add_ticket_collaborators.sql",
+    "migrations\016_add_ring_for_help.sql",
+    "migrations\017_add_ticket_update_requests.sql",
+    "migrations\019_add_ticket_templates.sql",
+    "migrations\019_add_knowledge_base.sql",
+    "migrations\020_add_kb_version_control.sql",
+    "migrations\020_update_existing_templates.sql",
+    "migrations\021_seed_kb_articles.sql",
+    "migrations\022_seed_kb_articles_part2.sql",
+    "migrations\023_seed_kb_articles_part3.sql",
+    "migrations\024_seed_kb_articles_part4.sql",
+    "migrations\025_add_fulltext_search.sql"
+    "migrations\add_response_time_to_update_requests.sql"
 )
 
 $migrationsApplied = 0
@@ -180,14 +211,132 @@ foreach ($migration in $migrationFiles) {
 }
 
 if ($migrationsApplied -eq $migrationFiles.Count) {
-    Write-Host "Email-to-ticket system configured successfully" -ForegroundColor Green
+    Write-Host "Email-to-ticket and comment system configured successfully" -ForegroundColor Green
     Write-Host "  [OK] Email creation tracking" -ForegroundColor Green
     Write-Host "  [OK] Email thread management" -ForegroundColor Green
     Write-Host "  [OK] Spam detection and filtering" -ForegroundColor Green
     Write-Host "  [OK] Admin management features" -ForegroundColor Green
+    Write-Host "  [OK] Comment reactions and threading" -ForegroundColor Green
+    Write-Host "  [OK] Knowledge base seeded with 15 starter articles" -ForegroundColor Green
+    Write-Host "  [OK] Full-text search with PostgreSQL tsvector" -ForegroundColor Green
 } else {
     Write-Host "WARNING: Some migrations failed to apply ($migrationsApplied/$($migrationFiles.Count))" -ForegroundColor Yellow
     Write-Host "Email-to-ticket features may not work correctly" -ForegroundColor Yellow
+}
+
+Write-Host ""
+
+# Step 4.6: Apply ticket lifecycle migrations (cancelled status + soft-delete)
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Step 4.6: Applying ticket lifecycle migrations..." -ForegroundColor Yellow
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Adding cancelled notification type and soft-delete support..." -ForegroundColor White
+
+$lifecycleMigrations = @(
+    "migrations\012_add_ticket_cancelled_notification_type.sql",
+    "migrations\013_add_deleted_at_column.sql"
+)
+
+$lifecycleApplied = 0
+foreach ($migration in $lifecycleMigrations) {
+    if (Test-Path $migration) {
+        Write-Host "  Applying $migration..." -ForegroundColor White
+        $null = psql -U postgres -d blueclue -f $migration -q 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $lifecycleApplied++
+        } else {
+            Write-Host "  WARNING: Failed to apply $migration" -ForegroundColor Yellow
+        }
+    }
+}
+
+if ($lifecycleApplied -eq $lifecycleMigrations.Count) {
+    Write-Host "Ticket lifecycle migrations applied successfully" -ForegroundColor Green
+    Write-Host "  [OK] ticket_cancelled notification type" -ForegroundColor Green
+    Write-Host "  [OK] Soft-delete columns (deleted_at, deleted_by)" -ForegroundColor Green
+} else {
+    Write-Host "WARNING: Some lifecycle migrations failed ($lifecycleApplied/$($lifecycleMigrations.Count))" -ForegroundColor Yellow
+    Write-Host "Cancelled notifications or soft-delete may not work correctly" -ForegroundColor Yellow
+}
+
+Write-Host ""
+
+# Step 4.7: Apply dashboard layouts migration
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Step 4.7: Applying dashboard layout migration..." -ForegroundColor Yellow
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Adding user dashboard layouts and saved layouts tables..." -ForegroundColor White
+
+$dashboardMigration = "migrations\018_add_user_dashboard_layouts.sql"
+if (Test-Path $dashboardMigration) {
+    Write-Host "  Applying $dashboardMigration..." -ForegroundColor White
+    $null = psql -U postgres -d blueclue -f $dashboardMigration -q 2>&1
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Dashboard layout migration applied successfully" -ForegroundColor Green
+        Write-Host "  [OK] user_dashboard_layouts table" -ForegroundColor Green
+        Write-Host "  [OK] user_saved_layouts table" -ForegroundColor Green
+        Write-Host "  [OK] Auto-update timestamp triggers" -ForegroundColor Green
+    } else {
+        Write-Host "WARNING: Failed to apply dashboard layout migration" -ForegroundColor Yellow
+        Write-Host "Dashboard customization will fall back to localStorage only" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "WARNING: $dashboardMigration not found" -ForegroundColor Yellow
+}
+
+Write-Host ""
+
+# Step 4.8: Apply ticket templates migration
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Step 4.8: Applying ticket templates migration..." -ForegroundColor Yellow
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Adding ticket templates with versioning and usage tracking..." -ForegroundColor White
+
+$templatesMigration = "migrations\019_add_ticket_templates.sql"
+if (Test-Path $templatesMigration) {
+    Write-Host "  Applying $templatesMigration..." -ForegroundColor White
+    $null = psql -U postgres -d blueclue -f $templatesMigration -q 2>&1
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Ticket templates migration applied successfully" -ForegroundColor Green
+        Write-Host "  [OK] ticket_templates table" -ForegroundColor Green
+        Write-Host "  [OK] template_versions table" -ForegroundColor Green
+        Write-Host "  [OK] ticket_template_usage table" -ForegroundColor Green
+        Write-Host "  [OK] template_category ENUM type" -ForegroundColor Green
+        Write-Host "  [OK] Default templates seeded" -ForegroundColor Green
+    } else {
+        Write-Host "WARNING: Failed to apply ticket templates migration" -ForegroundColor Yellow
+        Write-Host "Template features will not be available" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "WARNING: $templatesMigration not found" -ForegroundColor Yellow
+}
+
+Write-Host ""
+
+# Step 4.9: Update existing templates with content and categories
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Step 4.9: Updating existing templates..." -ForegroundColor Yellow
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Fixing template content and categories..." -ForegroundColor White
+
+$templatesUpdateMigration = "migrations\020_update_existing_templates.sql"
+if (Test-Path $templatesUpdateMigration) {
+    Write-Host "  Applying $templatesUpdateMigration..." -ForegroundColor White
+    $null = psql -U postgres -d blueclue -f $templatesUpdateMigration -q 2>&1
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Template updates applied successfully" -ForegroundColor Green
+        Write-Host "  [OK] Template categories updated" -ForegroundColor Green
+        Write-Host "  [OK] Template content filled" -ForegroundColor Green
+        Write-Host "  [OK] Missing fields populated" -ForegroundColor Green
+    } else {
+        Write-Host "WARNING: Failed to apply template updates" -ForegroundColor Yellow
+        Write-Host "Some templates may be missing content" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "WARNING: $templatesUpdateMigration not found" -ForegroundColor Yellow
 }
 
 Write-Host ""
@@ -213,6 +362,49 @@ if (-not $SkipSeed) {
     Write-Host "============================================================================" -ForegroundColor Cyan
     Write-Host "Step 5: Skipping sample data (as requested)" -ForegroundColor Yellow
     Write-Host "============================================================================" -ForegroundColor Cyan
+}
+
+Write-Host ""
+
+# Step 6: Optional utility scripts (with user prompts)
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Optional Setup Tasks" -ForegroundColor Yellow
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host ""
+
+# Prompt for admin password fix
+$fixAdminResponse = Read-Host "Do you want to reset admin password to BlueClue2026!? (y/n)"
+if ($fixAdminResponse -eq 'y' -or $fixAdminResponse -eq 'Y') {
+    Write-Host ""
+    Write-Host "Resetting admin@blueclue.com password..." -ForegroundColor White
+
+    $null = psql -U postgres -d blueclue -f fix_admin_password.sql 2>&1
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Admin password reset successfully" -ForegroundColor Green
+    } else {
+        Write-Host "WARNING: Failed to reset admin password" -ForegroundColor Yellow
+    }
+}
+
+Write-Host ""
+
+# Prompt for manager account creation
+$createManagerResponse = Read-Host "Do you want to create manager@blueclue.com account with full permissions? (y/n)"
+if ($createManagerResponse -eq 'y' -or $createManagerResponse -eq 'Y') {
+    Write-Host ""
+    Write-Host "Creating manager@blueclue.com with full category permissions..." -ForegroundColor White
+
+    $null = psql -U postgres -d blueclue -f create_manager_account.sql 2>&1
+
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Manager account created successfully" -ForegroundColor Green
+        Write-Host "  Login: manager@blueclue.com / BlueClue2026!" -ForegroundColor White
+        $managerCreated = $true
+    } else {
+        Write-Host "WARNING: Failed to create manager account" -ForegroundColor Yellow
+        $managerCreated = $false
+    }
 }
 
 Write-Host ""
@@ -264,6 +456,25 @@ Write-Host "  [OK] Email thread tracking and replies" -ForegroundColor Green
 Write-Host "  [OK] Spam detection and filtering" -ForegroundColor Green
 Write-Host "  [OK] Automatic priority classification" -ForegroundColor Green
 Write-Host ""
+Write-Host "Comment System Enabled:" -ForegroundColor Yellow
+Write-Host "  [OK] Threaded comments with reply support" -ForegroundColor Green
+Write-Host "  [OK] Internal (tech-only) comments" -ForegroundColor Green
+Write-Host "  [OK] Emoji reactions (6 types)" -ForegroundColor Green
+Write-Host "  [OK] Real-time updates via WebSocket" -ForegroundColor Green
+Write-Host ""
+Write-Host "Dashboard Customization Enabled:" -ForegroundColor Yellow
+Write-Host "  [OK] Drag-and-drop widget grid layouts" -ForegroundColor Green
+Write-Host "  [OK] Per-user layout persistence (database-backed)" -ForegroundColor Green
+Write-Host "  [OK] Named saved layouts with load/rename/delete" -ForegroundColor Green
+Write-Host ""
+Write-Host "Knowledge Base Enabled:" -ForegroundColor Yellow
+Write-Host "  [OK] Article management with version control" -ForegroundColor Green
+Write-Host "  [OK] 15 starter support articles seeded" -ForegroundColor Green
+Write-Host "  [OK] Categories: Account, Network, Software, Hardware, Security, Support, Troubleshooting" -ForegroundColor Green
+Write-Host "  [OK] Markdown editing with tags and difficulty levels" -ForegroundColor Green
+Write-Host "  [OK] Full-text search with autocomplete and filtering" -ForegroundColor Green
+Write-Host "  [OK] Related articles recommendations" -ForegroundColor Green
+Write-Host ""
 Write-Host "Connection String:" -ForegroundColor Yellow
 Write-Host "postgresql://postgres:PASSWORD@localhost:5432/blueclue" -ForegroundColor White
 Write-Host ""
@@ -281,6 +492,13 @@ if (-not $SkipSeed) {
     Write-Host ""
     Write-Host "Admin Login:" -ForegroundColor Yellow
     Write-Host "  Email: admin@blueclue.com" -ForegroundColor White
+    Write-Host "  Password: BlueClue2026!" -ForegroundColor White
+    Write-Host ""
+}
+
+if ($managerCreated) {
+    Write-Host "Manager Login:" -ForegroundColor Yellow
+    Write-Host "  Email: manager@blueclue.com" -ForegroundColor White
     Write-Host "  Password: BlueClue2026!" -ForegroundColor White
     Write-Host ""
 }

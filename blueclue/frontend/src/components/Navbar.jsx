@@ -1,21 +1,29 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useState, useRef, useEffect } from 'react'
 import { logout, isAuthenticated, getUser } from '../services/authService'
+import NotificationBell from './NotificationBell'
+import NotificationDropdown from './NotificationDropdown'
+import SettingsSidebar from './SettingsSidebar'
+import TicketDetailView from './TicketDetailView'
 import logo from '../assets/EditedBlueClueLogo.png'
 
 function Navbar() {
   const navigate = useNavigate()
-  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [notificationDropdownOpen, setNotificationDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const dropdownRef = useRef(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [ticketDetailId, setTicketDetailId] = useState(null)
+  const [ticketDetailOpen, setTicketDetailOpen] = useState(false)
+  const notificationDropdownRef = useRef(null)
+  const notificationBellRef = useRef(null)
   const authenticated = isAuthenticated()
   const user = getUser()
 
-  // Close dropdown when clicking outside
+  // Close notification dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setDropdownOpen(false)
+       if (notificationDropdownRef.current && !notificationDropdownRef.current.contains(event.target)) {
+        setNotificationDropdownOpen(false)
       }
     }
 
@@ -26,7 +34,6 @@ function Navbar() {
   const handleLogout = async () => {
     await logout()
     navigate('/login')
-    setDropdownOpen(false)
   }
 
   const handleLogoClick = () => {
@@ -42,7 +49,7 @@ function Navbar() {
       <div className="flex items-center justify-between">
         {/* Logo + Desktop Nav */}
         <div className="flex items-center gap-4 md:gap-10">
-          <button onClick={handleLogoClick} className="hover:opacity-80 transition-opacity bg-gray-200 rounded-lg p-1 flex-shrink-0">
+          <button onClick={handleLogoClick} className="hover:opacity-80 transition-opacity flex-shrink-0">
             <img src={logo} alt="BlueClue Logo" className="h-10 md:h-16" />
           </button>
           <div className="hidden md:block h-8 w-px bg-gray-700"></div>
@@ -50,11 +57,16 @@ function Navbar() {
             {authenticated && (
               <>
                 {user?.role === 'customer' && (
-                  <Link to="/client-dashboard" className="text-gray-300 hover:text-white transition-colors">
-                    Client Dashboard
-                  </Link>
+                  <>
+                    <Link to="/client-dashboard" className="text-gray-300 hover:text-white transition-colors">
+                      Client Dashboard
+                    </Link>
+                    <Link to="/faq" className="text-gray-300 hover:text-white transition-colors">
+                      Help Center
+                    </Link>
+                  </>
                 )}
-                {user?.role === 'technician' && (
+                {['technician', 'senior_technician', 'admin'].includes(user?.role) && (
                   <>
                     <Link to="/technician" className="text-gray-300 hover:text-white transition-colors">
                       All Tickets
@@ -62,11 +74,29 @@ function Navbar() {
                     <Link to="/my-tickets" className="text-gray-300 hover:text-white transition-colors">
                       My Tickets
                     </Link>
+                    <Link to="/knowledge-base" className="text-gray-300 hover:text-white transition-colors">
+                      Knowledge Base
+                    </Link>
                   </>
                 )}
-                <Link to="/management-dashboard" className="text-gray-300 hover:text-white transition-colors">
-                  Management Dashboard
-                </Link>
+                {(user?.role === 'management' || user?.role === 'admin') && (
+                  <>
+                    <Link to="/management-dashboard" className="text-gray-300 hover:text-white transition-colors">
+                      Management Dashboard
+                    </Link>
+                    <Link to="/knowledge-base" className="text-gray-300 hover:text-white transition-colors">
+                      Knowledge Base
+                    </Link>
+                    <Link to="/template-manager" className="text-gray-300 hover:text-white transition-colors">
+                      Templates
+                    </Link>
+                  </>
+                )}
+                {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
+                  <Link to="/analytics" className="text-gray-300 hover:text-white transition-colors">
+                    Analytics
+                  </Link>
+                )}
               </>
             )}
           </div>
@@ -82,45 +112,45 @@ function Navbar() {
                 <span className="text-gray-400 capitalize">{user?.role || 'User'}</span>
               </div>
 
-              {/* Account Dropdown */}
-              <div className="relative" ref={dropdownRef}>
-                <button
-                  onClick={() => setDropdownOpen(!dropdownOpen)}
-                  className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-800 hover:bg-gray-700 transition-colors"
-                >
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                  </svg>
-                </button>
+            {/* Notification Bell & Dropdown */}
+              <div className="relative" ref={notificationDropdownRef}>
+                <NotificationBell 
+                  ref={notificationBellRef}
+                  onClick={() => setNotificationDropdownOpen(!notificationDropdownOpen)} 
+                />
+                <NotificationDropdown 
+                  isOpen={notificationDropdownOpen}
+                  onClose={() => setNotificationDropdownOpen(false)}
+                  onNotificationUpdate={() => {
+                    // Refresh the bell's unread count
+                    if (notificationBellRef.current?.refresh) {
+                      notificationBellRef.current.refresh();
+                    }
+                  }}
+                  onTicketClick={(ticketId) => {
+                    setTicketDetailId(ticketId);
+                    setTicketDetailOpen(true);
+                  }}
+                />
+              </div>
 
-                {/* Dropdown Menu */}
-                {dropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-50">
-                    <button
-                      onClick={() => {
-                        setPreferencesOpen(true)
-                        setDropdownOpen(false)
-                      }}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap"
-                    >
-                      🔔 Notification Settings
-                    </button>
-                    <Link
-                      to="/change-password"
-                      onClick={() => setDropdownOpen(false)}
-                      className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
-                    >
-                      🔒 Change Password
-                    </Link>
-                    <hr className="border-gray-700" />
-                    <button
-                      onClick={handleLogout}
-                      className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-950 transition-colors rounded-b-lg"
-                    >
-                      🚪 Logout
-                    </button>
-                  </div>
-                )}
+              {/* Settings Gear Button */}
+              <button
+                onClick={() => setSettingsOpen(true)}
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-800 hover:bg-gray-700 transition-colors"
+                title="Settings"
+              >
+                <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+
+              {/* Profile Icon */}
+              <div className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-800">
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                </svg>
               </div>
             </>
           ) : (
@@ -164,15 +194,24 @@ function Navbar() {
           </div>
           
           {(user?.role === 'customer' || user?.role === 'guest') && (
-            <Link
-              to="/client-dashboard"
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
-            >
-              Client Dashboard
-            </Link>
+            <>
+              <Link
+                to="/client-dashboard"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+              >
+                Client Dashboard
+              </Link>
+              <Link
+                to="/faq"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+              >
+                ❓ Help Center
+              </Link>
+            </>
           )}
-          {user?.role === 'technician' && (
+          {['technician', 'senior_technician', 'admin'].includes(user?.role) && (
             <>
               <Link
                 to="/technician"
@@ -190,32 +229,50 @@ function Navbar() {
               </Link>
             </>
           )}
-          <Link
-            to="/management-dashboard"
-            onClick={() => setMobileMenuOpen(false)}
-            className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
-          >
-            Management Dashboard
-          </Link>
-          
-          {!user?.isGuest && (
+          {(user?.role === 'management' || user?.role === 'admin') && (
+            <>
+              <Link
+                to="/management-dashboard"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+              >
+                Management Dashboard
+              </Link>
+              <Link
+                to="/template-manager"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+              >
+                Templates
+              </Link>
+            </>
+          )}
+          {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
             <Link
-              to="/change-password"
+              to="/analytics"
               onClick={() => setMobileMenuOpen(false)}
               className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
             >
-              🔒 Change Password
+              Analytics
             </Link>
           )}
           
-          <button
-            onClick={handleLogout}
-            className="text-left text-red-400 hover:bg-red-950 transition-colors px-3 py-2 rounded-lg"
-          >
-            🚪 Logout
-          </button>
+
         </div>
       )}
+      {/* Settings Sidebar */}
+      <SettingsSidebar
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onLogout={handleLogout}
+      />
+
+      {/* Ticket Detail View - opened from notification clicks */}
+      <TicketDetailView
+        ticketId={ticketDetailId}
+        isOpen={ticketDetailOpen}
+        onClose={() => setTicketDetailOpen(false)}
+      />
     </nav>
   )
 }

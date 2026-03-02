@@ -1,7 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getTicketById, updateTicketStatus, updateTicket, getTechnicians, assignSingleTicket, reassignTicket } from '../services/ticketService'
-import { getUserRole } from '../services/authService'
+import { createPortal } from 'react-dom'
+import { getTicketById, updateTicketStatus, updateTicket, deleteTicket, getTechnicians, assignSingleTicket, reassignTicket, cancelTicket, reopenTicket } from '../services/ticketService'
+import { getUserRole, getUser, getUserId } from '../services/authService'
 import TicketActivityLog from './TicketActivityLog'
+import CancelTicketModal from './CancelTicketModal'
+import TicketComments from './TicketComments'
+import AddCollaboratorModal from './AddCollaboratorModal'
+import RingForHelpModal from './RingForHelpModal'
+import RequestUpdateModal from './RequestUpdateModal'
+import { getCollaborators, addCollaborator, removeCollaborator } from '../services/collaboratorService'
 
 /**
  * TicketDetailView
@@ -24,6 +31,10 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   const [isEditing, setIsEditing] = useState(false)
   const [editSubject, setEditSubject] = useState('')
   const [editDescription, setEditDescription] = useState('')
+  const [editCategory, setEditCategory] = useState('')
+  const [editPriority, setEditPriority] = useState('')
+  const [editResolution, setEditResolution] = useState('')
+  const [editPriorityReason, setEditPriorityReason] = useState('')
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState(null)
   const [showAssign, setShowAssign] = useState(false)
@@ -35,6 +46,30 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   const [techSearch, setTechSearch] = useState('')
   const [showStatusDropdown, setShowStatusDropdown] = useState(false)
 
+  // ─── Cancel ticket state (client-facing) ─────────────────────────
+  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [cancelSubmitting, setCancelSubmitting] = useState(false)
+
+  // ─── Delete ticket state (management) ─────────────────────────────
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  // ─── Reopen state ────────────────────────────────────────────
+  const [showReopenModal, setShowReopenModal] = useState(false)
+  const [reopenReason, setReopenReason] = useState('')
+  const [reopenLoading, setReopenLoading] = useState(false)
+  const [reopenError, setReopenError] = useState(null)
+
+  // ─── Collaboration state ─────────────────────────────────────
+  const [showCollaboratorModal, setShowCollaboratorModal] = useState(false)
+  const [collaborators, setCollaborators] = useState([])
+  const [collaboratorsLoading, setCollaboratorsLoading] = useState(false)
+
+  // ─── Ring for Help state ─────────────────────────────────────
+  const [showRingModal, setShowRingModal] = useState(false)
+
+  // ─── Request Update state ────────────────────────────────────
+  const [showRequestUpdateModal, setShowRequestUpdateModal] = useState(false)
+
   const modalRef = useRef(null)
   const assignRef = useRef(null)
   const statusDropdownRef = useRef(null)
@@ -43,11 +78,24 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
 
   // ─── Role-based visibility ─────────────────────────────────────
   const userRole = getUserRole()
+  const currentUser = getUser()
+  const currentUserId = currentUser?.id
   const isTech = userRole === 'technician'
   const isManagement = userRole === 'management'
   const canSeeInternals = isTech || isManagement   // priority, SLA, assignee, reopen
   const canSeeAudit = isManagement                 // AI classification, audit logs
   const canChangeStatus = isTech || isManagement   // only staff can change status
+  const isClient = !isTech && !isManagement        // client / customer role
+
+  // ─── Role-based edit permissions ──────────────────────────────────
+  // Clients: own tickets that are open/waiting_on_customer
+  // Techs: tickets assigned to them (not closed/cancelled)
+  // Management: all tickets
+  const canEdit = ticket ? (
+    isManagement ||
+    (isTech && ticket.assigned_to === currentUserId && !['closed', 'cancelled'].includes(ticket.status)) ||
+    (isClient && ticket.customer_id === currentUserId && ['open', 'waiting_on_customer'].includes(ticket.status))
+  ) : false
 
   // ─── Fetch ticket data (cache-aware) ─────────────────────────────
   const CACHE_TTL = 60_000 // 60 seconds
@@ -104,6 +152,9 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
       setShowAssign(false)
       setShowStatusDropdown(false)
       fetchTicket()
+      if (canSeeInternals) {
+        fetchCollaborators()
+      }
     }
   }, [isOpen, ticketId, fetchTicket])
 
@@ -168,6 +219,10 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     if (!ticket) return
     setEditSubject(ticket.subject || '')
     setEditDescription(ticket.description || '')
+    setEditCategory(ticket.category || '')
+    setEditPriority(ticket.priority || 'low')
+    setEditResolution(ticket.resolution || '')
+    setEditPriorityReason('')
     setEditError(null)
     setIsEditing(true)
     setActiveTab('details')
@@ -178,20 +233,103 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     setEditError(null)
   }
 
+  // Helper: check if a field changed from its original value
+  const isFieldModified = (field) => {
+    if (!ticket) return false
+    switch (field) {
+      case 'subject': return editSubject !== (ticket.subject || '')
+      case 'description': return editDescription !== (ticket.description || '')
+      case 'category': return editCategory !== (ticket.category || '')
+      case 'priority': return editPriority !== (ticket.priority || 'low')
+      case 'resolution': return editResolution !== (ticket.resolution || '')
+      default: return false
+    }
+  }
+
   const saveEdit = async () => {
     if (!ticket || editSaving) return
+
+    // Build payload based on role — only send changed fields
+    const payload = {}
+    if (isManagement) {
+      if (editSubject !== (ticket.subject || '')) payload.subject = editSubject
+      if (editDescription !== (ticket.description || '')) payload.description = editDescription
+      if (editCategory !== (ticket.category || '')) payload.category = editCategory
+      if (editPriority !== (ticket.priority || 'low')) payload.priority = editPriority
+      if (editResolution !== (ticket.resolution || '')) payload.resolution = editResolution
+    } else if (isTech) {
+      if (editDescription !== (ticket.description || '')) payload.description = editDescription
+      if (editPriority !== (ticket.priority || 'low')) payload.priority = editPriority
+      if (editResolution !== (ticket.resolution || '')) payload.resolution = editResolution
+    } else {
+      if (editDescription !== (ticket.description || '')) payload.description = editDescription
+      if (editCategory !== (ticket.category || '')) payload.category = editCategory
+    }
+
+    // Nothing changed
+    if (Object.keys(payload).length === 0) {
+      setIsEditing(false)
+      return
+    }
+
+    // Require reason for priority changes
+    if (payload.priority && !editPriorityReason.trim()) {
+      setEditError('Please provide a reason for the priority change.')
+      return
+    }
+
+    // Confirmation for major changes (priority, category, subject)
+    const majorChanges = ['priority', 'category', 'subject'].filter(f => payload[f])
+    if (majorChanges.length > 0) {
+      const confirmed = window.confirm(
+        `You are changing: ${majorChanges.join(', ')}. Save these changes?`
+      )
+      if (!confirmed) return
+    }
+
+    // Include priority change reason if applicable
+    if (payload.priority && editPriorityReason.trim()) {
+      payload.priority_change_reason = editPriorityReason.trim()
+    }
+
     setEditSaving(true)
     setEditError(null)
+
+    // Optimistic update — apply immediately, rollback on failure
+    const previousTicket = { ...ticket }
+    const displayPayload = { ...payload }
+    delete displayPayload.priority_change_reason
+    setTicket((prev) => ({ ...prev, ...displayPayload }))
+    updateCache(ticket.id, displayPayload)
+
     try {
-      await updateTicket(ticket.id, { subject: editSubject, description: editDescription })
-      setTicket((prev) => ({ ...prev, subject: editSubject, description: editDescription }))
-      updateCache(ticket.id, { subject: editSubject, description: editDescription })
+      await updateTicket(ticket.id, payload)
       setIsEditing(false)
-      if (onTicketUpdated) onTicketUpdated(ticket.id, { subject: editSubject, description: editDescription })
+      if (onTicketUpdated) onTicketUpdated(ticket.id, displayPayload)
     } catch (err) {
+      // Rollback on failure
+      setTicket(previousTicket)
+      updateCache(ticket.id, previousTicket)
       setEditError(err.message || 'Failed to save changes')
     } finally {
       setEditSaving(false)
+    }
+  }
+
+  // ─── Delete handler (management only) ────────────────────────────
+  const handleDeleteTicket = async () => {
+    if (!ticket || deleteLoading) return
+    setDeleteLoading(true)
+    try {
+      await deleteTicket(ticket.id)
+      setShowDeleteConfirm(false)
+      if (onTicketUpdated) onTicketUpdated(ticket.id, { deleted: true })
+      onClose()
+    } catch (err) {
+      setEditError(err.message || 'Failed to delete ticket')
+      setShowDeleteConfirm(false)
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
@@ -235,6 +373,26 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     }
   }
 
+  // ─── Cancel ticket handler (client-facing) ──────────────────────
+  const handleCancelTicket = async (reason, details) => {
+    if (!ticket || cancelSubmitting) return
+    setCancelSubmitting(true)
+    try {
+      await cancelTicket(ticket.id, reason, details)
+      setTicket((prev) => ({ ...prev, status: 'cancelled' }))
+      updateCache(ticket.id, { status: 'cancelled' })
+      setShowCancelModal(false)
+      setStatusSuccess('Ticket cancelled successfully')
+      setTimeout(() => setStatusSuccess(null), 3000)
+      if (onTicketUpdated) onTicketUpdated(ticket.id, { status: 'cancelled' })
+    } catch (err) {
+      setStatusError(err.message || 'Failed to cancel ticket')
+      setShowCancelModal(false)
+    } finally {
+      setCancelSubmitting(false)
+    }
+  }
+
   // ─── Close ticket shortcut ───────────────────────────────────────
   const handleCloseTicket = () => {
     if (ticket?.status === 'resolved') {
@@ -242,6 +400,126 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     } else if (ticket?.status !== 'closed') {
       handleStatusChange('closed')
     }
+  }
+
+  // ─── Reopen ticket logic ─────────────────────────────────────────
+  const canReopenTicket = () => {
+    if (!ticket) return false
+    
+    // Check if ticket is closed or cancelled
+    if (!['closed', 'cancelled'].includes(ticket.status)) return false
+    
+    // Check if user is requester or management
+    const userId = getUserId()
+    const isRequester = userId && ticket.customer_id === parseInt(userId)
+    if (!isRequester && !isManagement) return false
+    
+    // Check 30-day window
+    if (ticket.closed_at) {
+      const daysSinceClosure = (Date.now() - new Date(ticket.closed_at).getTime()) / (1000 * 60 * 60 * 24)
+      if (daysSinceClosure > 30) return false
+    }
+    
+    return true
+  }
+
+  const handleReopenTicket = async () => {
+    if (!reopenReason.trim()) {
+      setReopenError('Please provide a reason for reopening')
+      return
+    }
+
+    setReopenLoading(true)
+    setReopenError(null)
+
+    try {
+      await reopenTicket(ticketId, reopenReason.trim())
+      
+      // Close modal
+      setShowReopenModal(false)
+      setReopenReason('')
+      
+      // Refresh ticket data
+      await fetchTicket(true)
+      
+      // Notify parent component
+      if (onTicketUpdated) {
+        onTicketUpdated()
+      }
+      
+      // Show success message
+      setStatusSuccess('Ticket reopened successfully')
+      setTimeout(() => setStatusSuccess(null), 3000)
+      
+    } catch (err) {
+      setReopenError(err.message || 'Failed to reopen ticket')
+    } finally {
+      setReopenLoading(false)
+    }
+  }
+
+  // ─── Fetch collaborators ─────────────────────────────────────────
+  const fetchCollaborators = useCallback(async () => {
+    if (!ticketId || !canSeeInternals) return
+    
+    try {
+      setCollaboratorsLoading(true)
+      const response = await getCollaborators(ticketId)
+      setCollaborators(response.data?.collaborators || [])
+    } catch (err) {
+      console.error('Failed to fetch collaborators:', err)
+    } finally {
+      setCollaboratorsLoading(false)
+    }
+  }, [ticketId, canSeeInternals])
+
+  // ─── Handle add collaborator ─────────────────────────────────────
+  const handleAddCollaborator = async (userId, role, note) => {
+    try {
+      await addCollaborator(ticketId, userId, role, note)
+      await fetchCollaborators()
+      await fetchTicket(true) // Refresh ticket data
+      setStatusSuccess('Collaborator added successfully')
+      setTimeout(() => setStatusSuccess(null), 3000)
+    } catch (err) {
+      throw err // Let modal handle the error
+    }
+  }
+
+  // ─── Handle remove collaborator ──────────────────────────────────
+  const handleRemoveCollaborator = async (userId, techName) => {
+    if (!window.confirm(`Remove ${techName} from this ticket?`)) return
+    
+    try {
+      await removeCollaborator(ticketId, userId)
+      await fetchCollaborators()
+      await fetchTicket(true)
+      setStatusSuccess('Collaborator removed')
+      setTimeout(() => setStatusSuccess(null), 3000)
+    } catch (err) {
+      setStatusError(err.message || 'Failed to remove collaborator')
+      setTimeout(() => setStatusError(null), 3000)
+    }
+  }
+
+  // ─── Check if user can add collaborators ─────────────────────────
+  const canAddCollaborators = () => {
+    if (!canSeeInternals || !ticket) return false
+    const currentUserId = getUserId()
+    const isPrimaryTech = ticket.assigned_to === parseInt(currentUserId)
+    return isManagement || isPrimaryTech
+  }
+
+  // ─── Check if user is working on this ticket (can send ring requests) ─
+  const isWorkingOnTicket = () => {
+    if (!canSeeInternals || !ticket) return false
+    const currentUserId = parseInt(getUserId())
+    
+    // Check if assigned
+    if (ticket.assigned_to === currentUserId) return true
+    
+    // Check if collaborator
+    return collaborators.some(c => c.user_id === currentUserId)
   }
 
   // ─── Print / Export ──────────────────────────────────────────────
@@ -340,6 +618,8 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     waiting_on_customer: 'bg-purple-900/60 text-purple-300 border-purple-600',
     resolved: 'bg-green-900/60 text-green-300 border-green-600',
     closed: 'bg-gray-700/60 text-gray-300 border-gray-600',
+    cancelled: 'bg-gray-700/60 text-gray-400 border-gray-600',
+    reopened: 'bg-orange-900/60 text-orange-300 border-orange-600',
   }
 
   const priorityConfig = {
@@ -350,18 +630,20 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   }
 
   const validTransitions = {
-    open: ['in_progress', 'waiting_on_customer', 'resolved', 'closed'],
-    in_progress: ['waiting_on_customer', 'resolved', 'open'],
-    waiting_on_customer: ['in_progress', 'resolved', 'open'],
+    open: ['in_progress', 'waiting_on_customer', 'resolved', 'closed', 'cancelled'],
+    in_progress: ['waiting_on_customer', 'resolved', 'open', 'cancelled'],
+    waiting_on_customer: ['in_progress', 'resolved', 'open', 'cancelled'],
     resolved: ['closed', 'in_progress', 'open'],
     closed: [],
+    cancelled: isManagement ? ['open'] : [],  // Only management/admin can reopen
+    reopened: ['in_progress', 'waiting_on_customer', 'resolved', 'closed'],
   }
 
   if (!isOpen) return null
 
   // ─── Minimized bar ───────────────────────────────────────────────
   if (minimized) {
-    return (
+    return createPortal(
       <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 border-t border-gray-700 shadow-2xl px-4 py-3 flex items-center justify-between">
         <button
           onClick={() => setMinimized(false)}
@@ -397,18 +679,19 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
             </svg>
           </button>
         </div>
-      </div>
+      </div>,
+      document.body
     )
   }
 
   // ─── Full modal overlay ──────────────────────────────────────────
-  return (
+  return createPortal(
     <div
       ref={modalRef}
       onClick={handleBackdropClick}
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-stretch justify-center overflow-hidden"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-stretch md:items-center md:justify-center overflow-hidden md:p-6"
     >
-      <div className="bg-gray-950 w-full max-w-6xl mx-auto flex flex-col h-full md:my-4 md:mx-4 md:rounded-xl md:border md:border-gray-700 md:h-auto md:max-h-[calc(100vh-2rem)] shadow-2xl">
+      <div className="bg-gray-950 w-full max-w-6xl flex flex-col h-full md:h-auto md:max-h-full md:rounded-xl md:border md:border-gray-700 shadow-2xl">
         {/* ── Top bar ─────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-4 md:px-6 py-3 border-b border-gray-800 flex-shrink-0 bg-gray-900/80 md:rounded-t-xl">
           <div className="flex items-center gap-3 min-w-0">
@@ -448,8 +731,8 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
         {/* ── Quick Actions Bar ─────────────────────────────────── */}
         {ticket && !loading && !error && (
           <div className="flex items-center gap-2 px-4 md:px-6 py-2 border-b border-gray-800 flex-shrink-0 bg-gray-900/40 overflow-x-auto">
-            {/* Edit — management only */}
-            {isManagement && (
+            {/* Edit — role-based: clients (own open/pending), techs (assigned), management (all) */}
+            {canEdit && (
               isEditing ? (
                 <div className="flex items-center gap-1.5">
                   <button
@@ -617,6 +900,95 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
               </div>
             )}
 
+            {/* Reopen Ticket Modal */}
+            {showReopenModal && (
+              <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40" onClick={(e) => { if (e.target === e.currentTarget) setShowReopenModal(false) }}>
+                <div className="w-full max-w-md bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-white text-base font-semibold">Reopen Ticket</p>
+                    <button 
+                      onClick={() => {
+                        setShowReopenModal(false)
+                        setReopenReason('')
+                        setReopenError(null)
+                      }} 
+                      className="text-gray-500 hover:text-gray-300 transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3">
+                    <div className="flex gap-2">
+                      <svg className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <div>
+                        <p className="text-yellow-300 text-sm font-medium">Reopening this ticket</p>
+                        <p className="text-gray-400 text-xs mt-1">
+                          {ticket.previous_assigned_tech || ticket.assigned_to 
+                            ? 'This ticket will be reassigned to the previous technician if available.'
+                            : 'This ticket will return to the unassigned queue.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-gray-400 text-xs font-medium uppercase tracking-wider mb-1.5 block">
+                      Reason for Reopening <span className="text-red-400">*</span>
+                    </label>
+                    <textarea
+                      value={reopenReason}
+                      onChange={(e) => {
+                        setReopenReason(e.target.value)
+                        setReopenError(null)
+                      }}
+                      placeholder="Please explain why this ticket needs to be reopened..."
+                      rows={4}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
+                      autoFocus
+                    />
+                    <p className="text-gray-500 text-xs mt-1">
+                      {reopenReason.length}/500 characters
+                    </p>
+                  </div>
+
+                  {reopenError && (
+                    <div className="bg-red-900/20 border border-red-700/50 rounded-lg p-2">
+                      <p className="text-red-400 text-xs">{reopenError}</p>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        setShowReopenModal(false)
+                        setReopenReason('')
+                        setReopenError(null)
+                      }}
+                      className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 text-sm border border-gray-700 transition-colors"
+                      disabled={reopenLoading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleReopenTicket}
+                      disabled={!reopenReason.trim() || reopenLoading || reopenReason.length > 500}
+                      className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {reopenLoading && (
+                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      )}
+                      {reopenLoading ? 'Reopening...' : 'Reopen Ticket'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Change Status — tech & management */}
             {canChangeStatus && validTransitions[ticket.status]?.length > 0 && (
               <button
@@ -673,7 +1045,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
             <div className="w-px h-5 bg-gray-700 mx-0.5" />
 
             {/* Close Ticket — tech & management, when ticket isn't already closed */}
-            {canChangeStatus && ticket.status !== 'closed' && (
+            {canChangeStatus && ticket.status !== 'closed' && ticket.status !== 'cancelled' && (
               <button
                 onClick={handleCloseTicket}
                 disabled={statusUpdating}
@@ -684,6 +1056,95 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                 </svg>
                 Close
+              </button>
+            )}
+
+            {/* Cancel Ticket — clients: open/pending only; techs/management: any active ticket */}
+            {((
+              isClient && ['open', 'waiting_on_customer'].includes(ticket.status)
+            ) || (
+              (isTech || isManagement) && ticket.status !== 'closed' && ticket.status !== 'cancelled'
+            )) && (
+              <button
+                onClick={() => setShowCancelModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-gray-100 text-xs font-medium border border-gray-700 hover:border-gray-500 transition-colors"
+                title="Cancel ticket"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+                Cancel Ticket
+              </button>
+            )}
+
+            {/* Delete Ticket — management only, with confirmation */}
+            {isManagement && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-red-900/60 text-gray-300 hover:text-red-300 text-xs font-medium border border-gray-700 hover:border-red-700 transition-colors"
+                title="Delete ticket"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                Delete
+              </button>
+            )}
+
+            {/* Reopen Ticket — requester or management, for closed/cancelled tickets < 30 days */}
+            {canReopenTicket() && (
+              <button
+                onClick={() => setShowReopenModal(true)}
+                disabled={statusUpdating}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-green-900/60 text-gray-300 hover:text-green-300 text-xs font-medium border border-gray-700 hover:border-green-700 transition-colors disabled:opacity-50"
+                title="Reopen ticket"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Reopen
+              </button>
+            )}
+
+            {/* Add Technician — primary tech or management */}
+            {canSeeInternals && canAddCollaborators() && (
+              <button
+                onClick={() => setShowCollaboratorModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-purple-900/60 text-gray-300 hover:text-purple-300 text-xs font-medium border border-gray-700 hover:border-purple-700 transition-colors"
+                title="Add collaborating technician"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
+                Add Technician
+              </button>
+            )}
+
+            {/* Ring for Help — assigned tech or collaborators */}
+            {canSeeInternals && isWorkingOnTicket() && (
+              <button
+                onClick={() => setShowRingModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-orange-900/60 to-red-900/60 hover:from-orange-800/70 hover:to-red-800/70 text-orange-200 hover:text-orange-100 text-xs font-medium border border-orange-700/50 hover:border-orange-600 transition-colors"
+                title="Request urgent help from another technician"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                Ring for Help
+              </button>
+            )}
+
+            {/* Request Update — management only */}
+            {isManagement && (ticket.assigned_to || collaborators.length > 0) && (
+              <button
+                onClick={() => setShowRequestUpdateModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-900/60 hover:bg-indigo-800/70 text-indigo-200 hover:text-indigo-100 text-xs font-medium border border-indigo-700/50 hover:border-indigo-600 transition-colors"
+                title="Request status update from technician"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+                Request Update
               </button>
             )}
 
@@ -737,13 +1198,25 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                 {/* Status */}
                 <div>
                   <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">Status</label>
-                  <span
-                    className={`inline-block px-3 py-1.5 rounded-lg text-sm font-semibold border ${
-                      statusColorMap[ticket.status] || 'bg-gray-700 text-gray-300 border-gray-600'
-                    }`}
-                  >
-                    {formatStatus(ticket.status)}
-                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span
+                      className={`inline-block px-3 py-1.5 rounded-lg text-sm font-semibold border ${
+                        statusColorMap[ticket.status] || 'bg-gray-700 text-gray-300 border-gray-600'
+                      }`}
+                    >
+                      {formatStatus(ticket.status)}
+                    </span>
+
+                    {/* Reopen indicator */}
+                    {ticket.reopen_count > 0 && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-900/30 text-orange-300 border border-orange-700/50 text-xs font-medium" title={`Reopened ${ticket.reopen_count} time${ticket.reopen_count > 1 ? 's' : ''}`}>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        Reopened {ticket.reopen_count}×
+                      </span>
+                    )}
+                  </div>
 
                   {/* Quick status actions — tech & management only */}
                   {canChangeStatus && validTransitions[ticket.status]?.length > 0 && (
@@ -758,6 +1231,25 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                           &rarr; {formatStatus(s)}
                         </button>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Cancel Ticket — clients: open/pending only; techs/management: any active ticket */}
+                  {((
+                    isClient && ['open', 'waiting_on_customer'].includes(ticket.status)
+                  ) || (
+                    (isTech || isManagement) && ticket.status !== 'closed' && ticket.status !== 'cancelled'
+                  )) && (
+                    <div className="mt-3">
+                      <button
+                        onClick={() => setShowCancelModal(true)}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-gray-700/30 hover:bg-gray-700/50 text-gray-300 text-sm font-medium border border-gray-600/50 hover:border-gray-500 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                        </svg>
+                        Cancel Ticket
+                      </button>
                     </div>
                   )}
 
@@ -831,11 +1323,54 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                           <p className="text-gray-500 text-xs">{ticket.assigned_to_email}</p>
                         )}
                       </div>
+                      <span className="ml-auto px-2 py-0.5 bg-blue-900/40 text-blue-300 text-xs rounded border border-blue-600">
+                        Primary
+                      </span>
                     </div>
                   ) : (
                     <p className="text-gray-500 text-sm italic">Unassigned</p>
                   )}
                 </div>
+
+                {/* Collaborators */}
+                {collaborators.length > 0 && (
+                  <div className="mt-4">
+                    <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                      Collaborators ({collaborators.length})
+                    </label>
+                    <div className="space-y-2">
+                      {collaborators.map((collab) => (
+                        <div key={collab.user_id} className="flex items-center gap-2 group">
+                          <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                            {(collab.first_name || '?').charAt(0)}{(collab.last_name || '?').charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white text-sm font-medium truncate">
+                              {collab.first_name} {collab.last_name}
+                            </p>
+                            {collab.email && (
+                              <p className="text-gray-500 text-xs truncate">{collab.email}</p>
+                            )}
+                          </div>
+                          <span className="px-2 py-0.5 bg-purple-900/40 text-purple-300 text-xs rounded border border-purple-600 flex-shrink-0">
+                            Assisting
+                          </span>
+                          {canAddCollaborators() && (
+                            <button
+                              onClick={() => handleRemoveCollaborator(collab.user_id, `${collab.first_name} ${collab.last_name}`)}
+                              className="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:text-red-300 transition-opacity"
+                              title="Remove collaborator"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 </>
                 )}
 
@@ -952,6 +1487,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
               <div className="flex items-center border-b border-gray-800 px-4 md:px-6 flex-shrink-0 bg-gray-900/30">
                 {[
                   { id: 'details', label: 'Details' },
+                  { id: 'comments', label: 'Comments' },
                   { id: 'activity', label: 'Activity' },
                 ].map((tab) => (
                   <button
@@ -974,14 +1510,23 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                   <div className="space-y-6 max-w-3xl">
                     {/* Subject */}
                     <div>
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={editSubject}
-                          onChange={(e) => setEditSubject(e.target.value)}
-                          className="w-full bg-gray-900 border border-blue-500/50 rounded-lg px-4 py-2.5 text-xl font-bold text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30"
-                          placeholder="Ticket subject"
-                        />
+                      {isEditing && isManagement ? (
+                        <div>
+                          <input
+                            type="text"
+                            value={editSubject}
+                            onChange={(e) => setEditSubject(e.target.value)}
+                            className={`w-full bg-gray-900 border rounded-lg px-4 py-2.5 text-xl font-bold text-white focus:outline-none focus:ring-1 ${
+                              isFieldModified('subject')
+                                ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-500/30'
+                                : 'border-blue-500/50 focus:border-blue-500 focus:ring-blue-500/30'
+                            }`}
+                            placeholder="Ticket subject"
+                          />
+                          {isFieldModified('subject') && (
+                            <span className="text-amber-400 text-xs mt-1 block">Modified</span>
+                          )}
+                        </div>
                       ) : (
                         <h3 className="text-xl md:text-2xl font-bold text-white leading-tight">
                           {ticket.subject}
@@ -996,13 +1541,22 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
 
                     {/* Description */}
                     <div>
-                      <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">Description</label>
+                      <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                        Description
+                        {isEditing && isFieldModified('description') && (
+                          <span className="text-amber-400 ml-2 normal-case">Modified</span>
+                        )}
+                      </label>
                       {isEditing ? (
                         <textarea
                           value={editDescription}
                           onChange={(e) => setEditDescription(e.target.value)}
                           rows={8}
-                          className="w-full bg-gray-900 border border-blue-500/50 rounded-lg px-4 py-3 text-gray-300 text-sm leading-relaxed focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 resize-y"
+                          className={`w-full bg-gray-900 border rounded-lg px-4 py-3 text-gray-300 text-sm leading-relaxed focus:outline-none focus:ring-1 resize-y ${
+                            isFieldModified('description')
+                              ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-500/30'
+                              : 'border-blue-500/50 focus:border-blue-500 focus:ring-blue-500/30'
+                          }`}
                           placeholder="Ticket description"
                         />
                       ) : (
@@ -1012,15 +1566,108 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                       )}
                     </div>
 
-                    {/* Resolution */}
-                    {ticket.resolution && (
+                    {/* Inline edit fields — role-based */}
+                    {isEditing && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Category — clients & management */}
+                        {(isClient || isManagement) && (
+                          <div>
+                            <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                              Category
+                              {isFieldModified('category') && (
+                                <span className="text-amber-400 ml-2 normal-case">Modified</span>
+                              )}
+                            </label>
+                            <select
+                              value={editCategory}
+                              onChange={(e) => setEditCategory(e.target.value)}
+                              className={`w-full bg-gray-900 border rounded-lg px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:ring-1 capitalize ${
+                                isFieldModified('category')
+                                  ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-500/30'
+                                  : 'border-blue-500/50 focus:border-blue-500 focus:ring-blue-500/30'
+                              }`}
+                            >
+                              {['general', 'technical', 'billing', 'account', 'feature_request', 'hardware', 'software', 'network', 'login', 'other'].map((cat) => (
+                                <option key={cat} value={cat}>
+                                  {cat.replace(/_/g, ' ')}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        {/* Priority — techs & management */}
+                        {(isTech || isManagement) && (
+                          <div>
+                            <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                              Priority
+                              {isFieldModified('priority') && (
+                                <span className="text-amber-400 ml-2 normal-case">Modified</span>
+                              )}
+                            </label>
+                            <select
+                              value={editPriority}
+                              onChange={(e) => setEditPriority(e.target.value)}
+                              className={`w-full bg-gray-900 border rounded-lg px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:ring-1 capitalize ${
+                                isFieldModified('priority')
+                                  ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-500/30'
+                                  : 'border-blue-500/50 focus:border-blue-500 focus:ring-blue-500/30'
+                              }`}
+                            >
+                              {['low', 'medium', 'high', 'critical'].map((p) => (
+                                <option key={p} value={p}>
+                                  {p}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Priority change reason — shown when priority is modified */}
+                    {isEditing && isFieldModified('priority') && (
+                      <div>
+                        <label className="text-amber-400 text-xs font-medium uppercase tracking-wider mb-2 block">Reason for Priority Change *</label>
+                        <input
+                          type="text"
+                          value={editPriorityReason}
+                          onChange={(e) => setEditPriorityReason(e.target.value)}
+                          className="w-full bg-gray-900 border border-amber-500/50 rounded-lg px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30"
+                          placeholder="Why is the priority being changed?"
+                        />
+                      </div>
+                    )}
+
+                    {/* Resolution / Notes — editable for techs & management */}
+                    {isEditing && (isTech || isManagement) ? (
+                      <div>
+                        <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                          Resolution / Notes
+                          {isFieldModified('resolution') && (
+                            <span className="text-amber-400 ml-2 normal-case">Modified</span>
+                          )}
+                        </label>
+                        <textarea
+                          value={editResolution}
+                          onChange={(e) => setEditResolution(e.target.value)}
+                          rows={4}
+                          className={`w-full bg-gray-900 border rounded-lg px-4 py-3 text-gray-300 text-sm leading-relaxed focus:outline-none focus:ring-1 resize-y ${
+                            isFieldModified('resolution')
+                              ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-500/30'
+                              : 'border-blue-500/50 focus:border-blue-500 focus:ring-blue-500/30'
+                          }`}
+                          placeholder="Add resolution notes..."
+                        />
+                      </div>
+                    ) : ticket.resolution ? (
                       <div>
                         <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">Resolution</label>
                         <div className="bg-green-900/20 rounded-lg border border-green-800/50 p-4 text-green-300 text-sm leading-relaxed whitespace-pre-wrap break-words">
                           {ticket.resolution}
                         </div>
                       </div>
-                    )}
+                    ) : null}
 
                     {/* AI Classification Details — management only */}
                     {canSeeAudit && ticket.ai_classified && (
@@ -1068,6 +1715,10 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                   </div>
                 )}
 
+                {activeTab === 'comments' && (
+                  <TicketComments ticketId={ticket.id} />
+                )}
+
                 {activeTab === 'activity' && (
                   <div className="max-w-3xl">
                     <TicketActivityLog ticketId={ticket.id} isOpen={true} />
@@ -1077,8 +1728,104 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
             </main>
           </div>
         ) : null}
+
+        {/* Add Collaborator Modal */}
+        {ticket && showCollaboratorModal && (
+          <AddCollaboratorModal
+            isOpen={showCollaboratorModal}
+            onClose={() => setShowCollaboratorModal(false)}
+            onAdd={handleAddCollaborator}
+            existingCollaborators={collaborators}
+          />
+        )}
+
+        {/* Ring for Help Modal */}
+        {ticket && showRingModal && (
+          <RingForHelpModal
+            isOpen={showRingModal}
+            onClose={() => setShowRingModal(false)}
+            ticketId={ticket.id}
+            ticketSubject={ticket.subject}
+            existingCollaborators={collaborators}
+            onRingSent={(data) => {
+              // Show success message
+              setStatusSuccess(`Ring request sent to ${data.targetTech.first_name} ${data.targetTech.last_name}`)
+              setTimeout(() => setStatusSuccess(null), 3000)
+              // Refresh ticket data to show updated activity
+              fetchTicket(true)
+            }}
+          />
+        )}
+
+        {/* Request Update Modal */}
+        {ticket && showRequestUpdateModal && (
+          <RequestUpdateModal
+            isOpen={showRequestUpdateModal}
+            onClose={(data) => {
+              setShowRequestUpdateModal(false)
+              if (data) {
+                setStatusSuccess('Update request sent successfully')
+                setTimeout(() => setStatusSuccess(null), 3000)
+                fetchTicket(true)
+              }
+            }}
+            ticketId={ticket.id}
+            ticketSubject={ticket.subject}
+            collaborators={collaborators}
+            assignedTo={ticket.assigned_to}
+            assignedToName={ticket.assigned_to_name}
+          />
+        )}
       </div>
-    </div>
+
+      {/* Cancel Ticket Modal (rendered outside main content for z-index) */}
+      <CancelTicketModal
+        isOpen={showCancelModal}
+        ticketNumber={ticket?.ticket_number}
+        onConfirm={handleCancelTicket}
+        onClose={() => setShowCancelModal(false)}
+        isSubmitting={cancelSubmitting}
+      />
+
+      {/* Delete Ticket Confirmation Modal — management only */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50" onClick={(e) => { if (e.target === e.currentTarget) setShowDeleteConfirm(false) }}>
+          <div className="w-full max-w-sm bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-900/40 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="text-white font-semibold">Delete Ticket</h4>
+                <p className="text-gray-400 text-sm">This action cannot be undone.</p>
+              </div>
+            </div>
+            <p className="text-gray-300 text-sm mb-5">
+              Are you sure you want to delete ticket <span className="text-white font-medium">{ticket?.ticket_number}</span>? This will permanently remove the ticket and all associated data.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleteLoading}
+                className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium border border-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteTicket}
+                disabled={deleteLoading}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {deleteLoading ? 'Deleting...' : 'Delete Ticket'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>,
+    document.body
   )
 }
 

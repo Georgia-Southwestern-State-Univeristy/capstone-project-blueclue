@@ -34,7 +34,7 @@ class TicketHistory {
 
     /**
      * Get recent assignment activity across ALL tickets.
-     * Returns entries of type ticket_assigned, ticket_reassigned, ticket_unassigned
+     * Returns entries of type ticket_assigned, ticket_reassigned, ticket_unassigned, update requests
      * for the global assignment activity feed.
      * @param {number} limit - Max entries to return (default 50)
      * @returns {Array} Recent assignment history entries
@@ -54,7 +54,7 @@ class TicketHistory {
             LEFT JOIN tickets t ON th.ticket_id = t.id
             LEFT JOIN users nv ON nv.id = CASE WHEN th.new_value ~ '^[0-9]+$' THEN CAST(th.new_value AS INTEGER) ELSE NULL END
             LEFT JOIN users ov ON ov.id = CASE WHEN th.old_value ~ '^[0-9]+$' THEN CAST(th.old_value AS INTEGER) ELSE NULL END
-            WHERE th.change_type IN ('ticket_assigned', 'ticket_reassigned', 'ticket_unassigned', 'assignment')
+            WHERE th.change_type IN ('ticket_assigned', 'ticket_reassigned', 'ticket_unassigned', 'assignment', 'ticket_cancelled', 'update_requested', 'update_fulfilled')
             ORDER BY th.created_at DESC
             LIMIT $1
         `;

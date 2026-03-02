@@ -1,0 +1,28 @@
+NEW COMMENT ON TICKET #{{ticketId}}
+===============================================
+
+Hi {{technicianName}},
+
+{{commenterName}} has added a new comment to a ticket assigned to you.
+
+TICKET DETAILS
+--------------
+Ticket #{{ticketId}}: {{ticketSubject}}
+
+COMMENT
+-------
+{{commenterName}} commented:
+
+{{commentContent}}
+
+VIEW AND REPLY
+--------------
+View the full ticket and reply at:
+{{ticketUrl}}
+
+---
+BlueClue Support System
+{{frontendUrl}}
+
+You received this email because you are assigned to this ticket.
+To manage your notification preferences, visit your account settings.

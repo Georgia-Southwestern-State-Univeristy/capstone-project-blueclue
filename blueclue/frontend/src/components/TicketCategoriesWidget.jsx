@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import BaseWidget from './BaseWidget'
+import useContainerSize from '../hooks/useContainerSize'
 
 // Fallback colors when the DB doesn't provide a color_code
 const CATEGORY_COLORS = {
@@ -33,11 +34,18 @@ function TicketCategoriesWidget({
   onRefresh = null,
   activeCategory = null,
   onCategorySelect = null,
+  onTicketClick = null,
 }) {
   const [hoveredIndex, setHoveredIndex] = useState(null)
   const [apiData, setApiData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+
+  // Container-width responsive legend
+  const containerRef = useRef(null)
+  const { width: containerWidth } = useContainerSize(containerRef)
+  // wide: 2-col detailed, medium: 3-col compact, narrow: flex-wrap chips
+  const legendMode = containerWidth > 300 ? 'detailed' : containerWidth > 180 ? 'compact' : 'chips'
 
   // Fetch category breakdown from analytics API
   const fetchData = useCallback(async () => {
@@ -174,18 +182,26 @@ function TicketCategoriesWidget({
   return (
     <BaseWidget
       title="Ticket Categories"
-      icon="🏷️"
+      icon={
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+        </svg>
+      }
       onRefresh={handleRefresh}
       isLoading={loading && !apiData}
       error={error}
       isEmpty={total === 0 && !loading}
       emptyMessage="No tickets to display"
-      emptyIcon="📋"
+      emptyIcon={
+        <svg className="w-10 h-10 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+      }
       noPadding
     >
-      <div className="flex flex-col items-center gap-4 px-4 py-4 md:px-6">
+      <div ref={containerRef} className="flex flex-col items-center gap-4 px-4 py-4">
         {/* Pie Chart */}
-        <div className="relative w-40 h-40 flex-shrink-0">
+        <div className="relative flex-shrink-0" style={{ width: 'clamp(120px, 40%, 160px)', aspectRatio: '1 / 1' }}>
           <svg
             viewBox="0 0 100 100"
             className="w-full h-full"
@@ -253,10 +269,16 @@ function TicketCategoriesWidget({
           </div>
         </div>
 
-        {/* Color-coded legend */}
-        <div className="w-full grid grid-cols-2 gap-x-3 gap-y-1.5">
+        {/* Color-coded legend — adapts columns based on container width */}
+        <div className={`w-full grid gap-y-1.5 ${
+          legendMode === 'detailed' ? 'grid-cols-2 gap-x-3'
+          : legendMode === 'compact' ? 'grid-cols-3 gap-x-1.5'
+          : 'grid-cols-4 gap-x-1'
+        }`}>
           {slices.map((slice, i) => {
             const isActive = activeCategory === slice.key
+            const highlighted = hoveredIndex === i || isActive
+
             return (
               <button
                 key={slice.key}
@@ -264,35 +286,31 @@ function TicketCategoriesWidget({
                 onMouseEnter={() => setHoveredIndex(i)}
                 onMouseLeave={() => setHoveredIndex(null)}
                 className={`
-                  flex items-center gap-2 rounded-md px-2 py-1.5 transition-all duration-200 text-left
+                  flex items-center gap-1.5 rounded-md transition-all duration-200 text-left
+                  ${legendMode === 'detailed' ? 'px-2 py-1.5 gap-2' : 'px-1 py-1'}
                   ${isActive ? 'ring-1' : ''}
                   hover:bg-gray-800
                 `}
                 style={{
-                  backgroundColor:
-                    hoveredIndex === i || isActive
-                      ? `${slice.color}15`
-                      : 'transparent',
+                  backgroundColor: highlighted ? `${slice.color}15` : 'transparent',
                   ringColor: isActive ? slice.color : undefined,
                 }}
+                title={`${slice.label}: ${slice.count} (${slice.percentage}%)`}
               >
                 <div
-                  className="w-2.5 h-2.5 rounded-sm flex-shrink-0 transition-transform duration-200"
+                  className={`rounded-sm flex-shrink-0 transition-transform duration-200 ${legendMode === 'detailed' ? 'w-2.5 h-2.5' : 'w-2 h-2'}`}
                   style={{
                     backgroundColor: slice.color,
-                    transform:
-                      hoveredIndex === i || isActive
-                        ? 'scale(1.4)'
-                        : 'scale(1)',
+                    transform: highlighted ? 'scale(1.4)' : 'scale(1)',
                   }}
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[11px] text-gray-300 truncate leading-tight">
+                  <p className={`text-gray-300 truncate leading-tight ${legendMode === 'detailed' ? 'text-[11px]' : 'text-[10px]'}`}>
                     {slice.label}
                   </p>
-                  <p className="text-xs font-semibold text-white leading-tight">
+                  <p className={`font-semibold text-white leading-tight ${legendMode === 'detailed' ? 'text-xs' : 'text-[10px]'}`}>
                     {slice.count}{' '}
-                    <span className="text-[10px] font-normal text-gray-500">
+                    <span className={`font-normal text-gray-500 ${legendMode === 'detailed' ? 'text-[10px]' : 'text-[9px]'}`}>
                       ({slice.percentage}%)
                     </span>
                   </p>
@@ -318,7 +336,7 @@ function TicketCategoriesWidget({
 
       {/* Drill-down ticket list */}
       {activeCategory && (
-        <div className="border-t border-gray-800 px-4 py-3 md:px-6">
+        <div className="border-t border-gray-800 px-4 py-3">
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-sm font-semibold text-white flex items-center gap-2">
               <span
@@ -334,14 +352,15 @@ function TicketCategoriesWidget({
               </span>
             </h4>
           </div>
-          <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+          <div className="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-1">
             {drillDownTickets.length === 0 ? (
               <p className="text-gray-500 text-xs py-2">No tickets in this category.</p>
             ) : (
               drillDownTickets.slice(0, 20).map((t) => (
                 <div
                   key={t.id || t.ticket_id}
-                  className="flex items-center justify-between p-2 bg-gray-800/60 rounded border border-gray-700/50 text-xs hover:bg-gray-700/60 transition-colors"
+                  className={`flex items-center justify-between p-2 bg-gray-800/60 rounded border border-gray-700/50 text-xs hover:bg-gray-700/60 transition-colors ${onTicketClick ? 'cursor-pointer hover:border-blue-500/50' : ''}`}
+                  onClick={() => onTicketClick?.(t)}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-gray-500 font-mono flex-shrink-0">

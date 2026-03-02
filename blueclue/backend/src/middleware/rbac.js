@@ -30,8 +30,8 @@ export const checkPrivilege = (privilegeType, options = {}) => {
                 });
             }
 
-            // Admins bypass privilege checks (if enabled)
-            if (allowAdmin && req.user.role === 'admin') {
+            // Admins and management bypass privilege checks (if enabled)
+            if (allowAdmin && (req.user.role === 'admin' || req.user.role === 'management')) {
                 return next();
             }
 
@@ -233,8 +233,8 @@ export const checkAnyPrivilege = (privilegeTypes, options = {}) => {
                 });
             }
 
-            // Admins bypass privilege checks (if enabled)
-            if (allowAdmin && req.user.role === 'admin') {
+            // Admins and management bypass privilege checks (if enabled)
+            if (allowAdmin && (req.user.role === 'admin' || req.user.role === 'management')) {
                 return next();
             }
 
@@ -288,8 +288,8 @@ export const checkAllPrivileges = (privilegeTypes, options = {}) => {
                 });
             }
 
-            // Admins bypass privilege checks (if enabled)
-            if (allowAdmin && req.user.role === 'admin') {
+            // Admins and management bypass privilege checks (if enabled)
+            if (allowAdmin && (req.user.role === 'admin' || req.user.role === 'management')) {
                 return next();
             }
 

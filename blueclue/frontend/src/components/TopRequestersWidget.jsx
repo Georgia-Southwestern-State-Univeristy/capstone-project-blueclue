@@ -211,7 +211,7 @@ export default function TopRequestersWidget({ onRefresh, onUserClick, autoRefres
               {/* Expanded detail pane */}
               {isExpanded && (
                 <div className="ml-9 mt-1 mb-2 p-3 bg-gray-800/60 border border-gray-700 rounded-lg text-xs space-y-2 animate-[fadeIn_150ms_ease-out]">
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="bg-gray-900/50 rounded-lg p-2 text-center border border-gray-700/50">
                       <p className="text-lg font-bold text-white">{user.ticket_count}</p>
                       <p className="text-gray-500">Total Tickets</p>
