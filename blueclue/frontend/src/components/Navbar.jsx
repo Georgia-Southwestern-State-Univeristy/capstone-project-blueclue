@@ -93,7 +93,6 @@ function Navbar() {
                     <Link to="/knowledge-base" className="text-gray-300 hover:text-white transition-colors">
                       Knowledge Base
                     </Link>
-                  </>
                     <Link to="/template-manager" className="text-gray-300 hover:text-white transition-colors">
                       Templates
                     </Link>
