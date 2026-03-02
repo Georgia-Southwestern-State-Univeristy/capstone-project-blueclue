@@ -390,6 +390,33 @@ export const getMyAssignedTickets = async (req, res) => {
             // Get tickets assigned to this technician
             let assignedTickets = await Ticket.getByTechnicianId(req.user.id);
             
+            // Get tickets where user is a collaborator
+            const collaboratorQuery = `
+                SELECT DISTINCT
+                    t.*,
+                    customer.first_name || ' ' || customer.last_name as customer_name,
+                    customer.email as customer_email,
+                    assigned.first_name || ' ' || assigned.last_name as assigned_to_name,
+                    assigned.email as assigned_to_email
+                FROM tickets t
+                INNER JOIN ticket_collaborators tc ON t.id = tc.ticket_id
+                LEFT JOIN users customer ON t.customer_id = customer.id
+                LEFT JOIN users assigned ON t.assigned_to = assigned.id
+                WHERE tc.user_id = $1 AND t.deleted_at IS NULL
+                ORDER BY t.created_at DESC
+            `;
+            const collaboratorResult = await pool.query(collaboratorQuery, [req.user.id]);
+            const collaboratorTickets = collaboratorResult.rows;
+            
+            // Merge assigned and collaborator tickets, removing duplicates
+            const ticketMap = new Map();
+            [...assignedTickets, ...collaboratorTickets].forEach(ticket => {
+                if (!ticketMap.has(ticket.id)) {
+                    ticketMap.set(ticket.id, ticket);
+                }
+            });
+            let allTickets = Array.from(ticketMap.values());
+            
             // Check if technician has CAN_VIEW_ALL_TICKETS privilege
             const canViewAll = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_VIEW_ALL_TICKETS');
             
@@ -403,13 +430,13 @@ export const getMyAssignedTickets = async (req, res) => {
                     const categoryResult = await pool.query(categoryQuery, [accessibleCategories]);
                     const categoryNames = categoryResult.rows.map(row => row.name);
                     
-                    // Filter assigned tickets by accessible categories
-                    tickets = assignedTickets.filter(ticket => categoryNames.includes(ticket.category));
+                    // Filter tickets by accessible categories
+                    tickets = allTickets.filter(ticket => categoryNames.includes(ticket.category));
                 } else {
                     tickets = [];
                 }
             } else {
-                tickets = assignedTickets;
+                tickets = allTickets;
             }
         } else if (req.user.role === 'admin') {
             // Admins can see all tickets
