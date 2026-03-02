@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getTechnicians } from '../services/userService';
 import { sendRingRequest, checkLocalCooldown, getUrgencyColor, getUrgencyLabel } from '../services/ringService';
+import { getUserId } from '../services/authService';
 
 /**
  * RingForHelpModal - Modal for sending urgent help requests to other technicians
@@ -33,7 +34,8 @@ const RingForHelpModal = ({
   // Check cooldown on mount
   useEffect(() => {
     if (isOpen) {
-      const lastRingTime = localStorage.getItem('lastRingTime');
+      const userId = getUserId();
+      const lastRingTime = localStorage.getItem(`lastRingTime_${userId}`);
       if (lastRingTime) {
         const cooldown = checkLocalCooldown(lastRingTime, 10);
         if (!cooldown.canSend) {
@@ -109,8 +111,9 @@ const RingForHelpModal = ({
       
       const result = await sendRingRequest(ticketId, selectedTechId, urgencyLevel, message);
       
-      // Store cooldown info
-      localStorage.setItem('lastRingTime', new Date().toISOString());
+      // Store cooldown info (user-specific)
+      const userId = getUserId();
+      localStorage.setItem(`lastRingTime_${userId}`, new Date().toISOString());
       
       // Call success callback
       if (onRingSent) {
