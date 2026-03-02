@@ -4,6 +4,7 @@ import { logout, isAuthenticated, getUser } from '../services/authService'
 import { sendChatMessage, submitChatFeedback, clearChatHistory } from '../services/chatService'
 import NotificationBell from './NotificationBell'
 import NotificationDropdown from './NotificationDropdown'
+import ChatWidgetButton from './ChatWidgetButton'
 import SettingsSidebar from './SettingsSidebar'
 import TicketDetailView from './TicketDetailView'
 import ChatWidgetButton from './ChatWidgetButton'
@@ -16,6 +17,7 @@ function Navbar() {
   const [notificationDropdownOpen, setNotificationDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
   const [ticketDetailId, setTicketDetailId] = useState(null)
   const [ticketDetailOpen, setTicketDetailOpen] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
@@ -176,6 +178,13 @@ function Navbar() {
                 <span className="text-gray-600">|</span>
                 <span className="text-gray-400 capitalize">{user?.role || 'User'}</span>
               </div>
+
+              {/* Chat Widget Button */}
+              <ChatWidgetButton
+                onClick={() => setChatOpen(!chatOpen)}
+                unreadCount={0}
+                hasNewMessage={false}
+              />
 
             {/* Notification Bell & Dropdown */}
               <div className="relative" ref={notificationDropdownRef}>
