@@ -57,6 +57,12 @@ function NotificationCard({ notification, onUpdate, onTicketClick }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
           </svg>
         );
+      case 'ring_request':
+        return (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+          </svg>
+        );
       default:
         return (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -72,6 +78,7 @@ function NotificationCard({ notification, onUpdate, onTicketClick }) {
       case 'overdue': return 'text-red-400';
       case 'update_request': return 'text-yellow-400';
       case 'mention': return 'text-purple-400';
+      case 'ring_request': return 'text-amber-400';
       default: return 'text-gray-400';
     }
   };
@@ -93,7 +100,7 @@ function NotificationCard({ notification, onUpdate, onTicketClick }) {
 
   return (
     <div
-      className={`px-4 py-3 hover:bg-gray-700/50 transition-colors cursor-pointer ${
+      className={`px-4 py-3 transition-colors hover:bg-gray-700/50 cursor-pointer ${
         !notification.isRead ? 'bg-gray-700/30' : ''
       } ${isDeleting ? 'opacity-50' : ''}`}
       onClick={handleClick}
@@ -107,6 +114,7 @@ function NotificationCard({ notification, onUpdate, onTicketClick }) {
         {/* Content */}
         <div className="flex-1 min-w-0">
           <p className="text-sm text-gray-200 break-words">{notification.message}</p>
+
           <div className="flex items-center gap-2 mt-1">
             <p className="text-xs text-gray-500">{formatTime(notification.createdAt)}</p>
             {notification.ticket_id && (
