@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import MessageBubble from './MessageBubble';
 
 /**
  * ChatWindow — Collapsible chat panel for the BlueClue Assistant.
@@ -41,13 +42,6 @@ function ChatWindow({ isOpen, onClose, onMinimize }) {
       inputRef.current.focus();
     }
   }, [isOpen]);
-
-  const formatTimestamp = (date) => {
-    return new Date(date).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
 
   const handleSend = () => {
     const trimmed = inputValue.trim();
@@ -135,23 +129,12 @@ function ChatWindow({ isOpen, onClose, onMinimize }) {
       {/* ── Messages area ──────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {messages.map((msg) => (
-          <div
+          <MessageBubble
             key={msg.id}
-            className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
-          >
-            <div
-              className={`max-w-[80%] px-3 py-2 rounded-lg text-sm leading-relaxed ${
-                msg.sender === 'user'
-                  ? 'bg-blue-600 text-white rounded-br-none'
-                  : 'bg-gray-800 text-gray-200 rounded-bl-none'
-              }`}
-            >
-              {msg.text}
-            </div>
-            <span className="text-[10px] text-gray-500 mt-1 px-1">
-              {formatTimestamp(msg.timestamp)}
-            </span>
-          </div>
+            sender={msg.sender}
+            text={msg.text}
+            timestamp={msg.timestamp}
+          />
         ))}
 
         {/* Typing indicator */}
