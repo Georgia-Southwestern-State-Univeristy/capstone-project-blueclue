@@ -196,6 +196,7 @@ $migrationFiles = @(
     "migrations\025_add_fulltext_search.sql",
     "migrations\026_add_notification_metadata.sql",
     "migrations\027_add_chat_system.sql",
+    "migrations\028_add_ml_monitoring_tables.sql",
     "migrations\add_response_time_to_update_requests.sql"
 )
 
