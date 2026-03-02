@@ -177,7 +177,7 @@ const CategoryManager = ({ categories, onCategoriesChange }) => {
                             <button
                                 type="button"
                                 onClick={resetForm}
-                                className="px-4 py-2 bg-gray-900/50 border border-gray-700 text-gray-200 text-gray-400 text-sm font-medium rounded-lg hover:bg-gray-800/50 transition-colors"
+                                className="px-4 py-2 bg-gray-900/50 border border-gray-700 text-gray-400 text-sm font-medium rounded-lg hover:bg-gray-800/50 transition-colors"
                             >
                                 Cancel
                             </button>
