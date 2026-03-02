@@ -5,6 +5,7 @@ import { sendChatMessage, submitChatFeedback, clearChatHistory } from '../servic
 import NotificationBell from './NotificationBell'
 import NotificationDropdown from './NotificationDropdown'
 import ChatWidgetButton from './ChatWidgetButton'
+import ChatWindow from './ChatWindow'
 import SettingsSidebar from './SettingsSidebar'
 import TicketDetailView from './TicketDetailView'
 import ChatWidgetButton from './ChatWidgetButton'
@@ -346,6 +347,13 @@ function Navbar() {
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         onLogout={handleLogout}
+      />
+
+      {/* Chat Window */}
+      <ChatWindow
+        isOpen={chatOpen}
+        onClose={() => setChatOpen(false)}
+        onMinimize={() => setChatOpen(false)}
       />
 
       {/* Ticket Detail View - opened from notification clicks */}
