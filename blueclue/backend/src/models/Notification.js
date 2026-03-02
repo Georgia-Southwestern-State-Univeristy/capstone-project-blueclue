@@ -4,17 +4,17 @@ import pool from '../config/database.js';
 class Notification {
     /**
      * Create a new notification
-     * @param {Object} notificationData - { user_id, type, message, ticket_id }
+     * @param {Object} notificationData - { user_id, type, message, ticket_id, metadata }
      * @returns {Promise<Object>} Created notification
      */
-    static async create({ user_id, type, message, ticket_id = null }) {
+    static async create({ user_id, type, message, ticket_id = null, metadata = null }) {
         const query = `
-            INSERT INTO notifications (user_id, type, message, ticket_id)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO notifications (user_id, type, message, ticket_id, metadata)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING *
         `;
         
-        const values = [user_id, type, message, ticket_id];
+        const values = [user_id, type, message, ticket_id, metadata ? JSON.stringify(metadata) : null];
         const result = await pool.query(query, values);
         return result.rows[0];
     }
