@@ -1,16 +1,14 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { logout, isAuthenticated, getUser } from '../services/authService'
-import { sendChatMessage, submitChatFeedback, clearChatHistory } from '../services/chatService'
 import NotificationBell from './NotificationBell'
 import NotificationDropdown from './NotificationDropdown'
 import ChatWidgetButton from './ChatWidgetButton'
 import ChatWindow from './ChatWindow'
 import SettingsSidebar from './SettingsSidebar'
 import TicketDetailView from './TicketDetailView'
-import ChatWidgetButton from './ChatWidgetButton'
-import ChatWindow from './ChatWindow'
 import useChatStore from '../hooks/useChatStore'
+import { requestNotificationPermission } from '../utils/chatNotifications'
 import logo from '../assets/EditedBlueClueLogo.png'
 
 function Navbar() {
@@ -18,16 +16,16 @@ function Navbar() {
   const [notificationDropdownOpen, setNotificationDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [chatOpen, setChatOpen] = useState(false)
-  const [ticketDetailId, setTicketDetailId] = useState(null)
-  const [ticketDetailOpen, setTicketDetailOpen] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
-  const [suggestions, setSuggestions] = useState(null)
+  const [ticketDetailId, setTicketDetailId] = useState(null)
+
+  // Persistent chat state
+  const chat = useChatStore()
+  const [ticketDetailOpen, setTicketDetailOpen] = useState(false)
   const notificationDropdownRef = useRef(null)
   const notificationBellRef = useRef(null)
   const authenticated = isAuthenticated()
   const user = getUser()
-  const chat = useChatStore()
 
   // Close notification dropdown when clicking outside
   useEffect(() => {
@@ -41,64 +39,29 @@ function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // ── Chat: send a message through the real backend ──
-  const handleChatSend = useCallback(async (text) => {
-    // Add user message to store immediately
-    chat.addMessage({
-      id: `user-${Date.now()}`,
-      sender: 'user',
-      text,
-      timestamp: new Date().toISOString(),
-    })
-
+  // Send a message and simulate a bot reply (placeholder until backend)
+  const handleChatSend = useCallback((text) => {
+    // Request notification permission on first interaction (user-initiated)
+    requestNotificationPermission()
+    chat.addMessage({ id: Date.now(), sender: 'user', text, timestamp: new Date() })
     setIsTyping(true)
-    try {
-      const data = await sendChatMessage(text, chat.conversationId)
-
-      // Persist the backend conversationId so the session is tracked
-      if (data.conversationId) {
-        chat.updateConversationId(data.conversationId)
-      }
-
-      // Update quick-reply suggestions from the bot response
-      if (data.suggestions?.length) {
-        setSuggestions(data.suggestions)
-      }
-
-      // Add bot reply
-      chat.addMessage({
-        id: data.messageId ?? `bot-${Date.now()}`,
-        sender: 'bot',
-        text: data.response,
-        timestamp: new Date().toISOString(),
-        intent: data.intent,
-        confidence: data.confidence,
-      })
-    } catch (err) {
-      // Surface the error inside the chat so the user knows what happened
-      chat.addMessage({
-        id: `err-${Date.now()}`,
-        sender: 'bot',
-        text: `Sorry, something went wrong. ${err.message || 'Please try again later.'}`,
-        timestamp: new Date().toISOString(),
-      })
-    } finally {
+    setTimeout(() => {
       setIsTyping(false)
-    }
+      chat.addMessage({
+        id: Date.now() + 1,
+        sender: 'bot',
+        text: 'Thanks for your message! This is a placeholder response. The AI backend will be integrated soon.',
+        timestamp: new Date(),
+      })
+    }, 1500)
   }, [chat])
 
-  // ── Chat: submit thumbs-up / thumbs-down feedback ──
-  const handleChatFeedback = useCallback(async (messageId, helpful) => {
-    try {
-      await submitChatFeedback(messageId, helpful)
-    } catch {
-      // Silently ignore — feedback is best-effort
-    }
+  // Feedback handler — placeholder until backend integration
+  const handleChatFeedback = useCallback((messageId, rating) => {
+    console.log(`Feedback for message ${messageId}: ${rating}`)
   }, [])
 
   const handleLogout = async () => {
-    // Clear chat state + backend conversation history
-    try { await clearChatHistory() } catch { /* best-effort */ }
     chat.clearChat()
     await logout()
     navigate('/login')
@@ -182,9 +145,9 @@ function Navbar() {
 
               {/* Chat Widget Button */}
               <ChatWidgetButton
-                onClick={() => setChatOpen(!chatOpen)}
-                unreadCount={0}
-                hasNewMessage={false}
+                onClick={chat.toggleChat}
+                unreadCount={chat.unreadCount}
+                hasNewMessage={chat.hasNewMessage}
               />
 
             {/* Notification Bell & Dropdown */}
@@ -220,13 +183,6 @@ function Navbar() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               </button>
-
-              {/* Chat Widget Button */}
-              <ChatWidgetButton
-                onClick={chat.toggleChat}
-                unreadCount={chat.unreadCount}
-                hasNewMessage={chat.hasNewMessage}
-              />
 
               {/* Profile Icon */}
               <div className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-800">
@@ -351,9 +307,13 @@ function Navbar() {
 
       {/* Chat Window */}
       <ChatWindow
-        isOpen={chatOpen}
-        onClose={() => setChatOpen(false)}
-        onMinimize={() => setChatOpen(false)}
+        isOpen={chat.isOpen}
+        messages={chat.messages}
+        onSend={handleChatSend}
+        onClose={chat.closeChat}
+        onMinimize={chat.closeChat}
+        onFeedback={handleChatFeedback}
+        isTyping={isTyping}
       />
 
       {/* Ticket Detail View - opened from notification clicks */}
@@ -362,19 +322,6 @@ function Navbar() {
         isOpen={ticketDetailOpen}
         onClose={() => setTicketDetailOpen(false)}
       />
-
-      {/* Chat Window (rendered outside the nav bar so it floats freely) */}
-      {authenticated && (
-        <ChatWindow
-          isOpen={chat.isOpen}
-          messages={chat.messages}
-          onSend={handleChatSend}
-          onClose={chat.closeChat}
-          onFeedback={handleChatFeedback}
-          isTyping={isTyping}
-          suggestions={suggestions}
-        />
-      )}
     </nav>
   )
 }
