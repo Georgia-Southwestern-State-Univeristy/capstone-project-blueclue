@@ -195,6 +195,7 @@ $migrationFiles = @(
     "migrations\024_seed_kb_articles_part4.sql",
     "migrations\025_add_fulltext_search.sql",
     "migrations\026_add_notification_metadata.sql",
+    "migrations\027_add_chat_system.sql",
     "migrations\add_response_time_to_update_requests.sql"
 )
 
