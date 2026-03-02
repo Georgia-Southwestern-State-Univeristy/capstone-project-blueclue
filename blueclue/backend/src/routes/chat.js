@@ -6,7 +6,8 @@ import {
   getConversations,
   submitFeedback,
   clearHistory,
-  endConversation
+  endConversation,
+  createTicketFromChat,
 } from '../controllers/chatController.js';
 
 const router = express.Router();
@@ -58,5 +59,12 @@ router.post('/clear', authenticateToken, clearHistory);
  * @access  Private (authenticated users)
  */
 router.post('/end', authenticateToken, endConversation);
+
+/**
+ * @route   POST /api/chat/create-ticket
+ * @desc    Create a support ticket pre-filled from chat conversation context
+ * @access  Private (authenticated users)
+ */
+router.post('/create-ticket', authenticateToken, createTicketFromChat);
 
 export default router;

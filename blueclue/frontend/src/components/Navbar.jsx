@@ -9,7 +9,7 @@ import SettingsSidebar from './SettingsSidebar'
 import TicketDetailView from './TicketDetailView'
 import useChatStore from '../hooks/useChatStore'
 import { requestNotificationPermission } from '../utils/chatNotifications'
-import { sendChatMessage, submitChatFeedback, clearChatHistory } from '../services/chatService'
+import { sendChatMessage, submitChatFeedback, clearChatHistory, createTicketFromChat } from '../services/chatService'
 import logo from '../assets/EditedBlueClueLogo.png'
 
 function Navbar() {
@@ -58,6 +58,8 @@ function Navbar() {
       // Map backend suggestions to {label, value} for QuickReplyButtons
       if (data.suggestions?.length) {
         setSuggestions(data.suggestions.map((s) => ({ label: s, value: s })))
+      } else {
+        setSuggestions(null)
       }
 
       chat.addMessage({
@@ -65,6 +67,8 @@ function Navbar() {
         sender: 'bot',
         text: data.response,
         timestamp: new Date(),
+        articleLinks: data.articleLinks?.length ? data.articleLinks : undefined,
+        actionButtons: data.actionButtons?.length ? data.actionButtons : undefined,
       })
     } catch (err) {
       setIsTyping(false)
@@ -77,6 +81,39 @@ function Navbar() {
       console.error('Chat error:', err)
     }
   }, [chat])
+
+  // Handle action buttons embedded in bot messages
+  const handleActionButton = useCallback(async (buttonId) => {
+    if (buttonId === 'create_ticket') {
+      setIsTyping(true)
+      setSuggestions(null)
+      try {
+        const result = await createTicketFromChat(conversationIdRef.current)
+        setIsTyping(false)
+        chat.addMessage({
+          id: Date.now(),
+          sender: 'bot',
+          text: result.message || `Ticket ${result.ticketNumber} created. A technician will respond soon.`,
+          timestamp: new Date(),
+          actionButtons: [
+            { id: 'view_tickets', label: '📋 View my tickets', primary: false },
+          ],
+        })
+      } catch (err) {
+        setIsTyping(false)
+        chat.addMessage({
+          id: Date.now(),
+          sender: 'bot',
+          text: 'Sorry, I couldn\'t create the ticket automatically. Please visit the Client Dashboard to submit one.',
+          timestamp: new Date(),
+        })
+        console.error('Create ticket from chat error:', err)
+      }
+    } else if (buttonId === 'view_tickets') {
+      navigate('/client-dashboard')
+      chat.closeChat()
+    }
+  }, [chat, navigate])
 
   // Feedback handler — sends rating to backend
   const handleChatFeedback = useCallback(async (messageId, rating) => {
@@ -351,6 +388,7 @@ function Navbar() {
         onFeedback={handleChatFeedback}
         isTyping={isTyping}
         suggestions={suggestions || undefined}
+        onActionButton={handleActionButton}
       />
 
       {/* Ticket Detail View - opened from notification clicks */}

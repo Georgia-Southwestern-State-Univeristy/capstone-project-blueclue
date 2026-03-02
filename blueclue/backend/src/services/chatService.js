@@ -1,248 +1,463 @@
 import ChatMessage from '../models/ChatMessage.js';
 import ChatConversation from '../models/ChatConversation.js';
+import pool from '../config/database.js';
 
 /**
  * Message Processing Service
- * Handles intent recognition, response generation, and message logging
+ * Rule-based intent recognition with KB search fallback, context awareness,
+ * frustration detection, and ticket-creation handoff.
  */
 
+// ============================================================================
+// INTENT DEFINITIONS
+// ============================================================================
+
 /**
- * Simple intent recognition based on keywords
- * @param {string} message - User message
- * @returns {Object} {intent, confidence}
+ * Each intent has:
+ *   keywords       – matched against the lowercased user message
+ *   articleSlug    – preferred KB article slug (used for lookup)
+ *   articleCategory – fallback KB category if slug lookup fails
+ */
+const INTENT_DEFINITIONS = {
+  password_reset: {
+    keywords: ['password', 'forgot', 'reset', 'login', "can't log in", 'cannot log in',
+               'locked out', 'sign in', 'logged out', 'cant login', 'cant log'],
+    articleSlug: 'how-to-reset-your-password',
+    articleCategory: 'account-management',
+  },
+  printer_issues: {
+    keywords: ['printer', 'print', "won't print", 'paper jam', 'printing',
+               'not printing', 'jammed', 'jam', 'scanner'],
+    articleSlug: 'printer-troubleshooting',
+    articleCategory: 'hardware',
+  },
+  software_request: {
+    keywords: ['install', 'software', 'need program', 'application', 'app',
+               'download', 'request software', 'new software', 'program request'],
+    articleSlug: 'how-to-request-software',
+    articleCategory: 'software',
+  },
+  network_wifi: {
+    keywords: ['wifi', 'wi-fi', 'internet', 'connection', 'network', "can't connect",
+               'cannot connect', 'offline', 'no wifi', 'no internet', 'wireless', 'vpn'],
+    articleSlug: 'wifi-setup-guide',
+    articleCategory: 'network',
+  },
+  email_issues: {
+    keywords: ['email', 'outlook', "can't send", "can't receive", 'mail', 'inbox',
+               'sending email', 'receiving email', 'email not working', 'email setup'],
+    articleSlug: 'email-configuration-guide',
+    articleCategory: 'email',
+  },
+  general_help: {
+    keywords: ['help', 'support', 'what can you do', 'what do you do', 'assist',
+               'guide me', 'capabilities', 'how do i', 'show me'],
+    articleSlug: null,
+    articleCategory: null,
+  },
+  greeting: {
+    keywords: ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening', 'howdy'],
+    articleSlug: null,
+    articleCategory: null,
+  },
+  create_ticket: {
+    keywords: ['create ticket', 'new ticket', 'submit ticket', 'open ticket',
+               'report issue', 'raise ticket', 'log ticket'],
+    articleSlug: null,
+    articleCategory: null,
+  },
+  check_status: {
+    keywords: ['ticket status', 'check ticket', 'ticket update', 'my tickets',
+               'where is my ticket', 'status of my', 'check my ticket'],
+    articleSlug: null,
+    articleCategory: null,
+  },
+  escalation: {
+    keywords: ['speak to human', 'talk to person', 'escalate', 'manager',
+               'supervisor', 'real person', 'human agent'],
+    articleSlug: null,
+    articleCategory: null,
+  },
+  gratitude: {
+    keywords: ['thank', 'thanks', 'appreciate', 'helpful', 'great', 'perfect', 'awesome'],
+    articleSlug: null,
+    articleCategory: null,
+  },
+  farewell: {
+    keywords: ['bye', 'goodbye', 'see you', 'exit', 'quit', 'done', 'close'],
+    articleSlug: null,
+    articleCategory: null,
+  },
+};
+
+/** Keywords that signal the user is frustrated or the previous answer didn't help */
+const FRUSTRATION_KEYWORDS = [
+  'still not working', "doesn't help", 'doesnt help', "didn't work", 'didnt work',
+  'not working', 'still broken', 'frustrated', 'useless', 'not helpful',
+  'tried that', 'already tried', 'nothing works', 'no it', 'nope', 'that didnt',
+  "that didn't", 'still having', 'still getting',
+];
+
+// ============================================================================
+// INTENT RECOGNITION
+// ============================================================================
+
+/**
+ * Enhanced keyword-based intent recognition with confidence scoring.
+ *
+ * Confidence rules:
+ *   matchCount >= 2  → 0.85  (high confidence — act immediately)
+ *   matchCount === 1 → 0.50  (low confidence  — fall back to KB search)
+ *   matchCount === 0 → 0.30  (no match        — pure KB search / offer ticket)
+ *
+ * @param {string} message
+ * @returns {{ intent: string, confidence: number, matchCount: number, isFrustrated: boolean }}
  */
 function recognizeIntent(message) {
-  const lowercaseMessage = message.toLowerCase();
-  
-  // Define intent patterns with keywords
-  const intentPatterns = {
-    greeting: {
-      keywords: ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening'],
-      confidence: 0.9
-    },
-    create_ticket: {
-      keywords: ['create ticket', 'new ticket', 'submit ticket', 'open ticket', 'report issue', 'problem', 'help with'],
-      confidence: 0.85
-    },
-    check_status: {
-      keywords: ['ticket status', 'check ticket', 'ticket update', 'my tickets', 'where is my ticket'],
-      confidence: 0.85
-    },
-    technical_support: {
-      keywords: ['how to', 'how do i', 'can you help', 'need help', 'support', 'assistance'],
-      confidence: 0.8
-    },
-    account_help: {
-      keywords: ['password', 'login', 'account', 'username', 'reset', 'forgot'],
-      confidence: 0.85
-    },
-    knowledge_base: {
-      keywords: ['article', 'guide', 'tutorial', 'documentation', 'faq', 'how-to'],
-      confidence: 0.8
-    },
-    escalation: {
-      keywords: ['speak to human', 'talk to person', 'escalate', 'manager', 'supervisor'],
-      confidence: 0.9
-    },
-    gratitude: {
-      keywords: ['thank', 'thanks', 'appreciate', 'helpful'],
-      confidence: 0.9
-    },
-    farewell: {
-      keywords: ['bye', 'goodbye', 'see you', 'exit', 'quit'],
-      confidence: 0.9
+  const lc = message.toLowerCase();
+
+  const isFrustrated = FRUSTRATION_KEYWORDS.some(kw => lc.includes(kw));
+
+  let bestMatch = { intent: 'general_inquiry', confidence: 0.3, matchCount: 0 };
+
+  for (const [intent, def] of Object.entries(INTENT_DEFINITIONS)) {
+    let matchCount = 0;
+    for (const kw of def.keywords) {
+      if (lc.includes(kw)) matchCount++;
     }
-  };
-  
-  // Check each intent pattern
-  let bestMatch = { intent: 'general_inquiry', confidence: 0.5 };
-  
-  for (const [intent, pattern] of Object.entries(intentPatterns)) {
-    for (const keyword of pattern.keywords) {
-      if (lowercaseMessage.includes(keyword)) {
-        if (pattern.confidence > bestMatch.confidence) {
-          bestMatch = { intent, confidence: pattern.confidence };
-        }
-        break;
-      }
+    if (matchCount === 0) continue;
+
+    const confidence = matchCount >= 2 ? 0.85 : 0.50;
+    if (
+      matchCount > bestMatch.matchCount ||
+      (matchCount === bestMatch.matchCount && confidence > bestMatch.confidence)
+    ) {
+      bestMatch = { intent, confidence, matchCount };
     }
   }
-  
-  return bestMatch;
+
+  return { ...bestMatch, isFrustrated };
 }
 
+// ============================================================================
+// KNOWLEDGE BASE HELPERS
+// ============================================================================
+
 /**
- * Generate bot response based on intent
- * @param {string} intent - Detected intent
- * @param {string} userMessage - Original user message
- * @param {Object} context - Conversation context
- * @returns {Object} {response, suggestedArticles, suggestions}
+ * Full-text search the knowledge base for up to `limit` articles.
+ * @param {string} query
+ * @param {number} limit
+ * @returns {Promise<Array<{id, title, slug, category, excerpt}>>}
  */
-function generateResponse(intent, userMessage, context = {}) {
-  const responses = {
-    greeting: {
-      response: "Hello! I'm the BlueClue support assistant. How can I help you today?",
-      suggestions: [
-        "Create a new ticket",
-        "Check ticket status",
-        "Browse knowledge base",
-        "Get technical help"
-      ],
-      suggestedArticles: []
-    },
-    create_ticket: {
-      response: "I can help you create a support ticket. Could you please describe the issue you're experiencing? Include details like:\n\n• What were you trying to do?\n• What happened instead?\n• Any error messages you saw",
-      suggestions: [
-        "It's a technical issue",
-        "I need account help",
-        "Hardware problem",
-        "Software issue"
-      ],
-      suggestedArticles: []
-    },
-    check_status: {
-      response: "I can help you check your ticket status. You can view all your tickets in the 'My Tickets' section. Would you like me to guide you there?",
-      suggestions: [
-        "Yes, show me my tickets",
-        "How do I track a ticket?",
-        "What's the typical response time?"
-      ],
-      suggestedArticles: []
-    },
-    technical_support: {
-      response: "I'm here to help with technical issues. Let me search our knowledge base for relevant articles. In the meantime, could you tell me more about what you're trying to accomplish?",
-      suggestions: [
-        "Password reset",
-        "Software installation",
-        "Network issues",
-        "Email problems"
-      ],
-      suggestedArticles: []
-    },
-    account_help: {
-      response: "I can assist with account-related issues. Common account topics include:\n\n• Password resets\n• Login problems\n• Account access\n• Profile updates\n\nWhat specifically are you needing help with?",
-      suggestions: [
-        "Reset my password",
-        "Can't login",
-        "Update account info",
-        "Two-factor authentication"
-      ],
-      suggestedArticles: []
-    },
-    knowledge_base: {
-      response: "Our knowledge base contains helpful articles and guides. I can search for articles related to your question. What topic are you interested in?",
-      suggestions: [
-        "Getting started guides",
-        "Troubleshooting tips",
-        "Common issues",
-        "How-to guides"
-      ],
-      suggestedArticles: []
-    },
-    escalation: {
-      response: "I understand you'd like to speak with a person. I can help you create a support ticket, and a technician will be assigned to assist you. Would you like me to do that?",
-      suggestions: [
-        "Yes, create a ticket",
-        "No, I'll try the chatbot first",
-        "What's the typical wait time?"
-      ],
-      suggestedArticles: []
-    },
-    gratitude: {
-      response: "You're welcome! I'm glad I could help. Is there anything else you need assistance with?",
-      suggestions: [
-        "Yes, I have another question",
-        "No, that's all",
-        "Rate this conversation"
-      ],
-      suggestedArticles: []
-    },
-    farewell: {
-      response: "Thank you for using BlueClue support! If you need help in the future, don't hesitate to reach out. Have a great day!",
-      suggestions: [],
-      suggestedArticles: []
-    },
-    general_inquiry: {
-      response: "I'm here to help! I can assist you with:\n\n• Creating support tickets\n• Checking ticket status\n• Finding helpful articles\n• Answering common questions\n\nWhat would you like help with?",
-      suggestions: [
-        "Create a ticket",
-        "Check my tickets",
-        "Browse knowledge base",
-        "Contact support"
-      ],
-      suggestedArticles: []
-    }
-  };
-  
-  return responses[intent] || responses.general_inquiry;
+async function searchKnowledgeBase(query, limit = 3) {
+  if (!query || query.trim().length < 3) return [];
+  try {
+    const result = await pool.query(
+      `SELECT id, title, slug, category,
+              COALESCE(excerpt, LEFT(content, 200)) AS excerpt
+       FROM   knowledge_articles
+       WHERE  deleted_at IS NULL
+         AND  is_published = true
+         AND  is_public    = true
+         AND  (
+               search_vector @@ plainto_tsquery('english', $1)
+               OR title   ILIKE $2
+               OR content ILIKE $2
+             )
+       ORDER  BY ts_rank_cd(search_vector, plainto_tsquery('english', $1), 32) DESC,
+                 helpful_votes DESC
+       LIMIT  $3`,
+      [query.trim(), `%${query.trim()}%`, limit],
+    );
+    return result.rows.map(r => ({
+      id: r.id, title: r.title, slug: r.slug,
+      category: r.category, excerpt: r.excerpt,
+    }));
+  } catch (err) {
+    console.error('KB search error:', err);
+    return [];
+  }
 }
 
 /**
- * Process a chat message
- * @param {number} userId - User ID
- * @param {string} message - User message
- * @param {number} conversationId - Optional: Existing conversation ID
- * @returns {Promise<Object>} {response, suggestions, articleLinks, conversationId, messageId}
+ * Look up the canonical article for a known intent (by preferred slug,
+ * then by category fallback).
+ * @param {string} intent
+ * @returns {Promise<Object|null>}
+ */
+async function findIntentArticle(intent) {
+  const def = INTENT_DEFINITIONS[intent];
+  if (!def || !def.articleSlug) return null;
+  try {
+    // Try exact slug first
+    const slugResult = await pool.query(
+      `SELECT id, title, slug, category,
+              COALESCE(excerpt, LEFT(content, 200)) AS excerpt
+       FROM   knowledge_articles
+       WHERE  deleted_at IS NULL AND is_published = true AND is_public = true
+         AND  slug = $1
+       LIMIT 1`,
+      [def.articleSlug],
+    );
+    if (slugResult.rows.length > 0) return slugResult.rows[0];
+
+    // Fallback: best article in the same category
+    if (def.articleCategory) {
+      const catResult = await pool.query(
+        `SELECT id, title, slug, category,
+                COALESCE(excerpt, LEFT(content, 200)) AS excerpt
+         FROM   knowledge_articles
+         WHERE  deleted_at IS NULL AND is_published = true AND is_public = true
+           AND  category = $1
+         ORDER  BY helpful_votes DESC, views DESC
+         LIMIT 1`,
+        [def.articleCategory],
+      );
+      return catResult.rows[0] || null;
+    }
+    return null;
+  } catch (err) {
+    console.error('Intent article lookup error:', err);
+    return null;
+  }
+}
+
+// ============================================================================
+// CONTEXT ANALYSIS  (last 5 messages)
+// ============================================================================
+
+/**
+ * Derive context from the most recent conversation messages.
+ * @param {Array} previousMessages
+ * @returns {{ seenArticleIds: Set, previousIntents: string[], frustrationLevel: number }}
+ */
+function analyzeContext(previousMessages) {
+  const seenArticleIds = new Set();
+  const previousIntents = [];
+  let frustrationLevel = 0;
+
+  for (const msg of previousMessages) {
+    if (msg.intent) previousIntents.push(msg.intent);
+
+    // Collect article IDs already suggested to this user
+    if (msg.sender === 'bot' && msg.suggested_articles) {
+      let articles = msg.suggested_articles;
+      if (typeof articles === 'string') {
+        try { articles = JSON.parse(articles); } catch { articles = []; }
+      }
+      if (Array.isArray(articles)) {
+        articles.forEach(a => seenArticleIds.add(typeof a === 'object' ? a.id : a));
+      }
+    }
+
+    // Count frustration signals from the user
+    if (msg.sender === 'user') {
+      const lc = (msg.message || '').toLowerCase();
+      if (FRUSTRATION_KEYWORDS.some(kw => lc.includes(kw))) frustrationLevel++;
+    }
+  }
+
+  return { seenArticleIds, previousIntents, frustrationLevel };
+}
+
+// ============================================================================
+// RESPONSE GENERATION
+// ============================================================================
+
+/**
+ * Build the bot's reply given detected intent, confidence, and conversation context.
+ *
+ * Returns:
+ *   response      – text shown in the bubble
+ *   articleLinks  – [{id, title, slug, category, excerpt}]
+ *   actionButtons – [{id, label, primary}]
+ *   suggestions   – quick-reply chip labels
+ *
+ * @param {string}  intent
+ * @param {number}  confidence
+ * @param {string}  userMessage
+ * @param {{ seenArticleIds: Set, previousIntents: string[], frustrationLevel: number, isFrustrated: boolean }} ctx
+ * @returns {Promise<Object>}
+ */
+async function generateResponse(intent, confidence, userMessage, ctx) {
+  const { seenArticleIds, frustrationLevel, isFrustrated } = ctx;
+
+  // ── Frustration / "nothing worked" path ───────────────────────────────────
+  if (isFrustrated || frustrationLevel >= 1) {
+    return {
+      response: "I'm sorry the previous suggestions didn't resolve your issue. Let me connect you with a technician who can help directly.",
+      articleLinks: [],
+      actionButtons: [{ id: 'create_ticket', label: '🎫 Create a support ticket', primary: true }],
+      suggestions: ['Create a support ticket', 'Try a different search'],
+    };
+  }
+
+  // ── Simple intents that don't need articles ────────────────────────────────
+  if (intent === 'greeting') {
+    return {
+      response: "Hello! I'm the BlueClue Assistant. How can I help you today?",
+      articleLinks: [],
+      actionButtons: [],
+      suggestions: ['🔑 Password Reset', '🖨️ Printer Issues', '📦 Software Request', '📶 Network/WiFi', '📧 Email Issues'],
+    };
+  }
+  if (intent === 'farewell') {
+    return {
+      response: "Thanks for using BlueClue Support! Have a great day! 👋 Come back anytime if you need help.",
+      articleLinks: [], actionButtons: [], suggestions: [],
+    };
+  }
+  if (intent === 'gratitude') {
+    return {
+      response: "You're welcome! Is there anything else I can help you with?",
+      articleLinks: [], actionButtons: [],
+      suggestions: ["Yes, I have another question", "No, that's all", 'Create a ticket'],
+    };
+  }
+  if (intent === 'check_status') {
+    return {
+      response: "You can view all your support tickets from the Client Dashboard. Need help with something else?",
+      articleLinks: [],
+      actionButtons: [{ id: 'view_tickets', label: '📋 View my tickets', primary: false }],
+      suggestions: ['View my tickets', 'Create a new ticket'],
+    };
+  }
+  if (intent === 'create_ticket' || intent === 'escalation') {
+    return {
+      response: "No problem — I'll help you open a support ticket. A technician will be assigned and will respond as soon as possible.",
+      articleLinks: [],
+      actionButtons: [{ id: 'create_ticket', label: '🎫 Create a support ticket', primary: true }],
+      suggestions: ['Create a support ticket'],
+    };
+  }
+  if (intent === 'general_help' || intent === 'general_inquiry') {
+    return {
+      response: "I can help you with:\n\n• 🔑 Password resets\n• 🖨️ Printer troubleshooting\n• 📦 Software installation requests\n• 📶 Network & WiFi issues\n• 📧 Email configuration\n• 🎫 Creating support tickets\n\nWhat do you need help with?",
+      articleLinks: [], actionButtons: [],
+      suggestions: ['Password Reset', 'Printer Issues', 'Software Request', 'Network/WiFi', 'Email Issues', 'Create a Ticket'],
+    };
+  }
+
+  // ── HIGH CONFIDENCE (≥ 0.75): look up canonical article for this intent ────
+  if (confidence >= 0.75) {
+    const article = await findIntentArticle(intent);
+
+    // If user has already seen this exact article → skip article, offer ticket
+    if (article && seenArticleIds.has(article.id)) {
+      return {
+        response: "It looks like you've already seen that guide and it might not have solved your issue. Would you like a technician to take a look?",
+        articleLinks: [],
+        actionButtons: [{ id: 'create_ticket', label: '🎫 Create a support ticket', primary: true }],
+        suggestions: ['Create a support ticket', 'Search for something else'],
+      };
+    }
+
+    const intentMeta = {
+      password_reset:   { text: "Here's the guide to reset your password:", action: { id: 'password_reset_link', label: '🔑 Reset my password now', primary: false } },
+      printer_issues:   { text: "Here's our Printer Troubleshooting guide:", action: { id: 'create_ticket', label: "🎫 Create a ticket if this doesn't help", primary: false } },
+      software_request: { text: "Here's how to request software installation:", action: { id: 'create_ticket', label: '🎫 Create a software request ticket', primary: true } },
+      network_wifi:     { text: "Here's our WiFi Setup guide.\n\nQuick steps to try first:\n• Restart your router/switch\n• Forget the network and rejoin it\n• Test on another device to isolate the issue", action: { id: 'create_ticket', label: "🎫 Create a ticket if this doesn't help", primary: false } },
+      email_issues:     { text: "Here's the Email Configuration guide:", action: { id: 'create_ticket', label: "🎫 Create a ticket if this doesn't help", primary: false } },
+    };
+
+    const meta = intentMeta[intent] || { text: "I found this article that should help:", action: null };
+    const articleLinks = article ? [article] : [];
+    const actionButtons = meta.action ? [meta.action] : [];
+
+    return {
+      response: meta.text,
+      articleLinks,
+      actionButtons,
+      suggestions: article ? ['✅ This helped', '❌ Still not working'] : ['Create a support ticket'],
+    };
+  }
+
+  // ── LOW CONFIDENCE (< 0.75): full-text knowledge base search ──────────────
+  const kbResults = await searchKnowledgeBase(userMessage);
+  const freshArticles = kbResults.filter(a => !seenArticleIds.has(a.id));
+
+  if (freshArticles.length > 0) {
+    return {
+      response: "I found these articles that might help:",
+      articleLinks: freshArticles.slice(0, 3),
+      actionButtons: [{ id: 'create_ticket', label: "🎫 None of these helped — create a ticket", primary: false }],
+      suggestions: ['✅ This helped', '❌ Still not working', 'Create a support ticket'],
+    };
+  }
+
+  // ── Absolute fallback: offer ticket creation ───────────────────────────────
+  return {
+    response: "I couldn't find a matching article for that. Would you like to create a support ticket so a technician can assist you?",
+    articleLinks: [],
+    actionButtons: [{ id: 'create_ticket', label: '🎫 Create a support ticket', primary: true }],
+    suggestions: ['Create a support ticket', 'Rephrase my question'],
+  };
+}
+
+// ============================================================================
+// PUBLIC API
+// ============================================================================
+
+/**
+ * Process a chat message — main entry point.
+ *
+ * @param {number} userId
+ * @param {string} message
+ * @param {number|null} conversationId
+ * @returns {Promise<{response, suggestions, articleLinks, actionButtons, conversationId, messageId, intent, confidence}>}
  */
 export async function processChatMessage(userId, message, conversationId = null) {
   try {
-    // Get or create conversation
+    // ── Resolve conversation ─────────────────────────────────────────────────
     let conversation;
     if (conversationId) {
       conversation = await ChatConversation.getById(conversationId);
-      if (!conversation) {
-        throw new Error('Conversation not found');
-      }
+      if (!conversation) throw new Error('Conversation not found');
     } else {
-      // Get active conversation or create new one
       conversation = await ChatConversation.getActiveByUserId(userId);
-      if (!conversation) {
-        conversation = await ChatConversation.create(userId);
-      }
+      if (!conversation) conversation = await ChatConversation.create(userId);
     }
-    
-    // Recognize intent
-    const { intent, confidence } = recognizeIntent(message);
-    
-    // Get conversation context
-    const previousMessages = await ChatMessage.getByConversationId(conversation.id, 10);
-    const context = {
-      messageCount: previousMessages.length,
-      previousIntents: previousMessages.map(m => m.intent).filter(Boolean)
-    };
-    
-    // Generate response
-    const { response, suggestions, suggestedArticles } = generateResponse(intent, message, context);
-    
-    // Save user message
-    const userMessageRecord = await ChatMessage.create({
+
+    // ── Context: last 5 messages ─────────────────────────────────────────────
+    const previousMessages = await ChatMessage.getByConversationId(conversation.id, 5);
+    const context = analyzeContext(previousMessages);
+
+    // ── Recognise intent ─────────────────────────────────────────────────────
+    const { intent, confidence, isFrustrated } = recognizeIntent(message);
+
+    // ── Build response ───────────────────────────────────────────────────────
+    const { response, articleLinks, actionButtons, suggestions } =
+      await generateResponse(intent, confidence, message, { ...context, isFrustrated });
+
+    // ── Persist messages ─────────────────────────────────────────────────────
+    await ChatMessage.create({
       conversationId: conversation.id,
       sender: 'user',
       message,
       intent,
-      confidence
+      confidence,
     });
-    
-    // Save bot response
+
     const botMessageRecord = await ChatMessage.create({
       conversationId: conversation.id,
       sender: 'bot',
       message: response,
       intent: `response_${intent}`,
       confidence: 1.0,
-      suggestedArticles
+      suggestedArticles: articleLinks.map(a => a.id),
     });
-    
+
     return {
       response,
       suggestions: suggestions || [],
-      articleLinks: suggestedArticles || [],
+      articleLinks: articleLinks || [],
+      actionButtons: actionButtons || [],
       conversationId: conversation.id,
       messageId: botMessageRecord.id,
       intent,
-      confidence
+      confidence,
     };
-    
+
   } catch (error) {
     console.error('Error processing chat message:', error);
     throw error;
@@ -311,6 +526,4 @@ export default {
   processChatMessage,
   getConversationHistory,
   clearChatHistory,
-  recognizeIntent,
-  generateResponse
 };
