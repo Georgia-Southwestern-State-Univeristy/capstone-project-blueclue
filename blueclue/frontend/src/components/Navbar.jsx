@@ -1,10 +1,15 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { logout, isAuthenticated, getUser } from '../services/authService'
 import NotificationBell from './NotificationBell'
 import NotificationDropdown from './NotificationDropdown'
+import ChatWidgetButton from './ChatWidgetButton'
+import ChatWindow from './ChatWindow'
 import SettingsSidebar from './SettingsSidebar'
 import TicketDetailView from './TicketDetailView'
+import useChatStore from '../hooks/useChatStore'
+import { requestNotificationPermission } from '../utils/chatNotifications'
+import { sendChatMessage, submitChatFeedback, clearChatHistory } from '../services/chatService'
 import logo from '../assets/EditedBlueClueLogo.png'
 
 function Navbar() {
@@ -12,7 +17,13 @@ function Navbar() {
   const [notificationDropdownOpen, setNotificationDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [isTyping, setIsTyping] = useState(false)
   const [ticketDetailId, setTicketDetailId] = useState(null)
+  const [suggestions, setSuggestions] = useState(null)
+
+  // Persistent chat state
+  const chat = useChatStore()
+  const conversationIdRef = useRef(null)
   const [ticketDetailOpen, setTicketDetailOpen] = useState(false)
   const notificationDropdownRef = useRef(null)
   const notificationBellRef = useRef(null)
@@ -31,7 +42,63 @@ function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Send a message to the backend and display the bot reply
+  const handleChatSend = useCallback(async (text) => {
+    // Request notification permission on first interaction (user-initiated)
+    requestNotificationPermission()
+    chat.addMessage({ id: Date.now(), sender: 'user', text, timestamp: new Date() })
+    setIsTyping(true)
+    setSuggestions(null)
+
+    try {
+      const data = await sendChatMessage(text, conversationIdRef.current)
+      conversationIdRef.current = data.conversationId ?? conversationIdRef.current
+      setIsTyping(false)
+
+      // Map backend suggestions to {label, value} for QuickReplyButtons
+      if (data.suggestions?.length) {
+        setSuggestions(data.suggestions.map((s) => ({ label: s, value: s })))
+      }
+
+      chat.addMessage({
+        id: data.messageId ?? Date.now() + 1,
+        sender: 'bot',
+        text: data.response,
+        timestamp: new Date(),
+      })
+    } catch (err) {
+      setIsTyping(false)
+      chat.addMessage({
+        id: Date.now() + 1,
+        sender: 'bot',
+        text: 'Sorry, something went wrong. Please try again.',
+        timestamp: new Date(),
+      })
+      console.error('Chat error:', err)
+    }
+  }, [chat])
+
+  // Feedback handler — sends rating to backend
+  const handleChatFeedback = useCallback(async (messageId, rating) => {
+    try {
+      const helpful = rating === 'positive'
+      await submitChatFeedback(messageId, helpful)
+    } catch (err) {
+      console.error('Feedback error:', err)
+    }
+  }, [])
+
   const handleLogout = async () => {
+    try {
+      if (conversationIdRef.current) {
+        await clearChatHistory(conversationIdRef.current)
+      }
+    } catch {
+      // silently ignore — logout should always proceed
+    }
+    conversationIdRef.current = null
+    setSuggestions(null)
+    chat.clearChat()
     await logout()
     navigate('/login')
   }
@@ -111,6 +178,13 @@ function Navbar() {
                 <span className="text-gray-600">|</span>
                 <span className="text-gray-400 capitalize">{user?.role || 'User'}</span>
               </div>
+
+              {/* Chat Widget Button */}
+              <ChatWidgetButton
+                onClick={chat.toggleChat}
+                unreadCount={chat.unreadCount}
+                hasNewMessage={chat.hasNewMessage}
+              />
 
             {/* Notification Bell & Dropdown */}
               <div className="relative" ref={notificationDropdownRef}>
@@ -265,6 +339,18 @@ function Navbar() {
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         onLogout={handleLogout}
+      />
+
+      {/* Chat Window */}
+      <ChatWindow
+        isOpen={chat.isOpen}
+        messages={chat.messages}
+        onSend={handleChatSend}
+        onClose={chat.closeChat}
+        onMinimize={chat.closeChat}
+        onFeedback={handleChatFeedback}
+        isTyping={isTyping}
+        suggestions={suggestions || undefined}
       />
 
       {/* Ticket Detail View - opened from notification clicks */}
