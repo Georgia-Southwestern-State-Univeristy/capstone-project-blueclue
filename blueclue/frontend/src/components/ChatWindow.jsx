@@ -27,6 +27,7 @@ import {
  *  - onFeedback: (messageId, rating) => void
  *  - isTyping: boolean
  *  - suggestions: Array<{ label, value }> | undefined — quick-reply chips from the backend
+ *  - onActionButton: (buttonId) => void — called when an action button is clicked
  */
 function ChatWindow({
   isOpen,
@@ -37,6 +38,7 @@ function ChatWindow({
   onFeedback,
   isTyping = false,
   suggestions,
+  onActionButton,
 }) {
   const messagesEndRef = useRef(null);
   const prevMessageCount = useRef(messages.length);
@@ -127,6 +129,9 @@ function ChatWindow({
               text={msg.text}
               timestamp={msg.timestamp}
               onFeedback={onFeedback}
+              articleLinks={msg.articleLinks}
+              actionButtons={msg.actionButtons}
+              onActionButton={onActionButton}
             />
           </div>
         ))}

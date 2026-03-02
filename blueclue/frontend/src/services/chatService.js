@@ -169,3 +169,27 @@ export const endChatConversation = async (conversationId, wasHelpful = null) => 
   const json = await handleResponse(res, 'Failed to end conversation')
   return json.data
 }
+
+/**
+ * Create a support ticket pre-filled from the current chat conversation.
+ * POST /api/chat/create-ticket
+ *
+ * @param {number}  conversationId – ID of the conversation to pull context from
+ * @param {string}  [subject]      – Optional override subject
+ * @param {string}  [description]  – Optional override description
+ * @returns {Promise<{ticketId, ticketNumber, subject, status, message}>}
+ */
+export const createTicketFromChat = async (conversationId, subject = null, description = null) => {
+  const payload = { conversationId }
+  if (subject)      payload.subject      = subject
+  if (description)  payload.description  = description
+
+  const res = await fetchWithTimeout(`${API_BASE_URL}/chat/create-ticket`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(payload),
+  })
+
+  const json = await handleResponse(res, 'Failed to create ticket')
+  return json.data
+}
