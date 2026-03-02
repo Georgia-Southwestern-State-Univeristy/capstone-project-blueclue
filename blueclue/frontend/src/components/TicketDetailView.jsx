@@ -9,6 +9,7 @@ import AddCollaboratorModal from './AddCollaboratorModal'
 import RingForHelpModal from './RingForHelpModal'
 import RequestUpdateModal from './RequestUpdateModal'
 import { getCollaborators, addCollaborator, removeCollaborator } from '../services/collaboratorService'
+import { getUpdateRequests, handleExtensionRequest } from '../services/updateRequestService'
 
 /**
  * TicketDetailView
@@ -69,6 +70,8 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
 
   // ─── Request Update state ────────────────────────────────────
   const [showRequestUpdateModal, setShowRequestUpdateModal] = useState(false)
+  const [updateRequests, setUpdateRequests] = useState([])
+  const [updateRequestsLoading, setUpdateRequestsLoading] = useState(false)
 
   const modalRef = useRef(null)
   const assignRef = useRef(null)
@@ -155,8 +158,12 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
       if (canSeeInternals) {
         fetchCollaborators()
       }
+      if (isManagement) {
+        fetchUpdateRequests()
+      }
     }
-  }, [isOpen, ticketId, fetchTicket])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, ticketId])
 
   // ─── Body scroll lock ────────────────────────────────────────────
   useEffect(() => {
@@ -472,6 +479,40 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
       setCollaboratorsLoading(false)
     }
   }, [ticketId, canSeeInternals])
+
+  // ─── Fetch update requests ───────────────────────────────────────
+  const fetchUpdateRequests = useCallback(async () => {
+    if (!ticketId || !isManagement) return
+    
+    try {
+      setUpdateRequestsLoading(true)
+      const response = await getUpdateRequests({ role: 'all' })
+      // Filter requests for this specific ticket
+      const allRequests = response.data?.requests || []
+      const ticketRequests = allRequests.filter(req => req.ticket_id === parseInt(ticketId))
+      console.log('Fetched update requests for ticket', ticketId, ':', ticketRequests)
+      console.log('Extension requests pending:', ticketRequests.filter(req => req.extension_requested && req.extension_approved === null))
+      setUpdateRequests(ticketRequests)
+    } catch (err) {
+      console.error('Failed to fetch update requests:', err)
+    } finally {
+      setUpdateRequestsLoading(false)
+    }
+  }, [ticketId, isManagement])
+
+  // ─── Handle extension approval/denial ─────────────────────────────
+  const handleExtensionDecision = async (requestId, approved) => {
+    try {
+      await handleExtensionRequest(requestId, approved)
+      await fetchUpdateRequests() // Refresh the list
+      await fetchTicket(true) // Refresh ticket data
+      setStatusSuccess(`Extension ${approved ? 'approved' : 'denied'} successfully`)
+      setTimeout(() => setStatusSuccess(null), 3000)
+    } catch (err) {
+      setStatusError(err.message || 'Failed to process extension request')
+      setTimeout(() => setStatusError(null), 3000)
+    }
+  }
 
   // ─── Handle add collaborator ─────────────────────────────────────
   const handleAddCollaborator = async (userId, role, note) => {
@@ -1539,6 +1580,65 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                       </div>
                     </div>
 
+                    {/* Extension Requests — management only */}
+                    {isManagement && updateRequests.length > 0 && (
+                      <div className="space-y-4">
+                        {updateRequests
+                          .filter(req => req.extension_requested === true && req.extension_approved !== true)
+                          .map(request => (
+                            <div key={request.id} className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-4">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <svg className="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <h4 className="text-amber-400 font-medium">Extension Request Pending</h4>
+                                  </div>
+                                  <div className="space-y-1 text-sm text-gray-300">
+                                    <p>
+                                      <span className="text-gray-500">Technician:</span>{' '}
+                                      {request.assignee_first_name} {request.assignee_last_name}
+                                    </p>
+                                    <p>
+                                      <span className="text-gray-500">Current Deadline:</span>{' '}
+                                      {new Date(request.deadline).toLocaleString()}
+                                    </p>
+                                    <p>
+                                      <span className="text-gray-500">Requested Deadline:</span>{' '}
+                                      <span className="text-amber-400 font-medium">
+                                        {new Date(request.extension_deadline).toLocaleString()}
+                                      </span>
+                                    </p>
+                                    {request.reason && (
+                                      <p className="mt-2">
+                                        <span className="text-gray-500">Reason:</span>{' '}
+                                        <span className="text-gray-200">{request.reason}</span>
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleExtensionDecision(request.id, true)}
+                                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    onClick={() => handleExtensionDecision(request.id, false)}
+                                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors"
+                                  >
+                                    Deny
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        }
+                      </div>
+                    )}
+
                     {/* Description */}
                     <div>
                       <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
@@ -1669,7 +1769,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                       </div>
                     ) : null}
 
-                    {/* AI Classification Details — management only */}
+                    {/* AI Classification Details - management only */}
                     {canSeeAudit && ticket.ai_classified && (
                       <div>
                         <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">AI Classification</label>
