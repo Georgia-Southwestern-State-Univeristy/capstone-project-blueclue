@@ -63,10 +63,19 @@ const KnowledgeBaseManagement = () => {
             if (filterPublished !== '') params.published = filterPublished;
             if (searchTerm) params.search = searchTerm;
 
+            const token = localStorage.getItem('blueclue_token');
+            console.log('[KB] token present:', !!token);
+            console.log('[KB] fetching articles with params:', params);
+
             const response = await axios.get('/api/knowledge-base/articles', { params, ...getAuthHeaders() });
-            setArticles(response.data.articles || []);
+            console.log('[KB] response status:', response.status);
+            console.log('[KB] response data:', response.data);
+            const fetched = response.data.articles || [];
+            console.log('[KB] articles count:', fetched.length);
+            setArticles(fetched);
         } catch (error) {
-            console.error('Error fetching articles:', error);
+            console.error('[KB] Error fetching articles:', error);
+            console.error('[KB] response:', error.response?.status, error.response?.data);
             const status = error.response?.status;
             const msg = error.response?.data?.message || error.response?.data?.error || error.message;
             setFetchError(`Failed to load articles (${status || 'network error'}): ${msg}`);
