@@ -22,7 +22,10 @@
  *   LLM_TIMEOUT_MS      HTTP timeout for each RAG request (default: 15 000)
  */
 
-const AI_SERVICE_URL   = process.env.AI_SERVICE_URL   || 'http://localhost:5000';
+const _rawAiServiceUrl = process.env.AI_SERVICE_URL || 'http://localhost:5000';
+const AI_SERVICE_URL   = /^https?:\/\//i.test(_rawAiServiceUrl)
+  ? _rawAiServiceUrl
+  : `http://${_rawAiServiceUrl}`;
 const LLM_ENABLED      = (process.env.LLM_ENABLED     || 'true') === 'true';
 const RATE_LIMIT       = parseInt(process.env.LLM_RATE_LIMIT    || '10',  10);
 const DAILY_BUDGET_USD = parseFloat(process.env.LLM_DAILY_BUDGET || '1.00');
