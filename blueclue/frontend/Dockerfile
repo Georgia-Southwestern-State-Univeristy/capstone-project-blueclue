@@ -21,7 +21,11 @@ FROM nginx:stable-alpine
 # Copy built assets
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy nginx config (simple SPA server — API calls go direct to backend via VITE_API_URL)
+# Copy nginx configs:
+# - nginx.conf overrides the main config to cap worker_processes at 1
+#   (prevents Railway from spawning 70+ workers based on host CPU count)
+# - nginx.conf.template provides the server block (SPA fallback, gzip, etc.)
+COPY nginx.conf /etc/nginx/nginx.conf
 COPY nginx.conf.template /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
