@@ -136,7 +136,7 @@ const RelatedArticles = ({ articleId, limit = 5 }) => {
                             </div>
 
                             {/* Tags */}
-                            {article.tags && article.tags.length > 0 && (
+                            {article.tags && Array.isArray(article.tags) && article.tags.length > 0 && (
                                 <div className="flex flex-wrap gap-1 mt-3">
                                     {article.tags.slice(0, 3).map((tag, idx) => (
                                         <span
