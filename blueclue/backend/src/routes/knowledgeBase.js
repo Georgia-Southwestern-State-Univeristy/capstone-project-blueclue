@@ -11,42 +11,42 @@ const router = express.Router();
 // Get all articles (management view - requires authentication)
 router.get('/articles', 
     authenticateToken, 
-    requireRole(['admin', 'technician', 'management']),
+    requireRole(['admin', 'technician', 'senior_technician', 'management']),
     knowledgeBaseController.getAllArticles
 );
 
 // Get single article by ID
 router.get('/articles/:id', 
     authenticateToken,
-    requireRole(['admin', 'technician', 'management']),
+    requireRole(['admin', 'technician', 'senior_technician', 'management']),
     knowledgeBaseController.getArticleById
 );
 
 // Create new article
 router.post('/articles', 
     authenticateToken,
-    requireRole(['admin', 'technician', 'management']),
+    requireRole(['admin', 'technician', 'senior_technician', 'management']),
     knowledgeBaseController.createArticle
 );
 
 // Update article
 router.put('/articles/:id', 
     authenticateToken,
-    requireRole(['admin', 'technician', 'management']),
+    requireRole(['admin', 'technician', 'senior_technician', 'management']),
     knowledgeBaseController.updateArticle
 );
 
 // Delete article (soft delete)
 router.delete('/articles/:id', 
     authenticateToken,
-    requireRole(['admin', 'technician', 'management']),
+    requireRole(['admin', 'technician', 'senior_technician', 'management']),
     knowledgeBaseController.deleteArticle
 );
 
 // Toggle publish status
 router.patch('/articles/:id/publish', 
     authenticateToken,
-    requireRole(['admin', 'technician', 'management']),
+    requireRole(['admin', 'technician', 'senior_technician', 'management']),
     knowledgeBaseController.togglePublishArticle
 );
 
@@ -67,7 +67,7 @@ router.post('/articles/:id/feedback',
 // Get all categories
 router.get('/categories', 
     authenticateToken,
-    requireRole(['admin', 'technician', 'management']),
+    requireRole(['admin', 'technician', 'senior_technician', 'management']),
     knowledgeBaseController.getCategories
 );
 
@@ -99,14 +99,14 @@ router.delete('/categories/:id',
 // Get all tags with usage counts
 router.get('/tags', 
     authenticateToken,
-    requireRole(['admin', 'technician', 'management']),
+    requireRole(['admin', 'technician', 'senior_technician', 'management']),
     knowledgeBaseController.getAllTags
 );
 
 // Bulk update tags for multiple articles
 router.post('/tags/bulk-update', 
     authenticateToken,
-    requireRole(['admin', 'technician', 'management']),
+    requireRole(['admin', 'technician', 'senior_technician', 'management']),
     knowledgeBaseController.bulkUpdateTags
 );
 
@@ -117,21 +117,21 @@ router.post('/tags/bulk-update',
 // Get version history for an article
 router.get('/articles/:id/versions', 
     authenticateToken,
-    requireRole(['admin', 'technician', 'management']),
+    requireRole(['admin', 'technician', 'senior_technician', 'management']),
     knowledgeBaseController.getArticleVersions
 );
 
 // Get specific version details
 router.get('/articles/:id/versions/:versionNumber', 
     authenticateToken,
-    requireRole(['admin', 'technician', 'management']),
+    requireRole(['admin', 'technician', 'senior_technician', 'management']),
     knowledgeBaseController.getVersionById
 );
 
 // Restore article to previous version
 router.post('/articles/:id/versions/:versionNumber/restore', 
     authenticateToken,
-    requireRole(['admin', 'technician', 'management']),
+    requireRole(['admin', 'technician', 'senior_technician', 'management']),
     knowledgeBaseController.restoreVersion
 );
 
@@ -142,7 +142,7 @@ router.post('/articles/:id/versions/:versionNumber/restore',
 // Get analytics dashboard data
 router.get('/analytics', 
     authenticateToken,
-    requireRole(['admin', 'technician', 'management']),
+    requireRole(['admin', 'technician', 'senior_technician', 'management']),
     knowledgeBaseController.getAnalytics
 );
 
