@@ -80,7 +80,7 @@ const VersionHistory = ({ articleId, onClose, onRestore }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center backdrop-blur-sm z-[60] p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center backdrop-blur-sm z-[60] p-4">
             <div className="bg-gray-900 rounded-lg border border-gray-700 w-full max-w-5xl max-h-[90vh] flex flex-col">
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b border-gray-800">
@@ -200,7 +200,7 @@ const VersionHistory = ({ articleId, onClose, onRestore }) => {
                                             </span>
                                         </div>
                                     </div>
-                                    {viewingVersion.tags && viewingVersion.tags.length > 0 && (
+                                    {viewingVersion.tags && Array.isArray(viewingVersion.tags) && viewingVersion.tags.length > 0 && (
                                         <div className="mt-3">
                                             <span className="text-sm text-gray-400">Tags:</span>
                                             <div className="flex flex-wrap gap-1 mt-1">
