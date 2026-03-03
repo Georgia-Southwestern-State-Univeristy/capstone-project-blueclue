@@ -107,7 +107,7 @@ const ArticleViewer = ({ article, onClose }) => {
                     </div>
 
                     {/* Tags */}
-                    {article.tags && article.tags.length > 0 && (
+                    {article.tags && Array.isArray(article.tags) && article.tags.length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-3">
                             <span className="text-sm text-gray-400">Tags:</span>
                             {article.tags.map((tag, idx) => (
