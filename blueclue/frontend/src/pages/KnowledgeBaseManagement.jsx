@@ -269,7 +269,15 @@ const KnowledgeBaseManagement = () => {
                         </div>
 
                         {/* Article List */}
-                        {loading ? (
+                        {fetchError ? (
+                            <div className="bg-gray-900 rounded-lg border border-red-700 p-8 text-center">
+                                <p className="text-red-400 font-medium mb-2">Error loading articles</p>
+                                <p className="text-gray-400 text-sm">{fetchError}</p>
+                                <button onClick={fetchArticles} className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+                                    Retry
+                                </button>
+                            </div>
+                        ) : loading ? (
                             <div className="bg-gray-900 rounded-lg border border-gray-700 p-12 text-center">
                                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-700 border-t-blue-500"></div>
                                 <p className="mt-4 text-gray-400">Loading articles...</p>

@@ -14,18 +14,22 @@ const getAuthHeaders = () => {
 const KBAnalytics = () => {
     const [analytics, setAnalytics] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState(null);
 
     useEffect(() => {
         fetchAnalytics();
     }, []);
 
     const fetchAnalytics = async () => {
+        setFetchError(null);
         try {
             const response = await axios.get('/api/knowledge-base/analytics', getAuthHeaders());
             setAnalytics(response.data);
         } catch (error) {
             console.error('Error fetching analytics:', error);
-            alert('Failed to fetch analytics');
+            const status = error.response?.status;
+            const msg = error.response?.data?.message || error.response?.data?.error || error.message;
+            setFetchError(`Failed to load analytics (${status || 'network error'}): ${msg}`);
         } finally {
             setLoading(false);
         }
@@ -40,6 +44,18 @@ const KBAnalytics = () => {
         );
     }
 
+    if (fetchError) {
+        return (
+            <div className="bg-gray-900 rounded-lg border border-red-700 p-8 text-center">
+                <p className="text-red-400 font-medium mb-2">Error loading analytics</p>
+                <p className="text-gray-400 text-sm">{fetchError}</p>
+                <button onClick={fetchAnalytics} className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+                    Retry
+                </button>
+            </div>
+        );
+    }
+
     if (!analytics) {
         return (
             <div className="bg-gray-900 rounded-lg border border-gray-700 p-12 text-center text-gray-400">
@@ -48,7 +64,7 @@ const KBAnalytics = () => {
         );
     }
 
-    const { overview, most_viewed, least_viewed, by_category } = analytics;
+    const { overview = {}, most_viewed, least_viewed, by_category } = analytics;
 
     return (
         <div className="space-y-6">
