@@ -22,8 +22,35 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+import math
+
 import psycopg2
 import psycopg2.extras
+
+try:
+    import numpy as _np
+    _USE_NUMPY = True
+except ImportError:
+    _USE_NUMPY = False
+
+
+def _cosine_similarity(a: List[float], b: List[float]) -> float:
+    """Compute cosine similarity between two vectors (pure Python or numpy)."""
+    if _USE_NUMPY:
+        va = _np.array(a, dtype=_np.float32)
+        vb = _np.array(b, dtype=_np.float32)
+        norm_a = _np.linalg.norm(va)
+        norm_b = _np.linalg.norm(vb)
+        if norm_a == 0 or norm_b == 0:
+            return 0.0
+        return float(_np.dot(va, vb) / (norm_a * norm_b))
+    # Pure Python fallback
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(x * x for x in b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
 
 logger = logging.getLogger("blueclue.rag")
 
@@ -122,7 +149,7 @@ def get_article_embedding_status(conn) -> Dict[str, int]:
 
 def upsert_embedding(conn, article_id: int, embedding: List[float],
                      embedding_text: str, model: str) -> None:
-    """Insert or update an article's embedding vector."""
+    """Insert or update an article's embedding vector (stored as FLOAT[])."""
     dim = len(embedding)
     col = "embedding" if dim == 1536 else "embedding_384"
     with conn.cursor() as cur:
@@ -130,14 +157,14 @@ def upsert_embedding(conn, article_id: int, embedding: List[float],
             f"""
             INSERT INTO article_embeddings
               (article_id, {col}, embedding_model, embedding_text)
-            VALUES (%s, %s::vector, %s, %s)
+            VALUES (%s, %s, %s, %s)
             ON CONFLICT (article_id) DO UPDATE SET
-              {col}          = EXCLUDED.{col},
+              {col}           = EXCLUDED.{col},
               embedding_model = EXCLUDED.embedding_model,
               embedding_text  = EXCLUDED.embedding_text,
               updated_at      = NOW()
             """,
-            (article_id, str(embedding), model, embedding_text),
+            (article_id, embedding, model, embedding_text),
         )
     conn.commit()
 
@@ -150,6 +177,7 @@ def semantic_search(
 ) -> List[RetrievedArticle]:
     """
     Cosine similarity search over article_embeddings.
+    Embeddings are stored as FLOAT[] — similarity is computed in Python.
     Returns up to top_k articles above min_similarity threshold.
     """
     dim = len(query_embedding)
@@ -165,20 +193,29 @@ def semantic_search(
               ka.category,
               ka.content,
               COALESCE(ka.excerpt, LEFT(ka.content, 300)) AS excerpt,
-              1 - (ae.{col} <=> %s::vector)              AS similarity
+              ae.{col} AS embedding
             FROM   article_embeddings ae
             JOIN   knowledge_articles ka ON ka.id = ae.article_id
             WHERE  ka.deleted_at  IS NULL
               AND  ka.is_published = TRUE
               AND  ka.is_public    = TRUE
               AND  ae.{col} IS NOT NULL
-              AND  1 - (ae.{col} <=> %s::vector) >= %s
-            ORDER  BY similarity DESC
-            LIMIT  %s
             """,
-            (str(query_embedding), str(query_embedding), min_similarity, top_k),
         )
         rows = cur.fetchall()
+
+    # Compute cosine similarity in Python and filter
+    scored: List[Tuple[float, Any]] = []
+    for r in rows:
+        emb = r["embedding"]
+        if emb and len(emb) == dim:
+            sim = _cosine_similarity(query_embedding, emb)
+            if sim >= min_similarity:
+                scored.append((sim, r))
+
+    # Sort descending, take top_k
+    scored.sort(key=lambda x: x[0], reverse=True)
+    scored = scored[:top_k]
 
     return [
         RetrievedArticle(
@@ -188,9 +225,9 @@ def semantic_search(
             category=r["category"],
             content=r["content"] or "",
             excerpt=r["excerpt"] or "",
-            similarity=float(r["similarity"]),
+            similarity=round(sim, 4),
         )
-        for r in rows
+        for sim, r in scored
     ]
 
 
