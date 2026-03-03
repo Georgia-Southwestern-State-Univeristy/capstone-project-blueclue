@@ -28,6 +28,7 @@ const KnowledgeBaseManagement = () => {
     const [isViewerOpen, setIsViewerOpen] = useState(false);
     const [viewingArticle, setViewingArticle] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [fetchError, setFetchError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterCategory, setFilterCategory] = useState('');
     const [filterPublished, setFilterPublished] = useState('');
@@ -55,6 +56,7 @@ const KnowledgeBaseManagement = () => {
     // Fetch articles
     const fetchArticles = useCallback(async () => {
         setLoading(true);
+        setFetchError(null);
         try {
             const params = {};
             if (filterCategory) params.category = filterCategory;
@@ -65,7 +67,9 @@ const KnowledgeBaseManagement = () => {
             setArticles(response.data.articles || []);
         } catch (error) {
             console.error('Error fetching articles:', error);
-            alert('Failed to fetch articles');
+            const status = error.response?.status;
+            const msg = error.response?.data?.message || error.response?.data?.error || error.message;
+            setFetchError(`Failed to load articles (${status || 'network error'}): ${msg}`);
         } finally {
             setLoading(false);
         }
