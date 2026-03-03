@@ -30,6 +30,7 @@ import knowledgeBaseRoutes from './routes/knowledgeBase.js';
 import templateRoutes from './routes/templates.js';
 import themeRoutes from './routes/themes.js';
 import chatRoutes from './routes/chat.js';
+import mlAdminRoutes from './routes/mlAdmin.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 import { startUpdateRequestReminderJob } from './jobs/updateRequestReminders.js';
 
@@ -88,6 +89,7 @@ app.use('/api/knowledge-base', knowledgeBaseRoutes); // Knowledge base managemen
 app.use('/api/templates', templateRoutes); // Ticket templates
 app.use('/api/themes', themeRoutes); // User theme preferences
 app.use('/api/chat', chatRoutes); // Chat bot routes
+app.use('/api/ml-admin', mlAdminRoutes); // ML Admin – monitoring, explainability, versioning
 app.use('/api/dev', devRoutes);
 app.use('/api/admin', adminRoutes);
 

@@ -23,16 +23,16 @@ import time
 import json
 import hashlib
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from contextlib import asynccontextmanager
 from functools import partial
 
 import numpy as np
 import joblib
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -101,6 +101,69 @@ class TimeResponse(BaseModel):
     estimated_hours: float
     confidence_range: Dict[str, float]
     model_version: str
+
+
+# ---- New schemas for monitoring / explainability / feedback -------------- #
+
+
+class ExplainRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=10000)
+    subject: Optional[str] = None
+    model_type: str = Field("category", description="'category' | 'priority'")
+    prediction: Optional[str] = None
+    confidence: Optional[float] = 0.0
+
+
+class ExplainResponse(BaseModel):
+    prediction: str
+    confidence: float
+    confidence_pct: float
+    low_confidence: bool
+    top_features: List[Dict[str, Any]]
+    summary: str
+    method: str
+
+
+class FeedbackRequest(BaseModel):
+    ticket_id: int
+    classification_id: Optional[int] = None
+    ai_category: Optional[str] = None
+    ai_priority: Optional[str] = None
+    ai_confidence: Optional[float] = None
+    user_category: Optional[str] = None
+    user_priority: Optional[str] = None
+    category_overridden: bool = False
+    priority_overridden: bool = False
+    override_reason: Optional[str] = None
+    user_id: Optional[int] = None
+
+
+class FeedbackResponse(BaseModel):
+    success: bool
+    message: str
+    feedback_id: Optional[int] = None
+
+
+class DriftRunRequest(BaseModel):
+    model_type: str = Field("category", description="'category' | 'priority'")
+    window_days: int = Field(30, ge=1, le=365)
+
+
+class ModelDeployRequest(BaseModel):
+    model_type: str
+    version: str
+
+
+class ModelRollbackRequest(BaseModel):
+    model_type: str
+    target_version: Optional[str] = None
+
+
+class RetrainingRequest(BaseModel):
+    model_types: List[str] = Field(default_factory=lambda: ["category", "priority", "time"])
+    triggered_by: str = "manual"
+    auto_deploy: bool = False
+    improvement_threshold: float = 0.02
 
 
 class CombinedResponse(BaseModel):
@@ -588,8 +651,163 @@ metrics = MetricsCollector()
 
 
 # --------------------------------------------------------------------------- #
-# FastAPI application
+# Explainability engines (lazy-loaded after models are ready)
 # --------------------------------------------------------------------------- #
+
+class ExplainabilityManager:
+    """Wraps one ExplainabilityEngine per model type."""
+
+    def __init__(self):
+        self._engines: Dict[str, Any] = {}
+
+    def init(self, model_manager: "ModelManager"):
+        try:
+            from src.explainability import ExplainabilityEngine
+            if model_manager._loaded.get("category"):
+                self._engines["category"] = ExplainabilityEngine(
+                    model_manager.category_model,
+                    model_manager.category_extractor,
+                    model_type="category",
+                    confidence_threshold=CONFIDENCE_THRESHOLD,
+                )
+                logger.info("Category explainability engine ready")
+            if model_manager._loaded.get("priority"):
+                self._engines["priority"] = ExplainabilityEngine(
+                    model_manager.priority_model,
+                    model_manager.priority_extractor,
+                    model_type="priority",
+                    confidence_threshold=CONFIDENCE_THRESHOLD,
+                )
+                logger.info("Priority explainability engine ready")
+        except ImportError as exc:
+            logger.warning("Explainability engine unavailable: %s", exc)
+        except Exception as exc:
+            logger.error("Failed to init explainability engines: %s", exc, exc_info=True)
+
+    def explain(self, model_type: str, text: str, subject: str = "",
+                prediction: str = "", confidence: float = 0.0) -> Optional[Dict]:
+        engine = self._engines.get(model_type)
+        if engine is None:
+            return None
+        result = engine.explain(
+            text=text, subject=subject,
+            prediction=prediction, confidence=confidence,
+        )
+        return result.to_dict()
+
+    def is_ready(self, model_type: str) -> bool:
+        return model_type in self._engines
+
+
+explainer_mgr = ExplainabilityManager()
+
+
+# --------------------------------------------------------------------------- #
+# Drift detectors
+# --------------------------------------------------------------------------- #
+
+class DriftManager:
+    """Manages DriftDetector instances per model type."""
+
+    def __init__(self):
+        self._detectors: Dict[str, Any] = {}
+        self._last_reports: Dict[str, Any] = {}
+
+    def init(self, model_manager: "ModelManager"):
+        try:
+            from src.drift_detector import DriftDetector, build_baseline_from_model_card
+            for mt, card in [
+                ("category", model_manager.category_card),
+                ("priority", model_manager.priority_card),
+            ]:
+                if card:
+                    dist = build_baseline_from_model_card(card, "category_distribution")
+                    if not dist:
+                        dist = build_baseline_from_model_card(card, "priority_distribution")
+                    if dist:
+                        self._detectors[mt] = DriftDetector(
+                            baseline_distribution=dist,
+                            model_type=mt,
+                        )
+                        logger.info("Drift detector ready for %s", mt)
+        except Exception as exc:
+            logger.warning("Drift detector init failed: %s", exc)
+
+    def run_report(self, model_type: str, window_days: int = 30) -> Optional[Dict]:
+        detector = self._detectors.get(model_type)
+        if detector is None:
+            return None
+
+        # Sample from in-memory metrics distributions
+        if model_type == "category":
+            dist = metrics.category_distribution
+        else:
+            dist = metrics.priority_distribution
+
+        live_labels = []
+        for label, count in dist.items():
+            live_labels.extend([label] * count)
+
+        if not live_labels:
+            return {"error": "No live predictions available yet"}
+
+        from datetime import datetime, timezone, timedelta
+        period_end = datetime.now(tz=timezone.utc)
+        period_start = period_end - timedelta(days=window_days)
+
+        report = detector.run(
+            live_predictions=live_labels,
+            confidence_scores=metrics.confidence_scores[-1000:] if metrics.confidence_scores else None,
+            period_start=period_start,
+            period_end=period_end,
+        )
+        self._last_reports[model_type] = report.to_dict()
+        return report.to_dict()
+
+    def get_last_report(self, model_type: str) -> Optional[Dict]:
+        return self._last_reports.get(model_type)
+
+
+drift_mgr = DriftManager()
+
+
+# --------------------------------------------------------------------------- #
+# Model registry
+# --------------------------------------------------------------------------- #
+
+registry = None  # initialised in lifespan
+
+
+# --------------------------------------------------------------------------- #
+# Local feedback store (JSONL file – read by the Node.js backend)
+# --------------------------------------------------------------------------- #
+
+FEEDBACK_LOG_PATH = os.path.join(BASE_DIR, "data", "feedback_log.jsonl")
+_feedback_lock = asyncio.Lock()
+
+async def _append_feedback(record: Dict):
+    os.makedirs(os.path.dirname(FEEDBACK_LOG_PATH), exist_ok=True)
+    async with _feedback_lock:
+        with open(FEEDBACK_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, default=str) + "\n")
+
+
+# --------------------------------------------------------------------------- #
+# Rolling accuracy store (persisted to disk for dashboard)
+# --------------------------------------------------------------------------- #
+
+ROLLING_ACCURACY_PATH = os.path.join(BASE_DIR, "data", "rolling_accuracy.json")
+
+def _load_rolling_accuracy() -> Dict:
+    if os.path.exists(ROLLING_ACCURACY_PATH):
+        try:
+            with open(ROLLING_ACCURACY_PATH) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"daily": [], "weekly": []}
+
+_rolling_accuracy: Dict = {}  # loaded in lifespan
 
 
 # Sample texts used to warm the prediction cache at startup so the first
@@ -611,7 +829,24 @@ _WARMUP_TEXTS = [
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load models at startup, warm cache, clean up on shutdown."""
+    global registry, _rolling_accuracy
     models.load_all()
+
+    # Initialise explainability + drift detection
+    explainer_mgr.init(models)
+    drift_mgr.init(models)
+
+    # Initialise model registry
+    try:
+        from src.model_registry import ModelRegistry
+        registry = ModelRegistry(base_dir=BASE_DIR)
+        logger.info("Model registry loaded (%d total versions)",
+                    len(registry.list_versions()))
+    except Exception as exc:
+        logger.warning("Model registry unavailable: %s", exc)
+
+    # Load rolling accuracy data
+    _rolling_accuracy = _load_rolling_accuracy()
 
     # Warm the cache with sample texts so cold-start latency doesn't affect p95
     if any(models._loaded.values()):
@@ -974,19 +1209,379 @@ async def root():
             "health": "GET /health",
             "models_info": "GET /models/info",
             "metrics": "GET /metrics",
+            "metrics_rolling": "GET /metrics/rolling",
             "classify_category": "POST /classify/category",
             "classify_priority": "POST /classify/priority",
             "predict_time": "POST /predict/resolution_time",
             "classify_combined": "POST /classify",
             "classify_legacy": "POST /classify/legacy",
+            "explain": "POST /explain",
+            "feedback": "POST /feedback",
+            "feedback_log": "GET /feedback/log",
+            "drift_run": "POST /drift/run",
+            "drift_latest": "GET /drift/latest",
+            "model_versions": "GET /models/versions",
+            "model_deploy": "POST /models/deploy",
+            "model_rollback": "POST /models/rollback",
+            "retrain": "POST /retrain",
         },
         "documentation": "/docs",
     }
 
 
-# --------------------------------------------------------------------------- #
-# Entry point
-# --------------------------------------------------------------------------- #
+# ---- Explainability ------------------------------------------------------ #
+
+
+@app.post("/explain", response_model=ExplainResponse)
+async def explain_prediction(req: ExplainRequest):
+    """
+    Return a SHAP-based explanation for a single prediction.
+    Answers: 'Why did the AI choose this category / priority?'
+    """
+    if not explainer_mgr.is_ready(req.model_type):
+        # Fall back: auto-classify first then explain
+        if req.model_type == "category" and models._loaded.get("category"):
+            cr = await asyncio.to_thread(
+                models.predict_category, text=req.text, subject=req.subject
+            )
+            result = explainer_mgr.explain(
+                "category", req.text, req.subject or "",
+                prediction=cr["category"], confidence=cr["confidence"]
+            )
+            if result:
+                return ExplainResponse(**result)
+        raise HTTPException(
+            status_code=503,
+            detail=f"Explainability engine for '{req.model_type}' is not available"
+        )
+
+    prediction = req.prediction or ""
+    confidence = req.confidence or 0.0
+
+    # If no prediction provided, classify first
+    if not prediction:
+        try:
+            if req.model_type == "category" and models._loaded.get("category"):
+                cr = await asyncio.to_thread(
+                    models.predict_category, text=req.text, subject=req.subject
+                )
+                prediction = cr["category"]
+                confidence = cr["confidence"]
+            elif req.model_type == "priority" and models._loaded.get("priority"):
+                pr = await asyncio.to_thread(
+                    models.predict_priority, text=req.text, subject=req.subject
+                )
+                prediction = pr["priority"]
+                confidence = pr["confidence"]
+        except Exception as exc:
+            logger.warning("Pre-classification for explain failed: %s", exc)
+
+    try:
+        result = await asyncio.to_thread(
+            explainer_mgr.explain,
+            req.model_type, req.text, req.subject or "",
+            prediction, confidence
+        )
+        if result is None:
+            raise HTTPException(status_code=503, detail="Explainability engine unavailable")
+        return ExplainResponse(**result)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Explain endpoint error: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ---- Feedback collection ------------------------------------------------- #
+
+
+@app.post("/feedback", response_model=FeedbackResponse)
+async def record_feedback(req: FeedbackRequest, background_tasks: BackgroundTasks):
+    """
+    Record a user's accept/override decision on an AI prediction.
+    The record is appended to a local JSONL log so the Node.js backend
+    can periodically ingest it into PostgreSQL.
+    """
+    record = {
+        "id": int(time.time() * 1000),
+        "ticket_id": req.ticket_id,
+        "classification_id": req.classification_id,
+        "ai_category": req.ai_category,
+        "ai_priority": req.ai_priority,
+        "ai_confidence": req.ai_confidence,
+        "user_category": req.user_category,
+        "user_priority": req.user_priority,
+        "category_overridden": req.category_overridden,
+        "priority_overridden": req.priority_overridden,
+        "override_reason": req.override_reason,
+        "user_id": req.user_id,
+        "created_at": datetime.now(tz=timezone.utc).isoformat(),
+    }
+    background_tasks.add_task(_append_feedback, record)
+    return FeedbackResponse(
+        success=True,
+        message="Feedback recorded",
+        feedback_id=record["id"]
+    )
+
+
+@app.get("/feedback/log")
+async def get_feedback_log(limit: int = 100):
+    """Return recent feedback entries from the local JSONL log."""
+    if not os.path.exists(FEEDBACK_LOG_PATH):
+        return {"entries": [], "total": 0}
+
+    entries = []
+    try:
+        with open(FEEDBACK_LOG_PATH, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    entries.append(json.loads(line))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    entries = entries[-limit:]
+    override_count = sum(1 for e in entries if e.get("category_overridden") or e.get("priority_overridden"))
+    override_rate = round(override_count / max(len(entries), 1) * 100, 2)
+
+    return {
+        "entries": list(reversed(entries)),
+        "total": len(entries),
+        "override_count": override_count,
+        "override_rate_pct": override_rate,
+    }
+
+
+# ---- Drift detection ----------------------------------------------------- #
+
+
+@app.post("/drift/run")
+async def run_drift_detection(req: DriftRunRequest):
+    """
+    Run drift detection on the last N days of live predictions.
+    Returns a full DriftReport.
+    """
+    report = await asyncio.to_thread(
+        drift_mgr.run_report, req.model_type, req.window_days
+    )
+    if report is None:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Drift detector for '{req.model_type}' is not available"
+        )
+    return report
+
+
+@app.get("/drift/latest")
+async def get_latest_drift_report(model_type: str = "category"):
+    """Return the most recently computed drift report for a model type."""
+    report = drift_mgr.get_last_report(model_type)
+    if report is None:
+        return {
+            "message": f"No drift report yet for '{model_type}'. "
+                       f"Call POST /drift/run to generate one."
+        }
+    return report
+
+
+# ---- Model version management ------------------------------------------- #
+
+
+@app.get("/models/versions")
+async def list_model_versions(model_type: Optional[str] = None):
+    """List all registered model versions."""
+    if registry is None:
+        raise HTTPException(status_code=503, detail="Model registry not available")
+    summary = registry.get_summary()
+    if model_type:
+        return summary.get(model_type, {"error": f"No versions found for '{model_type}'"})
+    return summary
+
+
+@app.get("/models/registry/history")
+async def get_registry_history(limit: int = 20):
+    """Return deployment / rollback history."""
+    if registry is None:
+        raise HTTPException(status_code=503, detail="Model registry not available")
+    return {"history": registry.get_history(limit=limit)}
+
+
+@app.post("/models/deploy")
+async def deploy_model(req: ModelDeployRequest):
+    """Deploy a registered model version as the active model."""
+    if registry is None:
+        raise HTTPException(status_code=503, detail="Model registry not available")
+    success = await asyncio.to_thread(registry.deploy, req.model_type, req.version)
+    if not success:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Version '{req.version}' of '{req.model_type}' not found in registry"
+        )
+    # Reload the deployed model
+    if req.model_type == "category":
+        await asyncio.to_thread(models.load_category_model)
+        explainer_mgr.init(models)
+    elif req.model_type == "priority":
+        await asyncio.to_thread(models.load_priority_model)
+        explainer_mgr.init(models)
+    elif req.model_type == "time":
+        await asyncio.to_thread(models.load_time_model)
+    cache._store.clear()  # Invalidate cache after model change
+
+    return {"success": True, "message": f"Deployed {req.model_type} v{req.version}"}
+
+
+@app.post("/models/rollback")
+async def rollback_model(req: ModelRollbackRequest):
+    """Roll back a model type to the previous (or specified) version."""
+    if registry is None:
+        raise HTTPException(status_code=503, detail="Model registry not available")
+    success = await asyncio.to_thread(
+        registry.rollback, req.model_type, req.target_version
+    )
+    if not success:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No previous version available to roll back to for '{req.model_type}'"
+        )
+    # Reload
+    if req.model_type == "category":
+        await asyncio.to_thread(models.load_category_model)
+        explainer_mgr.init(models)
+    elif req.model_type == "priority":
+        await asyncio.to_thread(models.load_priority_model)
+        explainer_mgr.init(models)
+    elif req.model_type == "time":
+        await asyncio.to_thread(models.load_time_model)
+    cache._store.clear()
+
+    active = registry.get_active_version(req.model_type)
+    return {
+        "success": True,
+        "message": f"Rolled back {req.model_type}",
+        "active_version": active.get("version") if active else None,
+    }
+
+
+# ---- Manual retraining trigger ------------------------------------------ #
+
+
+@app.post("/retrain")
+async def trigger_retraining(req: RetrainingRequest, background_tasks: BackgroundTasks):
+    """
+    Trigger the retraining pipeline as a background task.
+    Returns immediately with a run ID; poll /retrain/status for progress.
+    """
+    run_id = f"run_{int(time.time())}"
+    pipeline_script = os.path.join(BASE_DIR, "scripts", "retrain_pipeline.py")
+
+    if not os.path.exists(pipeline_script):
+        raise HTTPException(
+            status_code=503,
+            detail="Retraining pipeline script not found. "
+                   "Ensure scripts/retrain_pipeline.py is present."
+        )
+
+    async def _run_pipeline():
+        import subprocess
+        logger.info("Starting retraining pipeline (%s), run_id=%s",
+                    req.model_types, run_id)
+        env = os.environ.copy()
+        env["RETRAIN_MODELS"] = ",".join(req.model_types)
+        env["RETRAIN_AUTO_DEPLOY"] = "1" if req.auto_deploy else "0"
+        env["RETRAIN_THRESHOLD"] = str(req.improvement_threshold)
+        env["RETRAIN_RUN_ID"] = run_id
+        try:
+            result = subprocess.run(
+                [sys.executable, pipeline_script],
+                capture_output=True, text=True, timeout=3600, env=env
+            )
+            if result.returncode == 0:
+                logger.info("Retraining pipeline completed successfully (run_id=%s)", run_id)
+            else:
+                logger.error("Retraining pipeline failed (run_id=%s):\n%s",
+                             run_id, result.stderr)
+        except subprocess.TimeoutExpired:
+            logger.error("Retraining pipeline timed out (run_id=%s)", run_id)
+        except Exception as exc:
+            logger.error("Retraining pipeline error (run_id=%s): %s", run_id, exc)
+
+    background_tasks.add_task(_run_pipeline)
+
+    return {
+        "success": True,
+        "run_id": run_id,
+        "message": f"Retraining pipeline started for: {req.model_types}. "
+                   "Check server logs for progress.",
+        "triggered_by": req.triggered_by,
+        "auto_deploy": req.auto_deploy,
+    }
+
+
+# ---- Enhanced metrics ---------------------------------------------------- #
+
+
+@app.get("/metrics/rolling")
+async def get_rolling_metrics():
+    """
+    Rolling accuracy and performance metrics for the monitoring dashboard.
+    Includes daily stats from the in-memory MetricsCollector plus any
+    persisted rolling_accuracy.json data.
+    """
+    base_metrics = metrics.summary
+    lats = metrics.latencies or [0]
+    confs = metrics.confidence_scores or [0]
+
+    low_conf_threshold = CONFIDENCE_THRESHOLD
+    low_conf_count = sum(1 for c in confs if c < low_conf_threshold)
+
+    # Confidence histogram (10 buckets)
+    hist_counts, hist_bins = np.histogram(confs, bins=10, range=(0, 1))
+    confidence_histogram = [
+        {
+            "bucket": f"{hist_bins[i]:.1f}-{hist_bins[i+1]:.1f}",
+            "count": int(hist_counts[i]),
+        }
+        for i in range(len(hist_counts))
+    ]
+
+    # Requests-per-minute (estimate from latency window)
+    uptime = time.time() - START_TIME
+    rpm = round(metrics.request_count / max(uptime / 60, 1), 2)
+
+    return {
+        "uptime_seconds": round(uptime, 1),
+        "requests_per_minute": rpm,
+        "total_requests": metrics.request_count,
+        "total_errors": metrics.error_count,
+        "error_rate_pct": round(
+            100 * metrics.error_count / max(metrics.request_count, 1), 2
+        ),
+        "fallback_count": metrics.fallback_count,
+        "fallback_rate_pct": round(
+            100 * metrics.fallback_count / max(metrics.request_count, 1), 2
+        ),
+        "latency_ms": base_metrics["latency_ms"],
+        "confidence": {
+            **base_metrics["confidence"],
+            "histogram": confidence_histogram,
+            "low_confidence_count": low_conf_count,
+            "low_confidence_pct": round(100 * low_conf_count / max(len(confs), 1), 2),
+            "threshold": low_conf_threshold,
+        },
+        "category_distribution": base_metrics["category_distribution"],
+        "priority_distribution": base_metrics["priority_distribution"],
+        "models_loaded": models.loaded_status,
+        "explainability_ready": {
+            "category": explainer_mgr.is_ready("category"),
+            "priority": explainer_mgr.is_ready("priority"),
+        },
+        "rolling_accuracy": _rolling_accuracy,
+    }
+
+
+# ---- Root --------------------------------------------------------------- #
 
 if __name__ == "__main__":
     uvicorn.run(
