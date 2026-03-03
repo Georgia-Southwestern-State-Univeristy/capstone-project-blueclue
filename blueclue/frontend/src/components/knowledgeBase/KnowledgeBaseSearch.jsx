@@ -368,7 +368,7 @@ const KnowledgeBaseSearch = () => {
                             />
 
                             {/* Tags */}
-                            {article.tags && article.tags.length > 0 && (
+                            {article.tags && Array.isArray(article.tags) && article.tags.length > 0 && (
                                 <div className="flex flex-wrap gap-2">
                                     {article.tags.map((tag, idx) => (
                                         <span
