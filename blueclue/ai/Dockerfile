@@ -23,14 +23,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Pre-download MiniLM model at build time so the container starts faster.
 # Falls back gracefully if the download fails (e.g., no internet during build).
-RUN python -c "\
-try:\
-    from sentence_transformers import SentenceTransformer;\
-    SentenceTransformer('all-MiniLM-L6-v2');\
-    print('MiniLM model cached')\
-except Exception as e:\
-    print(f'MiniLM pre-download skipped: {e}')\
-" || true
+RUN printf 'try:\n    from sentence_transformers import SentenceTransformer\n    SentenceTransformer("all-MiniLM-L6-v2")\n    print("MiniLM model cached")\nexcept Exception as e:\n    print(f"MiniLM pre-download skipped: {e}")\n' | python3 || true
 
 # Copy application code
 COPY . .
