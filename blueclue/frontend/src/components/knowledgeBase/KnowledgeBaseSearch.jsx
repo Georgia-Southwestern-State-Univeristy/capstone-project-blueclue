@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, Filter, X, ChevronDown, Loader2 } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
-
 const KnowledgeBaseSearch = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [results, setResults] = useState([]);
@@ -63,7 +61,7 @@ const KnowledgeBaseSearch = () => {
             params.append('limit', '20');
             params.append('offset', loadMore ? offset : '0');
 
-            const response = await axios.get(`${API_BASE_URL}/api/knowledge-base/search?${params}`);
+            const response = await axios.get(`/api/knowledge-base/search?${params}`);
 
             const newResults = Array.isArray(response.data.results) ? response.data.results : [];
             if (loadMore) {
@@ -92,7 +90,7 @@ const KnowledgeBaseSearch = () => {
 
         try {
             const response = await axios.get(
-                `${API_BASE_URL}/api/knowledge-base/search/autocomplete?q=${encodeURIComponent(query)}`
+                `/api/knowledge-base/search/autocomplete?q=${encodeURIComponent(query)}`
             );
             setSuggestions(Array.isArray(response.data.suggestions) ? response.data.suggestions : []);
             setShowSuggestions(true);

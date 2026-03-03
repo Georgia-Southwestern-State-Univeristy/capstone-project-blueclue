@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { FileText, TrendingUp, Loader2, ArrowRight } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
-
 const RelatedArticles = ({ articleId, limit = 5 }) => {
     const [relatedArticles, setRelatedArticles] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -18,7 +16,7 @@ const RelatedArticles = ({ articleId, limit = 5 }) => {
             
             try {
                 const response = await axios.get(
-                    `${API_BASE_URL}/api/knowledge-base/articles/${articleId}/related?limit=${limit}`
+                    `/api/knowledge-base/articles/${articleId}/related?limit=${limit}`
                 );
                 setRelatedArticles(response.data.related || []);
             } catch (err) {
