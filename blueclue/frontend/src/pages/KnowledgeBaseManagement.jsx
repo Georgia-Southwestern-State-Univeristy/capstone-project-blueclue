@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import ArticleList from '../components/knowledgeBase/ArticleList';
@@ -33,6 +33,7 @@ const KnowledgeBaseManagement = () => {
     const [filterCategory, setFilterCategory] = useState('');
     const [filterPublished, setFilterPublished] = useState('');
     const [accessDenied, setAccessDenied] = useState(false);
+    const isFetchingRef = useRef(false);
 
     // Check user role on mount
     useEffect(() => {

@@ -18,17 +18,12 @@ RUN npm run build
 # Stage 2 – Serve with nginx
 FROM nginx:stable-alpine
 
-# Install envsubst (part of gettext)
-RUN apk add --no-cache gettext
-
 # Copy built assets
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy nginx config template (BACKEND_URL is substituted at container startup)
-COPY nginx.conf.template /etc/nginx/conf.d/default.conf.template
+# Copy nginx config (simple SPA server — API calls go direct to backend via VITE_API_URL)
+COPY nginx.conf.template /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 
-# Substitute BACKEND_URL at startup, then launch nginx
-# Only ${BACKEND_URL} is replaced — nginx vars like $host, $uri are preserved
-CMD ["/bin/sh", "-c", "envsubst '${BACKEND_URL}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+CMD ["nginx", "-g", "daemon off;"]
