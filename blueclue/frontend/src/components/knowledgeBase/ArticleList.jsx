@@ -52,7 +52,7 @@ const ArticleList = ({ articles, onEdit, onDelete, onTogglePublish, onView }) =>
                                             {article.excerpt}
                                         </div>
                                     )}
-                                    {article.tags && article.tags.length > 0 && (
+                                    {article.tags && Array.isArray(article.tags) && article.tags.length > 0 && (
                                         <div className="flex flex-wrap gap-1 mt-2">
                                             {article.tags.map((tag, idx) => (
                                                 <span
