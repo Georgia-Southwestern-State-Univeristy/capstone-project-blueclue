@@ -8,6 +8,7 @@ import {
   clearHistory,
   endConversation,
   createTicketFromChat,
+  getLLMHealth,
 } from '../controllers/chatController.js';
 
 const router = express.Router();
@@ -66,5 +67,12 @@ router.post('/end', authenticateToken, endConversation);
  * @access  Private (authenticated users)
  */
 router.post('/create-ticket', authenticateToken, createTicketFromChat);
+
+/**
+ * @route   GET /api/chat/llm/health
+ * @desc    Return LLM + RAG service readiness and embedding coverage
+ * @access  Private (authenticated users)
+ */
+router.get('/llm/health', authenticateToken, getLLMHealth);
 
 export default router;

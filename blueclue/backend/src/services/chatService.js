@@ -1,12 +1,25 @@
 import ChatMessage from '../models/ChatMessage.js';
 import ChatConversation from '../models/ChatConversation.js';
 import pool from '../config/database.js';
+import { processMessageWithLLM } from './llmService.js';
 
 /**
  * Message Processing Service
- * Rule-based intent recognition with KB search fallback, context awareness,
- * frustration detection, and ticket-creation handoff.
+ * ===========================
+ * Primary path  : LLM + RAG (context-aware, grounded in KB articles)
+ * Fallback path : Rule-based intent recognition + keyword KB search
+ *
+ * The LLM path is attempted first; if it fails (service down, API error,
+ * kill-switch) or returns fallbackUsed=true the existing rule-based logic
+ * handles the message transparently.
  */
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+/** Number of previous messages loaded into context / passed to LLM */
+const HISTORY_LIMIT = 10;
 
 // ============================================================================
 // INTENT DEFINITIONS
@@ -395,11 +408,38 @@ async function generateResponse(intent, confidence, userMessage, ctx) {
 }
 
 // ============================================================================
+// USER ROLE HELPER  (used to tune LLM prompt verbosity)
+// ============================================================================
+
+/**
+ * Return a simplified role string for LLM prompt construction.
+ * @param {number} userId
+ * @returns {Promise<'customer'|'tech'|'admin'>}
+ */
+async function _getUserRole(userId) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT role FROM users WHERE id = $1 LIMIT 1`,
+      [userId],
+    );
+    const role = rows[0]?.role || 'customer';
+    if (['admin', 'superadmin'].includes(role)) return 'admin';
+    if (['tech', 'technician'].includes(role)) return 'tech';
+    return 'customer';
+  } catch {
+    return 'customer';
+  }
+}
+
+// ============================================================================
 // PUBLIC API
 // ============================================================================
 
 /**
  * Process a chat message — main entry point.
+ *
+ * Primary path  : LLM + RAG (intelligent, grounded, conversational)
+ * Fallback path : Rule-based + KB full-text search (always-available)
  *
  * @param {number} userId
  * @param {string} message
@@ -418,21 +458,74 @@ export async function processChatMessage(userId, message, conversationId = null)
       if (!conversation) conversation = await ChatConversation.create(userId);
     }
 
-    // ── Context: last 5 messages ─────────────────────────────────────────────
-    const previousMessages = await ChatMessage.getByConversationId(conversation.id, 5);
+    // ── Context: last N messages ─────────────────────────────────────────────
+    const previousMessages = await ChatMessage.getByConversationId(conversation.id, HISTORY_LIMIT);
     const context = analyzeContext(previousMessages);
 
-    // ── Recognise intent ─────────────────────────────────────────────────────
-    const { intent, confidence, isFrustrated } = recognizeIntent(message);
+    // ── Determine user role (for LLM prompt tuning) ──────────────────────────
+    const userRole = await _getUserRole(userId);
 
-    // ── Build response ───────────────────────────────────────────────────────
-    const { response, articleLinks, actionButtons, suggestions } =
-      await generateResponse(intent, confidence, message, { ...context, isFrustrated });
+    // ── Attempt LLM + RAG path ───────────────────────────────────────────────
+    const llmResult = await processMessageWithLLM({
+      userId,
+      message,
+      conversationId:      conversation.id,
+      conversationHistory: previousMessages,
+      userRole,
+    });
+
+    let response, articleLinks, actionButtons, suggestions, intent, confidence;
+
+    if (llmResult.rateLimited) {
+      // Rate-limited — return the rate-limit message directly
+      response     = llmResult.response;
+      articleLinks = [];
+      actionButtons = [];
+      suggestions  = [];
+      intent       = 'rate_limited';
+      confidence   = 1.0;
+
+    } else if (!llmResult.fallbackUsed && llmResult.response) {
+      // ── LLM SUCCESS PATH ─────────────────────────────────────────────────
+      response = llmResult.response;
+
+      // Build article links from citations returned by RAG
+      articleLinks = (llmResult.citations || []).map(c => ({
+        id:       c.id,
+        title:    c.title,
+        slug:     c.slug,
+        category: c.category,
+        excerpt:  c.excerpt,
+      }));
+
+      // If LLM signals it can't help → offer ticket creation
+      if (llmResult.escalate) {
+        actionButtons = [{ id: 'create_ticket', label: '🎫 Create a support ticket', primary: true }];
+        suggestions   = ['Create a support ticket', 'Rephrase my question'];
+      } else {
+        actionButtons = articleLinks.length > 0
+          ? [{ id: 'create_ticket', label: "🎫 Still need help? Create a ticket", primary: false }]
+          : [{ id: 'create_ticket', label: '🎫 Create a support ticket', primary: true }];
+        suggestions = ['✅ This helped', '❌ Still not working', 'Create a support ticket'];
+      }
+
+      intent     = 'llm_rag';
+      confidence = 0.95;
+
+    } else {
+      // ── RULE-BASED FALLBACK PATH ──────────────────────────────────────────
+      const { intent: ri, confidence: rc, isFrustrated } = recognizeIntent(message);
+      intent     = ri;
+      confidence = rc;
+
+      ({ response, articleLinks, actionButtons, suggestions } =
+        await generateResponse(intent, confidence, message, { ...context, isFrustrated }));
+    }
 
     // ── Persist messages ─────────────────────────────────────────────────────
     await ChatMessage.create({
       conversationId: conversation.id,
-      sender: 'user',
+      sender:         'user',
       message,
       intent,
       confidence,
@@ -440,22 +533,31 @@ export async function processChatMessage(userId, message, conversationId = null)
 
     const botMessageRecord = await ChatMessage.create({
       conversationId: conversation.id,
-      sender: 'bot',
-      message: response,
-      intent: `response_${intent}`,
-      confidence: 1.0,
+      sender:         'bot',
+      message:        response,
+      intent:         `response_${intent}`,
+      confidence:     1.0,
       suggestedArticles: articleLinks.map(a => a.id),
     });
 
     return {
       response,
-      suggestions: suggestions || [],
-      articleLinks: articleLinks || [],
+      suggestions:   suggestions   || [],
+      articleLinks:  articleLinks  || [],
       actionButtons: actionButtons || [],
       conversationId: conversation.id,
-      messageId: botMessageRecord.id,
+      messageId:     botMessageRecord.id,
       intent,
       confidence,
+      // LLM metadata (useful for monitoring/debugging)
+      llm: llmResult.fallbackUsed || llmResult.rateLimited ? null : {
+        model:            llmResult.modelUsed,
+        promptTokens:     llmResult.promptTokens,
+        completionTokens: llmResult.completionTokens,
+        costUsd:          llmResult.costUsd,
+        latencyMs:        llmResult.latencyMs,
+        cacheHit:         llmResult.cacheHit,
+      },
     };
 
   } catch (error) {

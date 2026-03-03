@@ -772,6 +772,13 @@ drift_mgr = DriftManager()
 
 
 # --------------------------------------------------------------------------- #
+# LLM / RAG service (initialised in lifespan)
+# --------------------------------------------------------------------------- #
+
+_llm_service = None   # LLMService singleton — set in lifespan
+
+
+# --------------------------------------------------------------------------- #
 # Model registry
 # --------------------------------------------------------------------------- #
 
@@ -829,7 +836,7 @@ _WARMUP_TEXTS = [
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load models at startup, warm cache, clean up on shutdown."""
-    global registry, _rolling_accuracy
+    global registry, _rolling_accuracy, _llm_service
     models.load_all()
 
     # Initialise explainability + drift detection
@@ -847,6 +854,37 @@ async def lifespan(app: FastAPI):
 
     # Load rolling accuracy data
     _rolling_accuracy = _load_rolling_accuracy()
+
+    # ── LLM / RAG initialisation ────────────────────────────────────────── #
+    try:
+        from src.llm_service import get_llm_service
+        _llm_service = get_llm_service()
+        logger.info(
+            "LLM service initialised — model=%s  llm_ready=%s  embed_dim=%d",
+            _llm_service.get_model_name(),
+            _llm_service.is_llm_available(),
+            _llm_service.get_embedding_dim(),
+        )
+        # Auto-generate embeddings for any articles that don't have one yet.
+        # Runs in a background thread so it doesn't delay startup.
+        if os.getenv("DATABASE_URL"):
+            import threading
+            def _bg_embed():
+                try:
+                    import importlib.util, sys as _sys
+                    gen_path = os.path.join(BASE_DIR, "generate_embeddings.py")
+                    spec = importlib.util.spec_from_file_location("gen_emb", gen_path)
+                    mod  = importlib.util.module_from_spec(spec)
+                    _sys.modules["gen_emb"] = mod
+                    spec.loader.exec_module(mod)
+                    mod.run(force=False, dry_run=False)
+                except Exception as exc:
+                    logger.warning("Background embedding generation failed: %s", exc)
+            threading.Thread(target=_bg_embed, daemon=True).start()
+            logger.info("Background embedding generation started")
+    except Exception as exc:
+        logger.warning("LLM service init failed (RAG endpoints disabled): %s", exc)
+    # ──────────────────────────────────────────────────────────────────────── #
 
     # Warm the cache with sample texts so cold-start latency doesn't affect p95
     if any(models._loaded.values()):
@@ -1579,6 +1617,268 @@ async def get_rolling_metrics():
         },
         "rolling_accuracy": _rolling_accuracy,
     }
+
+
+# =========================================================================== #
+# RAG / LLM Endpoints                                                          #
+# =========================================================================== #
+
+# ── Pydantic schemas for RAG ─────────────────────────────────────────────── #
+
+class RAGChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=4000)
+    user_id: Optional[int] = None
+    conversation_id: Optional[int] = None
+    conversation_history: Optional[List[Dict[str, str]]] = Field(default_factory=list)
+    user_role: str = Field("customer", description="'customer' | 'tech' | 'admin'")
+    use_cache: bool = True
+    top_k: int = Field(5, ge=1, le=10)
+
+
+class RAGChatResponse(BaseModel):
+    answer: str
+    citations: List[Dict[str, Any]] = []
+    escalate: bool = False
+    model_used: str = ""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    cost_usd: float = 0.0
+    latency_ms: int = 0
+    cache_hit: bool = False
+    fallback_used: bool = False
+
+
+class TicketSummarizeRequest(BaseModel):
+    transcript: str = Field(..., min_length=10, max_length=20000)
+
+
+class TicketSummarizeResponse(BaseModel):
+    title: str
+    description: str
+    suggested_category: str
+
+
+class EmbeddingGenerateRequest(BaseModel):
+    force: bool = False
+    article_id: Optional[int] = None
+
+
+# ── /rag/health ─────────────────────────────────────────────────────────── #
+
+@app.get("/rag/health")
+async def rag_health():
+    """Return LLM / embedding readiness and KB coverage."""
+    if _llm_service is None:
+        return JSONResponse(
+            status_code=503,
+            content={"llm_ready": False, "embedding_ready": False,
+                     "error": "LLM service not initialised"},
+        )
+
+    # Check embedding coverage
+    embedding_stats = {"total": 0, "embedded": 0, "missing": 0}
+    db_url = os.getenv("DATABASE_URL", "")
+    if db_url:
+        try:
+            import psycopg2, psycopg2.extras
+            conn = psycopg2.connect(db_url, cursor_factory=psycopg2.extras.RealDictCursor)
+            from src.rag_pipeline import get_article_embedding_status
+            embedding_stats = get_article_embedding_status(conn)
+            conn.close()
+        except Exception as exc:
+            logger.warning("rag/health DB check failed: %s", exc)
+
+    return {
+        "llm_ready":         _llm_service.is_llm_available(),
+        "embedding_ready":   embedding_stats.get("embedded", 0) > 0,
+        "model":             _llm_service.get_model_name(),
+        "embedding_model":   os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002"),
+        "embedding_dim":     _llm_service.get_embedding_dim(),
+        "articles_total":    embedding_stats.get("total", 0),
+        "articles_embedded": embedding_stats.get("embedded", 0),
+        "articles_missing":  embedding_stats.get("missing", 0),
+    }
+
+
+# ── /rag/chat ────────────────────────────────────────────────────────────── #
+
+@app.post("/rag/chat", response_model=RAGChatResponse)
+async def rag_chat(req: RAGChatRequest, background_tasks: BackgroundTasks):
+    """
+    Main RAG chat endpoint.
+    Embeds the user message, retrieves relevant KB articles,
+    constructs a grounded prompt, and calls the LLM.
+    """
+    if _llm_service is None:
+        raise HTTPException(status_code=503, detail="LLM service not initialised")
+
+    try:
+        from src.rag_pipeline import run_rag_pipeline
+        result = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: run_rag_pipeline(
+                query=req.message,
+                llm_service=_llm_service,
+                user_id=req.user_id,
+                conversation_id=req.conversation_id,
+                conversation_history=req.conversation_history or [],
+                user_role=req.user_role,
+                top_k=req.top_k,
+                use_cache=req.use_cache,
+            ),
+        )
+        return RAGChatResponse(
+            answer=result.answer,
+            citations=result.citations,
+            escalate=result.escalate,
+            model_used=result.model_used,
+            prompt_tokens=result.prompt_tokens,
+            completion_tokens=result.completion_tokens,
+            total_tokens=result.total_tokens,
+            cost_usd=result.cost_usd,
+            latency_ms=result.latency_ms,
+            cache_hit=result.cache_hit,
+            fallback_used=result.fallback_used,
+        )
+    except Exception as exc:
+        logger.error("/rag/chat error: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ── /rag/summarize-ticket ────────────────────────────────────────────────── #
+
+@app.post("/rag/summarize-ticket", response_model=TicketSummarizeResponse)
+async def rag_summarize_ticket(req: TicketSummarizeRequest):
+    """
+    Use the LLM to generate a ticket title, description, and category
+    suggestion from a chat transcript.
+    """
+    if _llm_service is None or not _llm_service.is_llm_available():
+        # Fallback: first user line as title
+        lines = [l for l in req.transcript.split("\n") if l.startswith("User:")]
+        title = lines[0].replace("User:", "").strip()[:100] if lines else "Support Request"
+        return TicketSummarizeResponse(
+            title=title,
+            description=req.transcript[:2000],
+            suggested_category="general",
+        )
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a help-desk ticket intake assistant. "
+                "Given a chat transcript between a user and a support bot, "
+                "extract a concise ticket title (max 10 words), "
+                "a 1-2 sentence description of the issue, "
+                "and suggest one category from: "
+                "hardware, software, network, account, email, other. "
+                "Respond ONLY with JSON: "
+                '{"title": "...", "description": "...", "suggested_category": "..."}'
+            ),
+        },
+        {
+            "role": "user",
+            "content": f"Chat transcript:\n{req.transcript[:4000]}",
+        },
+    ]
+
+    try:
+        result = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: _llm_service.chat_completion(messages, temperature=0.3, max_tokens=150),
+        )
+        import re
+        raw = result["content"].strip()
+        # Extract JSON from possible markdown code block
+        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if json_match:
+            data = json.loads(json_match.group())
+            return TicketSummarizeResponse(
+                title=data.get("title", "Support Request")[:100],
+                description=data.get("description", "")[:2000],
+                suggested_category=data.get("suggested_category", "general"),
+            )
+    except Exception as exc:
+        logger.warning("/rag/summarize-ticket LLM error: %s", exc)
+
+    # Fallback
+    lines = [l for l in req.transcript.split("\n") if l.startswith("User:")]
+    title = lines[0].replace("User:", "").strip()[:100] if lines else "Support Request"
+    return TicketSummarizeResponse(
+        title=title,
+        description=req.transcript[:2000],
+        suggested_category="general",
+    )
+
+
+# ── /rag/embeddings/generate ─────────────────────────────────────────────── #
+
+@app.post("/rag/embeddings/generate")
+async def rag_generate_embeddings(
+    req: EmbeddingGenerateRequest,
+    background_tasks: BackgroundTasks,
+):
+    """
+    Trigger (re)generation of KB article embeddings.
+    Runs in the background so we return immediately.
+    """
+    if _llm_service is None:
+        raise HTTPException(status_code=503, detail="LLM service not initialised")
+
+    if not os.getenv("DATABASE_URL"):
+        raise HTTPException(status_code=503, detail="DATABASE_URL not configured")
+
+    def _run():
+        import sys as _sys
+        gen_path = os.path.join(BASE_DIR, "generate_embeddings.py")
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("gen_emb_bg", gen_path)
+        mod  = importlib.util.module_from_spec(spec)
+        _sys.modules["gen_emb_bg"] = mod
+        spec.loader.exec_module(mod)
+        mod.run(force=req.force, dry_run=False, article_id=req.article_id)
+
+    background_tasks.add_task(_run)
+    return {"status": "started", "force": req.force, "article_id": req.article_id}
+
+
+# ── /rag/embeddings/status ───────────────────────────────────────────────── #
+
+@app.get("/rag/embeddings/status")
+async def rag_embeddings_status():
+    """Return embedding coverage stats for all KB articles."""
+    db_url = os.getenv("DATABASE_URL", "")
+    if not db_url:
+        raise HTTPException(status_code=503, detail="DATABASE_URL not configured")
+
+    try:
+        import psycopg2, psycopg2.extras
+        conn = psycopg2.connect(db_url, cursor_factory=psycopg2.extras.RealDictCursor)
+        from src.rag_pipeline import get_article_embedding_status
+
+        stats    = get_article_embedding_status(conn)
+
+        # Also return per-article detail via the view
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, title, category, status, last_embedded, embedding_model
+                FROM   kb_embedding_coverage
+                ORDER  BY status DESC, id
+                """
+            )
+            articles = [dict(r) for r in cur.fetchall()]
+        conn.close()
+
+        return {
+            "summary":  stats,
+            "articles": articles,
+        }
+    except Exception as exc:
+        logger.error("/rag/embeddings/status error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 # ---- Root --------------------------------------------------------------- #

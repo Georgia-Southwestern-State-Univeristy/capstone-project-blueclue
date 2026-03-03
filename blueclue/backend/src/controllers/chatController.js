@@ -1,4 +1,5 @@
 import { processChatMessage, getConversationHistory, clearChatHistory } from '../services/chatService.js';
+import { generateTicketSummary, checkLLMHealth } from '../services/llmService.js';
 import ChatConversation from '../models/ChatConversation.js';
 import ChatMessage from '../models/ChatMessage.js';
 import pool from '../config/database.js';
@@ -299,15 +300,6 @@ export const createTicketFromChat = async (req, res) => {
     const userId = req.user.id;
     const { conversationId, subject, description } = req.body;
 
-    // Intents that are always quick-reply button clicks, not real problem descriptions
-    const ACTION_INTENTS = new Set([
-      'create_ticket', 'check_status', 'greeting', 'farewell',
-      'gratitude', 'escalation', 'general_help',
-    ]);
-
-    // Regex: message starts with an emoji — a sure sign it's a quick-reply chip
-    const EMOJI_PREFIX = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
-
     // Build description from conversation history if not already supplied
     let ticketSubject = subject;
     let ticketDescription = description;
@@ -315,31 +307,44 @@ export const createTicketFromChat = async (req, res) => {
     if (conversationId && (!ticketSubject || !ticketDescription)) {
       const messages = await ChatMessage.getByConversationId(parseInt(conversationId), 20);
 
-      // Keep only genuine user problem descriptions:
-      //   • sender is 'user'
-      //   • intent is not a pure navigation/action intent
-      //   • message does not start with an emoji (quick-reply chip)
-      const realUserMessages = messages.filter(m => {
-        if (m.sender !== 'user') return false;
-        const intentIsAction = m.intent && ACTION_INTENTS.has(m.intent);
-        const looksLikeChip  = EMOJI_PREFIX.test(m.message?.trim() || '');
-        return !intentIsAction && !looksLikeChip;
-      });
-
-      if (!ticketSubject) {
-        const firstReal = realUserMessages[0]?.message
-          || messages.find(m => m.sender === 'user')?.message
-          || 'Support Request';
-        ticketSubject = firstReal.length > 100
-          ? firstReal.slice(0, 97) + '...'
-          : firstReal;
+      // ── Try LLM-powered summarization first ─────────────────────────────
+      try {
+        const summary = await generateTicketSummary(messages);
+        if (!ticketSubject)      ticketSubject      = summary.title;
+        if (!ticketDescription)  ticketDescription  = summary.description;
+      } catch {
+        // Fall through to rule-based extraction
       }
 
-      if (!ticketDescription) {
-        if (realUserMessages.length > 0) {
-          ticketDescription = realUserMessages.map(m => m.message).join('\n');
-        } else {
-          ticketDescription = 'Submitted via chat assistant';
+      // ── Rule-based fallback ──────────────────────────────────────────────
+      if (!ticketSubject || !ticketDescription) {
+        // Intents that are always quick-reply button clicks, not real problem descriptions
+        const ACTION_INTENTS = new Set([
+          'create_ticket', 'check_status', 'greeting', 'farewell',
+          'gratitude', 'escalation', 'general_help',
+        ]);
+        const EMOJI_PREFIX = /^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
+
+        const realUserMessages = messages.filter(m => {
+          if (m.sender !== 'user') return false;
+          const intentIsAction = m.intent && ACTION_INTENTS.has(m.intent);
+          const looksLikeChip  = EMOJI_PREFIX.test(m.message?.trim() || '');
+          return !intentIsAction && !looksLikeChip;
+        });
+
+        if (!ticketSubject) {
+          const firstReal = realUserMessages[0]?.message
+            || messages.find(m => m.sender === 'user')?.message
+            || 'Support Request';
+          ticketSubject = firstReal.length > 100
+            ? firstReal.slice(0, 97) + '...'
+            : firstReal;
+        }
+
+        if (!ticketDescription) {
+          ticketDescription = realUserMessages.length > 0
+            ? realUserMessages.map(m => m.message).join('\n')
+            : 'Submitted via chat assistant';
         }
       }
     }
@@ -379,6 +384,22 @@ export const createTicketFromChat = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/chat/llm/health
+ * Returns LLM + RAG service status (admin/debug endpoint)
+ */
+export const getLLMHealth = async (req, res) => {
+  try {
+    const health = await checkLLMHealth();
+    res.status(health.available ? 200 : 503).json({
+      status: health.available ? 'success' : 'degraded',
+      data: health,
+    });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: error.message });
+  }
+};
+
 export default {
   sendMessage,
   getHistory,
@@ -387,4 +408,5 @@ export default {
   clearHistory,
   endConversation,
   createTicketFromChat,
+  getLLMHealth,
 };
