@@ -65,10 +65,11 @@ const KnowledgeBaseSearch = () => {
 
             const response = await axios.get(`${API_BASE_URL}/api/knowledge-base/search?${params}`);
 
+            const newResults = Array.isArray(response.data.results) ? response.data.results : [];
             if (loadMore) {
-                setResults(prev => [...prev, ...response.data.results]);
+                setResults(prev => [...prev, ...newResults]);
             } else {
-                setResults(response.data.results);
+                setResults(newResults);
                 setOffset(0);
             }
 
@@ -93,7 +94,7 @@ const KnowledgeBaseSearch = () => {
             const response = await axios.get(
                 `${API_BASE_URL}/api/knowledge-base/search/autocomplete?q=${encodeURIComponent(query)}`
             );
-            setSuggestions(response.data.suggestions);
+            setSuggestions(Array.isArray(response.data.suggestions) ? response.data.suggestions : []);
             setShowSuggestions(true);
         } catch (error) {
             console.error('Autocomplete error:', error);

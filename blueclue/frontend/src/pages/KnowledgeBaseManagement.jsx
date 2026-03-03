@@ -75,7 +75,7 @@ const KnowledgeBaseManagement = () => {
     const fetchCategories = async () => {
         try {
             const response = await axios.get('/api/knowledge-base/categories', getAuthHeaders());
-            setCategories(response.data);
+            setCategories(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             console.error('Error fetching categories:', error);
         }
@@ -85,7 +85,7 @@ const KnowledgeBaseManagement = () => {
     const fetchTags = async () => {
         try {
             const response = await axios.get('/api/knowledge-base/tags', getAuthHeaders());
-            setTags(response.data);
+            setTags(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             console.error('Error fetching tags:', error);
         }
