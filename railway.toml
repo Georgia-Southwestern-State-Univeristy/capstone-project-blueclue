@@ -1,0 +1,15 @@
+# railway.toml — Root project configuration
+# ==========================================
+# This file is intentionally minimal. Each service is configured
+# individually inside Railway's dashboard (Settings > Build).
+#
+# Service layout (set "Root Directory" in each Railway service):
+#
+#   Service Name   | Root Directory      | Build
+#   ---------------+---------------------+-----------------------------
+#   database       | (Railway plugin)    | PostgreSQL add-on
+#   ml-service     | blueclue/ai         | Dockerfile
+#   backend        | blueclue/backend    | Dockerfile
+#   frontend       | blueclue/frontend   | Dockerfile (multi-stage)
+#
+# See docs/setup/RAILWAY_DEPLOYMENT.md for the full setup walkthrough.
