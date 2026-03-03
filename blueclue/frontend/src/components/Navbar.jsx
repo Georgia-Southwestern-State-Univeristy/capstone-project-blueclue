@@ -194,6 +194,9 @@ function Navbar() {
                     <Link to="/template-manager" className="text-gray-300 hover:text-white transition-colors">
                       Templates
                     </Link>
+                    <Link to="/ml-admin" className="text-gray-300 hover:text-white transition-colors">
+                      ML Dashboard
+                    </Link>
                   </>
                 )}
                 {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
@@ -355,6 +358,13 @@ function Navbar() {
                 className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
               >
                 Templates
+              </Link>
+              <Link
+                to="/ml-admin"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+              >
+                ML Dashboard
               </Link>
             </>
           )}
