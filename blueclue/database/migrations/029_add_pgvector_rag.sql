@@ -1,43 +1,30 @@
 -- =============================================================================
--- Migration 029: pgvector + RAG (Retrieval-Augmented Generation) tables
+-- Migration 029: RAG (Retrieval-Augmented Generation) tables
 -- =============================================================================
--- Run this migration on Railway (or your Postgres instance) to enable
--- semantic search over Knowledge Base articles for the LLM chatbot.
---
--- Prerequisites: PostgreSQL 15+ with pgvector extension available.
---   On Railway: pgvector is bundled with the Postgres plugin.
+-- Uses FLOAT[] arrays for embedding storage — no pgvector extension required.
+-- Cosine similarity is computed in Python by the RAG pipeline.
+-- Safe to re-run (all statements use IF NOT EXISTS / OR REPLACE).
 -- =============================================================================
 
--- 1. Enable pgvector ---------------------------------------------------------
-CREATE EXTENSION IF NOT EXISTS vector;
-
--- 2. Article embeddings -------------------------------------------------------
---    Stores a 1536-dim vector per KB article (OpenAI text-embedding-ada-002).
---    A 384-dim column is also supported via sentence-transformers/all-MiniLM-L6-v2
---    (the embedding_model column identifies which model was used).
+-- 1. Article embeddings -------------------------------------------------------
+--    Stores a float array per KB article.
+--    embedding      = 1536-dim (OpenAI text-embedding-ada-002)
+--    embedding_384  = 384-dim  (sentence-transformers/all-MiniLM-L6-v2 fallback)
+--    embedding_model identifies which model produced the vector.
 CREATE TABLE IF NOT EXISTS article_embeddings (
   id                SERIAL PRIMARY KEY,
-  article_id        INTEGER NOT NULL,      -- logical FK to knowledge_articles(id)
-  embedding         VECTOR(1536),          -- OpenAI ada-002 / 1536-dim
-  embedding_384     VECTOR(384),           -- MiniLM fallback / 384-dim
+  article_id        INTEGER NOT NULL,
+  embedding         FLOAT[],              -- OpenAI ada-002 / 1536-dim
+  embedding_384     FLOAT[],              -- MiniLM fallback / 384-dim
   embedding_model   VARCHAR(100)  NOT NULL DEFAULT 'text-embedding-ada-002',
-  embedding_text    TEXT,                  -- concatenated text that was embedded
+  embedding_text    TEXT,
   created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
   CONSTRAINT uq_article_embeddings_article UNIQUE (article_id)
 );
 
--- IVFFlat index for fast approximate cosine similarity (1536-dim)
-CREATE INDEX IF NOT EXISTS article_embeddings_vec_idx
-  ON article_embeddings
-  USING ivfflat (embedding vector_cosine_ops)
-  WITH (lists = 50);
-
--- IVFFlat index for the 384-dim column
-CREATE INDEX IF NOT EXISTS article_embeddings_384_idx
-  ON article_embeddings
-  USING ivfflat (embedding_384 vector_cosine_ops)
-  WITH (lists = 50);
+CREATE INDEX IF NOT EXISTS article_embeddings_article_idx
+  ON article_embeddings (article_id);
 
 -- 3. LLM response cache -------------------------------------------------------
 --    Caches (query_hash → LLM answer) to avoid redundant API calls.
