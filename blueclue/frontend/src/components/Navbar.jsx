@@ -21,6 +21,7 @@ function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
+  const [toolsDropdownOpen, setToolsDropdownOpen] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const [ticketDetailId, setTicketDetailId] = useState(null)
   const [suggestions, setSuggestions] = useState(null)
@@ -37,6 +38,7 @@ function Navbar() {
   const notificationDropdownRef = useRef(null)
   const notificationBellRef = useRef(null)
   const profileDropdownRef = useRef(null)
+  const toolsDropdownRef = useRef(null)
   const authenticated = isAuthenticated()
   const user = getUser()
 
@@ -48,6 +50,9 @@ function Navbar() {
       }
       if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
         setProfileDropdownOpen(false)
+      }
+      if (toolsDropdownRef.current && !toolsDropdownRef.current.contains(event.target)) {
+        setToolsDropdownOpen(false)
       }
     }
 
@@ -338,35 +343,72 @@ function Navbar() {
                     <Link to="/my-tickets" className="text-gray-300 hover:text-white transition-colors">
                       My Tickets
                     </Link>
-                    <Link to="/knowledge-base" className="text-gray-300 hover:text-white transition-colors">
-                      Knowledge Base
-                    </Link>
+                    {/* Knowledge Base only shown here if NOT also management/admin (avoid duplicate) */}
+                    {user?.role !== 'management' && user?.role !== 'admin' && (
+                      <Link to="/knowledge-base" className="text-gray-300 hover:text-white transition-colors">
+                        Knowledge Base
+                      </Link>
+                    )}
                   </>
                 )}
                 {(user?.role === 'management' || user?.role === 'admin') && (
                   <>
                     <Link to="/management-dashboard" className="text-gray-300 hover:text-white transition-colors">
-                      Management Dashboard
+                      Dashboard
                     </Link>
-                    <Link to="/knowledge-base" className="text-gray-300 hover:text-white transition-colors">
-                      Knowledge Base
+                    <Link to="/analytics" className="text-gray-300 hover:text-white transition-colors">
+                      Analytics
                     </Link>
-                    <Link to="/template-manager" className="text-gray-300 hover:text-white transition-colors">
-                      Templates
-                    </Link>
-                    <Link to="/ml-admin" className="text-gray-300 hover:text-white transition-colors">
-                      ML Dashboard
-                    </Link>
+                    {/* Tools dropdown for less-frequent management links */}
+                    <div className="relative" ref={toolsDropdownRef}>
+                      <button
+                        onClick={() => setToolsDropdownOpen(!toolsDropdownOpen)}
+                        className="text-gray-300 hover:text-white transition-colors flex items-center gap-1"
+                      >
+                        Tools
+                        <svg className={`w-3.5 h-3.5 transition-transform ${toolsDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      {toolsDropdownOpen && (
+                        <div className="absolute left-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden py-1">
+                          <Link
+                            to="/knowledge-base"
+                            onClick={() => setToolsDropdownOpen(false)}
+                            className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                          >
+                            Knowledge Base
+                          </Link>
+                          <Link
+                            to="/template-manager"
+                            onClick={() => setToolsDropdownOpen(false)}
+                            className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                          >
+                            Templates
+                          </Link>
+                          <Link
+                            to="/ml-admin"
+                            onClick={() => setToolsDropdownOpen(false)}
+                            className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                          >
+                            ML Dashboard
+                          </Link>
+                          <Link
+                            to="/chat-analytics"
+                            onClick={() => setToolsDropdownOpen(false)}
+                            className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                          >
+                            Chat Analytics
+                          </Link>
+                        </div>
+                      )}
+                    </div>
                   </>
                 )}
-                {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
+                {/* Analytics for technicians (management/admin already have it above) */}
+                {['technician', 'senior_technician'].includes(user?.role) && (
                   <Link to="/analytics" className="text-gray-300 hover:text-white transition-colors">
                     Analytics
-                  </Link>
-                )}
-                {(user?.role === 'management' || user?.role === 'admin') && (
-                  <Link to="/chat-analytics" className="text-gray-300 hover:text-white transition-colors">
-                    Chat Analytics
                   </Link>
                 )}
               </>
@@ -542,7 +584,14 @@ function Navbar() {
                 onClick={() => setMobileMenuOpen(false)}
                 className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
               >
-                Management Dashboard
+                Dashboard
+              </Link>
+              <Link
+                to="/knowledge-base"
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+              >
+                Knowledge Base
               </Link>
               <Link
                 to="/template-manager"
