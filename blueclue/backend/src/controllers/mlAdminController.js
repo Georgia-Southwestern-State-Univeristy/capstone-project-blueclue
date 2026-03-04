@@ -6,7 +6,8 @@ import MLFeedback from '../models/MLFeedback.js';
 import MLModelVersion from '../models/MLModelVersion.js';
 import pool from '../config/database.js';
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:5000';
+const _rawAiUrl      = process.env.AI_SERVICE_URL || 'http://localhost:5000';
+const AI_SERVICE_URL  = /^https?:\/\//i.test(_rawAiUrl) ? _rawAiUrl : `http://${_rawAiUrl}`;
 const AI_TIMEOUT     = parseInt(process.env.AI_SERVICE_TIMEOUT, 10) || 8000;
 
 // ─────────────────────────────────────────────────────────────────────────────

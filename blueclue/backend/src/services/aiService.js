@@ -17,7 +17,8 @@
 // Configuration
 // -------------------------------------------------------------------------- //
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:5000';
+const _rawAiUrl     = process.env.AI_SERVICE_URL || 'http://localhost:5000';
+const AI_SERVICE_URL = /^https?:\/\//i.test(_rawAiUrl) ? _rawAiUrl : `http://${_rawAiUrl}`;
 const AI_SERVICE_TIMEOUT = parseInt(process.env.AI_SERVICE_TIMEOUT, 10) || 5000;
 const MAX_RETRIES = parseInt(process.env.AI_MAX_RETRIES, 10) || 2;
 const RETRY_BASE_MS = 200;
