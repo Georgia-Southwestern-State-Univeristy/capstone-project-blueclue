@@ -160,7 +160,7 @@ function TicketTimeline({ tickets = [], onTicketClick = null }) {
       {/* Chart area — scrollable on mobile only, allow tooltips to overflow */}
       <div
         ref={scrollRef}
-        className="flex-1 flex flex-col justify-end min-h-0 overflow-x-visible overflow-y-hidden pt-16 pr-8 scrollbar-hide md:scrollbar-default"
+        className="flex-1 flex flex-col justify-end min-h-0 overflow-x-visible overflow-y-visible pt-16 pr-8 scrollbar-hide md:scrollbar-default"
         style={{ WebkitOverflowScrolling: 'touch', position: 'relative', zIndex: 1 }}
       >
         <div className="flex items-end gap-1 h-36 md:min-w-0">
@@ -230,11 +230,11 @@ function TicketTimeline({ tickets = [], onTicketClick = null }) {
                 {/* Tooltip — allow overflow for right-most bar */}
                 {isHovered && (
                   <div
-                    className="absolute top-0 bg-gray-800 border border-gray-600 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-20 pointer-events-none"
+                    className="absolute bg-gray-800 border border-gray-600 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-20 pointer-events-none"
                     style={
                       isRightMost
-                        ? { right: 0, left: 'auto', transform: 'translateY(-100%)' }
-                        : { left: '50%', transform: 'translateX(-50%) translateY(-100%)' }
+                        ? { top: '1rem', right: 0, left: 'auto', transform: 'translateY(-100%)' }
+                        : { top: '1rem', left: '50%', transform: 'translateX(-50%) translateY(-100%)' }
                     }
                   >
                     <p className="font-medium">{formatHour(bucket.hourStart)}</p>
