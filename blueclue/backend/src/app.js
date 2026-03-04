@@ -7,6 +7,9 @@ import dotenv from 'dotenv';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import { fileURLToPath } from 'url';
+import path from 'path';
+import fs from 'fs';
 import pool from './config/database.js';
 import ticketRoutes from './routes/tickets.js';
 import authRoutes from './routes/auth.js';
@@ -75,6 +78,13 @@ app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true })); // For parsing Mailgun webhook form data
 app.use(cookieParser());
+
+// ── Static file serving (chat uploads) ──────────────────────────────────────
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
+const uploadsDir = path.resolve(__dirname, '../../uploads');
+fs.mkdirSync(path.join(uploadsDir, 'chat'), { recursive: true });
+app.use('/uploads', express.static(uploadsDir, { maxAge: '7d' }));
 
 // API Routes
 app.use('/api/auth', authRoutes);
