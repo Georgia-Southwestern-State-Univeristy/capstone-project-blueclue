@@ -73,8 +73,6 @@ function TechnicianWidgetGrid({
       timeline: (
         <TicketTimeline
           tickets={tickets}
-          onRefresh={fetchTickets}
-          isRefreshing={loading}
           onTicketClick={handleTicketClick}
         />
       ),
@@ -84,7 +82,6 @@ function TechnicianWidgetGrid({
         <TechTicketQueueWidget
           tickets={tickets}
           loading={loading}
-          onRefresh={fetchTickets}
           technicians={technicians}
           onTicketClick={handleTicketClick}
           onStatusChange={handleStatusChange}
@@ -157,7 +154,8 @@ function TechnicianDashboard() {
   }, [tickets]);
 
   const fetchTickets = async () => {
-    setLoading(true)
+    // Only show full loading spinner on initial load
+    if (tickets.length === 0) setLoading(true)
     setError(null)
     try {
       const response = await getAllTickets()

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import LoadingSpinner from './LoadingSpinner'
 import Alert from './Alert'
 import RequestAssignmentModal from './RequestAssignmentModal'
+import RefreshButton from './RefreshButton'
 import { getAvailableTickets, requestAssignment } from '../services/ticketService'
 
 /**
@@ -229,16 +230,7 @@ function AvailableTickets({ onTicketClick }) {
               )}
             </button>
 
-            <button
-              onClick={fetchAvailableTickets}
-              disabled={loading}
-              title="Refresh available tickets"
-              className={`w-9 h-9 flex items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-all ${loading ? 'animate-spin' : ''}`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
+            <RefreshButton onRefresh={fetchAvailableTickets} disabled={loading} />
           </div>
         </div>
 

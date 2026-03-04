@@ -31,7 +31,6 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
  */
 function TicketCategoriesWidget({
   tickets = [],
-  onRefresh = null,
   activeCategory = null,
   onCategorySelect = null,
   onTicketClick = null,
@@ -73,8 +72,7 @@ function TicketCategoriesWidget({
 
   const handleRefresh = useCallback(async () => {
     await fetchData()
-    if (onRefresh) await onRefresh()
-  }, [fetchData, onRefresh])
+  }, [fetchData])
 
   // Build segments from API data, falling back to client-side computation
   const { segments, total } = useMemo(() => {

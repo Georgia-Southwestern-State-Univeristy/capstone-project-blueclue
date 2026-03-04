@@ -113,13 +113,12 @@ function ManagementWidgetGrid({
   const widgetConfig = useMemo(() => {
     const componentMap = {
       timeline: (
-        <TicketTimeline tickets={tickets} onRefresh={fetchTickets} isRefreshing={loading} onTicketClick={handleTicketClick} />
+        <TicketTimeline tickets={tickets} onTicketClick={handleTicketClick} />
       ),
-      ticketControl: <TicketControlWidget tickets={tickets} onRefresh={fetchTickets} />,
+      ticketControl: <TicketControlWidget tickets={tickets} onTicketUpdated={fetchTickets} />,
       assignedChart: (
         <UnassignedVsAssignedWidget
           tickets={tickets}
-          onRefresh={fetchTickets}
           activeFilter={assignmentFilter}
           onFilter={setAssignmentFilter}
           widgetFilters={widgetFilters}
@@ -129,19 +128,18 @@ function ManagementWidgetGrid({
       categoriesChart: (
         <TicketCategoriesWidget
           tickets={tickets}
-          onRefresh={fetchTickets}
           activeCategory={categoryFilter}
           onCategorySelect={setCategoryFilter}
           onTicketClick={(ticket) => handleTicketClick(ticket.id || ticket.ticket_id)}
         />
       ),
-      overdue: <OverdueTicketsWidget onRefresh={fetchTickets} onTicketClick={(ticket) => handleTicketClick(ticket.id)} />,
-      escalations: <EscalationsWidget onRefresh={fetchTickets} onView={(ticket) => handleTicketClick(ticket.id)} />,
-      todaysActions: <TodaysActionsWidget onRefresh={fetchTickets} onAction={(item) => handleTicketClick(item.id || item.ticket_id)} />,
-      topRequesters: <TopRequestersWidget onRefresh={fetchTickets} />,
-      techPerformance: <TechPerformanceWidget onRefresh={fetchTickets} />,
-      deletedTickets: <DeletedTicketsWidget onRefresh={fetchTickets} onTicketClick={(ticket) => handleTicketClick(ticket.id)} />,
-      pendingRequests: <PendingRequestsWidget ref={pendingRequestsRef} onAction={() => fetchTickets()} onTicketClick={(ticketId) => handleTicketClick(ticketId)} />,
+      overdue: <OverdueTicketsWidget onTicketClick={(ticket) => handleTicketClick(ticket.id)} />,
+      escalations: <EscalationsWidget onView={(ticket) => handleTicketClick(ticket.id)} />,
+      todaysActions: <TodaysActionsWidget onAction={(item) => handleTicketClick(item.id || item.ticket_id)} />,
+      topRequesters: <TopRequestersWidget />,
+      techPerformance: <TechPerformanceWidget />,
+      deletedTickets: <DeletedTicketsWidget onTicketClick={(ticket) => handleTicketClick(ticket.id)} />,
+      pendingRequests: <PendingRequestsWidget ref={pendingRequestsRef} onTicketClick={(ticketId) => handleTicketClick(ticketId)} />,
       responseTime: (
         <BaseWidget title="Update Request Response Times" icon="⏱️">
           <UpdateRequestResponseTimeAnalytics />
@@ -292,7 +290,8 @@ function ManagementDashboard() {
   })
 
   const fetchTickets = async () => {
-    setLoading(true)
+    // Only show full loading spinner on initial load
+    if (tickets.length === 0) setLoading(true)
     setError(null)
     try {
       const response = await getAllTickets()

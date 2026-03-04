@@ -57,7 +57,7 @@ const PRIORITY_COLORS = {
 }
 
 /* ── Component ── */
-export default function TodaysActionsWidget({ onRefresh, onAction, autoRefreshInterval = 60000 }) {
+export default function TodaysActionsWidget({ onAction, autoRefreshInterval = 60000 }) {
   const [data, setData] = useState({ actions: [], summary: {} })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -150,7 +150,7 @@ export default function TodaysActionsWidget({ onRefresh, onAction, autoRefreshIn
           </span>
         ) : null
       }
-      onRefresh={() => { fetchActions(); if (onRefresh) onRefresh() }}
+      onRefresh={() => { fetchActions() }}
       isLoading={loading}
       error={error}
       isEmpty={totalCount === 0}

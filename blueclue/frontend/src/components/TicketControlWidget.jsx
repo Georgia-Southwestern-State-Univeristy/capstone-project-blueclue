@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { getTechnicians, bulkAssignTickets, assignTicket as assignTicketApi } from '../services/ticketService'
 import TicketDetailView from './TicketDetailView'
 import useContainerSize from '../hooks/useContainerSize'
+import RefreshButton from './RefreshButton'
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -35,7 +36,7 @@ const getWorkloadTier = (count) => {
 
 // ── Component ────────────────────────────────────────────────────────────
 
-function TicketControlWidget({ tickets = [], onRefresh }) {
+function TicketControlWidget({ tickets = [], onRefresh, onTicketUpdated }) {
   // ── Container-responsive sizing ──
   const [containerRef, { width: containerWidth }] = useContainerSize()
   const ticketCols = containerWidth >= 900 ? 3 : containerWidth >= 550 ? 2 : 1
@@ -78,10 +79,10 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
 
   // ── Refresh handler with visual feedback ──
   const handleRefresh = async () => {
-    if (refreshing || !onRefresh) return
+    if (refreshing) return
     setRefreshing(true)
     try {
-      await onRefresh()
+      if (onRefresh) await onRefresh()
       refreshTechnicians()
     } finally {
       setTimeout(() => setRefreshing(false), 600)
@@ -164,7 +165,7 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
       setAssignmentNote('')
       setActiveTab('queue')
       refreshTechnicians()
-      if (onRefresh) onRefresh()
+      if (onTicketUpdated) onTicketUpdated()
     } catch (err) {
       setAssignError(err.message || 'Failed to assign tickets')
     } finally {
@@ -180,7 +181,7 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
       await assignTicketApi(ticketId, null)
       setAssignSuccess('Ticket unassigned successfully')
       refreshTechnicians()
-      if (onRefresh) onRefresh()
+      if (onTicketUpdated) onTicketUpdated()
     } catch (err) {
       setAssignError(err.message || 'Failed to unassign ticket')
     } finally {
@@ -299,11 +300,7 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
                     </span>
                   )}
                 </button>
-                {onRefresh && (
-                  <button onClick={handleRefresh} disabled={refreshing} title="Refresh tickets" className={`w-10 h-10 flex items-center justify-center rounded-full text-white transition-all ${refreshing ? 'bg-blue-800 cursor-wait' : 'bg-blue-600 hover:bg-blue-700'}`}>
-                    <svg className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                  </button>
-                )}
+                <RefreshButton onRefresh={handleRefresh} disabled={refreshing} />
               </div>
             </div>
 
@@ -702,7 +699,7 @@ function TicketControlWidget({ tickets = [], onRefresh }) {
       ticketId={detailTicketId}
       isOpen={isDetailOpen}
       onClose={() => setIsDetailOpen(false)}
-      onTicketUpdated={onRefresh}
+      onTicketUpdated={onTicketUpdated}
     />
     </>
   )

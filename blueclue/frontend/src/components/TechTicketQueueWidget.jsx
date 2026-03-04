@@ -1,4 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
+import RefreshButton from './RefreshButton'
+import { getAllTickets } from '../services/ticketService'
 
 // ── Utility functions ────────────────────────────────────────────────────────
 
@@ -202,9 +204,8 @@ function TechTicketCard({
 // ── Main Queue Widget ────────────────────────────────────────────────────────
 
 export default function TechTicketQueueWidget({
-  tickets,
+  tickets: externalTickets,
   loading,
-  onRefresh,
   technicians = [],
   onTicketClick,
   onStatusChange,
@@ -218,6 +219,24 @@ export default function TechTicketQueueWidget({
   const [showFilters, setShowFilters] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [filters, setFilters] = useState({ status: [], priority: [], assignmentStatus: [] })
+  const [localTickets, setLocalTickets] = useState(null)
+  const [refreshing, setRefreshing] = useState(false)
+
+  // Use local tickets if we've self-refreshed, otherwise use parent's tickets
+  const tickets = localTickets || externalTickets
+
+  // Reset local tickets when parent data changes so we stay in sync
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      const response = await getAllTickets()
+      setLocalTickets(response.data || [])
+    } catch (err) {
+      console.error('TechTicketQueue refresh error:', err)
+    } finally {
+      setTimeout(() => setRefreshing(false), 600)
+    }
+  }, [])
 
   // Compute tickets
   const activeTickets = useMemo(
@@ -355,16 +374,7 @@ export default function TechTicketQueueWidget({
                 </span>
               )}
             </button>
-            <button
-              onClick={onRefresh}
-              disabled={loading}
-              title={loading ? 'Refreshing...' : 'Refresh tickets'}
-              className={`w-10 h-10 flex items-center justify-center rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all ${loading ? 'animate-spin' : ''}`}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
+            <RefreshButton onRefresh={handleRefresh} disabled={refreshing || loading} />
           </div>
         </div>
 

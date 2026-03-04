@@ -63,7 +63,6 @@ const PRIORITY_COLORS = {
  * @param {number}   [props.autoRefreshInterval=0] - Auto-refresh in ms (0 = off)
  */
 function OverdueTicketsWidget({
-  onRefresh = null,
   onTicketClick = null,
   autoRefreshInterval = 0,
 }) {
@@ -97,8 +96,7 @@ function OverdueTicketsWidget({
 
   const handleRefresh = useCallback(async () => {
     await fetchData()
-    if (onRefresh) await onRefresh()
-  }, [fetchData, onRefresh])
+  }, [fetchData])
 
   // Compute summary counts by alert level
   const summary = {
