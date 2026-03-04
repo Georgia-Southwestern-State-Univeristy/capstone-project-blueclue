@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { getTicketById, updateTicketStatus, updateTicket, deleteTicket, getTechnicians, assignSingleTicket, reassignTicket, cancelTicket, reopenTicket } from '../services/ticketService'
 import { getUserRole, getUser, getUserId } from '../services/authService'
 import TicketActivityLog from './TicketActivityLog'
@@ -1660,8 +1662,40 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                           placeholder="Ticket description"
                         />
                       ) : (
-                        <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 text-gray-300 text-sm leading-relaxed whitespace-pre-wrap break-words">
-                          {ticket.description || <span className="text-gray-600 italic">No description provided.</span>}
+                        <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 text-sm leading-relaxed break-words">
+                          {ticket.description ? (
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                h1: ({node, ...props}) => <h1 className="text-xl font-bold text-white mt-4 mb-2 first:mt-0" {...props} />,
+                                h2: ({node, ...props}) => <h2 className="text-lg font-semibold text-white mt-3 mb-2 first:mt-0" {...props} />,
+                                h3: ({node, ...props}) => <h3 className="text-base font-semibold text-gray-200 mt-3 mb-1 first:mt-0" {...props} />,
+                                p:  ({node, ...props}) => <p  className="text-gray-300 mb-3 last:mb-0" {...props} />,
+                                ul: ({node, ...props}) => <ul className="list-disc list-inside text-gray-300 mb-3 space-y-1 pl-2" {...props} />,
+                                ol: ({node, ...props}) => <ol className="list-decimal list-inside text-gray-300 mb-3 space-y-1 pl-2" {...props} />,
+                                li: ({node, ...props}) => <li className="text-gray-300" {...props} />,
+                                strong: ({node, ...props}) => <strong className="font-semibold text-white" {...props} />,
+                                em: ({node, ...props}) => <em className="italic text-gray-300" {...props} />,
+                                code: ({node, className, children, ...props}) => {
+                                  const isBlock = className?.startsWith('language-')
+                                  return isBlock
+                                    ? <code className="block text-blue-300 font-mono text-xs overflow-x-auto" {...props}>{children}</code>
+                                    : <code className="bg-gray-800 text-blue-300 rounded px-1 py-0.5 font-mono text-xs" {...props}>{children}</code>
+                                },
+                                pre: ({node, ...props}) => <pre className="bg-gray-800 rounded-lg p-3 overflow-x-auto mb-3 text-blue-300 font-mono text-xs" {...props} />,
+                                blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-gray-600 pl-4 italic text-gray-400 my-3" {...props} />,
+                                a: ({node, ...props}) => <a className="text-blue-400 underline hover:text-blue-300" target="_blank" rel="noopener noreferrer" {...props} />,
+                                hr: ({node, ...props}) => <hr className="border-gray-700 my-4" {...props} />,
+                                table: ({node, ...props}) => <div className="overflow-x-auto mb-3"><table className="w-full text-sm border-collapse" {...props} /></div>,
+                                th: ({node, ...props}) => <th className="border border-gray-700 bg-gray-800 px-3 py-2 text-left text-gray-200 font-semibold" {...props} />,
+                                td: ({node, ...props}) => <td className="border border-gray-700 px-3 py-2 text-gray-300" {...props} />,
+                              }}
+                            >
+                              {ticket.description}
+                            </ReactMarkdown>
+                          ) : (
+                            <span className="text-gray-600 italic">No description provided.</span>
+                          )}
                         </div>
                       )}
                     </div>

@@ -107,7 +107,7 @@ const autoDenyPendingRequests = async (ticketId, reviewerId, reason, io, exclude
  */
 export const createTicket = async (req, res) => {
     try {
-        const { subject, description, customer_id, priority, category } = req.body;
+        const { subject, description, customer_id, priority, category, attachments = [] } = req.body;
 
         // Validation
         if (!subject || subject.trim() === '') {
@@ -168,6 +168,15 @@ export const createTicket = async (req, res) => {
             aiPriority
         );
 
+        // Validate attachments (array of { dataUrl, name, size })
+        const sanitizedAttachments = Array.isArray(attachments)
+            ? attachments.slice(0, 5).map(a => ({
+                name: String(a.name || '').slice(0, 255),
+                size: Number(a.size) || 0,
+                dataUrl: String(a.dataUrl || '')
+              }))
+            : [];
+
         // Create ticket with AI classification metadata and priority tracking
         const ticket = await Ticket.create({
             subject: subject.trim(),
@@ -186,7 +195,8 @@ export const createTicket = async (req, res) => {
             ai_keywords_matched: aiResult.aiClassified ? {
                 category_keywords: aiResult.category_keywords || [],
                 priority_keywords: aiResult.priority_keywords || []
-            } : null
+            } : null,
+            attachments: sanitizedAttachments
         });
 
         // Save AI classification to ai_classifications table
