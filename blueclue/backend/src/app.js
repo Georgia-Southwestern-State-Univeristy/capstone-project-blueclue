@@ -77,8 +77,8 @@ app.use(cors({
     credentials: true
 }));
 app.use(morgan('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // For parsing Mailgun webhook form data
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' })); // For parsing Mailgun webhook form data
 app.use(cookieParser());
 
 // ── Static file serving (chat uploads) ──────────────────────────────────────
