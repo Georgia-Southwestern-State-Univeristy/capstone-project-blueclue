@@ -9,7 +9,7 @@ import SettingsSidebar from './SettingsSidebar'
 import TicketDetailView from './TicketDetailView'
 import useChatStore from '../hooks/useChatStore'
 import { requestNotificationPermission } from '../utils/chatNotifications'
-import { sendChatMessage, submitChatFeedback, clearChatHistory, createTicketFromChat } from '../services/chatService'
+import { sendChatMessage, sendTechChatMessage, submitChatFeedback, clearChatHistory, createTicketFromChat, requestChatHandoff, uploadChatFile } from '../services/chatService'
 import logo from '../assets/EditedBlueClueLogo.png'
 
 function Navbar() {
@@ -20,6 +20,7 @@ function Navbar() {
   const [isTyping, setIsTyping] = useState(false)
   const [ticketDetailId, setTicketDetailId] = useState(null)
   const [suggestions, setSuggestions] = useState(null)
+  const [handoffStatus, setHandoffStatus] = useState(null) // null | 'requested' | 'claimed'
 
   // Persistent chat state
   const chat = useChatStore()
@@ -42,21 +43,23 @@ function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Send a message to the backend and display the bot reply
+  // Send a message — branches between customer and tech mode
   const handleChatSend = useCallback(async (text) => {
-    // Request notification permission on first interaction (user-initiated)
     requestNotificationPermission()
     chat.addMessage({ id: Date.now(), sender: 'user', text, timestamp: new Date() })
     setIsTyping(true)
     setSuggestions(null)
 
     try {
-      const data = await sendChatMessage(text, conversationIdRef.current)
+      const isTech = chat.chatMode === 'tech'
+      const data = isTech
+        ? await sendTechChatMessage(text, conversationIdRef.current)
+        : await sendChatMessage(text, conversationIdRef.current)
+
       conversationIdRef.current = data.conversationId ?? conversationIdRef.current
       setIsTyping(false)
 
-      // Map backend suggestions to {label, value} for QuickReplyButtons
-      if (data.suggestions?.length) {
+      if (!isTech && data.suggestions?.length) {
         setSuggestions(data.suggestions.map((s) => ({ label: s, value: s })))
       } else {
         setSuggestions(null)
@@ -79,6 +82,41 @@ function Navbar() {
         timestamp: new Date(),
       })
       console.error('Chat error:', err)
+    }
+  }, [chat])
+
+  // Request human handoff
+  const handleHandoff = useCallback(async () => {
+    setHandoffStatus('requested')
+    try {
+      await requestChatHandoff(conversationIdRef.current)
+    } catch (err) {
+      console.error('Handoff request error:', err)
+      setHandoffStatus(null)
+    }
+  }, [])
+
+  // File upload in chat
+  const handleFileUpload = useCallback(async (file) => {
+    if (!file) return
+    const sizeMB = file.size / (1024 * 1024)
+    if (sizeMB > 5) {
+      chat.addMessage({ id: Date.now(), sender: 'bot', text: 'File too large (max 5 MB).', timestamp: new Date() })
+      return
+    }
+    chat.addMessage({ id: Date.now(), sender: 'user', text: `📎 ${file.name}`, timestamp: new Date() })
+    try {
+      const result = await uploadChatFile(file, conversationIdRef.current)
+      conversationIdRef.current = result.conversationId ?? conversationIdRef.current
+      chat.addMessage({
+        id: Date.now() + 1,
+        sender: 'bot',
+        text: result.message || 'File received.',
+        timestamp: new Date(),
+      })
+    } catch (err) {
+      chat.addMessage({ id: Date.now() + 1, sender: 'bot', text: 'Upload failed. Please try again.', timestamp: new Date() })
+      console.error('File upload error:', err)
     }
   }, [chat])
 
@@ -202,6 +240,11 @@ function Navbar() {
                 {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
                   <Link to="/analytics" className="text-gray-300 hover:text-white transition-colors">
                     Analytics
+                  </Link>
+                )}
+                {(user?.role === 'management' || user?.role === 'admin') && (
+                  <Link to="/chat-analytics" className="text-gray-300 hover:text-white transition-colors">
+                    Chat Analytics
                   </Link>
                 )}
               </>
@@ -377,6 +420,15 @@ function Navbar() {
               Analytics
             </Link>
           )}
+          {(user?.role === 'management' || user?.role === 'admin') && (
+            <Link
+              to="/chat-analytics"
+              onClick={() => setMobileMenuOpen(false)}
+              className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+            >
+              Chat Analytics
+            </Link>
+          )}
           
 
         </div>
@@ -399,6 +451,12 @@ function Navbar() {
         isTyping={isTyping}
         suggestions={suggestions || undefined}
         onActionButton={handleActionButton}
+        chatMode={chat.chatMode}
+        onToggleMode={() => chat.toggleMode()}
+        userRole={user?.role || 'customer'}
+        onHandoff={handleHandoff}
+        handoffStatus={handoffStatus}
+        onFileUpload={handleFileUpload}
       />
 
       {/* Ticket Detail View - opened from notification clicks */}
