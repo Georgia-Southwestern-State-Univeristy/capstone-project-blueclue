@@ -75,6 +75,9 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   const [updateRequests, setUpdateRequests] = useState([])
   const [updateRequestsLoading, setUpdateRequestsLoading] = useState(false)
 
+  // ─── Image Lightbox state ────────────────────────────────────
+  const [lightboxImage, setLightboxImage] = useState(null)
+
   const modalRef = useRef(null)
   const assignRef = useRef(null)
   const statusDropdownRef = useRef(null)
@@ -1700,6 +1703,42 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                       )}
                     </div>
 
+                    {/* Attachments */}
+                    {ticket.attachments && ticket.attachments.length > 0 && (
+                      <div>
+                        <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                          Attachments ({ticket.attachments.length})
+                        </label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                          {ticket.attachments.map((attachment, idx) => (
+                            <div key={idx} className="group relative bg-gray-900 rounded-lg border border-gray-800 overflow-hidden hover:border-blue-500/50 transition-colors">
+                              <div className="aspect-square relative bg-gray-950 flex items-center justify-center">
+                                <img
+                                  src={attachment.dataUrl}
+                                  alt={attachment.name || `Attachment ${idx + 1}`}
+                                  className="max-w-full max-h-full object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                                  onClick={() => setLightboxImage(attachment)}
+                                  loading="lazy"
+                                />
+                              </div>
+                              {attachment.name && (
+                                <div className="p-2 bg-gray-900/90">
+                                  <p className="text-xs text-gray-400 truncate" title={attachment.name}>
+                                    {attachment.name}
+                                  </p>
+                                  {attachment.size && (
+                                    <p className="text-xs text-gray-600">
+                                      {(attachment.size / 1024).toFixed(1)} KB
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Inline edit fields — role-based */}
                     {isEditing && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1955,6 +1994,46 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                 {deleteLoading ? 'Deleting...' : 'Delete Ticket'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Lightbox Modal */}
+      {lightboxImage && (
+        <div 
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4"
+          onClick={() => setLightboxImage(null)}
+        >
+          <div className="relative max-w-7xl max-h-full" onClick={(e) => e.stopPropagation()}>
+            {/* Close button */}
+            <button
+              onClick={() => setLightboxImage(null)}
+              className="absolute -top-12 right-0 text-white hover:text-gray-300 transition-colors"
+              aria-label="Close lightbox"
+            >
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            
+            {/* Image */}
+            <img
+              src={lightboxImage.dataUrl}
+              alt={lightboxImage.name || 'Attachment'}
+              className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            />
+            
+            {/* Image info */}
+            {lightboxImage.name && (
+              <div className="mt-4 text-center">
+                <p className="text-white font-medium">{lightboxImage.name}</p>
+                {lightboxImage.size && (
+                  <p className="text-gray-400 text-sm mt-1">
+                    {(lightboxImage.size / 1024).toFixed(1)} KB
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
