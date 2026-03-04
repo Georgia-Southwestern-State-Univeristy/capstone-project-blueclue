@@ -129,6 +129,7 @@ export const createTicket = async (ticketData) => {
     subject: ticketData.title,
     description: ticketData.description,
     priority: ticketData.priority,
+    attachments: ticketData.attachments || [],
   };
   
   // Add customer_id for authenticated users, or guest info for guests
