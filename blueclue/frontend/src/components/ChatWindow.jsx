@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect } from 'react';
 import MessageBubble from './MessageBubble';
 import ChatInput from './ChatInput';
 import QuickReplyButtons from './QuickReplyButtons';
@@ -25,9 +25,10 @@ const TECH_ROLES = new Set(['technician', 'senior_technician', 'management', 'ad
  *  - chatMode:       'customer' | 'tech'
  *  - onToggleMode:   () => void   — only called for tech-role users
  *  - userRole:       string       — to decide if mode toggle is shown
- *  - onHandoff:      () => void   — customer requests a human tech
- *  - onFileUpload:   (file: File) => void
- *  - handoffStatus:  null | 'requested' | 'claimed'
+ *  - onHandoff:       () => void   — customer requests a human tech
+ *  - onFileUpload:    (file: File) => void
+ *  - handoffStatus:   null | 'requested' | 'claimed'
+ *  - onCreateTicket:  () => void   — opens TicketFromChatModal (shown when handoffStatus=claimed)
  */
 function ChatWindow({
   isOpen,
@@ -45,6 +46,7 @@ function ChatWindow({
   onHandoff,
   onFileUpload,
   handoffStatus = null,
+  onCreateTicket,
 }) {
   const messagesEndRef   = useRef(null);
   const prevMessageCount = useRef(messages.length);
@@ -135,7 +137,18 @@ function ChatWindow({
             <span className="text-[10px] text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded font-medium">⏳ Connecting…</span>
           )}
           {handoffStatus === 'claimed' && (
-            <span className="text-[10px] text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded font-medium">✅ Tech joined</span>
+            <>
+              {onCreateTicket && (
+                <button
+                  onClick={onCreateTicket}
+                  className="flex items-center gap-0.5 px-2 py-1 rounded text-[10px] font-medium bg-blue-900/50 hover:bg-blue-800 text-blue-300 hover:text-white transition-colors"
+                  title="Create a ticket from this chat"
+                >
+                  🎫 Ticket
+                </button>
+              )}
+              <span className="text-[10px] text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded font-medium">✅ Tech joined</span>
+            </>
           )}
 
           {/* Minimize */}

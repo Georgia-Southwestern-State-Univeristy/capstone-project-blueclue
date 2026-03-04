@@ -123,9 +123,11 @@ function useChatStore() {
     setIsOpen(false);
     setUnreadCount(0);
     setHasNewMessage(false);
+    setChatMode('customer');
     sessionStorage.removeItem(STORAGE_KEYS.MESSAGES);
     sessionStorage.removeItem(STORAGE_KEYS.OPEN);
     sessionStorage.removeItem(STORAGE_KEYS.UNREAD);
+    sessionStorage.removeItem(STORAGE_KEYS.MODE);
   }, []);
 
   /** Toggle between customer and tech mode. Resets messages to appropriate welcome. */

@@ -9,6 +9,7 @@ import RingRequestWidget from '../components/RingRequestWidget'
 import UpdateRequestAlert from '../components/UpdateRequestAlert'
 import UpdateResponseModal from '../components/UpdateResponseModal'
 import TechTicketQueueWidget from '../components/TechTicketQueueWidget'
+import TechChatPanel from '../components/TechChatPanel'
 import DashboardGrid from '../components/DashboardGrid'
 import useDashboardLayout from '../hooks/useDashboardLayout'
 import { buildGalleryItems, buildWidgetConfig } from '../widgets'
@@ -183,8 +184,6 @@ function TechnicianDashboard() {
   const handleAssignmentChange = async (ticketId, technicianId) => {
     const ticket = tickets.find(t => t.id === ticketId)
     if (!ticket) return
-
-    const previousAssignedTo = ticket.assigned_to
 
     setAssigningTicketId(ticketId)
 
@@ -398,6 +397,9 @@ function TechnicianDashboard() {
           updateRequest={selectedUpdateRequest}
         />
       )}
+
+      {/* Live Chat Panel — handles pending handoff requests from customers */}
+      <TechChatPanel />
     </div>
   )
 }

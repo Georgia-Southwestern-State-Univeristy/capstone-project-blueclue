@@ -7,9 +7,12 @@ import ChatWidgetButton from './ChatWidgetButton'
 import ChatWindow from './ChatWindow'
 import SettingsSidebar from './SettingsSidebar'
 import TicketDetailView from './TicketDetailView'
+import TicketFromChatModal from './TicketFromChatModal'
 import useChatStore from '../hooks/useChatStore'
 import { requestNotificationPermission } from '../utils/chatNotifications'
-import { sendChatMessage, sendTechChatMessage, submitChatFeedback, clearChatHistory, createTicketFromChat, requestChatHandoff, uploadChatFile } from '../services/chatService'
+import { sendChatMessage, sendTechChatMessage, submitChatFeedback, submitConversationSurvey, clearChatHistory, createTicketFromChat, requestChatHandoff, uploadChatFile } from '../services/chatService'
+import ConversationSurveyModal from './ConversationSurveyModal'
+import { getSocket } from '../services/socketService'
 import logo from '../assets/EditedBlueClueLogo.png'
 
 function Navbar() {
@@ -21,10 +24,14 @@ function Navbar() {
   const [ticketDetailId, setTicketDetailId] = useState(null)
   const [suggestions, setSuggestions] = useState(null)
   const [handoffStatus, setHandoffStatus] = useState(null) // null | 'requested' | 'claimed'
+  const [ticketFromChatOpen, setTicketFromChatOpen] = useState(false)
+  const [showSurvey, setShowSurvey] = useState(false)
+  const [surveyShownForConvId, setSurveyShownForConvId] = useState(null)
 
   // Persistent chat state
   const chat = useChatStore()
   const conversationIdRef = useRef(null)
+  const [conversationId, setConversationId] = useState(null)
   const [ticketDetailOpen, setTicketDetailOpen] = useState(false)
   const notificationDropdownRef = useRef(null)
   const notificationBellRef = useRef(null)
@@ -43,6 +50,54 @@ function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // ── Socket: listen for tech_reply / handoff_resolved / chat_claimed ──
+  useEffect(() => {
+    if (!authenticated) return
+    const socket = getSocket()
+    if (!socket) return
+
+    const handleTechReply = (data) => {
+      chat.addMessage({
+        id: data.messageId ?? Date.now(),
+        sender: 'bot',
+        text: `👨‍💻 **${data.techName || 'Technician'}:** ${data.message}`,
+        timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
+      })
+      setHandoffStatus('claimed')
+    }
+
+    const handleHandoffResolved = () => {
+      setHandoffStatus(null)
+      chat.addMessage({
+        id: Date.now(),
+        sender: 'bot',
+        text: '✅ The technician has closed this chat session. If your issue persists, please open a new support ticket.',
+        timestamp: new Date(),
+        actionButtons: [{ id: 'create_ticket', label: '🎫 Create a Ticket', primary: true }],
+      })
+    }
+
+    const handleChatClaimed = (data) => {
+      setHandoffStatus('claimed')
+      chat.addMessage({
+        id: Date.now(),
+        sender: 'bot',
+        text: `🎉 **${data.techName || 'A technician'}** has joined the chat! How can they help you?`,
+        timestamp: new Date(),
+      })
+    }
+
+    socket.on('tech_reply', handleTechReply)
+    socket.on('handoff_resolved', handleHandoffResolved)
+    socket.on('chat_claimed', handleChatClaimed)
+
+    return () => {
+      socket.off('tech_reply', handleTechReply)
+      socket.off('handoff_resolved', handleHandoffResolved)
+      socket.off('chat_claimed', handleChatClaimed)
+    }
+  }, [authenticated, chat])
+
   // Send a message — branches between customer and tech mode
   const handleChatSend = useCallback(async (text) => {
     requestNotificationPermission()
@@ -57,6 +112,7 @@ function Navbar() {
         : await sendChatMessage(text, conversationIdRef.current)
 
       conversationIdRef.current = data.conversationId ?? conversationIdRef.current
+      setConversationId(conversationIdRef.current)
       setIsTyping(false)
 
       if (!isTech && data.suggestions?.length) {
@@ -73,6 +129,19 @@ function Navbar() {
         articleLinks: data.articleLinks?.length ? data.articleLinks : undefined,
         actionButtons: data.actionButtons?.length ? data.actionButtons : undefined,
       })
+
+      // Auto-handoff: low confidence after 5+ exchanges — suggest human tech
+      if (data.suggestHandoff && handoffStatus === null) {
+        setTimeout(() => {
+          chat.addMessage({
+            id: Date.now() + 2,
+            sender: 'bot',
+            text: "👷 It looks like I haven't been able to fully resolve your issue. Would you like me to connect you with a live technician?",
+            timestamp: new Date(),
+            actionButtons: [{ id: 'request_handoff', label: '🧑‍💻 Talk to a Technician', primary: true }],
+          })
+        }, 600)
+      }
     } catch (err) {
       setIsTyping(false)
       chat.addMessage({
@@ -83,7 +152,7 @@ function Navbar() {
       })
       console.error('Chat error:', err)
     }
-  }, [chat])
+  }, [chat, handoffStatus])
 
   // Request human handoff
   const handleHandoff = useCallback(async () => {
@@ -108,6 +177,7 @@ function Navbar() {
     try {
       const result = await uploadChatFile(file, conversationIdRef.current)
       conversationIdRef.current = result.conversationId ?? conversationIdRef.current
+      setConversationId(conversationIdRef.current)
       chat.addMessage({
         id: Date.now() + 1,
         sender: 'bot',
@@ -122,6 +192,10 @@ function Navbar() {
 
   // Handle action buttons embedded in bot messages
   const handleActionButton = useCallback(async (buttonId) => {
+    if (buttonId === 'request_handoff') {
+      handleHandoff()
+      return
+    }
     if (buttonId === 'create_ticket') {
       setIsTyping(true)
       setSuggestions(null)
@@ -150,14 +224,54 @@ function Navbar() {
     } else if (buttonId === 'view_tickets') {
       navigate('/client-dashboard')
       chat.closeChat()
+    } else if (buttonId.startsWith('view_ticket_')) {
+      const ticketId = parseInt(buttonId.replace('view_ticket_', ''), 10)
+      if (ticketId) {
+        setTicketDetailId(ticketId)
+        setTicketDetailOpen(true)
+      }
     }
-  }, [chat, navigate])
+  }, [chat, navigate, handleHandoff])
 
-  // Feedback handler — sends rating to backend
-  const handleChatFeedback = useCallback(async (messageId, rating) => {
+  // Close chat — show survey first if there was a real bot exchange
+  const handleCloseChat = useCallback(() => {
+    const hasBotMessages = chat.messages.some(m => m.sender === 'bot')
+    if (hasBotMessages && conversationId && conversationId !== surveyShownForConvId) {
+      setShowSurvey(true)
+    } else {
+      chat.closeChat()
+    }
+  }, [chat, conversationId, surveyShownForConvId])
+
+  // Survey submit — save response then close
+  const handleSurveySubmit = useCallback(async (surveyData) => {
+    setSurveyShownForConvId(conversationId)
+    setShowSurvey(false)
+    try {
+      await submitConversationSurvey(conversationId, surveyData)
+    } catch (err) {
+      console.error('Survey submit error:', err)
+    }
+    chat.closeChat()
+  }, [conversationId, chat])
+
+  // Survey skip — just close
+  const handleSurveySkip = useCallback(() => {
+    setSurveyShownForConvId(conversationId)
+    setShowSurvey(false)
+    chat.closeChat()
+  }, [conversationId, chat])
+
+  // Feedback handler — sends rating + optional reason/details to backend
+  const handleChatFeedback = useCallback(async (messageId, rating, feedbackDetails = {}) => {
     try {
       const helpful = rating === 'positive'
-      await submitChatFeedback(messageId, helpful)
+      await submitChatFeedback(
+        messageId,
+        helpful,
+        feedbackDetails?.text || '',
+        feedbackDetails?.reason || null,
+      )
     } catch (err) {
       console.error('Feedback error:', err)
     }
@@ -172,7 +286,10 @@ function Navbar() {
       // silently ignore — logout should always proceed
     }
     conversationIdRef.current = null
+    setConversationId(null)
     setSuggestions(null)
+    setShowSurvey(false)
+    setSurveyShownForConvId(null)
     chat.clearChat()
     await logout()
     navigate('/login')
@@ -445,8 +562,8 @@ function Navbar() {
         isOpen={chat.isOpen}
         messages={chat.messages}
         onSend={handleChatSend}
-        onClose={chat.closeChat}
-        onMinimize={chat.closeChat}
+        onClose={handleCloseChat}
+        onMinimize={handleCloseChat}
         onFeedback={handleChatFeedback}
         isTyping={isTyping}
         suggestions={suggestions || undefined}
@@ -457,6 +574,23 @@ function Navbar() {
         onHandoff={handleHandoff}
         handoffStatus={handoffStatus}
         onFileUpload={handleFileUpload}
+        onCreateTicket={handoffStatus === 'claimed' ? () => setTicketFromChatOpen(true) : undefined}
+      />
+
+      {/* Ticket-from-chat modal */}
+      <TicketFromChatModal
+        conversationId={conversationId}
+        isOpen={ticketFromChatOpen}
+        onClose={() => setTicketFromChatOpen(false)}
+        onCreated={(ticketNumber) => {
+          setTicketFromChatOpen(false)
+          chat.addMessage({
+            id: Date.now(),
+            sender: 'bot',
+            text: `🎫 Ticket **#${ticketNumber}** has been created. A technician will follow up soon.`,
+            timestamp: new Date(),
+          })
+        }}
       />
 
       {/* Ticket Detail View - opened from notification clicks */}
@@ -465,6 +599,14 @@ function Navbar() {
         isOpen={ticketDetailOpen}
         onClose={() => setTicketDetailOpen(false)}
       />
+
+      {/* End-of-conversation survey */}
+      {showSurvey && (
+        <ConversationSurveyModal
+          onSubmit={handleSurveySubmit}
+          onSkip={handleSurveySkip}
+        />
+      )}
     </nav>
   )
 }

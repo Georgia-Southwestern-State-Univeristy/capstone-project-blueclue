@@ -114,14 +114,19 @@ export const getChatConversations = async (limit = 50) => {
  *
  * @param {number}  messageId
  * @param {boolean} helpful
- * @param {string}  [feedback] – Optional free-text feedback
+ * @param {string}  [details]  – Optional free-text details (thumbs-down)
+ * @param {string}  [reason]   – Structured failure reason (thumbs-down)
  * @returns {Promise<Object>}
  */
-export const submitChatFeedback = async (messageId, helpful, feedback = '') => {
+export const submitChatFeedback = async (messageId, helpful, details = '', reason = null) => {
+  const payload = { messageId, helpful }
+  if (details) payload.details = details
+  if (reason)  payload.reason  = reason
+
   const res = await fetchWithTimeout(`${API_BASE_URL}/chat/feedback`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ messageId, helpful, feedback }),
+    body: JSON.stringify(payload),
   })
 
   const json = await handleResponse(res, 'Failed to submit feedback')
@@ -350,6 +355,18 @@ export const getPendingHandoffs = async () => {
   return json.data
 }
 
+/**
+ * (Tech/Customer) Get LLM-generated summary of a conversation without creating a ticket.
+ * GET /api/chat/summary/:conversationId
+ */
+export const getConversationSummary = async (conversationId) => {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/chat/summary/${conversationId}`, {
+    headers: getAuthHeaders(),
+  })
+  const json = await handleResponse(res, 'Failed to generate summary')
+  return json.data // { title, description, transcript }
+}
+
 // ---------------------------------------------------------------------------
 // Chat analytics
 // ---------------------------------------------------------------------------
@@ -366,5 +383,97 @@ export const getChatAnalytics = async (period = '30d') => {
   })
 
   const json = await handleResponse(res, 'Failed to fetch chat analytics')
+  return json.data
+}
+
+/**
+ * Submit an end-of-conversation survey.
+ * POST /api/chat/survey
+ *
+ * @param {number} conversationId
+ * @param {Object} surveyData – { rating, solved, wouldUseAgain, npsScore, feedbackText }
+ * @returns {Promise<Object>}
+ */
+export const submitConversationSurvey = async (conversationId, surveyData) => {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/chat/survey`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ conversationId, ...surveyData }),
+  })
+  const json = await handleResponse(res, 'Failed to submit survey')
+  return json.data
+}
+
+/**
+ * Fetch knowledge gaps + NPS breakdown + satisfaction trend (Management / Admin only).
+ * GET /api/chat/analytics/knowledge-gaps
+ *
+ * @param {number} [limit=20] – max gaps to return
+ * @returns {Promise<{ gaps, satisfactionTrend, npsBreakdown }>}
+ */
+export const getChatKnowledgeGaps = async (limit = 20) => {
+  const res = await fetchWithTimeout(
+    `${API_BASE_URL}/chat/analytics/knowledge-gaps?limit=${limit}`,
+    { headers: getAuthHeaders() },
+  )
+  const json = await handleResponse(res, 'Failed to fetch knowledge gaps')
+  return json.data
+}
+
+/**
+ * GDPR Art. 20 – export all chat data belonging to the logged-in user.
+ * GET /api/chat/export-my-data
+ *
+ * @returns {Promise<Object>} { conversations, messages, messageFeedback, conversationFeedback }
+ */
+export const exportMyChatData = async () => {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/chat/export-my-data`, {
+    headers: getAuthHeaders(),
+  })
+  const json = await handleResponse(res, 'Failed to export chat data')
+  return json.data
+}
+
+// ---------------------------------------------------------------------------
+// Tech handoff reply + resolve + history
+// ---------------------------------------------------------------------------
+
+/**
+ * (Tech) Send a reply message inside a claimed handoff conversation.
+ * POST /api/chat/handoff/reply
+ */
+export const sendHandoffReply = async (conversationId, message) => {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/chat/handoff/reply`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ conversationId, message }),
+  })
+  const json = await handleResponse(res, 'Failed to send reply')
+  return json.data
+}
+
+/**
+ * (Tech) Mark a claimed handoff conversation as resolved/closed.
+ * POST /api/chat/handoff/resolve
+ */
+export const resolveHandoff = async (conversationId) => {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/chat/handoff/resolve`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ conversationId }),
+  })
+  const json = await handleResponse(res, 'Failed to resolve chat')
+  return json.data
+}
+
+/**
+ * (Tech) Fetch full message history + customer context for a claimed handoff.
+ * GET /api/chat/handoff/:conversationId/history
+ */
+export const getHandoffHistory = async (conversationId) => {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/chat/handoff/${conversationId}/history`, {
+    headers: getAuthHeaders(),
+  })
+  const json = await handleResponse(res, 'Failed to load handoff history')
   return json.data
 }
