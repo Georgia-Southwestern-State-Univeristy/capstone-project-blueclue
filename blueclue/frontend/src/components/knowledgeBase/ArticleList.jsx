@@ -1,7 +1,7 @@
 const ArticleList = ({ articles, onEdit, onDelete, onTogglePublish, onView }) => {
     if (articles.length === 0) {
         return (
-            <div className="bg-gray-900 rounded-lg border border-gray-700 p-12 text-center">
+            <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center">
                 <svg className="mx-auto h-12 w-12 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
@@ -12,9 +12,9 @@ const ArticleList = ({ articles, onEdit, onDelete, onTogglePublish, onView }) =>
     }
 
     return (
-        <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-800">
-                <thead className="bg-gray-800/50">
+        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-700">
+                <thead className="bg-gray-900/50">
                     <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                             Title
@@ -39,7 +39,7 @@ const ArticleList = ({ articles, onEdit, onDelete, onTogglePublish, onView }) =>
                         </th>
                     </tr>
                 </thead>
-                <tbody className="bg-gray-900 divide-y divide-gray-800">
+                <tbody className="bg-gray-800 divide-y divide-gray-700">
                     {articles.map((article) => (
                         <tr key={article.id} className="hover:bg-gray-800/50 transition-colors">
                             <td className="px-6 py-4">
@@ -67,7 +67,7 @@ const ArticleList = ({ articles, onEdit, onDelete, onTogglePublish, onView }) =>
                                 </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                                <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-700 text-gray-800">
+                                <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-700 text-gray-300">
                                     {article.category}
                                 </span>
                             </td>

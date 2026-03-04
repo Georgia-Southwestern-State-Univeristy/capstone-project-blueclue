@@ -170,11 +170,11 @@ const KnowledgeBaseManagement = () => {
     };
 
     return (
-        <div className="p-6">
+        <div className="p-4 md:p-8 bg-gray-950 min-h-screen">
             <div className="max-w-7xl mx-auto">
                 {/* Access Denied Message */}
                 {accessDenied ? (
-                    <div className="bg-gray-900 rounded-lg border border-red-700 p-12 text-center">
+                    <div className="bg-gray-800 rounded-xl border border-red-700 p-12 text-center">
                         <div className="text-red-500 text-6xl mb-4"></div>
                         <h2 className="text-2xl font-bold text-white mb-2">Access Denied</h2>
                         <p className="text-gray-400 mb-6">
@@ -198,8 +198,8 @@ const KnowledgeBaseManagement = () => {
                         </div>
 
                 {/* Tabs */}
-                <div className="bg-gray-900 rounded-lg border border-gray-700 mb-6">
-                    <div className="border-b border-gray-800">
+                <div className="bg-gray-800 rounded-xl border border-gray-700 mb-6">
+                    <div className="border-b border-gray-700">
                         <nav className="-mb-px flex space-x-8 px-6">
                             <button
                                 onClick={() => setActiveTab('articles')}
@@ -239,7 +239,7 @@ const KnowledgeBaseManagement = () => {
                 {activeTab === 'articles' && (
                     <div>
                         {/* Filters and Create Button */}
-                        <div className="bg-gray-900 rounded-lg border border-gray-700 p-4 mb-6">
+                        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-6">
                             <div className="flex flex-wrap gap-4 items-center">
                                 <input
                                     type="text"
@@ -280,7 +280,7 @@ const KnowledgeBaseManagement = () => {
 
                         {/* Article List */}
                         {fetchError ? (
-                            <div className="bg-gray-900 rounded-lg border border-red-700 p-8 text-center">
+                            <div className="bg-gray-800 rounded-xl border border-red-700 p-8 text-center">
                                 <p className="text-red-400 font-medium mb-2">Error loading articles</p>
                                 <p className="text-gray-400 text-sm">{fetchError}</p>
                                 <button onClick={fetchArticles} className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
@@ -288,7 +288,7 @@ const KnowledgeBaseManagement = () => {
                                 </button>
                             </div>
                         ) : loading ? (
-                            <div className="bg-gray-900 rounded-lg border border-gray-700 p-12 text-center">
+                            <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center">
                                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-700 border-t-blue-500"></div>
                                 <p className="mt-4 text-gray-400">Loading articles...</p>
                             </div>

@@ -37,7 +37,7 @@ const KBAnalytics = () => {
 
     if (loading) {
         return (
-            <div className="bg-gray-900 rounded-lg border border-gray-700 p-12 text-center">
+            <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center">
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-700 border-t-blue-500"></div>
                 <p className="mt-4 text-gray-400">Loading analytics...</p>
             </div>
@@ -46,7 +46,7 @@ const KBAnalytics = () => {
 
     if (fetchError) {
         return (
-            <div className="bg-gray-900 rounded-lg border border-red-700 p-8 text-center">
+            <div className="bg-gray-800 rounded-xl border border-red-700 p-8 text-center">
                 <p className="text-red-400 font-medium mb-2">Error loading analytics</p>
                 <p className="text-gray-400 text-sm">{fetchError}</p>
                 <button onClick={fetchAnalytics} className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
@@ -58,7 +58,7 @@ const KBAnalytics = () => {
 
     if (!analytics) {
         return (
-            <div className="bg-gray-900 rounded-lg border border-gray-700 p-12 text-center text-gray-400">
+            <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center text-gray-400">
                 <p>No analytics data available</p>
             </div>
         );
@@ -70,7 +70,7 @@ const KBAnalytics = () => {
         <div className="space-y-6">
             {/* Overview Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-gray-900 rounded-lg border border-gray-700 p-6">
+                <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm font-medium text-gray-400">Total Articles</p>
@@ -94,7 +94,7 @@ const KBAnalytics = () => {
                     </div>
                 </div>
 
-                <div className="bg-gray-900 rounded-lg border border-gray-700 p-6">
+                <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm font-medium text-gray-400">Total Views</p>
@@ -114,7 +114,7 @@ const KBAnalytics = () => {
                     </p>
                 </div>
 
-                <div className="bg-gray-900 rounded-lg border border-gray-700 p-6">
+                <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm font-medium text-gray-400">Helpful Votes</p>
@@ -133,7 +133,7 @@ const KBAnalytics = () => {
                     </p>
                 </div>
 
-                <div className="bg-gray-900 rounded-lg border border-gray-700 p-6">
+                <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
                     <div className="flex items-center justify-between">
                         <div>
                             <p className="text-sm font-medium text-gray-400">Categories</p>
@@ -154,12 +154,12 @@ const KBAnalytics = () => {
             </div>
 
             {/* Most Viewed Articles */}
-            <div className="bg-gray-900 rounded-lg border border-gray-700 p-6">
+            <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
                 <h3 className="text-lg font-semibold text-gray-200 mb-4">Most Viewed Articles</h3>
                 {most_viewed && most_viewed.length > 0 ? (
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-800">
-                            <thead className="bg-gray-800/50">
+                        <table className="min-w-full divide-y divide-gray-700">
+                            <thead className="bg-gray-900/50">
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                                         Rank
@@ -178,9 +178,9 @@ const KBAnalytics = () => {
                                     </th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-gray-900 divide-y divide-gray-800">
+                            <tbody className="bg-gray-800 divide-y divide-gray-700">
                                 {most_viewed.map((article, idx) => (
-                                    <tr key={article.id} className="hover:bg-gray-800/50">
+                                    <tr key={article.id} className="hover:bg-gray-700/50">
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-200">
                                             #{idx + 1}
                                         </td>
@@ -188,7 +188,7 @@ const KBAnalytics = () => {
                                             {article.title}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-700 text-gray-800">
+                                            <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-700 text-gray-300">
                                                 {article.category}
                                             </span>
                                         </td>
@@ -216,15 +216,15 @@ const KBAnalytics = () => {
             </div>
 
             {/* Least Viewed Articles (Content Gaps) */}
-            <div className="bg-gray-900 rounded-lg border border-gray-700 p-6">
+            <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold text-gray-200">Least Viewed Articles</h3>
                     <span className="text-sm text-gray-400">Potential content gaps</span>
                 </div>
                 {least_viewed && least_viewed.length > 0 ? (
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-800">
-                            <thead className="bg-gray-800/50">
+                        <table className="min-w-full divide-y divide-gray-700">
+                            <thead className="bg-gray-900/50">
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                                         Title
@@ -240,14 +240,14 @@ const KBAnalytics = () => {
                                     </th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-gray-900 divide-y divide-gray-800">
+                            <tbody className="bg-gray-800 divide-y divide-gray-700">
                                 {least_viewed.map((article) => (
-                                    <tr key={article.id} className="hover:bg-gray-800/50">
+                                    <tr key={article.id} className="hover:bg-gray-700/50">
                                         <td className="px-6 py-4 text-sm text-gray-200">
                                             {article.title}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-700 text-gray-800">
+                                            <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-700 text-gray-300">
                                                 {article.category}
                                             </span>
                                         </td>
@@ -268,12 +268,12 @@ const KBAnalytics = () => {
             </div>
 
             {/* Category Performance */}
-            <div className="bg-gray-900 rounded-lg border border-gray-700 p-6">
+            <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
                 <h3 className="text-lg font-semibold text-gray-200 mb-4">Performance by Category</h3>
                 {by_category && by_category.length > 0 ? (
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-800">
-                            <thead className="bg-gray-800/50">
+                        <table className="min-w-full divide-y divide-gray-700">
+                            <thead className="bg-gray-900/50">
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                                         Category
@@ -292,11 +292,11 @@ const KBAnalytics = () => {
                                     </th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-gray-900 divide-y divide-gray-800">
+                            <tbody className="bg-gray-800 divide-y divide-gray-700">
                                 {by_category.map((cat) => (
-                                    <tr key={cat.category} className="hover:bg-gray-800/50">
+                                    <tr key={cat.category} className="hover:bg-gray-700/50">
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className="px-2 py-1 text-sm font-semibold rounded-full bg-gray-700 text-gray-800">
+                                            <span className="px-2 py-1 text-sm font-semibold rounded-full bg-gray-700 text-gray-300">
                                                 {cat.category}
                                             </span>
                                         </td>
