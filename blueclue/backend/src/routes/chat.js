@@ -9,70 +9,52 @@ import {
   endConversation,
   createTicketFromChat,
   getLLMHealth,
+  sendTechMessage,
+  suggestArticlesEndpoint,
+  trackSuggestionEvent,
+  uploadChatFile,
+  requestHandoff,
+  claimHandoff,
+  getPendingHandoffs,
+  getChatAnalytics,
 } from '../controllers/chatController.js';
 
 const router = express.Router();
 
-/**
- * Chat Routes
- * All routes require authentication
- */
-
-/**
- * @route   POST /api/chat/message
- * @desc    Send a message and get bot response
- * @access  Private (authenticated users)
- */
-router.post('/message', authenticateToken, sendMessage);
-
-/**
- * @route   GET /api/chat/history
- * @desc    Get chat history for a conversation
- * @query   conversationId - ID of the conversation
- * @access  Private (authenticated users)
- */
-router.get('/history', authenticateToken, getHistory);
-
-/**
- * @route   GET /api/chat/conversations
- * @desc    Get all conversations for the logged-in user
- * @access  Private (authenticated users)
- */
-router.get('/conversations', authenticateToken, getConversations);
-
-/**
- * @route   POST /api/chat/feedback
- * @desc    Submit feedback on a bot response
- * @access  Private (authenticated users)
- */
-router.post('/feedback', authenticateToken, submitFeedback);
-
-/**
- * @route   POST /api/chat/clear
- * @desc    Clear chat history
- * @access  Private (authenticated users)
- */
-router.post('/clear', authenticateToken, clearHistory);
-
-/**
- * @route   POST /api/chat/end
- * @desc    End a conversation
- * @access  Private (authenticated users)
- */
-router.post('/end', authenticateToken, endConversation);
-
-/**
- * @route   POST /api/chat/create-ticket
- * @desc    Create a support ticket pre-filled from chat conversation context
- * @access  Private (authenticated users)
- */
+// ── Existing routes ──────────────────────────────────────────────────────────
+router.post('/message',       authenticateToken, sendMessage);
+router.get('/history',        authenticateToken, getHistory);
+router.get('/conversations',  authenticateToken, getConversations);
+router.post('/feedback',      authenticateToken, submitFeedback);
+router.post('/clear',         authenticateToken, clearHistory);
+router.post('/end',           authenticateToken, endConversation);
 router.post('/create-ticket', authenticateToken, createTicketFromChat);
+router.get('/llm/health',     authenticateToken, getLLMHealth);
 
-/**
- * @route   GET /api/chat/llm/health
- * @desc    Return LLM + RAG service readiness and embedding coverage
- * @access  Private (authenticated users)
- */
-router.get('/llm/health', authenticateToken, getLLMHealth);
+// ── Tech mode ────────────────────────────────────────────────────────────────
+/** POST /api/chat/tech-message  – tech-facing message (private KB + slash commands) */
+router.post('/tech-message',  authenticateToken, sendTechMessage);
+
+// ── Proactive article suggestions (ticket prevention) ────────────────────────
+/** POST /api/suggest-articles  – suggest KB articles from partial ticket text */
+router.post('/suggest-articles',        authenticateToken, suggestArticlesEndpoint);
+/** POST /api/suggest-articles/event    – track suggestion interaction */
+router.post('/suggest-articles/event',  authenticateToken, trackSuggestionEvent);
+
+// ── File / image upload ──────────────────────────────────────────────────────
+/** POST /api/chat/upload  – upload image/file (base64 JSON, max 5 MB) */
+router.post('/upload', authenticateToken, uploadChatFile);
+
+// ── Human handoff ────────────────────────────────────────────────────────────
+/** POST /api/chat/handoff         – customer requests human tech */
+router.post('/handoff',         authenticateToken, requestHandoff);
+/** POST /api/chat/handoff/claim   – tech claims the handoff */
+router.post('/handoff/claim',   authenticateToken, claimHandoff);
+/** GET  /api/chat/handoff/pending – list unclaimed handoff requests (tech only) */
+router.get('/handoff/pending',  authenticateToken, getPendingHandoffs);
+
+// ── Chat analytics (management/admin) ────────────────────────────────────────
+/** GET /api/chat/analytics?period=30d */
+router.get('/analytics', authenticateToken, getChatAnalytics);
 
 export default router;

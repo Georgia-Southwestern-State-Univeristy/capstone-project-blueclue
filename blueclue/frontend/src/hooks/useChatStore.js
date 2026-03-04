@@ -17,12 +17,20 @@ const STORAGE_KEYS = {
   MESSAGES: 'blueclue_chat_messages',
   OPEN: 'blueclue_chat_open',
   UNREAD: 'blueclue_chat_unread',
+  MODE: 'blueclue_chat_mode',
 };
 
 const WELCOME_MESSAGE = {
   id: 1,
   sender: 'bot',
   text: "Hi! I'm the BlueClue Assistant. How can I help you today?",
+  timestamp: new Date().toISOString(),
+};
+
+const TECH_WELCOME_MESSAGE = {
+  id: 1,
+  sender: 'bot',
+  text: "👨‍💻 **Tech Mode** active.\n\nYou have access to internal KB articles and ticket management.\n\n**Quick commands:**\n`/search <keywords>` · `/status <id>` · `/assign <id> <tech>` · `/close <id> [note]` · `/create-ticket <desc>` · `/my-tickets`",
   timestamp: new Date().toISOString(),
 };
 
@@ -46,6 +54,9 @@ function useChatStore() {
     loadJSON(STORAGE_KEYS.UNREAD, 0),
   );
   const [hasNewMessage, setHasNewMessage] = useState(false);
+  const [chatMode, setChatMode] = useState(() =>
+    loadJSON(STORAGE_KEYS.MODE, 'customer'),
+  );
 
   // ── Persist on change ──────────────────────────────────────────────
   useEffect(() => {
@@ -59,6 +70,10 @@ function useChatStore() {
   useEffect(() => {
     sessionStorage.setItem(STORAGE_KEYS.UNREAD, JSON.stringify(unreadCount));
   }, [unreadCount]);
+
+  useEffect(() => {
+    sessionStorage.setItem(STORAGE_KEYS.MODE, JSON.stringify(chatMode));
+  }, [chatMode]);
 
   // ── Actions ────────────────────────────────────────────────────────
   const addMessage = useCallback((msg) => {
@@ -113,8 +128,18 @@ function useChatStore() {
     sessionStorage.removeItem(STORAGE_KEYS.UNREAD);
   }, []);
 
+  /** Toggle between customer and tech mode. Resets messages to appropriate welcome. */
+  const toggleMode = useCallback((newMode) => {
+    const next = newMode || (chatMode === 'customer' ? 'tech' : 'customer');
+    setChatMode(next);
+    const welcome = next === 'tech' ? TECH_WELCOME_MESSAGE : WELCOME_MESSAGE;
+    setMessages([{ ...welcome, timestamp: new Date().toISOString() }]);
+    sessionStorage.removeItem(STORAGE_KEYS.MESSAGES);
+  }, [chatMode]);
+
   return {
     messages,
+    chatMode,
     isOpen,
     unreadCount,
     hasNewMessage,
@@ -124,6 +149,7 @@ function useChatStore() {
     closeChat,
     toggleChat,
     clearChat,
+    toggleMode,
   };
 }
 

@@ -446,7 +446,8 @@ async function _getUserRole(userId) {
  * @param {number|null} conversationId
  * @returns {Promise<{response, suggestions, articleLinks, actionButtons, conversationId, messageId, intent, confidence}>}
  */
-export async function processChatMessage(userId, message, conversationId = null) {
+export async function processChatMessage(userId, message, conversationId = null, options = {}) {
+  const { techMode = false } = options;
   try {
     // ── Resolve conversation ─────────────────────────────────────────────────
     let conversation;
@@ -456,6 +457,12 @@ export async function processChatMessage(userId, message, conversationId = null)
     } else {
       conversation = await ChatConversation.getActiveByUserId(userId);
       if (!conversation) conversation = await ChatConversation.create(userId);
+    }
+
+    // Tag conversation mode (tech vs customer)
+    if (techMode && conversation.chat_mode !== 'tech') {
+      await pool.query(`UPDATE chat_conversations SET chat_mode = 'tech' WHERE id = $1`, [conversation.id]).catch(() => {});
+      conversation.chat_mode = 'tech';
     }
 
     // ── Context: last N messages ─────────────────────────────────────────────
@@ -472,6 +479,7 @@ export async function processChatMessage(userId, message, conversationId = null)
       conversationId:      conversation.id,
       conversationHistory: previousMessages,
       userRole,
+      techMode,
     });
 
     let response, articleLinks, actionButtons, suggestions, intent, confidence;
@@ -518,8 +526,28 @@ export async function processChatMessage(userId, message, conversationId = null)
       intent     = ri;
       confidence = rc;
 
-      ({ response, articleLinks, actionButtons, suggestions } =
-        await generateResponse(intent, confidence, message, { ...context, isFrustrated }));
+      // Tech mode: add internal KB results on top even when using rule-based
+      if (techMode) {
+        const internalArticles = await searchInternalKnowledgeBase(message, 5);
+        if (internalArticles.length > 0) {
+          const freshInternal = internalArticles.filter(a => !context.seenArticleIds.has(a.id));
+          if (freshInternal.length > 0) {
+            response   = `🔒 Internal results for **"${message}"**:`;
+            articleLinks  = freshInternal;
+            actionButtons = [];
+            suggestions   = ['✅ This helped', '❌ Still not working'];
+          } else {
+            ({ response, articleLinks, actionButtons, suggestions } =
+              await generateResponse(intent, confidence, message, { ...context, isFrustrated }));
+          }
+        } else {
+          ({ response, articleLinks, actionButtons, suggestions } =
+            await generateResponse(intent, confidence, message, { ...context, isFrustrated }));
+        }
+      } else {
+        ({ response, articleLinks, actionButtons, suggestions } =
+          await generateResponse(intent, confidence, message, { ...context, isFrustrated }));
+      }
     }
 
     // ── Persist messages ─────────────────────────────────────────────────────
@@ -629,3 +657,301 @@ export default {
   getConversationHistory,
   clearChatHistory,
 };
+
+// ============================================================================
+// SUGGEST ARTICLES  (for proactive ticket-prevention suggestions in TicketForm)
+// ============================================================================
+
+/**
+ * Search KB (public articles only) for articles matching a partial description.
+ * Returns top 3 results with id, title, slug, excerpt.
+ * @param {string} text      – partial ticket description
+ * @param {number} [userId]  – used for internal role check (not filtering by public here)
+ * @returns {Promise<Array>}
+ */
+export async function suggestArticlesForText(text, userId = null) {
+  if (!text || text.trim().length < 10) return [];
+
+  try {
+    // Use full-text search; only public articles (end-users submitting tickets)
+    const result = await pool.query(`
+      SELECT id, title, slug, category,
+             COALESCE(excerpt, LEFT(content, 200)) AS excerpt
+      FROM   knowledge_articles
+      WHERE  deleted_at IS NULL
+        AND  is_published = true
+        AND  is_public    = true
+        AND  (
+              search_vector @@ plainto_tsquery('english', $1)
+              OR title   ILIKE $2
+              OR content ILIKE $2
+             )
+      ORDER  BY ts_rank_cd(search_vector, plainto_tsquery('english', $1), 32) DESC,
+                helpful_votes DESC
+      LIMIT  3`,
+      [text.trim(), `%${text.trim().split(' ').slice(0, 5).join('%')}%`]
+    );
+    return result.rows.map(r => ({
+      id: r.id, title: r.title, slug: r.slug,
+      category: r.category, excerpt: r.excerpt,
+    }));
+  } catch (err) {
+    console.error('suggestArticlesForText error:', err);
+    return [];
+  }
+}
+
+// ============================================================================
+// INTERNAL KB SEARCH  (tech mode — includes is_public=false articles)
+// ============================================================================
+
+async function searchInternalKnowledgeBase(query, limit = 5) {
+  if (!query || query.trim().length < 3) return [];
+  try {
+    const result = await pool.query(
+      `SELECT id, title, slug, category, is_public,
+              COALESCE(excerpt, LEFT(content, 200)) AS excerpt
+       FROM   knowledge_articles
+       WHERE  deleted_at IS NULL
+         AND  is_published = true
+         AND  (
+               search_vector @@ plainto_tsquery('english', $1)
+               OR title   ILIKE $2
+               OR content ILIKE $2
+             )
+       ORDER  BY ts_rank_cd(search_vector, plainto_tsquery('english', $1), 32) DESC,
+                 helpful_votes DESC
+       LIMIT  $3`,
+      [query.trim(), `%${query.trim()}%`, limit],
+    );
+    return result.rows.map(r => ({
+      id: r.id, title: r.title, slug: r.slug,
+      category: r.category, excerpt: r.excerpt,
+      isInternal: !r.is_public,
+    }));
+  } catch (err) {
+    console.error('Internal KB search error:', err);
+    return [];
+  }
+}
+
+// ============================================================================
+// TECH SLASH COMMANDS
+// ============================================================================
+
+/**
+ * Process a slash command from a tech user.
+ * Supported: /create-ticket, /assign, /status, /close, /search
+ *
+ * @param {number} userId
+ * @param {string} rawCommand  – e.g. "/status 1234"
+ * @param {number|null} conversationId
+ * @returns {Promise<Object>}  – same shape as processChatMessage result
+ */
+export async function processTechCommand(userId, rawCommand, conversationId = null) {
+  const parts = rawCommand.trim().split(/\s+/);
+  const cmd   = parts[0].toLowerCase();
+  const args  = parts.slice(1);
+
+  let response = '';
+  let articleLinks  = [];
+  let actionButtons = [];
+  let suggestions   = [];
+
+  try {
+    switch (cmd) {
+      case '/search': {
+        const query = args.join(' ');
+        if (!query) {
+          response = '**Usage:** `/search <keywords>`\n\nExample: `/search printer offline`';
+          break;
+        }
+        const articles = await searchInternalKnowledgeBase(query, 5);
+        if (articles.length === 0) {
+          response = `No articles found for **"${query}"**.`;
+        } else {
+          response = `🔍 Found ${articles.length} article(s) for **"${query}"**:`;
+          articleLinks = articles;
+        }
+        break;
+      }
+
+      case '/status': {
+        const ticketNum = args[0];
+        if (!ticketNum) {
+          response = '**Usage:** `/status <ticket-id-or-number>`';
+          break;
+        }
+        const ticketRow = await pool.query(
+          `SELECT id, ticket_number, subject, status, priority, category,
+                  assigned_to, created_at,
+                  u.first_name || ' ' || u.last_name AS customer_name
+           FROM tickets t
+           LEFT JOIN users u ON u.id = t.customer_id
+           WHERE t.ticket_number = $1 OR t.id::text = $1
+           LIMIT 1`,
+          [ticketNum]
+        );
+        if (ticketRow.rowCount === 0) {
+          response = `❌ Ticket **"${ticketNum}"** not found.`;
+        } else {
+          const t = ticketRow.rows[0];
+          response = [
+            `**Ticket ${t.ticket_number}**`,
+            `**Subject:** ${t.subject}`,
+            `**Status:** ${t.status}   **Priority:** ${t.priority}`,
+            `**Category:** ${t.category || 'General'}`,
+            `**Customer:** ${t.customer_name || 'Unknown'}`,
+            `**Created:** ${new Date(t.created_at).toLocaleDateString()}`,
+          ].join('\n');
+          actionButtons = [{ id: `view_ticket_${t.id}`, label: '📋 Open Ticket', primary: true }];
+        }
+        break;
+      }
+
+      case '/assign': {
+        const [ticketNum, ...techParts] = args;
+        const techName = techParts.join(' ');
+        if (!ticketNum || !techName) {
+          response = '**Usage:** `/assign <ticket-id> <tech-name>`';
+          break;
+        }
+        // Look up ticket
+        const ticketRow = await pool.query(
+          `SELECT id, ticket_number, subject FROM tickets WHERE ticket_number = $1 OR id::text = $1 LIMIT 1`,
+          [ticketNum]
+        );
+        if (ticketRow.rowCount === 0) {
+          response = `❌ Ticket **"${ticketNum}"** not found.`;
+          break;
+        }
+        // Look up tech by name (fuzzy)
+        const techRow = await pool.query(
+          `SELECT id, first_name, last_name FROM users
+           WHERE role IN ('technician','senior_technician','admin')
+             AND (first_name || ' ' || last_name ILIKE $1 OR first_name ILIKE $1 OR last_name ILIKE $1)
+           LIMIT 1`,
+          [`%${techName}%`]
+        );
+        if (techRow.rowCount === 0) {
+          response = `❌ Tech **"${techName}"** not found.`;
+          break;
+        }
+        const ticket = ticketRow.rows[0];
+        const tech   = techRow.rows[0];
+        await pool.query(
+          `UPDATE tickets SET assigned_to = $1, status = 'in_progress', updated_at = NOW() WHERE id = $2`,
+          [tech.id, ticket.id]
+        );
+        response = `✅ Ticket **${ticket.ticket_number}** assigned to **${tech.first_name} ${tech.last_name}**.`;
+        break;
+      }
+
+      case '/close': {
+        const [ticketNum, ...noteParts] = args;
+        const note = noteParts.join(' ');
+        if (!ticketNum) {
+          response = '**Usage:** `/close <ticket-id> [resolution note]`';
+          break;
+        }
+        const ticketRow = await pool.query(
+          `UPDATE tickets SET status = 'closed', resolved_at = NOW(), updated_at = NOW()
+           WHERE (ticket_number = $1 OR id::text = $1) AND status != 'closed'
+           RETURNING id, ticket_number, subject`,
+          [ticketNum]
+        );
+        if (ticketRow.rowCount === 0) {
+          response = `❌ Ticket **"${ticketNum}"** not found or already closed.`;
+          break;
+        }
+        const ticket = ticketRow.rows[0];
+        if (note) {
+          await pool.query(
+            `INSERT INTO ticket_comments (ticket_id, user_id, comment, is_internal)
+             VALUES ($1, $2, $3, true)`,
+            [ticket.id, userId, note]
+          ).catch(() => {});
+        }
+        response = `✅ Ticket **${ticket.ticket_number}** closed.${note ? ` Note: _${note}_` : ''}`;
+        break;
+      }
+
+      case '/create-ticket': {
+        const description = args.join(' ');
+        if (!description) {
+          response = '**Usage:** `/create-ticket <description>`';
+          break;
+        }
+        const subject = description.length > 100 ? description.slice(0, 97) + '...' : description;
+        const res = await pool.query(
+          `INSERT INTO tickets (subject, description, customer_id, status, priority, category)
+           VALUES ($1, $2, $3, 'open', 'low', 'general')
+           RETURNING id, ticket_number`,
+          [subject, description, userId]
+        );
+        const ticket = res.rows[0];
+        response = `✅ Ticket **${ticket.ticket_number}** created.`;
+        actionButtons = [{ id: `view_ticket_${ticket.id}`, label: '📋 Open Ticket', primary: true }];
+        break;
+      }
+
+      case '/my-tickets': {
+        const rows = await pool.query(
+          `SELECT ticket_number, subject, status, priority, created_at
+           FROM tickets WHERE assigned_to = $1 AND status NOT IN ('closed','resolved')
+           ORDER BY created_at DESC LIMIT 10`,
+          [userId]
+        );
+        if (rows.rowCount === 0) {
+          response = 'You have no open assigned tickets.';
+        } else {
+          const lines = rows.rows.map(t =>
+            `• **${t.ticket_number}** — ${t.subject} _(${t.status} / ${t.priority})_`
+          );
+          response = `**Your open tickets (${rows.rowCount}):**\n\n${lines.join('\n')}`;
+        }
+        break;
+      }
+
+      default:
+        response = [
+          '**Available commands:**',
+          '`/search <keywords>` — Search knowledge base',
+          '`/status <ticket-id>` — Check ticket status',
+          '`/assign <ticket-id> <tech-name>` — Assign ticket',
+          '`/close <ticket-id> [note]` — Close ticket',
+          '`/create-ticket <description>` — Create a new ticket',
+          '`/my-tickets` — List your open assigned tickets',
+        ].join('\n');
+    }
+  } catch (err) {
+    console.error('Tech command error:', err);
+    response = `❌ Command failed: ${err.message}`;
+  }
+
+  // Persist command + response to conversation
+  let conversation;
+  try {
+    if (conversationId) {
+      conversation = await ChatConversation.getById(conversationId);
+    }
+    if (!conversation) {
+      conversation = await ChatConversation.getActiveByUserId(userId);
+      if (!conversation) conversation = await ChatConversation.create(userId);
+    }
+
+    await ChatMessage.create({ conversationId: conversation.id, sender: 'user', message: rawCommand, intent: 'tech_command', confidence: 1.0 });
+    const botMsg = await ChatMessage.create({ conversationId: conversation.id, sender: 'bot', message: response, intent: 'tech_command_response', confidence: 1.0 });
+
+    return {
+      response, articleLinks, actionButtons, suggestions,
+      conversationId: conversation.id,
+      messageId: botMsg.id,
+      intent: 'tech_command',
+      confidence: 1.0,
+    };
+  } catch (persistErr) {
+    console.error('Tech command persist error:', persistErr);
+    return { response, articleLinks, actionButtons, suggestions, conversationId, messageId: null, intent: 'tech_command', confidence: 1.0 };
+  }
+}
