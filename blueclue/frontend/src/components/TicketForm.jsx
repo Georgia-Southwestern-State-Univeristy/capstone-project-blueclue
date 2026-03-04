@@ -1,7 +1,12 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import LoadingSpinner from './LoadingSpinner'
 import TemplateSelector from './TemplateSelector'
 import { recordTemplateUsage } from '../services/templateService'
+import { suggestArticles } from '../services/chatService'
+import ArticleSuggestionCard from './ArticleSuggestionCard'
+
+const SUGGESTION_WORD_THRESHOLD = 20
+const SUGGESTION_DEBOUNCE_MS    = 1200
 
 // Validation constants
 const TITLE_MIN = 5
@@ -40,6 +45,12 @@ function TicketForm({ onSubmit }) {
 
   // Ref for title input (to focus after reset)
   const titleRef = useRef(null)
+
+  // Proactive article suggestion state
+  const [suggestedArticles, setSuggestedArticles]  = useState([])
+  const [suggestionDismissed, setSuggestionDismissed] = useState(false)
+  const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false)
+  const suggestionTimerRef = useRef(null)
 
   // Reset form to initial state
   const resetForm = () => {
@@ -142,6 +153,32 @@ function TicketForm({ onSubmit }) {
     return !errors.title && !errors.description
   }
 
+  // Proactive article suggestion: debounced fetch after 20+ words in description
+  useEffect(() => {
+    clearTimeout(suggestionTimerRef.current)
+
+    const wordCount = formData.description.trim().split(/\s+/).filter(Boolean).length
+    if (wordCount < SUGGESTION_WORD_THRESHOLD || suggestionDismissed) {
+      return
+    }
+
+    suggestionTimerRef.current = setTimeout(async () => {
+      try {
+        setIsFetchingSuggestions(true)
+        const result = await suggestArticles(formData.description)
+        if (result?.articles?.length > 0) {
+          setSuggestedArticles(result.articles)
+        }
+      } catch {
+        // Non-blocking: fail silently
+      } finally {
+        setIsFetchingSuggestions(false)
+      }
+    }, SUGGESTION_DEBOUNCE_MS)
+
+    return () => clearTimeout(suggestionTimerRef.current)
+  }, [formData.description, suggestionDismissed])
+
   // Handle input changes
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -149,6 +186,12 @@ function TicketForm({ onSubmit }) {
       ...prev,
       [name]: value
     }))
+
+    // Reset suggestions when description changes significantly
+    if (name === 'description') {
+      setSuggestedArticles([])
+      setSuggestionDismissed(false)
+    }
 
     // Validate on change if field has been touched
     if (touched[name]) {
@@ -410,6 +453,19 @@ function TicketForm({ onSubmit }) {
           <option value="high">High</option>
         </select>
       </div>
+
+      {/* Proactive article suggestions */}
+      {suggestedArticles.length > 0 && !suggestionDismissed && (
+        <ArticleSuggestionCard
+          articles={suggestedArticles}
+          description={formData.description}
+          onDismiss={() => setSuggestionDismissed(true)}
+          onCancel={() => {
+            setSuggestionDismissed(true)
+            resetForm()
+          }}
+        />
+      )}
 
       {/* Submit button */}
       <button 
