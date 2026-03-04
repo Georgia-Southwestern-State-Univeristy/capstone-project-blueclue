@@ -14,6 +14,27 @@ import { processMessageWithLLM } from './llmService.js';
  * handles the message transparently.
  */
 
+// ─── Knowledge gap tracker (fire-and-forget) ──────────────────────────────────
+async function trackKnowledgeGap(queryText, { lowConfidence = false, thumbsDown = false } = {}) {
+  if (!queryText || queryText.trim().length < 5) return;
+  const normalised = queryText.trim().toLowerCase().slice(0, 500);
+  try {
+    await pool.query(
+      `INSERT INTO chat_knowledge_gaps
+         (query_text, query_normalized, occurrence_count, low_confidence_count, thumbs_down_count, last_seen)
+       VALUES ($1, $2, 1, $3, $4, NOW())
+       ON CONFLICT (query_normalized) DO UPDATE SET
+         occurrence_count     = chat_knowledge_gaps.occurrence_count + 1,
+         low_confidence_count = chat_knowledge_gaps.low_confidence_count + EXCLUDED.low_confidence_count,
+         thumbs_down_count    = chat_knowledge_gaps.thumbs_down_count    + EXCLUDED.thumbs_down_count,
+         last_seen            = NOW()`,
+      [queryText.trim().slice(0, 500), normalised, lowConfidence ? 1 : 0, thumbsDown ? 1 : 0]
+    );
+  } catch {
+    // Non-critical
+  }
+}
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
@@ -568,15 +589,62 @@ export async function processChatMessage(userId, message, conversationId = null,
       suggestedArticles: articleLinks.map(a => a.id),
     });
 
+    // ── Auto-handoff: suggest if low confidence AND 5+ user exchanges ────────
+    const userMsgCount = previousMessages.filter(m => m.sender === 'user').length + 1; // +1 for current
+    const isLowConfidence = confidence < 0.50 && intent !== 'llm_rag';
+    const suggestHandoff = !techMode && isLowConfidence && userMsgCount >= 5;
+
+    // ── Knowledge gap tracking (low-confidence or unresolved queries) ────────
+    if (!techMode && confidence < 0.60 && intent !== 'llm_rag') {
+      trackKnowledgeGap(message, { lowConfidence: true }).catch(() => {});
+    }
+
+    // ── Auto-escalation rules ─────────────────────────────────────────────────
+    let autoEscalate = false;
+    let autoEscalateReason = null;
+
+    if (!techMode) {
+      // Rule 1: Password + locked-out keywords → skip to ticket creation immediately
+      const lc = message.toLowerCase();
+      const isPasswordLockedOut =
+        (lc.includes('password') || lc.includes('locked out') || lc.includes('cant login') ||
+         lc.includes("can't login") || lc.includes('cannot login')) &&
+        (lc.includes('locked') || lc.includes('urgent') || lc.includes('emergency') ||
+         lc.includes("can't access") || lc.includes("cannot access"));
+      if (isPasswordLockedOut) {
+        autoEscalate = true;
+        autoEscalateReason = 'locked_out';
+      }
+
+      // Rule 2: 3+ consecutive low-confidence bot turns → auto-create ticket
+      if (!autoEscalate) {
+        const recentBotMessages = previousMessages
+          .filter(m => m.sender === 'bot')
+          .slice(-3);
+        const consecutiveFailures = recentBotMessages.filter(
+          m => m.confidence !== null && parseFloat(m.confidence) < 0.50
+        ).length;
+        if (consecutiveFailures >= 3) {
+          autoEscalate = true;
+          autoEscalateReason = 'repeated_failure';
+        }
+      }
+    }
+
     return {
       response,
       suggestions:   suggestions   || [],
       articleLinks:  articleLinks  || [],
-      actionButtons: actionButtons || [],
+      actionButtons: autoEscalate
+        ? [{ id: 'create_ticket', label: '🎫 Create a support ticket now', primary: true }]
+        : (actionButtons || []),
       conversationId: conversation.id,
       messageId:     botMessageRecord.id,
       intent,
       confidence,
+      suggestHandoff,
+      autoEscalate,
+      autoEscalateReason,
       // LLM metadata (useful for monitoring/debugging)
       llm: llmResult.fallbackUsed || llmResult.rateLimited ? null : {
         model:            llmResult.modelUsed,
@@ -913,10 +981,77 @@ export async function processTechCommand(userId, rawCommand, conversationId = nu
         break;
       }
 
+      case '/tickets': {
+        // Natural-language search across closed/resolved tickets for past solutions
+        const query = args.join(' ');
+        if (!query) {
+          response = '**Usage:** `/tickets <keywords>`\n\nExample: `/tickets printer offline last week`';
+          break;
+        }
+
+        const ticketRows = await pool.query(
+          `SELECT
+             t.id,
+             t.ticket_number,
+             t.subject,
+             t.description,
+             t.status,
+             t.resolved_at,
+             t.created_at,
+             u.first_name || ' ' || u.last_name AS customer_name,
+             (
+               SELECT string_agg(tc.comment, ' | ' ORDER BY tc.created_at DESC)
+               FROM ticket_comments tc
+               WHERE tc.ticket_id = t.id
+                 AND tc.is_internal = false
+               LIMIT 3
+             ) AS resolution_notes
+           FROM tickets t
+           LEFT JOIN users u ON u.id = t.customer_id
+           WHERE t.status IN ('closed', 'resolved')
+             AND (
+               to_tsvector('english', COALESCE(t.subject,'') || ' ' || COALESCE(t.description,''))
+                 @@ plainto_tsquery('english', $1)
+               OR t.subject   ILIKE $2
+               OR t.description ILIKE $2
+             )
+           ORDER BY ts_rank_cd(
+             to_tsvector('english', COALESCE(t.subject,'') || ' ' || COALESCE(t.description,'')),
+             plainto_tsquery('english', $1), 32
+           ) DESC,
+           t.resolved_at DESC NULLS LAST
+           LIMIT 5`,
+          [query.trim(), `%${query.trim()}%`]
+        );
+
+        if (ticketRows.rowCount === 0) {
+          response = `No resolved tickets found matching **"${query}"**.\n\nTry different keywords or check spelling.`;
+        } else {
+          const lines = ticketRows.rows.map(t => {
+            const resolved = t.resolved_at
+              ? new Date(t.resolved_at).toLocaleDateString()
+              : new Date(t.created_at).toLocaleDateString();
+            const note = t.resolution_notes
+              ? `\n   💬 _${t.resolution_notes.slice(0, 120)}${t.resolution_notes.length > 120 ? '…' : ''}_`
+              : '';
+            return `• **${t.ticket_number}** — ${t.subject}\n   ${t.status} · Closed ${resolved} · Customer: ${t.customer_name || 'Unknown'}${note}`;
+          });
+          response = `🔎 Found **${ticketRows.rowCount}** past ticket(s) for **"${query}"**:\n\n${lines.join('\n\n')}`;
+          // Build action buttons linking to each ticket
+          actionButtons = ticketRows.rows.slice(0, 3).map(t => ({
+            id: `view_ticket_${t.id}`,
+            label: `📋 ${t.ticket_number}`,
+            primary: false,
+          }));
+        }
+        break;
+      }
+
       default:
         response = [
           '**Available commands:**',
           '`/search <keywords>` — Search knowledge base',
+          '`/tickets <keywords>` — Search past ticket resolutions',
           '`/status <ticket-id>` — Check ticket status',
           '`/assign <ticket-id> <tech-name>` — Assign ticket',
           '`/close <ticket-id> [note]` — Close ticket',

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getChatAnalytics } from '../services/chatService'
+import { getChatAnalytics, getChatKnowledgeGaps } from '../services/chatService'
 
 // ─── Tiny SVG bar chart ─────────────────────────────────────────────────────
 function BarChart({ data = [], valueKey = 'count', labelKey = 'label', color = '#3b82f6', height = 120 }) {
@@ -140,17 +140,24 @@ export default function ChatAnalyticsDashboard() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [gapData, setGapData] = useState(null)
+  const [gapLoading, setGapLoading] = useState(true)
 
   const load = useCallback(async (p) => {
     setLoading(true)
+    setGapLoading(true)
     setError(null)
     try {
-      const result = await getChatAnalytics(p)
-      setData(result)
-    } catch (err) {
-      setError(err.message || 'Failed to load analytics')
+      const [result, gaps] = await Promise.allSettled([
+        getChatAnalytics(p),
+        getChatKnowledgeGaps(20),
+      ])
+      if (result.status === 'fulfilled') setData(result.value)
+      else setError(result.reason?.message || 'Failed to load analytics')
+      if (gaps.status === 'fulfilled') setGapData(gaps.value)
     } finally {
       setLoading(false)
+      setGapLoading(false)
     }
   }, [])
 
@@ -331,6 +338,102 @@ export default function ChatAnalyticsDashboard() {
                 <PeakHeatmap data={peak} />
               </div>
             </div>
+
+            {/* NPS + Satisfaction trend + Knowledge gaps */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+              {/* NPS */}
+              <div className="bg-gray-800 rounded-xl p-5 border border-purple-800">
+                <h2 className="font-semibold mb-4 text-gray-200">Net Promoter Score</h2>
+                {gapLoading ? (
+                  <p className="text-gray-500 text-sm text-center py-6">Loading…</p>
+                ) : (
+                  <NpsGauge
+                    score={gapData?.npsBreakdown?.score}
+                    breakdown={gapData?.npsBreakdown}
+                  />
+                )}
+              </div>
+
+              {/* Satisfaction trend */}
+              <div className="bg-gray-800 rounded-xl p-5 border border-gray-700">
+                <h2 className="font-semibold mb-4 text-gray-200">Satisfaction Trend</h2>
+                <p className="text-gray-500 text-xs mb-3">Weekly avg star rating (1–5)</p>
+                {gapLoading ? (
+                  <p className="text-gray-500 text-sm text-center py-6">Loading…</p>
+                ) : gapData?.satisfactionTrend?.length ? (
+                  <BarChart
+                    data={(gapData.satisfactionTrend).map(d => ({
+                      label: d.week?.slice(5) ?? '',
+                      count: Number(d.avg_rating ?? 0).toFixed(1),
+                    }))}
+                    valueKey="count"
+                    labelKey="label"
+                    color="#a855f7"
+                    height={80}
+                  />
+                ) : (
+                  <p className="text-gray-500 text-sm text-center py-6">No survey data yet</p>
+                )}
+              </div>
+
+              {/* Knowledge gaps count */}
+              <div className="bg-gray-800 rounded-xl p-5 border border-yellow-700">
+                <h2 className="font-semibold mb-2 text-gray-200">Knowledge Gap Summary</h2>
+                {gapLoading ? (
+                  <p className="text-gray-500 text-sm text-center py-6">Loading…</p>
+                ) : (
+                  <>
+                    <div className="text-4xl font-bold text-yellow-400 text-center mt-2">
+                      {gapData?.gaps?.length ?? '—'}
+                    </div>
+                    <p className="text-gray-500 text-xs text-center mt-1">unresolved gaps</p>
+                    <p className="text-gray-400 text-xs text-center mt-3 leading-relaxed">
+                      {gapData?.gaps?.length >= 15
+                        ? '⚠️ High gap count — consider KB updates'
+                        : gapData?.gaps?.length > 0
+                          ? 'Review gaps below'
+                          : '✅ No significant gaps detected'}
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Knowledge gaps table */}
+            {!gapLoading && gapData?.gaps?.length > 0 && (
+              <div className="bg-gray-800 rounded-xl p-5 border border-gray-700 mb-6">
+                <h2 className="font-semibold mb-4 text-gray-200">Top Knowledge Gaps</h2>
+                <p className="text-gray-500 text-xs mb-3">Queries with low-confidence responses or negative feedback — review for KB improvements</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-gray-500 text-xs border-b border-gray-700">
+                        <th className="text-left pb-2 pr-4">Query</th>
+                        <th className="text-right pb-2 px-3">Occurrences</th>
+                        <th className="text-right pb-2 px-3">Low Conf.</th>
+                        <th className="text-right pb-2 px-3">👎</th>
+                        <th className="text-left pb-2 pl-3">First seen</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gapData.gaps.map((gap, i) => (
+                        <tr key={i} className="border-t border-gray-700 hover:bg-gray-750">
+                          <td className="py-2 pr-4 text-gray-300 max-w-xs truncate" title={gap.query_text}>
+                            {gap.query_text}
+                          </td>
+                          <td className="text-right px-3 text-white">{gap.occurrence_count}</td>
+                          <td className="text-right px-3 text-yellow-400">{gap.low_confidence_count}</td>
+                          <td className="text-right px-3 text-red-400">{gap.thumbs_down_count}</td>
+                          <td className="pl-3 text-gray-500 text-xs">
+                            {gap.first_seen ? new Date(gap.first_seen).toLocaleDateString() : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

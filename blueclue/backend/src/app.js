@@ -36,6 +36,7 @@ import chatRoutes from './routes/chat.js';
 import mlAdminRoutes from './routes/mlAdmin.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 import { startUpdateRequestReminderJob } from './jobs/updateRequestReminders.js';
+import { startChatQualityJob } from './jobs/chatQualityJob.js';
 
 dotenv.config();
 
@@ -55,6 +56,7 @@ initializeSocketHandlers(io);
 
 // Start scheduled jobs
 startUpdateRequestReminderJob(io);
+startChatQualityJob();
 
 // Make io accessible to routes/controllers
 app.set('io', io);

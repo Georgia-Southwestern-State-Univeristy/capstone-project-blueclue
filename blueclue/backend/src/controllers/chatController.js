@@ -5,6 +5,55 @@ import ChatMessage from '../models/ChatMessage.js';
 import pool from '../config/database.js';
 import path from 'path';
 import fs from 'fs';
+import { redactPII } from '../utils/piiRedactor.js';
+
+// ── Audit helper ─────────────────────────────────────────────────────────────
+async function auditLog(eventType, userId, conversationId, details, req) {
+  try {
+    await pool.query(
+      `INSERT INTO chat_audit_log (event_type, user_id, conversation_id, ip_address, user_agent, details)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        eventType,
+        userId   || null,
+        conversationId || null,
+        req?.ip  || null,
+        req?.headers?.['user-agent']?.slice(0, 255) || null,
+        JSON.stringify(details || {}),
+      ]
+    );
+  } catch {
+    // Non-critical — never fail the main request over audit logging
+  }
+}
+
+// ── Knowledge gap tracker ─────────────────────────────────────────────────────
+async function trackKnowledgeGap(queryText, { lowConfidence = false, thumbsDown = false, ticketCreated = false } = {}) {
+  if (!queryText || queryText.trim().length < 5) return;
+  const normalised = queryText.trim().toLowerCase().slice(0, 500);
+  try {
+    await pool.query(
+      `INSERT INTO chat_knowledge_gaps
+         (query_text, query_normalized, occurrence_count, low_confidence_count, thumbs_down_count, ticket_created_count, last_seen)
+       VALUES ($1, $2, 1, $3, $4, $5, NOW())
+       ON CONFLICT (query_normalized) DO UPDATE SET
+         occurrence_count     = chat_knowledge_gaps.occurrence_count + 1,
+         low_confidence_count = chat_knowledge_gaps.low_confidence_count + EXCLUDED.low_confidence_count,
+         thumbs_down_count    = chat_knowledge_gaps.thumbs_down_count    + EXCLUDED.thumbs_down_count,
+         ticket_created_count = chat_knowledge_gaps.ticket_created_count + EXCLUDED.ticket_created_count,
+         last_seen            = NOW()`,
+      [
+        queryText.trim().slice(0, 500),
+        normalised,
+        lowConfidence ? 1 : 0,
+        thumbsDown    ? 1 : 0,
+        ticketCreated ? 1 : 0,
+      ]
+    );
+  } catch {
+    // Non-critical
+  }
+}
 
 const TECH_ROLES = new Set(['technician', 'senior_technician', 'management', 'admin']);
 
@@ -34,6 +83,30 @@ export const sendMessage = async (req, res) => {
 
     // Process the message
     const result = await processChatMessage(userId, message.trim(), conversationId);
+
+    // During active handoff: forward customer message as socket event to the claiming tech
+    if (result.conversationId) {
+      try {
+        const convRow = await pool.query(
+          `SELECT handoff_claimed_by FROM chat_conversations WHERE id = $1 LIMIT 1`,
+          [result.conversationId]
+        );
+        const claimedBy = convRow.rows[0]?.handoff_claimed_by;
+        if (claimedBy) {
+          const io = req.app.get('io');
+          if (io) {
+            io.to(`user_${claimedBy}`).emit('customer_message', {
+              conversationId: result.conversationId,
+              message:        message.trim(),
+              timestamp:      new Date(),
+            });
+          }
+        }
+      } catch (emitErr) {
+        // Non-critical — don't fail the HTTP response
+        console.warn('customer_message emit error:', emitErr.message);
+      }
+    }
 
     res.status(200).json({
       status: 'success',
@@ -142,74 +215,71 @@ export const getConversations = async (req, res) => {
 /**
  * Rate bot response (provide feedback)
  * POST /api/chat/feedback
+ * Body: { messageId, helpful, reason?, details? }
  */
 export const submitFeedback = async (req, res) => {
   try {
-    const { messageId, helpful, feedback } = req.body;
+    const { messageId, helpful, reason, details } = req.body;
     const userId = req.user.id;
 
     // Validate input
     if (!messageId) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'messageId is required'
-      });
+      return res.status(400).json({ status: 'error', message: 'messageId is required' });
     }
-
     if (typeof helpful !== 'boolean') {
-      return res.status(400).json({
-        status: 'error',
-        message: 'helpful must be a boolean value'
-      });
+      return res.status(400).json({ status: 'error', message: 'helpful must be a boolean value' });
     }
 
-    // Get message and verify it belongs to user's conversation
-    const message = await ChatMessage.getById(parseInt(messageId));
-    
-    if (!message) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Message not found'
-      });
+    // Validate negative-feedback reason if thumbs down
+    const VALID_REASONS = ['no_answer', 'wrong_info', 'unhelpful_tone', 'too_slow', 'other'];
+    if (!helpful && reason && !VALID_REASONS.includes(reason)) {
+      return res.status(400).json({ status: 'error', message: 'Invalid failure reason.' });
     }
+
+    // Get message and verify ownership
+    const message = await ChatMessage.getById(parseInt(messageId));
+    if (!message) return res.status(404).json({ status: 'error', message: 'Message not found' });
 
     const conversation = await ChatConversation.getById(message.conversation_id);
-    
     if (!conversation || conversation.user_id !== userId) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'Unauthorized to rate this message'
-      });
+      return res.status(403).json({ status: 'error', message: 'Unauthorized to rate this message' });
     }
 
-    // Update conversation helpfulness
+    const rating = helpful ? 'positive' : 'negative';
+    const safeDetails = details ? redactPII(details.slice(0, 500)) : null;
+
+    // Persist to chat_message_feedback (upsert — one rating per message per user)
+    await pool.query(
+      `INSERT INTO chat_message_feedback
+         (message_id, conversation_id, user_id, rating, failure_reason, details)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (message_id, user_id) DO UPDATE SET
+         rating         = EXCLUDED.rating,
+         failure_reason = EXCLUDED.failure_reason,
+         details        = EXCLUDED.details`,
+      [messageId, conversation.id, userId, rating, reason || null, safeDetails]
+    );
+
+    // Also update the lightweight was_helpful flag on the conversation
     await ChatConversation.updateHelpfulness(conversation.id, helpful);
 
-    // Log feedback (for future analytics)
-    console.log('Chat feedback received:', {
-      userId,
-      conversationId: conversation.id,
-      messageId,
-      helpful,
-      feedback: feedback || null
-    });
+    // Track knowledge gap when thumbs down
+    if (!helpful && message.message) {
+      await trackKnowledgeGap(message.message, { thumbsDown: true });
+    }
+
+    // Audit
+    await auditLog('message_feedback', userId, conversation.id, { messageId, rating, reason }, req);
 
     res.status(200).json({
       status: 'success',
       message: 'Feedback submitted successfully',
-      data: {
-        conversationId: conversation.id,
-        helpful
-      }
+      data: { conversationId: conversation.id, helpful },
     });
 
   } catch (error) {
     console.error('Submit feedback error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to submit feedback',
-      error: error.message
-    });
+    res.status(500).json({ status: 'error', message: 'Failed to submit feedback', error: error.message });
   }
 };
 
@@ -389,9 +459,62 @@ export const createTicketFromChat = async (req, res) => {
 };
 
 /**
- * GET /api/chat/llm/health
- * Returns LLM + RAG service status (admin/debug endpoint)
+ * GET /api/chat/summary/:conversationId
+ * Generate a ticket summary from a conversation WITHOUT creating a ticket.
+ * Used by TicketFromChatModal to pre-fill editable fields.
  */
+export const getConversationSummary = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user.id;
+
+    const conversation = await ChatConversation.getById(parseInt(conversationId));
+    if (!conversation) {
+      return res.status(404).json({ status: 'error', message: 'Conversation not found.' });
+    }
+
+    // Allow tech roles to summarize any conversation; customers only their own
+    const TECH_ROLES_SET = new Set(['technician', 'senior_technician', 'management', 'admin']);
+    if (!TECH_ROLES_SET.has(req.user.role) && conversation.user_id !== userId) {
+      return res.status(403).json({ status: 'error', message: 'Unauthorized.' });
+    }
+
+    const messages = await ChatMessage.getByConversationId(parseInt(conversationId), 30);
+
+    let title = 'Support Request';
+    let description = 'Submitted via chat assistant';
+
+    try {
+      const summary = await generateTicketSummary(messages);
+      title       = summary.title       || title;
+      description = summary.description || description;
+    } catch {
+      // fallback: use first real user message
+      const first = messages.find(m => m.sender === 'user');
+      if (first?.message) title = first.message.slice(0, 100);
+      description = messages
+        .filter(m => m.sender === 'user')
+        .map(m => m.message)
+        .join('\n');
+    }
+
+    // Build a readable transcript
+    const transcript = messages.map(m => {
+      const who = m.sender === 'user' ? 'Customer' : m.sender === 'tech' ? 'Technician' : 'Bot';
+      return `[${who}] ${m.message || ''}`;
+    }).join('\n');
+
+    return res.status(200).json({
+      status: 'success',
+      data: { title, description, transcript },
+    });
+  } catch (error) {
+    console.error('Get conversation summary error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to generate summary.', error: error.message });
+  }
+};
+
+
 export const getLLMHealth = async (req, res) => {
   try {
     const health = await checkLLMHealth();
@@ -703,9 +826,154 @@ export const claimHandoff = async (req, res) => {
 };
 
 /**
- * GET /api/chat/handoff/pending
- * Returns list of conversations awaiting tech claim. Tech-role only.
+ * POST /api/chat/handoff/reply
+ * Tech sends a reply message in a claimed handoff conversation.
  */
+export const sendHandoffReply = async (req, res) => {
+  try {
+    const techUser = req.user;
+    if (!TECH_ROLES.has(techUser.role)) {
+      return res.status(403).json({ status: 'error', message: 'Requires tech role.' });
+    }
+
+    const { conversationId, message } = req.body;
+    if (!conversationId || !message?.trim()) {
+      return res.status(400).json({ status: 'error', message: 'conversationId and message are required.' });
+    }
+
+    // Verify this tech claimed this conversation
+    const convRow = await pool.query(
+      `SELECT id, user_id, handoff_claimed_by FROM chat_conversations WHERE id = $1 LIMIT 1`,
+      [conversationId]
+    );
+    if (!convRow.rows.length) {
+      return res.status(404).json({ status: 'error', message: 'Conversation not found.' });
+    }
+    const conv = convRow.rows[0];
+    if (conv.handoff_claimed_by !== techUser.id) {
+      return res.status(403).json({ status: 'error', message: 'You have not claimed this conversation.' });
+    }
+
+    // Store message as sender='tech'
+    const msgRow = await pool.query(
+      `INSERT INTO chat_messages (conversation_id, sender, message, intent, confidence)
+       VALUES ($1, 'tech', $2, 'tech_reply', 1.0)
+       RETURNING id, created_at`,
+      [conversationId, message.trim()]
+    );
+    const msg = msgRow.rows[0];
+
+    // Emit to customer's socket in real-time
+    const techName = [techUser.firstName, techUser.lastName].filter(Boolean).join(' ') || 'A technician';
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user_${conv.user_id}`).emit('tech_reply', {
+        conversationId,
+        message:   message.trim(),
+        techName,
+        messageId: msg.id,
+        timestamp: msg.created_at,
+      });
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      data: { messageId: msg.id, timestamp: msg.created_at },
+    });
+  } catch (error) {
+    console.error('Handoff reply error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to send reply.', error: error.message });
+  }
+};
+
+/**
+ * POST /api/chat/handoff/resolve
+ * Tech closes a claimed handoff conversation.
+ */
+export const resolveHandoff = async (req, res) => {
+  try {
+    const techUser = req.user;
+    if (!TECH_ROLES.has(techUser.role)) {
+      return res.status(403).json({ status: 'error', message: 'Requires tech role.' });
+    }
+
+    const { conversationId } = req.body;
+    if (!conversationId) return res.status(400).json({ status: 'error', message: 'conversationId is required.' });
+
+    const result = await pool.query(
+      `UPDATE chat_conversations
+         SET handoff_resolved_at = NOW(), ended_at = NOW()
+       WHERE id = $1 AND handoff_claimed_by = $2
+       RETURNING id, user_id`,
+      [conversationId, techUser.id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(403).json({ status: 'error', message: 'Not your conversation or already resolved.' });
+    }
+
+    const conv = result.rows[0];
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user_${conv.user_id}`).emit('handoff_resolved', { conversationId });
+    }
+
+    return res.status(200).json({ status: 'success', data: { conversationId } });
+  } catch (error) {
+    console.error('Resolve handoff error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to resolve handoff.', error: error.message });
+  }
+};
+
+/**
+ * GET /api/chat/handoff/:conversationId/history
+ * Tech fetches full message history of a handoff conversation.
+ */
+export const getHandoffHistory = async (req, res) => {
+  try {
+    const techUser = req.user;
+    if (!TECH_ROLES.has(techUser.role)) {
+      return res.status(403).json({ status: 'error', message: 'Requires tech role.' });
+    }
+
+    const { conversationId } = req.params;
+
+    const [convRow, msgRows, userRow] = await Promise.all([
+      pool.query(`SELECT cc.*, u.first_name, u.last_name, u.email, u.role AS customer_role
+                  FROM chat_conversations cc
+                  JOIN users u ON u.id = cc.user_id
+                  WHERE cc.id = $1 LIMIT 1`, [conversationId]),
+      pool.query(`SELECT id, sender, message, intent, attachment_url, attachment_type,
+                         attachment_filename, created_at
+                  FROM chat_messages
+                  WHERE conversation_id = $1
+                  ORDER BY created_at ASC`, [conversationId]),
+      // Past tickets for this customer (context)
+      pool.query(`SELECT ticket_number, subject, status, created_at
+                  FROM tickets
+                  WHERE customer_id = (SELECT user_id FROM chat_conversations WHERE id = $1 LIMIT 1)
+                  ORDER BY created_at DESC LIMIT 5`, [conversationId]),
+    ]);
+
+    if (!convRow.rows.length) {
+      return res.status(404).json({ status: 'error', message: 'Conversation not found.' });
+    }
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        conversation: convRow.rows[0],
+        messages:     msgRows.rows,
+        pastTickets:  userRow.rows,
+      },
+    });
+  } catch (error) {
+    console.error('Get handoff history error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to get history.', error: error.message });
+  }
+};
+
+
 export const getPendingHandoffs = async (req, res) => {
   try {
     const user = req.user;
@@ -886,5 +1154,217 @@ export const getChatAnalytics = async (req, res) => {
   } catch (error) {
     console.error('Chat analytics error:', error);
     res.status(500).json({ status: 'error', message: 'Failed to fetch analytics.', error: error.message });
+  }
+};
+// ============================================================================
+// CONVERSATION SURVEY  (end-of-conversation rating)
+// ============================================================================
+
+/**
+ * POST /api/chat/survey
+ * Submit end-of-conversation survey.
+ * Body: { conversationId, rating (1-5), solved, wouldUseAgain, npsScore (0-10), feedbackText }
+ */
+export const submitConversationSurvey = async (req, res) => {
+  try {
+    const {
+      conversationId,
+      rating,
+      solved,
+      wouldUseAgain,
+      npsScore,
+      feedbackText,
+    } = req.body;
+    const userId = req.user.id;
+
+    if (!conversationId) {
+      return res.status(400).json({ status: 'error', message: 'conversationId is required.' });
+    }
+
+    // Verify ownership
+    const conversation = await ChatConversation.getById(parseInt(conversationId));
+    if (!conversation || conversation.user_id !== userId) {
+      return res.status(403).json({ status: 'error', message: 'Unauthorized.' });
+    }
+
+    // Validate ranges
+    if (rating !== undefined && rating !== null && (rating < 1 || rating > 5)) {
+      return res.status(400).json({ status: 'error', message: 'Rating must be between 1 and 5.' });
+    }
+    if (npsScore !== undefined && npsScore !== null && (npsScore < 0 || npsScore > 10)) {
+      return res.status(400).json({ status: 'error', message: 'NPS score must be between 0 and 10.' });
+    }
+
+    // Redact PII from free-text
+    const safeText = feedbackText ? redactPII(feedbackText.trim().slice(0, 1000)) : null;
+
+    // Upsert (one survey per conversation)
+    await pool.query(
+      `INSERT INTO conversation_feedback
+         (conversation_id, user_id, rating, solved, would_use_again, nps_score, feedback_text)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (conversation_id) DO UPDATE SET
+         rating          = EXCLUDED.rating,
+         solved          = EXCLUDED.solved,
+         would_use_again = EXCLUDED.would_use_again,
+         nps_score       = EXCLUDED.nps_score,
+         feedback_text   = EXCLUDED.feedback_text`,
+      [
+        conversationId,
+        userId,
+        rating       ?? null,
+        solved       ?? null,
+        wouldUseAgain ?? null,
+        npsScore     ?? null,
+        safeText,
+      ]
+    );
+
+    // Audit
+    await auditLog('survey_submitted', userId, parseInt(conversationId), { rating, npsScore }, req);
+
+    return res.status(200).json({ status: 'success', message: 'Survey submitted. Thank you!' });
+
+  } catch (error) {
+    console.error('Submit survey error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to submit survey.', error: error.message });
+  }
+};
+
+// ============================================================================
+// KNOWLEDGE GAPS (management only)
+// ============================================================================
+
+/**
+ * GET /api/chat/analytics/knowledge-gaps
+ * Returns top unanswered / low-quality queries to guide KB content creation.
+ * Query params: limit (default 20), resolved (default false)
+ */
+export const getKnowledgeGaps = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!['management', 'admin'].includes(user.role)) {
+      return res.status(403).json({ status: 'error', message: 'Requires management or admin role.' });
+    }
+
+    const limit    = Math.min(parseInt(req.query.limit) || 20, 100);
+    const resolved = req.query.resolved === 'true';
+
+    const [gapsRows, satisfactionRows, npsRows] = await Promise.all([
+      // Top knowledge gaps
+      pool.query(
+        `SELECT id, query_text, occurrence_count, low_confidence_count,
+                thumbs_down_count, ticket_created_count, first_seen, last_seen,
+                suggested_article_title, resolved
+         FROM chat_knowledge_gaps
+         WHERE resolved = $1
+         ORDER BY (thumbs_down_count * 3 + low_confidence_count * 2 + occurrence_count) DESC
+         LIMIT $2`,
+        [resolved, limit]
+      ),
+
+      // 30-day satisfaction trend (avg star rating per week)
+      pool.query(`
+        SELECT
+          DATE_TRUNC('week', cf.created_at) AS week,
+          ROUND(AVG(cf.rating)::numeric, 2)  AS avg_rating,
+          COUNT(*)                            AS responses,
+          ROUND(AVG(cf.nps_score)::numeric, 2) AS avg_nps
+        FROM conversation_feedback cf
+        WHERE cf.created_at >= NOW() - INTERVAL '90 days'
+          AND cf.rating IS NOT NULL
+        GROUP BY week
+        ORDER BY week`),
+
+      // NPS breakdown
+      pool.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE nps_category = 'promoter')  AS promoters,
+          COUNT(*) FILTER (WHERE nps_category = 'passive')   AS passives,
+          COUNT(*) FILTER (WHERE nps_category = 'detractor') AS detractors,
+          COUNT(*) FILTER (WHERE nps_score IS NOT NULL)       AS total_nps_responses,
+          ROUND(
+            (COUNT(*) FILTER (WHERE nps_category = 'promoter')::numeric -
+             COUNT(*) FILTER (WHERE nps_category = 'detractor')::numeric)
+            / NULLIF(COUNT(*) FILTER (WHERE nps_score IS NOT NULL), 0)::numeric * 100, 1
+          ) AS nps_score
+        FROM conversation_feedback
+        WHERE created_at >= NOW() - INTERVAL '30 days'`),
+    ]);
+
+    const nps = npsRows.rows[0] || {};
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        knowledgeGaps:      gapsRows.rows,
+        satisfactionTrend:  satisfactionRows.rows,
+        nps: {
+          promoters:   parseInt(nps.promoters  || 0),
+          passives:    parseInt(nps.passives   || 0),
+          detractors:  parseInt(nps.detractors || 0),
+          total:       parseInt(nps.total_nps_responses || 0),
+          score:       parseFloat(nps.nps_score || 0),
+        },
+      },
+    });
+
+  } catch (error) {
+    console.error('Get knowledge gaps error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to fetch knowledge gaps.', error: error.message });
+  }
+};
+
+// ============================================================================
+// GDPR — export user conversation history
+// ============================================================================
+
+/**
+ * GET /api/chat/export-my-data
+ * Export all conversations + messages for the requesting user (GDPR Art. 20).
+ */
+export const exportMyData = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const [convsRows, msgsRows, feedbackRows] = await Promise.all([
+      pool.query(
+        `SELECT id, started_at, ended_at, was_helpful, created_at
+         FROM chat_conversations WHERE user_id = $1 ORDER BY created_at DESC`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT cm.id, cm.conversation_id, cm.sender, cm.message,
+                cm.intent, cm.timestamp
+         FROM chat_messages cm
+         JOIN chat_conversations cc ON cc.id = cm.conversation_id
+         WHERE cc.user_id = $1
+         ORDER BY cm.timestamp ASC`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT conversation_id, rating, solved, would_use_again, nps_score, created_at
+         FROM conversation_feedback WHERE user_id = $1 ORDER BY created_at DESC`,
+        [userId]
+      ),
+    ]);
+
+    // Audit the export access
+    await auditLog('data_export', userId, null, { format: 'json' }, req);
+
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        exportedAt:    new Date().toISOString(),
+        userId,
+        conversations: convsRows.rows,
+        messages:      msgsRows.rows,
+        feedback:      feedbackRows.rows,
+      },
+    });
+
+  } catch (error) {
+    console.error('Export data error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to export data.', error: error.message });
   }
 };
