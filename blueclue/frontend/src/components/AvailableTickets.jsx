@@ -335,7 +335,7 @@ function AvailableTickets({ onTicketClick }) {
       {/* Empty State */}
       {!loading && tickets.length === 0 && (
         <div className="p-12 text-center">
-          <div className="text-4xl mb-3">🎉</div>
+          <div className="text-4xl mb-3"></div>
           <p className="text-gray-400 text-lg">No available tickets</p>
           <p className="text-gray-500 text-sm mt-2">
             All tickets are assigned or there are none in your categories.
@@ -346,7 +346,7 @@ function AvailableTickets({ onTicketClick }) {
       {/* No Results for Filters */}
       {!loading && tickets.length > 0 && filteredTickets.length === 0 && (
         <div className="p-12 text-center">
-          <div className="text-4xl mb-3">🔍</div>
+          <div className="text-4xl mb-3"></div>
           <p className="text-gray-400 text-lg">No tickets match your filters</p>
           <button
             onClick={resetFilters}

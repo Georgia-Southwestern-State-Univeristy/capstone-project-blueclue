@@ -50,7 +50,7 @@ function MessageBubble({ id, sender, text, timestamp, onFeedback, articleLinks, 
               className="flex items-start gap-2 px-3 py-2 rounded-lg bg-blue-900/30 border border-blue-700/40
                          hover:bg-blue-800/40 hover:border-blue-500/60 transition-colors group"
             >
-              <span className="mt-0.5 text-blue-400 shrink-0">📄</span>
+              <span className="mt-0.5 text-blue-400 shrink-0"></span>
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-blue-300 group-hover:text-blue-200 truncate">
                   {article.title}

@@ -377,7 +377,7 @@ const RingForHelpModal = ({
         {/* Footer */}
         <div className="flex items-center justify-between gap-3 p-6 border-t border-gray-700/50 bg-gray-900/30">
           <p className="text-xs text-gray-500">
-            💡 The technician will have 5 minutes to respond
+            The technician will have 5 minutes to respond
           </p>
           <div className="flex gap-3">
             <button

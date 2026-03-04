@@ -175,7 +175,7 @@ const KnowledgeBaseManagement = () => {
                 {/* Access Denied Message */}
                 {accessDenied ? (
                     <div className="bg-gray-900 rounded-lg border border-red-700 p-12 text-center">
-                        <div className="text-red-500 text-6xl mb-4">🔒</div>
+                        <div className="text-red-500 text-6xl mb-4"></div>
                         <h2 className="text-2xl font-bold text-white mb-2">Access Denied</h2>
                         <p className="text-gray-400 mb-6">
                             You need admin or technician privileges to access Knowledge Base Management.

@@ -20,6 +20,7 @@ function Navbar() {
   const [notificationDropdownOpen, setNotificationDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const [ticketDetailId, setTicketDetailId] = useState(null)
   const [suggestions, setSuggestions] = useState(null)
@@ -35,6 +36,7 @@ function Navbar() {
   const [ticketDetailOpen, setTicketDetailOpen] = useState(false)
   const notificationDropdownRef = useRef(null)
   const notificationBellRef = useRef(null)
+  const profileDropdownRef = useRef(null)
   const authenticated = isAuthenticated()
   const user = getUser()
 
@@ -43,6 +45,9 @@ function Navbar() {
     function handleClickOutside(event) {
        if (notificationDropdownRef.current && !notificationDropdownRef.current.contains(event.target)) {
         setNotificationDropdownOpen(false)
+      }
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(event.target)) {
+        setProfileDropdownOpen(false)
       }
     }
 
@@ -60,7 +65,7 @@ function Navbar() {
       chat.addMessage({
         id: data.messageId ?? Date.now(),
         sender: 'bot',
-        text: `👨‍💻 **${data.techName || 'Technician'}:** ${data.message}`,
+        text: `**${data.techName || 'Technician'}:** ${data.message}`,
         timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
       })
       setHandoffStatus('claimed')
@@ -71,9 +76,9 @@ function Navbar() {
       chat.addMessage({
         id: Date.now(),
         sender: 'bot',
-        text: '✅ The technician has closed this chat session. If your issue persists, please open a new support ticket.',
+        text: 'The technician has closed this chat session. If your issue persists, please open a new support ticket.',
         timestamp: new Date(),
-        actionButtons: [{ id: 'create_ticket', label: '🎫 Create a Ticket', primary: true }],
+        actionButtons: [{ id: 'create_ticket', label: 'Create a Ticket', primary: true }],
       })
     }
 
@@ -82,7 +87,7 @@ function Navbar() {
       chat.addMessage({
         id: Date.now(),
         sender: 'bot',
-        text: `🎉 **${data.techName || 'A technician'}** has joined the chat! How can they help you?`,
+        text: `**${data.techName || 'A technician'}** has joined the chat! How can they help you?`,
         timestamp: new Date(),
       })
     }
@@ -136,9 +141,9 @@ function Navbar() {
           chat.addMessage({
             id: Date.now() + 2,
             sender: 'bot',
-            text: "👷 It looks like I haven't been able to fully resolve your issue. Would you like me to connect you with a live technician?",
+            text: "It looks like I haven't been able to fully resolve your issue. Would you like me to connect you with a live technician?",
             timestamp: new Date(),
-            actionButtons: [{ id: 'request_handoff', label: '🧑‍💻 Talk to a Technician', primary: true }],
+            actionButtons: [{ id: 'request_handoff', label: 'Talk to a Technician', primary: true }],
           })
         }, 600)
       }
@@ -173,7 +178,7 @@ function Navbar() {
       chat.addMessage({ id: Date.now(), sender: 'bot', text: 'File too large (max 5 MB).', timestamp: new Date() })
       return
     }
-    chat.addMessage({ id: Date.now(), sender: 'user', text: `📎 ${file.name}`, timestamp: new Date() })
+    chat.addMessage({ id: Date.now(), sender: 'user', text: `${file.name}`, timestamp: new Date() })
     try {
       const result = await uploadChatFile(file, conversationIdRef.current)
       conversationIdRef.current = result.conversationId ?? conversationIdRef.current
@@ -208,7 +213,7 @@ function Navbar() {
           text: result.message || `Ticket ${result.ticketNumber} created. A technician will respond soon.`,
           timestamp: new Date(),
           actionButtons: [
-            { id: 'view_tickets', label: '📋 View my tickets', primary: false },
+            { id: 'view_tickets', label: 'View my tickets', primary: false },
           ],
         })
       } catch (err) {
@@ -420,11 +425,38 @@ function Navbar() {
                 </svg>
               </button>
 
-              {/* Profile Icon */}
-              <div className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-800">
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                </svg>
+              {/* Profile Icon + Dropdown */}
+              <div className="relative" ref={profileDropdownRef}>
+                <button
+                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                  className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-800 hover:bg-gray-700 transition-colors"
+                  title="Profile"
+                >
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                  </svg>
+                </button>
+
+                {profileDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-56 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                    {/* User info */}
+                    <div className="px-4 py-3 border-b border-gray-700">
+                      <p className="text-sm font-medium text-white truncate">{user?.firstName || user?.fullName || user?.username || 'User'}</p>
+                      <p className="text-xs text-gray-400 truncate">{user?.email || ''}</p>
+                      <p className="text-xs text-gray-500 capitalize mt-0.5">{user?.role?.replace(/_/g, ' ') || 'Guest'}</p>
+                    </div>
+                    {/* Logout */}
+                    <button
+                      onClick={() => { setProfileDropdownOpen(false); handleLogout(); }}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-gray-700 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      Log Out
+                    </button>
+                  </div>
+                )}
               </div>
             </>
           ) : (
@@ -481,7 +513,7 @@ function Navbar() {
                 onClick={() => setMobileMenuOpen(false)}
                 className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
               >
-                ❓ Help Center
+                Help Center
               </Link>
             </>
           )}
@@ -587,7 +619,7 @@ function Navbar() {
           chat.addMessage({
             id: Date.now(),
             sender: 'bot',
-            text: `🎫 Ticket **#${ticketNumber}** has been created. A technician will follow up soon.`,
+            text: `Ticket **#${ticketNumber}** has been created. A technician will follow up soon.`,
             timestamp: new Date(),
           })
         }}

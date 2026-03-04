@@ -84,12 +84,12 @@ function TechTicketCard({
           disabled={updatingTicketId === ticket.id || ticket.status === 'closed' || ticket.status === 'cancelled'}
           className={`w-full px-3 py-2 rounded-md text-sm font-medium cursor-pointer transition-colors ${statusColor.badge} border border-gray-600 hover:border-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed`}
         >
-          <option value="open">{updatingTicketId === ticket.id && ticket.status === 'open' ? '⏳ ' : ''}Open</option>
-          <option value="in_progress">{updatingTicketId === ticket.id && ticket.status === 'in_progress' ? '⏳ ' : ''}In Progress</option>
-          <option value="waiting_on_customer">{updatingTicketId === ticket.id && ticket.status === 'waiting_on_customer' ? '⏳ ' : ''}Waiting on Customer</option>
-          <option value="resolved">{updatingTicketId === ticket.id && ticket.status === 'resolved' ? '⏳ ' : ''}Resolved</option>
-          <option value="closed">{updatingTicketId === ticket.id && ticket.status === 'closed' ? '⏳ ' : ''}Closed</option>
-          <option value="cancelled">{updatingTicketId === ticket.id && ticket.status === 'cancelled' ? '⏳ ' : ''}Cancelled</option>
+          <option value="open">{updatingTicketId === ticket.id && ticket.status === 'open' ? '' : ''}Open</option>
+          <option value="in_progress">{updatingTicketId === ticket.id && ticket.status === 'in_progress' ? '' : ''}In Progress</option>
+          <option value="waiting_on_customer">{updatingTicketId === ticket.id && ticket.status === 'waiting_on_customer' ? '' : ''}Waiting on Customer</option>
+          <option value="resolved">{updatingTicketId === ticket.id && ticket.status === 'resolved' ? '' : ''}Resolved</option>
+          <option value="closed">{updatingTicketId === ticket.id && ticket.status === 'closed' ? '' : ''}Closed</option>
+          <option value="cancelled">{updatingTicketId === ticket.id && ticket.status === 'cancelled' ? '' : ''}Cancelled</option>
         </select>
         {updatingTicketId === ticket.id && <p className="text-blue-400 text-[10px] mt-1">Updating...</p>}
         {(ticket.status === 'closed' || ticket.status === 'cancelled') && (
@@ -106,7 +106,7 @@ function TechTicketCard({
             </svg>
             <span className="font-semibold text-indigo-300">AI Classification</span>
             {ticket.ai_fallback_used && (
-              <span className="ml-auto text-yellow-500 text-[10px]" title="Fallback classification used">⚠ Fallback</span>
+              <span className="ml-auto text-yellow-500 text-[10px]" title="Fallback classification used">Fallback</span>
             )}
           </div>
           <div className="space-y-1.5">
@@ -436,7 +436,6 @@ export default function TechTicketQueueWidget({
 
         {!loading && tickets.length === 0 && (
           <div className="p-12 text-center">
-            <p className="text-2xl text-gray-500 mb-2">📭</p>
             <p className="text-gray-400 text-lg">No tickets found</p>
             <p className="text-gray-500 text-sm mt-2">All tickets have been resolved and closed!</p>
           </div>
@@ -444,7 +443,6 @@ export default function TechTicketQueueWidget({
 
         {!loading && tickets.length > 0 && filteredTickets.length === 0 && (
           <div className="p-12 text-center">
-            <p className="text-2xl text-gray-500 mb-2">🔍</p>
             <p className="text-gray-400 text-lg">No tickets match your filters</p>
             <button onClick={resetFilters} className="mt-4 px-4 py-2 text-blue-400 hover:text-blue-300 font-medium">Clear Filters</button>
           </div>

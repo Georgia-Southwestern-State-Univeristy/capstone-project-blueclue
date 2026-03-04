@@ -11,10 +11,10 @@
  */
 
 const DEFAULT_OPTIONS = [
-  { label: '📝 Create a ticket', value: 'I want to create a new ticket' },
-  { label: '🔍 Check ticket status', value: 'I want to check my ticket status' },
-  { label: '🛠️ Technical support', value: 'I need technical support' },
-  { label: '❓ FAQs', value: 'Show me frequently asked questions' },
+  { label: 'Create a ticket', value: 'I want to create a new ticket' },
+  { label: 'Check ticket status', value: 'I want to check my ticket status' },
+  { label: 'Technical support', value: 'I need technical support' },
+  { label: 'FAQs', value: 'Show me frequently asked questions' },
 ];
 
 function QuickReplyButtons({

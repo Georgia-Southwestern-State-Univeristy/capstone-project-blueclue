@@ -180,14 +180,14 @@ function AnalyticsDashboard() {
 
   // Tab configuration
   const tabs = [
-    { id: 'overview', label: 'Overview', icon: '📊' },
-    { id: 'resolution', label: 'Resolution Time', icon: '⏱️' },
-    { id: 'volume', label: 'Ticket Volume', icon: '📈' },
-    { id: 'performance', label: 'Tech Performance', icon: '👥' },
+    { id: 'overview', label: 'Overview', icon: '' },
+    { id: 'resolution', label: 'Resolution Time', icon: '' },
+    { id: 'volume', label: 'Ticket Volume', icon: '' },
+    { id: 'performance', label: 'Tech Performance', icon: '' },
     ...(userRole === 'management' || userRole === 'admin' 
       ? [
-          { id: 'categories', label: 'Categories', icon: '📁' },
-          { id: 'sla', label: 'SLA Compliance', icon: '✅' },
+          { id: 'categories', label: 'Categories', icon: '' },
+          { id: 'sla', label: 'SLA Compliance', icon: '' },
         ] 
       : []
     ),
@@ -260,14 +260,14 @@ function AnalyticsDashboard() {
                   disabled={exporting}
                   className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 flex items-center gap-1"
                 >
-                  {exporting ? '...' : '📄'} CSV
+                  {exporting ? '...' : ''} CSV
                 </button>
                 <button
                   onClick={() => handleExport('json')}
                   disabled={exporting}
                   className="px-3 py-1.5 text-sm bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 flex items-center gap-1"
                 >
-                  {exporting ? '...' : '📄'} JSON
+                  {exporting ? '...' : ''} JSON
                 </button>
               </div>
             )}
@@ -824,7 +824,7 @@ function CategoriesTab({ data, onDrillDown }) {
         {/* Growing */}
         <div className="bg-gray-900 rounded-lg border border-gray-700 p-4">
           <h4 className="text-sm font-medium text-green-400 mb-3 flex items-center gap-2">
-            <span>📈</span> Growing Categories
+            <span></span> Growing Categories
           </h4>
           {data.growing_categories?.length > 0 ? (
             <ul className="space-y-2">
@@ -843,7 +843,7 @@ function CategoriesTab({ data, onDrillDown }) {
         {/* Declining */}
         <div className="bg-gray-900 rounded-lg border border-gray-700 p-4">
           <h4 className="text-sm font-medium text-red-400 mb-3 flex items-center gap-2">
-            <span>📉</span> Declining Categories
+            <span></span> Declining Categories
           </h4>
           {data.declining_categories?.length > 0 ? (
             <ul className="space-y-2">
@@ -985,7 +985,7 @@ function SLATab({ data, onDrillDown }) {
         <div className="bg-gray-900 rounded-lg border border-red-900/50 overflow-hidden">
           <div className="p-4 border-b border-gray-700 bg-red-900/20">
             <h3 className="text-lg font-semibold text-red-400">
-              🚨 Current SLA Breaches ({data.current_breaches.length})
+              Current SLA Breaches ({data.current_breaches.length})
             </h3>
           </div>
           <div className="overflow-x-auto">

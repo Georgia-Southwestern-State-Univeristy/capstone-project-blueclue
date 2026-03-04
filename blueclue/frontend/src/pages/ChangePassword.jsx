@@ -266,7 +266,7 @@ function ChangePassword() {
 
         {/* Security Notice */}
         <div className="mt-6 text-center text-xs text-gray-500">
-          <p>🔒 Your password will be encrypted and stored securely</p>
+          <p>Your password will be encrypted and stored securely</p>
         </div>
       </div>
     </div>

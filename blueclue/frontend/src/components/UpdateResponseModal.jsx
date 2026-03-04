@@ -210,8 +210,7 @@ function UpdateResponseModal({ isOpen, onClose, updateRequest }) {
               />
               <div>
                 <div className="font-medium text-gray-200 flex items-center gap-2">
-                  <span>✅</span>
-                  <span>Issue Resolved</span>
+                  <span>Resolved</span>
                 </div>
                 <p className="text-sm text-gray-400">The ticket issue has been resolved</p>
               </div>
@@ -231,7 +230,6 @@ function UpdateResponseModal({ isOpen, onClose, updateRequest }) {
               />
               <div>
                 <div className="font-medium text-gray-200 flex items-center gap-2">
-                  <span>⏰</span>
                   <span>Need More Time</span>
                 </div>
                 <p className="text-sm text-gray-400">Still working on this, need additional time</p>
@@ -252,7 +250,6 @@ function UpdateResponseModal({ isOpen, onClose, updateRequest }) {
               />
               <div>
                 <div className="font-medium text-gray-200 flex items-center gap-2">
-                  <span>🚫</span>
                   <span>Blocked</span>
                 </div>
                 <p className="text-sm text-gray-400">Progress is blocked by external factors</p>
@@ -394,10 +391,10 @@ function UpdateResponseModal({ isOpen, onClose, updateRequest }) {
                   : 'text-amber-300'
               }`}>
                 {updateRequest.extension_approved 
-                  ? '✅ Extension Approved' 
+                  ? 'Extension Approved' 
                   : updateRequest.extension_approved === false
-                  ? '❌ Extension Denied'
-                  : '⏳ Extension Pending Approval'}
+                  ? 'Extension Denied'
+                  : 'Extension Pending Approval'}
               </p>
               {updateRequest.extension_approved && updateRequest.extension_deadline && (
                 <p className="text-xs text-gray-400 mt-1">

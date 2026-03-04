@@ -389,10 +389,10 @@ export default function ChatAnalyticsDashboard() {
                     <p className="text-gray-500 text-xs text-center mt-1">unresolved gaps</p>
                     <p className="text-gray-400 text-xs text-center mt-3 leading-relaxed">
                       {gapData?.gaps?.length >= 15
-                        ? '⚠️ High gap count — consider KB updates'
+                        ? 'High gap count — consider KB updates'
                         : gapData?.gaps?.length > 0
                           ? 'Review gaps below'
-                          : '✅ No significant gaps detected'}
+                          : 'No significant gaps detected'}
                     </p>
                   </>
                 )}
@@ -411,7 +411,7 @@ export default function ChatAnalyticsDashboard() {
                         <th className="text-left pb-2 pr-4">Query</th>
                         <th className="text-right pb-2 px-3">Occurrences</th>
                         <th className="text-right pb-2 px-3">Low Conf.</th>
-                        <th className="text-right pb-2 px-3">👎</th>
+                        <th className="text-right pb-2 px-3">Disliked</th>
                         <th className="text-left pb-2 pl-3">First seen</th>
                       </tr>
                     </thead>

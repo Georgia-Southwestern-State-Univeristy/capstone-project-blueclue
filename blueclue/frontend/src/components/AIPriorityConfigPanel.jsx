@@ -370,7 +370,7 @@ const AIPriorityConfigPanel = () => {
 
       {/* Info Box */}
       <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4">
-        <h4 className="text-sm font-semibold text-blue-400 mb-2">ℹ️ How It Works</h4>
+        <h4 className="text-sm font-semibold text-blue-400 mb-2">How It Works</h4>
         <ul className="text-sm text-gray-300 space-y-1 ml-4 list-disc">
           <li>When users don't select a priority, AI recommendation is used directly</li>
           <li>When users select a priority, it's weighted against AI's recommendation</li>

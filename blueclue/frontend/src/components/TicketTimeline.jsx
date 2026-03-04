@@ -358,9 +358,9 @@ function TicketTimeline({ tickets = [], onTicketClick = null }) {
                     </svg>
                   )
                   const fulfiller = details.fulfilled_by_name || entry.changed_by_name || 'Technician'
-                  const statusBadge = details.is_resolved ? '✅ Resolved' : 
-                                     details.is_blocked ? '🚫 Blocked' : 
-                                     details.needs_more_time ? '⏰ Needs Time' : 'Updated'
+                  const statusBadge = details.is_resolved ? 'Resolved' : 
+                                     details.is_blocked ? 'Blocked' : 
+                                     details.needs_more_time ? 'Needs Time' : 'Updated'
                   description = (
                     <span>
                       <span className="text-white font-medium">{fulfiller}</span>

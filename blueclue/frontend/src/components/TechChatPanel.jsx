@@ -207,14 +207,14 @@ export default function TechChatPanel() {
                 className="text-[10px] px-2 py-1 rounded bg-blue-700 hover:bg-blue-600 text-white transition-colors disabled:opacity-50"
                 title="Create support ticket from this chat"
               >
-                {creatingTicket ? '⏳ Creating…' : ticketCreated ? `✅ ${ticketCreated.ticketNumber}` : '🎫 Create Ticket'}
+                {creatingTicket ? 'Creating…' : ticketCreated ? `${ticketCreated.ticketNumber}` : 'Create Ticket'}
               </button>
               <button
                 onClick={handleResolve}
                 className="text-[10px] px-2 py-1 rounded bg-gray-700 hover:bg-red-800 text-gray-300 hover:text-white transition-colors"
                 title="Close this chat"
               >
-                ✓ Close Chat
+                Close Chat
               </button>
             </>
           )}
@@ -241,7 +241,7 @@ export default function TechChatPanel() {
           {error && (
             <div className="px-4 py-2 bg-red-900/30 border-b border-red-800 text-red-300 text-xs flex items-center justify-between">
               <span>{error}</span>
-              <button onClick={() => setError(null)} className="text-red-400 hover:text-white ml-2">✕</button>
+              <button onClick={() => setError(null)} className="text-red-400 hover:text-white ml-2">X</button>
             </div>
           )}
 
@@ -253,7 +253,7 @@ export default function TechChatPanel() {
               )}
               {!loading && pending.length === 0 && (
                 <div className="text-center text-gray-500 py-10">
-                  <p className="text-2xl mb-2">🎉</p>
+                  <p className="text-2xl mb-2"></p>
                   <p className="text-sm">No pending handoff requests.</p>
                   <p className="text-xs text-gray-600 mt-1">Checking every {POLL_INTERVAL_MS / 1000}s</p>
                 </div>
@@ -286,11 +286,11 @@ export default function TechChatPanel() {
             <>
               {/* Customer context bar */}
               <div className="px-4 py-2 bg-gray-800/50 border-b border-gray-700 flex items-center gap-4 text-xs flex-shrink-0 flex-wrap">
-                <span className="text-gray-400">📧 {activeConv.customer.email || '—'}</span>
-                <span className="text-gray-400 capitalize">🔖 {activeConv.customer.role || '—'}</span>
+                <span className="text-gray-400">{activeConv.customer.email || '—'}</span>
+                <span className="text-gray-400 capitalize">{activeConv.customer.role || '—'}</span>
                 {activeConv.pastTickets.length > 0 && (
                   <span className="text-gray-400">
-                    🎫 Past tickets: {activeConv.pastTickets.map(t =>
+                    Past tickets: {activeConv.pastTickets.map(t =>
                       <span key={t.ticket_number} className={`ml-1 px-1 rounded font-mono
                         ${t.status === 'closed' ? 'text-gray-500' : 'text-blue-400'}`}>
                         {t.ticket_number}
@@ -300,7 +300,7 @@ export default function TechChatPanel() {
                 )}
                 {ticketCreated && (
                   <span className="text-emerald-400 font-medium">
-                    ✅ Ticket {ticketCreated.ticketNumber} created
+                    Ticket {ticketCreated.ticketNumber} created
                   </span>
                 )}
               </div>
@@ -329,7 +329,7 @@ export default function TechChatPanel() {
                         {isAttachment && !isImage && (
                           <a href={`${API_BASE}${msg.attachment_url}`} target="_blank" rel="noopener noreferrer"
                              className="block mt-1 text-blue-400 underline text-xs">
-                            📎 {msg.attachment_filename || 'Attachment'}
+                            {msg.attachment_filename || 'Attachment'}
                           </a>
                         )}
                       </div>

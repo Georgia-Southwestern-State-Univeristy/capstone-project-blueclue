@@ -270,7 +270,7 @@ const RingRequestWidget = ({ onViewTicket }) => {
         {ringRequests.length > 0 && (
           <div className="p-3 bg-gray-900/30 border-t border-gray-700/50">
             <p className="text-xs text-gray-500 text-center">
-              💡 Requests auto-expire after 5 minutes
+              Requests auto-expire after 5 minutes
             </p>
           </div>
         )}

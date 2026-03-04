@@ -100,7 +100,7 @@ function ChatWindow({
           <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isTechMode ? 'bg-emerald-400' : 'bg-green-500'}`} />
           <div className="min-w-0">
             <h3 className={`text-sm font-semibold truncate ${isTechMode ? 'text-emerald-400' : 'text-white'}`}>
-              {isTechMode ? '👨‍💻 Tech Mode' : 'BlueClue Assistant'}
+              {isTechMode ? 'Tech Mode' : 'BlueClue Assistant'}
             </h3>
             {isTechMode && (
               <p className="text-[10px] text-emerald-600 leading-tight">Internal KB + commands active</p>
@@ -119,7 +119,7 @@ function ChatWindow({
                   : 'bg-gray-700 hover:bg-gray-600 text-gray-300'}`}
               title={isTechMode ? 'Switch to Customer Mode' : 'Switch to Tech Mode'}
             >
-              {isTechMode ? '👤 Customer' : '👨‍💻 Tech'}
+              {isTechMode ? 'Customer' : 'Tech'}
             </button>
           )}
 
@@ -130,11 +130,11 @@ function ChatWindow({
               className="flex items-center gap-0.5 px-2 py-1 rounded text-[10px] font-medium bg-gray-700 hover:bg-blue-700 text-gray-300 hover:text-white transition-colors"
               title="Talk to a human technician"
             >
-              🧑‍💼 Talk to Tech
+              Talk to Tech
             </button>
           )}
           {handoffStatus === 'requested' && (
-            <span className="text-[10px] text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded font-medium">⏳ Connecting…</span>
+            <span className="text-[10px] text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded font-medium">Connecting…</span>
           )}
           {handoffStatus === 'claimed' && (
             <>
@@ -144,10 +144,10 @@ function ChatWindow({
                   className="flex items-center gap-0.5 px-2 py-1 rounded text-[10px] font-medium bg-blue-900/50 hover:bg-blue-800 text-blue-300 hover:text-white transition-colors"
                   title="Create a ticket from this chat"
                 >
-                  🎫 Ticket
+                  Ticket
                 </button>
               )}
-              <span className="text-[10px] text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded font-medium">✅ Tech joined</span>
+              <span className="text-[10px] text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded font-medium">Tech joined</span>
             </>
           )}
 

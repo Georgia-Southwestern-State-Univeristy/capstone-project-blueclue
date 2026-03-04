@@ -381,13 +381,11 @@ function TicketControlWidget({ tickets = [], onRefresh, onTicketUpdated }) {
           {/* Empty / No results states */}
           {tickets.length === 0 && (
             <div className="p-12 text-center">
-              <p className="text-2xl text-gray-500 mb-2">📭</p>
               <p className="text-gray-400 text-lg">No tickets found</p>
             </div>
           )}
           {tickets.length > 0 && filteredTickets.length === 0 && (
             <div className="p-12 text-center">
-              <p className="text-2xl text-gray-500 mb-2">🔍</p>
               <p className="text-gray-400 text-lg">No tickets match your filters</p>
               <button onClick={resetFilters} className="mt-4 px-4 py-2 text-blue-400 hover:text-blue-300 font-medium">Clear Filters</button>
             </div>
@@ -462,7 +460,7 @@ function TicketControlWidget({ tickets = [], onRefresh, onTicketUpdated }) {
                               {Math.round(ticket.ai_confidence * 100)}%
                             </span>
                           )}
-                          {ticket.ai_fallback_used && <span className="text-yellow-500">⚠ Fallback</span>}
+                          {ticket.ai_fallback_used && <span className="text-yellow-500">Fallback</span>}
                         </div>
                       )}
                     </div>

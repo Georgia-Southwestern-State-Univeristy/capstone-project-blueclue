@@ -141,7 +141,7 @@ function ManagementWidgetGrid({
       deletedTickets: <DeletedTicketsWidget onTicketClick={(ticket) => handleTicketClick(ticket.id)} />,
       pendingRequests: <PendingRequestsWidget ref={pendingRequestsRef} onTicketClick={(ticketId) => handleTicketClick(ticketId)} />,
       responseTime: (
-        <BaseWidget title="Update Request Response Times" icon="⏱️">
+        <BaseWidget title="Update Request Response Times" icon="">
           <UpdateRequestResponseTimeAnalytics />
         </BaseWidget>
       ),

@@ -66,12 +66,12 @@ function QuickActionsPanel() {
             </button>
 
             <button className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center gap-3 text-sm">
-              <span className="w-6 h-6 bg-green-500 rounded flex items-center justify-center text-xs font-bold">⬇</span>
+              <span className="w-6 h-6 bg-green-500 rounded flex items-center justify-center text-xs font-bold">R</span>
               <span>Generate Report</span>
             </button>
 
             <button className="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center gap-3 text-sm">
-              <span className="w-6 h-6 bg-orange-500 rounded flex items-center justify-center text-xs font-bold">⚙</span>
+              <span className="w-6 h-6 bg-orange-500 rounded flex items-center justify-center text-xs font-bold">S</span>
               <span>Settings</span>
             </button>
           </div>
