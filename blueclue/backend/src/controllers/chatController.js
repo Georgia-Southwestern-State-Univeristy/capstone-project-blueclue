@@ -634,8 +634,8 @@ export const requestHandoff = async (req, res) => {
     const io = req.app.get('io');
     for (const tech of techRows.rows) {
       await pool.query(
-        `INSERT INTO notifications (user_id, type, title, message, data)
-         VALUES ($1, 'chat_handoff', 'Handoff Request', $2, $3)`,
+        `INSERT INTO notifications (user_id, type, message, metadata)
+         VALUES ($1, 'chat_handoff', $2, $3)`,
         [
           tech.id,
           `${displayName} is requesting to speak with a technician.`,
