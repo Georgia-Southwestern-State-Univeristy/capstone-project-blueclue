@@ -650,6 +650,9 @@ class MetricsCollector:
 
 metrics = MetricsCollector()
 
+# In-memory tracking of retraining runs started in this process instance
+_active_runs: Dict[str, Dict[str, Any]] = {}
+
 
 # --------------------------------------------------------------------------- #
 # Explainability engines (lazy-loaded after models are ready)
@@ -1510,7 +1513,7 @@ async def rollback_model(req: ModelRollbackRequest):
 async def trigger_retraining(req: RetrainingRequest, background_tasks: BackgroundTasks):
     """
     Trigger the retraining pipeline as a background task.
-    Returns immediately with a run ID; poll /retrain/status for progress.
+    Returns immediately with a run ID; poll GET /retrain/status/{run_id} for progress.
     """
     run_id = f"run_{int(time.time())}"
     pipeline_script = os.path.join(BASE_DIR, "scripts", "retrain_pipeline.py")
@@ -1522,7 +1525,21 @@ async def trigger_retraining(req: RetrainingRequest, background_tasks: Backgroun
                    "Ensure scripts/retrain_pipeline.py is present."
         )
 
-    async def _run_pipeline():
+    started_at = datetime.now(tz=timezone.utc).isoformat()
+    _active_runs[run_id] = {
+        "run_id": run_id,
+        "status": "running",
+        "model_types": req.model_types,
+        "triggered_by": req.triggered_by,
+        "auto_deploy": req.auto_deploy,
+        "started_at": started_at,
+        "completed_at": None,
+        "db_run_id": req.db_run_id,
+    }
+
+    # Sync function — BackgroundTasks runs it in a thread pool, so subprocess.run
+    # is safe here and won't block the event loop.
+    def _run_pipeline():
         import subprocess
         logger.info("Starting retraining pipeline (%s), run_id=%s",
                     req.model_types, run_id)
@@ -1532,20 +1549,27 @@ async def trigger_retraining(req: RetrainingRequest, background_tasks: Backgroun
         env["RETRAIN_THRESHOLD"] = str(req.improvement_threshold)
         env["RETRAIN_RUN_ID"] = run_id
         env["RETRAIN_DB_ID"] = str(req.db_run_id) if req.db_run_id else ""
+        status = "failed"
         try:
             result = subprocess.run(
                 [sys.executable, pipeline_script],
-                capture_output=True, text=True, timeout=3600, env=env
+                timeout=3600, env=env
+                # No capture_output — pipeline logs flow directly to server stdout/stderr
             )
             if result.returncode == 0:
+                status = "success"
                 logger.info("Retraining pipeline completed successfully (run_id=%s)", run_id)
             else:
-                logger.error("Retraining pipeline failed (run_id=%s):\n%s",
-                             run_id, result.stderr)
+                logger.error("Retraining pipeline failed (run_id=%s, returncode=%d)",
+                             run_id, result.returncode)
         except subprocess.TimeoutExpired:
+            status = "timeout"
             logger.error("Retraining pipeline timed out (run_id=%s)", run_id)
         except Exception as exc:
             logger.error("Retraining pipeline error (run_id=%s): %s", run_id, exc)
+        finally:
+            _active_runs[run_id]["status"] = status
+            _active_runs[run_id]["completed_at"] = datetime.now(tz=timezone.utc).isoformat()
 
     background_tasks.add_task(_run_pipeline)
 
@@ -1553,10 +1577,23 @@ async def trigger_retraining(req: RetrainingRequest, background_tasks: Backgroun
         "success": True,
         "run_id": run_id,
         "message": f"Retraining pipeline started for: {req.model_types}. "
-                   "Check server logs for progress.",
+                   f"Poll GET /retrain/status/{run_id} for progress.",
         "triggered_by": req.triggered_by,
         "auto_deploy": req.auto_deploy,
+        "started_at": started_at,
     }
+
+
+@app.get("/retrain/status/{run_id}")
+async def get_retrain_status(run_id: str):
+    """Poll the status of a retraining run started in this process instance."""
+    if run_id not in _active_runs:
+        return {
+            "run_id": run_id,
+            "status": "unknown",
+            "message": "Run not found — may have been started by a different worker or process restart.",
+        }
+    return _active_runs[run_id]
 
 
 # ---- Enhanced metrics ---------------------------------------------------- #
