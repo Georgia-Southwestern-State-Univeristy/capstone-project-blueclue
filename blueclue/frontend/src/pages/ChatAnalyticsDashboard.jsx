@@ -187,7 +187,7 @@ export default function ChatAnalyticsDashboard() {
   const fb = data?.feedback || {}
   const deflect = data?.deflection || {}
   const resolution = data?.resolution || {}
-  const daily = (data?.dailyConversations || []).map(d => ({ label: d.day?.slice(5), count: Number(d.conversations) }))
+  const daily = (data?.dailyConversations || []).map(d => ({ label: d.day?.slice(5, 10), count: Number(d.conversations) }))
   const intents = data?.topIntents || []
   const peak = data?.peakHeatmap || []
   const techArr = data?.techModeUsage || []
@@ -258,15 +258,15 @@ export default function ChatAnalyticsDashboard() {
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Suggestions shown</span>
-                    <span className="text-white">{deflect.suggestionsShown ?? '—'}</span>
+                    <span className="text-white">{deflect.suggestionsShown || '—'}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Articles clicked</span>
-                    <span className="text-white">{deflect.articlesClicked ?? '—'}</span>
+                    <span className="text-white">{deflect.articlesClicked || '—'}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Tickets cancelled</span>
-                    <span className="text-green-400">{deflect.ticketsCancelled ?? '—'}</span>
+                    <span className="text-green-400">{deflect.ticketsCancelled || '—'}</span>
                   </div>
                   <div className="border-t border-gray-700 pt-2 flex justify-between font-semibold">
                     <span className="text-gray-300">Deflection rate</span>
@@ -387,7 +387,7 @@ export default function ChatAnalyticsDashboard() {
                 ) : gapData?.satisfactionTrend?.length ? (
                   <BarChart
                     data={(gapData.satisfactionTrend).map(d => ({
-                      label: d.week?.slice(5) ?? '',
+                      label: d.week?.slice(5, 10) ?? '',
                       count: Number(d.avg_rating ?? 0).toFixed(1),
                     }))}
                     valueKey="count"

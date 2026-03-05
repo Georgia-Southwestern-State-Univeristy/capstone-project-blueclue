@@ -235,6 +235,68 @@ def step_register_and_deploy(
 # Report writer
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _update_db_run(db_run_id: str, results: Dict[str, Any], duration_s: float) -> None:
+    """Write final pipeline results back to ml_retraining_runs via DATABASE_URL."""
+    if not db_run_id:
+        return
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        logger.warning("RETRAIN_DB_ID set but DATABASE_URL missing – skipping DB update")
+        return
+    try:
+        import psycopg2, json as _json
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+
+        accuracy_after: Dict[str, Any] = {}
+        new_versions: Dict[str, Any] = {}
+        auto_deployed = False
+        for mt, r in results.get("model_results", {}).items():
+            metrics = r.get("metrics", {})
+            accuracy_after[mt] = metrics.get("accuracy")
+            new_versions[mt] = r.get("version")
+            if r.get("deployed"):
+                auto_deployed = True
+
+        ov_status = results.get("overall_status", "unknown")
+        status = "success" if ov_status == "success" else "failed"
+        failure_reason = None
+        if status == "failed":
+            failure_reason = "; ".join(
+                f"{mt}: {r.get('error', 'failed')}"
+                for mt, r in results.get("model_results", {}).items()
+                if r.get("status") == "failed"
+            ) or ov_status
+
+        cur.execute("""
+            UPDATE ml_retraining_runs
+            SET status           = %s,
+                new_versions     = %s,
+                accuracy_after   = %s,
+                auto_deployed    = %s,
+                failure_reason   = %s,
+                duration_seconds = %s,
+                training_rows    = %s,
+                completed_at     = NOW()
+            WHERE id = %s
+        """, (
+            status,
+            _json.dumps(new_versions),
+            _json.dumps(accuracy_after),
+            auto_deployed,
+            failure_reason,
+            int(duration_s),
+            results.get("new_records", 0),
+            int(db_run_id),
+        ))
+        conn.commit()
+        cur.close()
+        conn.close()
+        logger.info("ml_retraining_runs id=%s updated → status=%s", db_run_id, status)
+    except Exception as exc:
+        logger.warning("Could not update ml_retraining_runs: %s", exc)
+
+
 def write_run_report(run_id: str, results: Dict[str, Any], duration_s: float):
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     report_path = REPORTS_DIR / f"retrain_{run_id}.json"
@@ -325,6 +387,10 @@ def run_pipeline(
 
     report_path = write_run_report(run_id, results, duration)
     results["report_path"] = report_path
+
+    # Write completion data back to the Node.js database so the Retrain Logs
+    # table in the ML admin dashboard shows actual results.
+    _update_db_run(os.getenv("RETRAIN_DB_ID", ""), results, duration)
 
     logger.info("=" * 60)
     logger.info("Pipeline complete in %.1fs – status: %s", duration, overall_status)

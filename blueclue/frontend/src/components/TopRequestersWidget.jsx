@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import BaseWidget from './BaseWidget'
+import { useTicketSocket } from '../hooks/useTicketSocket'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
@@ -33,7 +34,7 @@ const fmtHours = (h) => {
 }
 
 /* ── Component ── */
-export default function TopRequestersWidget({ onUserClick, autoRefreshInterval = 120000 }) {
+export default function TopRequestersWidget({ onUserClick }) {
   const [requesters, setRequesters] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -63,12 +64,8 @@ export default function TopRequestersWidget({ onUserClick, autoRefreshInterval =
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  /* ── Auto-refresh ── */
-  useEffect(() => {
-    if (!autoRefreshInterval) return
-    const id = setInterval(fetchData, autoRefreshInterval)
-    return () => clearInterval(id)
-  }, [fetchData, autoRefreshInterval])
+  /* ── Socket-driven refresh ── */
+  useTicketSocket(fetchData)
 
   /* ── Max ticket count (for bar scale) ── */
   const maxCount = useMemo(

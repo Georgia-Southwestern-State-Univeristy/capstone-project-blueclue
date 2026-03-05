@@ -108,10 +108,42 @@ function Navbar() {
     }
   }, [authenticated, chat])
 
+  // Phrases that indicate the user's issue is resolved — skip the AI and show wrap-up
+  const RESOLVED_PHRASES = [
+    /^thanks?\b/i, /^thank you\b/i, /\bthat (fixed|worked|solved|helped|did it)\b/i,
+    /\bproblem (solved|fixed|resolved)\b/i, /\bissue (solved|fixed|resolved)\b/i,
+    /\ball (good|set|sorted)\b/i, /\bthat'?s? (all|it|good)\b/i,
+    /\bgot it\b/i, /\bnever mind\b/i, /\bno more (help|questions)\b/i,
+    /\bi'?m good\b/i, /\bperfect\b/i,
+  ]
+  const isResolutionMessage = (text) =>
+    RESOLVED_PHRASES.some((re) => re.test(text.trim()))
+
+  const WRAP_UP_BUTTONS = [
+    { id: 'ask_another', label: 'Ask another question', primary: false },
+    { id: 'end_chat',    label: 'End chat',             primary: true  },
+  ]
+
   // Send a message — branches between customer and tech mode
   const handleChatSend = useCallback(async (text) => {
     requestNotificationPermission()
     chat.addMessage({ id: Date.now(), sender: 'user', text, timestamp: new Date() })
+
+    // Gratitude / resolution detected — reply locally without hitting the AI
+    if (chat.chatMode !== 'tech' && isResolutionMessage(text)) {
+      setSuggestions(null)
+      setTimeout(() => {
+        chat.addMessage({
+          id: Date.now() + 1,
+          sender: 'bot',
+          text: "Glad I could help! 😊 Is there anything else you'd like to do?",
+          timestamp: new Date(),
+          actionButtons: WRAP_UP_BUTTONS,
+        })
+      }, 300)
+      return
+    }
+
     setIsTyping(true)
     setSuggestions(null)
 
@@ -202,6 +234,15 @@ function Navbar() {
 
   // Handle action buttons embedded in bot messages
   const handleActionButton = useCallback(async (buttonId) => {
+    if (buttonId === 'ask_another') {
+      chat.newConversation()
+      setSuggestions(null)
+      return
+    }
+    if (buttonId === 'end_chat') {
+      chat.closeChat()
+      return
+    }
     if (buttonId === 'request_handoff') {
       handleHandoff()
       return
@@ -285,7 +326,23 @@ function Navbar() {
     } catch (err) {
       console.error('Feedback error:', err)
     }
-  }, [])
+
+    // After a thumbs-up, show wrap-up options instead of waiting for more input
+    if (rating === 'positive') {
+      setTimeout(() => {
+        chat.addMessage({
+          id: Date.now(),
+          sender: 'bot',
+          text: "Great! Is there anything else I can help with?",
+          timestamp: new Date(),
+          actionButtons: [
+            { id: 'ask_another', label: 'Ask another question', primary: false },
+            { id: 'end_chat',    label: 'End chat',             primary: true  },
+          ],
+        })
+      }, 200)
+    }
+  }, [chat])
 
   const handleLogout = async () => {
     try {

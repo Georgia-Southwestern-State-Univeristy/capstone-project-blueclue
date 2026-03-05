@@ -1076,10 +1076,10 @@ export const getChatAnalytics = async (req, res) => {
 
       // Conversations per day
       pool.query(`
-        SELECT DATE(created_at) AS day, COUNT(*) AS conversations
+        SELECT TO_CHAR(DATE(created_at), 'YYYY-MM-DD') AS day, COUNT(*) AS conversations
         FROM   chat_conversations
         WHERE  created_at >= NOW() - INTERVAL '${days} days'
-        GROUP  BY day ORDER BY day`),
+        GROUP  BY DATE(created_at) ORDER BY DATE(created_at)`),
 
       // Top intents
       pool.query(`
@@ -1303,15 +1303,15 @@ export const getKnowledgeGaps = async (req, res) => {
       // 30-day satisfaction trend (avg star rating per week)
       pool.query(`
         SELECT
-          DATE_TRUNC('week', cf.created_at) AS week,
+          TO_CHAR(DATE_TRUNC('week', cf.created_at), 'YYYY-MM-DD') AS week,
           ROUND(AVG(cf.rating)::numeric, 2)  AS avg_rating,
           COUNT(*)                            AS responses,
           ROUND(AVG(cf.nps_score)::numeric, 2) AS avg_nps
         FROM conversation_feedback cf
         WHERE cf.created_at >= NOW() - INTERVAL '90 days'
           AND cf.rating IS NOT NULL
-        GROUP BY week
-        ORDER BY week`),
+        GROUP BY DATE_TRUNC('week', cf.created_at)
+        ORDER BY DATE_TRUNC('week', cf.created_at)`),
 
       // NPS breakdown
       pool.query(`

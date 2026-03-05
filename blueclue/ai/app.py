@@ -164,6 +164,7 @@ class RetrainingRequest(BaseModel):
     triggered_by: str = "manual"
     auto_deploy: bool = False
     improvement_threshold: float = 0.02
+    db_run_id: Optional[int] = None  # DB row id to update on completion
 
 
 class CombinedResponse(BaseModel):
@@ -1530,6 +1531,7 @@ async def trigger_retraining(req: RetrainingRequest, background_tasks: Backgroun
         env["RETRAIN_AUTO_DEPLOY"] = "1" if req.auto_deploy else "0"
         env["RETRAIN_THRESHOLD"] = str(req.improvement_threshold)
         env["RETRAIN_RUN_ID"] = run_id
+        env["RETRAIN_DB_ID"] = str(req.db_run_id) if req.db_run_id else ""
         try:
             result = subprocess.run(
                 [sys.executable, pipeline_script],

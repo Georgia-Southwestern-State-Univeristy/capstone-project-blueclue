@@ -130,6 +130,17 @@ function useChatStore() {
     sessionStorage.removeItem(STORAGE_KEYS.MODE);
   }, []);
 
+  /** Reset to the welcome message without closing the window ("ask another question"). */
+  const newConversation = useCallback(() => {
+    setMessages([{ ...WELCOME_MESSAGE, timestamp: new Date().toISOString() }]);
+    setUnreadCount(0);
+    setHasNewMessage(false);
+    setChatMode('customer');
+    sessionStorage.removeItem(STORAGE_KEYS.MESSAGES);
+    sessionStorage.removeItem(STORAGE_KEYS.UNREAD);
+    sessionStorage.removeItem(STORAGE_KEYS.MODE);
+  }, []);
+
   /** Toggle between customer and tech mode. Resets messages to appropriate welcome. */
   const toggleMode = useCallback((newMode) => {
     const next = newMode || (chatMode === 'customer' ? 'tech' : 'customer');
@@ -151,6 +162,7 @@ function useChatStore() {
     closeChat,
     toggleChat,
     clearChat,
+    newConversation,
     toggleMode,
   };
 }

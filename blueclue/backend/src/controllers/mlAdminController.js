@@ -356,15 +356,27 @@ export const getRegistryHistory = async (req, res) => {
  */
 export const triggerRetraining = async (req, res) => {
     try {
+        const modelTypes   = req.body.model_types || ['category', 'priority', 'time'];
+        const triggeredBy  = req.body.triggered_by || 'manual';
+
+        // Insert a tracking row so the Retrain Logs table is populated immediately
+        const dbRow = await pool.query(
+            `INSERT INTO ml_retraining_runs (triggered_by, model_types, status)
+             VALUES ($1, $2, 'running') RETURNING id`,
+            [triggeredBy, modelTypes.join(',')]
+        );
+        const dbRunId = dbRow.rows[0].id;
+
         const payload = {
-            model_types:          req.body.model_types || ['category', 'priority', 'time'],
-            triggered_by:         'manual',
-            auto_deploy:          !!req.body.auto_deploy,
+            model_types:           modelTypes,
+            triggered_by:          triggeredBy,
+            auto_deploy:           !!req.body.auto_deploy,
             improvement_threshold: req.body.improvement_threshold ?? 0.02,
+            db_run_id:             dbRunId,
         };
 
         const data = await callMLService('/retrain', { method: 'POST', body: payload });
-        return res.json({ success: true, data });
+        return res.json({ success: true, data: { ...data, db_run_id: dbRunId } });
     } catch (err) {
         console.error('Retrain trigger error:', err);
         return res.status(502).json({ success: false, message: err.message });
