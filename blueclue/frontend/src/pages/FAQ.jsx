@@ -312,7 +312,7 @@ const FAQ = () => {
                     <h3 className="text-2xl font-bold text-gray-200 mb-3">Still need help?</h3>
                     <p className="text-gray-300 mb-6">Can't find what you're looking for? Create a support ticket and our team will assist you.</p>
                     <button
-                        onClick={() => navigate('/submit-ticket')}
+                        onClick={() => navigate('/client-dashboard')}
                         className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-3 rounded-lg transition-colors"
                     >
                         Create a Ticket

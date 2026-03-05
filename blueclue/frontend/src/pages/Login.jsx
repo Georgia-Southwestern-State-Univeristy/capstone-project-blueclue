@@ -1,7 +1,23 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
-import { login as loginService, resendVerification } from '../services/authService'
+import { login as loginService, resendVerification, isAuthenticated, getUser } from '../services/authService'
 import logo from '../assets/EditedBlueClueLogo.png'
+
+/** Map a user role to their home dashboard */
+function getRoleHome(role) {
+  switch (role) {
+    case 'management':
+    case 'admin':
+      return '/management-dashboard'
+    case 'technician':
+    case 'senior_technician':
+      return '/technician'
+    case 'customer':
+    case 'guest':
+    default:
+      return '/client-dashboard'
+  }
+}
 
 function Login() {
   const navigate = useNavigate()
@@ -18,6 +34,15 @@ function Login() {
   const [showResendVerification, setShowResendVerification] = useState(false)
   const [resendingEmail, setResendingEmail] = useState(false)
   const [unverifiedEmail, setUnverifiedEmail] = useState('')
+
+  // ── If already authenticated, redirect to appropriate dashboard ─────────
+  useEffect(() => {
+    if (isAuthenticated()) {
+      const user = getUser()
+      const destination = location.state?.from || getRoleHome(user?.role)
+      navigate(destination, { replace: true })
+    }
+  }, [navigate, location.state])
 
   // Check for messages from navigation state (e.g., from registration)
   useEffect(() => {

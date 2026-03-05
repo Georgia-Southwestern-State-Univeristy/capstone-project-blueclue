@@ -276,6 +276,20 @@ export const createTicket = async (req, res) => {
             console.error('Failed to send ticket confirmation email:', emailError.message);
         }
 
+        // Broadcast new ticket to all connected dashboard users
+        try {
+            const io = req.app.locals.io;
+            if (io) {
+                io.emit('ticket_created', {
+                    ticket_id: ticket.id,
+                    ticket_number: ticket.ticket_number,
+                    priority: ticket.priority,
+                    category: ticket.category,
+                    customer_id: ticket.customer_id
+                });
+            }
+        } catch (_) { /* non-fatal */ }
+
         res.status(201).json(response);
 
     } catch (error) {
@@ -1805,6 +1819,15 @@ export const updateTicketStatus = async (req, res) => {
         // Validate status transition
         const currentStatus = existingTicket.status;
         const allowedTransitions = VALID_TRANSITIONS[currentStatus];
+
+        // Guard: if current status is not in our map (e.g. legacy data), treat as no allowed transitions
+        if (!allowedTransitions) {
+            return res.status(400).json({
+                status: 'error',
+                message: `Ticket has unrecognized status '${currentStatus}'. Cannot transition.`,
+                currentStatus: currentStatus
+            });
+        }
         
         if (!allowedTransitions.includes(status)) {
             return res.status(400).json({
@@ -1896,6 +1919,19 @@ export const updateTicketStatus = async (req, res) => {
         } catch (collabError) {
             console.error('Failed to notify collaborators:', collabError.message);
         }
+
+        // Broadcast status change to everyone so dashboards can auto-refresh
+        try {
+            const io = req.app.locals.io;
+            if (io) {
+                io.emit('ticket_updated', {
+                    ticket_id: updatedTicket.id,
+                    ticket_number: updatedTicket.ticket_number,
+                    status,
+                    previousStatus: existingTicket.status
+                });
+            }
+        } catch (_) { /* non-fatal */ }
 
         res.status(200).json({
             status: 'success',

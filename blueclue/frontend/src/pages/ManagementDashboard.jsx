@@ -260,7 +260,10 @@ function ManagementDashboard() {
     }
   }, [])
 
-  useNotificationSocket(handleNewNotification, null)
+  // Stable ref so the socket callback never triggers a reconnect on re-render
+  const _ticketFetchRef = useRef(null)
+  const handleTicketChange = useCallback(() => { _ticketFetchRef.current?.() }, [])
+  useNotificationSocket(handleNewNotification, null, handleTicketChange)
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
 
@@ -303,6 +306,8 @@ function ManagementDashboard() {
       setLoading(false)
     }
   }
+  // Keep ref pointing at latest fetchTickets so socket callback is always current
+  _ticketFetchRef.current = fetchTickets
 
   // Fetch cancellation stats from backend
   const fetchCancellationStats = async () => {

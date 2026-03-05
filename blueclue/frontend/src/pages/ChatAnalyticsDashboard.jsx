@@ -84,7 +84,7 @@ function PeakHeatmap({ data = [] }) {
   if (!data.length) return <p className="text-gray-500 text-sm text-center py-6">No data</p>
   const max = Math.max(...data.map(d => d.count || 0), 1)
   const grid = {}
-  data.forEach(d => { grid[`${d.day_of_week}_${d.hour}`] = d.count || 0 })
+  data.forEach(d => { grid[`${d.dow}_${d.hour}`] = d.count || 0 })
   return (
     <div className="overflow-x-auto">
       <table className="text-[10px] border-collapse">
