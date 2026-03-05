@@ -51,13 +51,59 @@ export const getDashboard = async (req, res) => {
             overrideStats,
             overrideRates,
             dailyStats,
+            dbConfStats,
+            dbCatDist,
+            dbPriDist,
         ] = await Promise.allSettled([
             callMLService('/metrics/rolling'),
             callMLService('/health'),
             MLFeedback.getStats(),
             MLFeedback.getOverrideRates(),
             pool.query('SELECT * FROM vw_ml_daily_stats LIMIT 30'),
+            // All-time confidence stats from DB (not reset on service restart)
+            pool.query(`
+                SELECT
+                    COUNT(*)                                                                        AS total_predictions,
+                    COALESCE(ROUND(AVG(confidence)::NUMERIC, 4), 0.0000)                           AS avg_confidence,
+                    COUNT(*) FILTER (WHERE confidence < 0.6)                                       AS low_confidence_count,
+                    COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE confidence < 0.6)
+                        / NULLIF(COUNT(*), 0), 2), 0.00)                                          AS low_confidence_pct,
+                    COUNT(*) FILTER (WHERE fallback_used = true)                                   AS fallback_count,
+                    COALESCE(ROUND(100.0 * COUNT(*) FILTER (WHERE fallback_used = true)
+                        / NULLIF(COUNT(*), 0), 2), 0.00)                                          AS fallback_rate_pct
+                FROM ai_classifications
+            `),
+            pool.query(`
+                SELECT predicted_category AS label, COUNT(*) AS cnt
+                FROM   ai_classifications
+                GROUP  BY predicted_category
+                ORDER  BY cnt DESC
+            `),
+            pool.query(`
+                SELECT predicted_priority AS label, COUNT(*) AS cnt
+                FROM   ai_classifications
+                GROUP  BY predicted_priority
+                ORDER  BY cnt DESC
+            `),
         ]);
+
+        // Build DB-backed stats object (all-time, survives service restarts)
+        let db_stats = null;
+        if (dbConfStats.status === 'fulfilled' && dbConfStats.value.rows[0]) {
+            const row = dbConfStats.value.rows[0];
+            const catRows = dbCatDist.status === 'fulfilled' ? dbCatDist.value.rows : [];
+            const priRows = dbPriDist.status === 'fulfilled' ? dbPriDist.value.rows : [];
+            db_stats = {
+                total_predictions:    parseInt(row.total_predictions, 10),
+                avg_confidence:       parseFloat(row.avg_confidence),
+                low_confidence_count: parseInt(row.low_confidence_count, 10),
+                low_confidence_pct:   parseFloat(row.low_confidence_pct),
+                fallback_count:       parseInt(row.fallback_count, 10),
+                fallback_rate_pct:    parseFloat(row.fallback_rate_pct),
+                category_distribution: catRows.reduce((acc, r) => { acc[r.label] = parseInt(r.cnt, 10); return acc; }, {}),
+                priority_distribution: priRows.reduce((acc, r) => { acc[r.label] = parseInt(r.cnt, 10); return acc; }, {}),
+            };
+        }
 
         return res.json({
             success: true,
@@ -67,6 +113,7 @@ export const getDashboard = async (req, res) => {
                 override_stats:overrideStats.status === 'fulfilled'? overrideStats.value : null,
                 override_rates:overrideRates.status === 'fulfilled'? overrideRates.value : [],
                 daily_stats:   dailyStats.status === 'fulfilled'  ? dailyStats.value.rows : [],
+                db_stats,
             },
         });
     } catch (err) {

@@ -234,6 +234,16 @@ export default function MLAdminDashboard() {
   const health      = dashboard?.ml_health     || {}
   const overrideStats = dashboard?.override_stats || {}
   const dailyStats  = dashboard?.daily_stats   || []
+  const dbStats     = dashboard?.db_stats      || null
+
+  // Prefer DB-backed stats (all-time, not reset on service restart) over in-memory counters
+  const totalPredictions  = dbStats?.total_predictions  ?? mlMetrics.total_requests
+  const avgConfidence     = dbStats?.avg_confidence     ?? mlMetrics.confidence?.mean
+  const lowConfPct        = dbStats?.low_confidence_pct ?? mlMetrics.confidence?.low_confidence_pct
+  const lowConfCount      = dbStats?.low_confidence_count ?? mlMetrics.confidence?.low_confidence_count ?? 0
+  const catDist = (dbStats?.category_distribution && Object.keys(dbStats.category_distribution).length > 0)
+    ? dbStats.category_distribution
+    : mlMetrics.category_distribution
 
   const isHealthy = health.status === 'OK'
 
@@ -308,15 +318,15 @@ export default function MLAdminDashboard() {
               <Card>
                 <Metric
                   label="Total Requests"
-                  value={mlMetrics.total_requests?.toLocaleString() ?? '—'}
+                  value={totalPredictions?.toLocaleString() ?? '—'}
                   sub={`${mlMetrics.requests_per_minute ?? '—'} req/min`}
                 />
               </Card>
               <Card>
                 <Metric
                   label="Avg Confidence"
-                  value={mlMetrics.confidence ? `${Math.round(mlMetrics.confidence.mean * 100)}%` : '—'}
-                  color={mlMetrics.confidence?.mean >= 0.7 ? 'green' : 'yellow'}
+                  value={avgConfidence != null ? `${Math.round(avgConfidence * 100)}%` : '—'}
+                  color={avgConfidence >= 0.7 ? 'green' : 'yellow'}
                 />
               </Card>
               <Card>
@@ -367,11 +377,11 @@ export default function MLAdminDashboard() {
                 <div className="space-y-2">
                   <Metric
                     label="Predictions < 60%"
-                    value={mlMetrics.confidence?.low_confidence_pct != null ? `${mlMetrics.confidence.low_confidence_pct}%` : '—'}
-                    color={parseFloat(mlMetrics.confidence?.low_confidence_pct) > 20 ? 'red' : 'green'}
+                    value={lowConfPct != null ? `${lowConfPct}%` : '—'}
+                    color={parseFloat(lowConfPct) > 20 ? 'red' : 'green'}
                   />
                   <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
-                    {mlMetrics.confidence?.low_confidence_count ?? 0} of {mlMetrics.total_requests ?? 0} total
+                    {lowConfCount} of {totalPredictions ?? 0} total
                   </p>
                 </div>
               </Card>
@@ -403,13 +413,13 @@ export default function MLAdminDashboard() {
             )}
 
             {/* Category distribution */}
-            {mlMetrics.category_distribution && Object.keys(mlMetrics.category_distribution).length > 0 && (
-              <Card title="Live Category Distribution">
+            {catDist && Object.keys(catDist).length > 0 && (
+              <Card title="Category Distribution (all-time)">
                 <div className="space-y-2">
-                  {Object.entries(mlMetrics.category_distribution)
+                  {Object.entries(catDist)
                     .sort((a, b) => b[1] - a[1])
                     .map(([cat, count]) => {
-                      const total = Object.values(mlMetrics.category_distribution).reduce((s, v) => s + v, 0)
+                      const total = Object.values(catDist).reduce((s, v) => s + v, 0)
                       return (
                         <div key={cat} className="flex items-center gap-3">
                           <span className="w-28 text-xs text-gray-600 dark:text-gray-400 capitalize truncate">{cat}</span>
