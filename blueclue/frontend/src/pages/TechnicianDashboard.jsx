@@ -73,8 +73,6 @@ function TechnicianWidgetGrid({
       timeline: (
         <TicketTimeline
           tickets={tickets}
-          onRefresh={fetchTickets}
-          isRefreshing={loading}
           onTicketClick={handleTicketClick}
         />
       ),
@@ -84,7 +82,6 @@ function TechnicianWidgetGrid({
         <TechTicketQueueWidget
           tickets={tickets}
           loading={loading}
-          onRefresh={fetchTickets}
           technicians={technicians}
           onTicketClick={handleTicketClick}
           onStatusChange={handleStatusChange}
@@ -157,7 +154,8 @@ function TechnicianDashboard() {
   }, [tickets]);
 
   const fetchTickets = async () => {
-    setLoading(true)
+    // Only show full loading spinner on initial load
+    if (tickets.length === 0) setLoading(true)
     setError(null)
     try {
       const response = await getAllTickets()
@@ -283,6 +281,7 @@ function TechnicianDashboard() {
     resolved: activeTickets.filter(t => t.status === 'resolved').length,
     closed: activeTickets.filter(t => t.status === 'closed').length,
     waiting: activeTickets.filter(t => t.status === 'waiting_on_customer').length,
+    reopened: activeTickets.filter(t => t.status === 'reopened').length,
     cancelled: cancelledCount,
     cancellationRate,
     total: activeTickets.length
@@ -293,6 +292,7 @@ function TechnicianDashboard() {
     { label: 'Open', count: stats.open, color: '#60a5fa' },
     { label: 'In Progress', count: stats.in_progress, color: '#93c5fd' },
     { label: 'Waiting', count: stats.waiting, color: '#a78bfa' },
+    { label: 'Reopened', count: stats.reopened, color: '#f59e0b' },
     { label: 'Resolved', count: stats.resolved, color: '#3b82f6' },
     { label: 'Closed', count: stats.closed, color: '#6b7280' },
     { label: 'Cancelled', count: stats.cancelled, color: '#9ca3af' },

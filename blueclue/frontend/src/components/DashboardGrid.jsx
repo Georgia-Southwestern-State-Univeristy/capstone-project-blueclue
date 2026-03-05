@@ -620,7 +620,7 @@ export default function DashboardGrid({
                   </>
                 )}
                 {/* Widget content – fill grid cell and scroll if needed */}
-                <div className={`h-full overflow-y-auto ${isEditMode ? 'pointer-events-none select-none' : ''}`}>
+                <div className={`h-full overflow-y-auto ${isEditMode ? 'pointer-events-none select-none edit-mode-active' : ''}`}>
                   {component}
                 </div>
               </div>

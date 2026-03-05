@@ -33,7 +33,7 @@ const fmtHours = (h) => {
 }
 
 /* ── Component ── */
-export default function TopRequestersWidget({ onRefresh, onUserClick, autoRefreshInterval = 120000 }) {
+export default function TopRequestersWidget({ onUserClick, autoRefreshInterval = 120000 }) {
   const [requesters, setRequesters] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -103,7 +103,7 @@ export default function TopRequestersWidget({ onRefresh, onUserClick, autoRefres
           </span>
         ) : null
       }
-      onRefresh={() => { fetchData(); if (onRefresh) onRefresh() }}
+      onRefresh={() => { fetchData() }}
       isLoading={loading}
       error={error}
       isEmpty={requesters.length === 0}

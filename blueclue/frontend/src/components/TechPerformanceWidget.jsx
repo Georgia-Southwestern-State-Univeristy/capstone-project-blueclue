@@ -35,7 +35,7 @@ const rateBg = (pct) => {
 }
 
 /* ── Component ── */
-export default function TechPerformanceWidget({ onRefresh, onTechClick, autoRefreshInterval = 120000 }) {
+export default function TechPerformanceWidget({ onTechClick, autoRefreshInterval = 120000 }) {
   const [techs, setTechs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -185,7 +185,7 @@ export default function TechPerformanceWidget({ onRefresh, onTechClick, autoRefr
           </span>
         ) : null
       }
-      onRefresh={() => { fetchData(); if (onRefresh) onRefresh() }}
+      onRefresh={() => { fetchData() }}
       isLoading={loading}
       error={error}
       isEmpty={techs.length === 0}

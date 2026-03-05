@@ -36,7 +36,7 @@ function TicketComments({ ticketId }) {
   const canCreateInternal = userRole === 'technician' || userRole === 'management';
   const MAX_CHARS = 2000;
 
-  const ALLOWED_EMOJIS = ['👍', '❤️', '😊', '🎉', '✅', '👏'];
+  const ALLOWED_EMOJIS = [];
 
   // Fetch comments
   useEffect(() => {

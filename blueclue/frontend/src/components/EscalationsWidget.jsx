@@ -45,7 +45,6 @@ const formatTimeSince = (hours) => {
  * @param {number}   [props.autoRefreshInterval=0] - Auto-refresh ms (0 = off)
  */
 function EscalationsWidget({
-  onRefresh = null,
   onView = null,
   onReassign = null,
   onResolve = null,
@@ -81,8 +80,7 @@ function EscalationsWidget({
 
   const handleRefresh = useCallback(async () => {
     await fetchData()
-    if (onRefresh) await onRefresh()
-  }, [fetchData, onRefresh])
+  }, [fetchData])
 
   // Counts
   const criticalCount = data.filter((t) => t.priority === 'critical').length

@@ -37,7 +37,7 @@ const CATEGORY_LABELS = {
  * Displays soft-deleted tickets with search, filter, and restore capabilities.
  * Management/admin only.
  */
-function DeletedTicketsWidget({ onRefresh = null, onTicketClick = null, autoRefreshInterval = 0 }) {
+function DeletedTicketsWidget({ onTicketClick = null, autoRefreshInterval = 0 }) {
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -70,8 +70,7 @@ function DeletedTicketsWidget({ onRefresh = null, onTicketClick = null, autoRefr
 
   const handleRefresh = useCallback(async () => {
     await fetchData()
-    if (onRefresh) await onRefresh()
-  }, [fetchData, onRefresh])
+  }, [fetchData])
 
   const handleRestore = useCallback(async (ticketId, e) => {
     e?.stopPropagation()
@@ -83,7 +82,6 @@ function DeletedTicketsWidget({ onRefresh = null, onTicketClick = null, autoRefr
       await restoreTicket(ticketId)
       setTickets(prev => prev.filter(t => t.id !== ticketId))
       setRestoreSuccess(ticketId)
-      if (onRefresh) await onRefresh()
       // Clear success message after 3s
       setTimeout(() => setRestoreSuccess(null), 3000)
     } catch (err) {
@@ -92,7 +90,7 @@ function DeletedTicketsWidget({ onRefresh = null, onTicketClick = null, autoRefr
     } finally {
       setRestoringId(null)
     }
-  }, [restoringId, onRefresh])
+  }, [restoringId])
 
   // Filtered + searched tickets
   const filteredTickets = useMemo(() => {

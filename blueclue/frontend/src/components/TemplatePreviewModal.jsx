@@ -97,7 +97,7 @@ function TemplatePreviewModal({ isOpen, onClose, template }) {
                         className="text-gray-400 hover:text-gray-300 transition-colors text-xl leading-none"
                         aria-label="Close modal"
                     >
-                        ✕
+                        X
                     </button>
                 </div>
                 

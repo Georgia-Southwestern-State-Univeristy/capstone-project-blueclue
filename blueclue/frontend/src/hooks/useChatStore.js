@@ -30,7 +30,7 @@ const WELCOME_MESSAGE = {
 const TECH_WELCOME_MESSAGE = {
   id: 1,
   sender: 'bot',
-  text: "👨‍💻 **Tech Mode** active.\n\nYou have access to internal KB articles and ticket management.\n\n**Quick commands:**\n`/search <keywords>` · `/status <id>` · `/assign <id> <tech>` · `/close <id> [note]` · `/create-ticket <desc>` · `/my-tickets`",
+  text: "**Tech Mode** active.\n\nYou have access to internal KB articles and ticket management.\n\n**Quick commands:**\n`/search <keywords>` · `/status <id>` · `/assign <id> <tech>` · `/close <id> [note]` · `/create-ticket <desc>` · `/my-tickets`",
   timestamp: new Date().toISOString(),
 };
 

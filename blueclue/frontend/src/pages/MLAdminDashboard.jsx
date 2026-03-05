@@ -132,7 +132,7 @@ export default function MLAdminDashboard() {
     setActionMsg(null)
     try {
       const r = await svc.runDriftDetection(modelType, 30)
-      setActionMsg({ type: 'success', text: `Drift report for ${modelType}: drift ${r?.data?.drift_detected ? '⚠ DETECTED' : '✓ none'}` })
+      setActionMsg({ type: 'success', text: `Drift report for ${modelType}: drift ${r?.data?.drift_detected ? 'DETECTED' : 'none'}` })
       svc.getDriftReports({ limit: 20 }).then(r => setDriftReports(r?.data || [])).catch(() => {})
     } catch (e) {
       setActionMsg({ type: 'error', text: 'Drift detection failed: ' + e.message })
@@ -215,7 +215,7 @@ export default function MLAdminDashboard() {
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              🤖 ML Admin Dashboard
+              ML Admin Dashboard
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               Monitoring, explainability, model versioning and retraining
@@ -241,7 +241,7 @@ export default function MLAdminDashboard() {
             ${actionMsg.type === 'success' ? 'bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800'
               : 'bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'}`}>
             <span>{actionMsg.text}</span>
-            <button onClick={() => setActionMsg(null)} className="ml-3 opacity-60 hover:opacity-100">✕</button>
+            <button onClick={() => setActionMsg(null)} className="ml-3 opacity-60 hover:opacity-100">X</button>
           </div>
         )}
 
@@ -563,8 +563,8 @@ export default function MLAdminDashboard() {
                             <td className="py-1.5 pr-3 capitalize">{f.ai_category}</td>
                             <td className="py-1.5 pr-3 capitalize">{f.user_category || '(kept)'}</td>
                             <td className="py-1.5 pr-3">
-                              {f.category_overridden ? <Badge color="yellow">Cat ✓</Badge> : ''}
-                              {f.priority_overridden ? <Badge color="yellow"> Pri ✓</Badge> : ''}
+                              {f.category_overridden ? <Badge color="yellow">Cat</Badge> : ''}
+                              {f.priority_overridden ? <Badge color="yellow"> Pri</Badge> : ''}
                               {!f.category_overridden && !f.priority_overridden && <Badge color="green">Accepted</Badge>}
                             </td>
                             <td className="py-1.5 pr-3 italic text-gray-400 truncate max-w-[150px]">{f.override_reason || '—'}</td>
@@ -593,7 +593,7 @@ export default function MLAdminDashboard() {
                   disabled={driftRunning}
                   className="px-4 py-2 text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg transition-colors"
                 >
-                  {driftRunning ? '⏳ Running…' : `▶ Run Drift (${mt})`}
+                  {driftRunning ? 'Running…' : `Run Drift (${mt})`}
                 </button>
               ))}
             </div>
@@ -612,7 +612,7 @@ export default function MLAdminDashboard() {
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <Badge color={r.drift_detected ? 'red' : 'green'}>
-                            {r.drift_detected ? '⚠ Drift Detected' : '✓ No Drift'}
+                            {r.drift_detected ? 'Drift Detected' : 'No Drift'}
                           </Badge>
                           <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">{r.model_type}</span>
                           <span className="text-xs text-gray-400 dark:text-gray-500">{r.report_date}</span>
@@ -773,14 +773,14 @@ export default function MLAdminDashboard() {
                     disabled={actionLoading === 'retrain'}
                     className="px-5 py-2.5 text-sm bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg transition-colors font-medium"
                   >
-                    {actionLoading === 'retrain' ? '⏳ Starting…' : '▶ Retrain All Models'}
+                    {actionLoading === 'retrain' ? 'Starting…' : 'Retrain All Models'}
                   </button>
                   <button
                     onClick={() => handleRetrain({ modelTypes: ['category', 'priority', 'time'], autoDeploy: true, threshold: 0.02 })}
                     disabled={actionLoading === 'retrain'}
                     className="px-5 py-2.5 text-sm bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg transition-colors font-medium"
                   >
-                    {actionLoading === 'retrain' ? '⏳ Starting…' : '▶ Retrain + Auto-deploy (≥2%)'}
+                    {actionLoading === 'retrain' ? 'Starting…' : 'Retrain + Auto-deploy (≥2%)'}
                   </button>
                 </div>
                 <p className="text-xs text-gray-400 dark:text-gray-500">

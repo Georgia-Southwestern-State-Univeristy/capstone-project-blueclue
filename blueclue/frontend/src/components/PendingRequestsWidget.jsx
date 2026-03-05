@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { getAssignmentRequests, approveAssignmentRequest, denyAssignmentRequest } from '../services/ticketService'
+import RefreshButton from './RefreshButton'
 
 /**
  * PendingRequestsWidget
@@ -120,14 +121,7 @@ const PendingRequestsWidget = forwardRef(({ onAction, onTicketClick }, ref) => {
             </span>
           )}
         </div>
-        <button
-          onClick={fetchRequests}
-          disabled={loading}
-          className="text-gray-400 hover:text-white text-sm transition-colors disabled:opacity-50"
-          title="Refresh"
-        >
-          {loading ? '...' : 'Refresh'}
-        </button>
+        <RefreshButton onRefresh={fetchRequests} disabled={loading} />
       </div>
 
       {/* Success banner */}

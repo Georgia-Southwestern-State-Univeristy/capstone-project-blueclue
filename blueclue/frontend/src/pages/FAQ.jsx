@@ -102,18 +102,18 @@ const FAQ = () => {
 
     const getCategoryIcon = (categoryName) => {
         const icons = {
-            'Hardware': '🖥️',
-            'Software': '💻',
-            'Network': '🌐',
-            'Account': '👤',
-            'Email': '📧',
-            'Security': '🔒',
-            'Printer': '🖨️',
-            'Mobile': '📱',
-            'Access': '🔑',
-            'Other': '📋'
+            'Hardware': '',
+            'Software': '',
+            'Network': '',
+            'Account': '',
+            'Email': '',
+            'Security': '',
+            'Printer': '',
+            'Mobile': '',
+            'Access': '',
+            'Other': ''
         };
-        return icons[categoryName] || '📄';
+        return icons[categoryName] || '';
     };
 
     if (loading && !selectedCategory) {
@@ -185,7 +185,7 @@ const FAQ = () => {
                                 {/* Most Helpful */}
                                 <div className="bg-gray-900 border border-gray-700 rounded-lg p-6">
                                     <h3 className="text-lg font-semibold text-gray-200 mb-4 flex items-center">
-                                        <span className="mr-2">👍</span>
+                                        <span className="mr-2"></span>
                                         Most Helpful Articles
                                     </h3>
                                     <ul className="space-y-3">
@@ -208,7 +208,7 @@ const FAQ = () => {
                                 {/* Most Viewed */}
                                 <div className="bg-gray-900 border border-gray-700 rounded-lg p-6">
                                     <h3 className="text-lg font-semibold text-gray-200 mb-4 flex items-center">
-                                        <span className="mr-2">👁️</span>
+                                        <span className="mr-2"></span>
                                         Most Viewed This Week
                                     </h3>
                                     <ul className="space-y-3">

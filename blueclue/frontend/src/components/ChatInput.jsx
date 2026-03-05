@@ -156,7 +156,7 @@ function ChatInput({ onSend, disabled = false, autoFocus = false, isTechMode = f
       {/* Drag overlay indicator */}
       {isDragOver && (
         <div className="absolute inset-0 flex items-center justify-center bg-blue-950/60 rounded z-20 pointer-events-none">
-          <span className="text-blue-300 text-sm font-medium">📎 Drop to attach</span>
+          <span className="text-blue-300 text-sm font-medium">Drop to attach</span>
         </div>
       )}
 

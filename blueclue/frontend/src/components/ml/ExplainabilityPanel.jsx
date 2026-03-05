@@ -67,7 +67,7 @@ export default function ExplainabilityPanel({
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className="text-blue-500 dark:text-blue-400 text-lg">🤖</span>
+          <span className="text-blue-500 dark:text-blue-400 text-lg"></span>
           <span className="text-sm font-semibold text-blue-800 dark:text-blue-200">
             AI {modelType === 'category' ? 'Category' : 'Priority'} Suggestion
           </span>
@@ -104,7 +104,7 @@ export default function ExplainabilityPanel({
         )}
         {(data?.low_confidence) && (
           <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 font-medium">
-            ⚠ Low confidence
+            Low confidence
           </span>
         )}
       </div>

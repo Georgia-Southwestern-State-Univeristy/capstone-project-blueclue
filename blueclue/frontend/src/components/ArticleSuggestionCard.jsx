@@ -50,7 +50,7 @@ function ArticleSuggestionCard({ articles, description, onDismiss, onCancel }) {
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-blue-400 text-lg">💡</span>
+          <span className="text-blue-400 text-lg"></span>
           <div>
             <p className="text-sm font-semibold text-blue-300">Before you submit, check if these articles help:</p>
             <p className="text-xs text-blue-400/70 mt-0.5">You might find a quick solution here</p>

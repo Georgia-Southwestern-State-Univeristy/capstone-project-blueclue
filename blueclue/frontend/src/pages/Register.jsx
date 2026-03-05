@@ -325,7 +325,7 @@ function Register() {
 
         {/* Security Notice */}
         <div className="mt-6 text-center text-xs text-gray-500">
-          <p>🔒 All passwords are encrypted using industry-standard bcrypt hashing</p>
+          <p>All passwords are encrypted using industry-standard bcrypt hashing</p>
         </div>
       </div>
     </div>

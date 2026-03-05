@@ -83,7 +83,7 @@ const CategoryManager = ({ categories, onCategoriesChange }) => {
         <div className="space-y-6">
             {/* Create/Edit Form */}
             {!isCreating ? (
-                <div className="bg-gray-900 rounded-lg border border-gray-700 p-6">
+                <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
                     <button
                         onClick={() => setIsCreating(true)}
                         className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
@@ -92,7 +92,7 @@ const CategoryManager = ({ categories, onCategoriesChange }) => {
                     </button>
                 </div>
             ) : (
-                <div className="bg-gray-900 rounded-lg border border-gray-700 p-6">
+                <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
                     <h3 className="text-lg font-semibold text-gray-200 mb-4">
                         {editingId ? 'Edit Category' : 'Create New Category'}
                     </h3>
@@ -187,9 +187,9 @@ const CategoryManager = ({ categories, onCategoriesChange }) => {
             )}
 
             {/* Category List */}
-            <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-800">
-                    <thead className="bg-gray-800/50">
+            <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-700">
+                    <thead className="bg-gray-900/50">
                         <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                                 Display Name
@@ -211,7 +211,7 @@ const CategoryManager = ({ categories, onCategoriesChange }) => {
                             </th>
                         </tr>
                     </thead>
-                    <tbody className="bg-gray-900 divide-y divide-gray-800">
+                    <tbody className="bg-gray-800 divide-y divide-gray-700">
                         {categories.map((category) => (
                             <tr key={category.id} className="hover:bg-gray-800/50 transition-colors">
                                 <td className="px-6 py-4 whitespace-nowrap">

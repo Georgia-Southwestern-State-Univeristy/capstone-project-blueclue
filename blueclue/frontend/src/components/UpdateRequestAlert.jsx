@@ -151,7 +151,7 @@ function UpdateRequestAlert({ onRespond }) {
 
             <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
               <span>
-                ⏰ Deadline: {new Date(currentRequest.deadline).toLocaleString()}
+                Deadline: {new Date(currentRequest.deadline).toLocaleString()}
               </span>
             </div>
           </div>

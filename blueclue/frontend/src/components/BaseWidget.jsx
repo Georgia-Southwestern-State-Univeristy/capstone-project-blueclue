@@ -15,7 +15,7 @@ import LoadingSpinner from './LoadingSpinner'
  * @param {string|null} [props.error=null] - Error message to display (replaces children)
  * @param {boolean} [props.isEmpty=false] - If true, shows the empty state (replaces children)
  * @param {string} [props.emptyMessage='No data available'] - Message for empty state
- * @param {string} [props.emptyIcon='📭'] - Icon/emoji for empty state
+ * @param {string} [props.emptyIcon=''] - Icon/emoji for empty state
  * @param {React.ReactNode} [props.headerExtra] - Extra content rendered in the header row (e.g. filters)
  * @param {string} [props.className] - Additional CSS classes on the outer container
  * @param {boolean} [props.noPadding=false] - Remove body padding (useful for charts)

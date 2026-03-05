@@ -336,9 +336,9 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
         const estimatedCompletion = fulfillDetails.estimated_completion
         
         let statusBadge = ''
-        if (isResolved) statusBadge = '✅ Resolved'
-        else if (isBlocked) statusBadge = '🚫 Blocked'
-        else if (needsMoreTime) statusBadge = '⏰ Needs More Time'
+        if (isResolved) statusBadge = 'Resolved'
+        else if (isBlocked) statusBadge = 'Blocked'
+        else if (needsMoreTime) statusBadge = 'Needs More Time'
         
         return (
           <span>
@@ -351,7 +351,7 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
             {isBlocked && blockerDesc && (
               <>
                 <br />
-                <span className="text-red-400">⚠️ Blocker: </span>
+                <span className="text-red-400">Blocker: </span>
                 <span className="text-gray-300">{blockerDesc}</span>
               </>
             )}

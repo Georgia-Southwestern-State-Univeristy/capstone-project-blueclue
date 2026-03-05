@@ -201,7 +201,7 @@ function VerifyEmail() {
                     }`}
                   >
                     {resendStatus === 'sending' && 'Sending...'}
-                    {resendStatus === 'sent' && 'Email Sent ✓'}
+                    {resendStatus === 'sent' && 'Email Sent'}
                     {(resendStatus === 'idle' || resendStatus === 'error') && 'Resend Verification Email'}
                   </button>
                 </div>
