@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useContext } from 'react'
 import { logout, isAuthenticated, getUser } from '../services/authService'
+import { ThemeContext } from '../context/ThemeContext'
 import NotificationBell from './NotificationBell'
 import NotificationDropdown from './NotificationDropdown'
 import ChatWidgetButton from './ChatWidgetButton'
@@ -14,6 +15,22 @@ import { sendChatMessage, sendTechChatMessage, submitChatFeedback, submitConvers
 import ConversationSurveyModal from './ConversationSurveyModal'
 import { getSocket } from '../services/socketService'
 import logo from '../assets/EditedBlueClueLogo.png'
+
+// ── Module-level constants (stable refs, safe to use in useCallback deps) ──
+const RESOLVED_PHRASES = [
+  /^thanks?\b/i, /^thank you\b/i, /\bthat (fixed|worked|solved|helped|did it)\b/i,
+  /\bproblem (solved|fixed|resolved)\b/i, /\bissue (solved|fixed|resolved)\b/i,
+  /\ball (good|set|sorted)\b/i, /\bthat'?s? (all|it|good)\b/i,
+  /\bgot it\b/i, /\bnever mind\b/i, /\bno more (help|questions)\b/i,
+  /\bi'?m good\b/i, /\bperfect\b/i,
+]
+const isResolutionMessage = (text) =>
+  RESOLVED_PHRASES.some((re) => re.test(text.trim()))
+
+const WRAP_UP_BUTTONS = [
+  { id: 'ask_another', label: 'Ask another question', primary: false },
+  { id: 'end_chat',    label: 'End chat',             primary: true  },
+]
 
 function Navbar() {
   const navigate = useNavigate()
@@ -108,26 +125,77 @@ function Navbar() {
     }
   }, [authenticated, chat])
 
-  // Phrases that indicate the user's issue is resolved — skip the AI and show wrap-up
-  const RESOLVED_PHRASES = [
-    /^thanks?\b/i, /^thank you\b/i, /\bthat (fixed|worked|solved|helped|did it)\b/i,
-    /\bproblem (solved|fixed|resolved)\b/i, /\bissue (solved|fixed|resolved)\b/i,
-    /\ball (good|set|sorted)\b/i, /\bthat'?s? (all|it|good)\b/i,
-    /\bgot it\b/i, /\bnever mind\b/i, /\bno more (help|questions)\b/i,
-    /\bi'?m good\b/i, /\bperfect\b/i,
-  ]
-  const isResolutionMessage = (text) =>
-    RESOLVED_PHRASES.some((re) => re.test(text.trim()))
-
-  const WRAP_UP_BUTTONS = [
-    { id: 'ask_another', label: 'Ask another question', primary: false },
-    { id: 'end_chat',    label: 'End chat',             primary: true  },
-  ]
-
   // Send a message — branches between customer and tech mode
   const handleChatSend = useCallback(async (text) => {
     requestNotificationPermission()
     chat.addMessage({ id: Date.now(), sender: 'user', text, timestamp: new Date() })
+
+    // ── Intercept special quick-reply labels — handle locally, never hit backend ──
+    if (chat.chatMode !== 'tech') {
+      // "✅ This helped" → positive feedback + wrap-up (non-repeatable: suggestions are cleared)
+      if (text === '✅ This helped') {
+        setSuggestions(null)
+        const lastBotMsg = [...chat.messages].reverse().find(m => m.sender === 'bot')
+        if (lastBotMsg?.id) {
+          submitChatFeedback(lastBotMsg.id, true).catch(() => {})
+        }
+        setTimeout(() => {
+          chat.addMessage({
+            id: Date.now() + 1,
+            sender: 'bot',
+            text: "Great! Is there anything else I can help with?",
+            timestamp: new Date(),
+            actionButtons: WRAP_UP_BUTTONS,
+          })
+        }, 300)
+        return
+      }
+
+      // "❌ Still not working" → offer ticket / rephrase
+      if (text === '❌ Still not working') {
+        setSuggestions(null)
+        setTimeout(() => {
+          chat.addMessage({
+            id: Date.now() + 1,
+            sender: 'bot',
+            text: "I'm sorry to hear that. Let me help you with more options:",
+            timestamp: new Date(),
+            actionButtons: [
+              { id: 'create_ticket', label: '🎫 Create a support ticket', primary: true },
+              { id: 'ask_another',   label: 'Rephrase my question',       primary: false },
+            ],
+          })
+        }, 300)
+        return
+      }
+
+      // "Create a support ticket" quick reply → trigger action directly
+      if (text === 'Create a support ticket') {
+        setSuggestions(null)
+        setIsTyping(true)
+        createTicketFromChat(conversationIdRef.current)
+          .then(result => {
+            setIsTyping(false)
+            chat.addMessage({
+              id: Date.now(),
+              sender: 'bot',
+              text: result.message || `Ticket ${result.ticketNumber} created. A technician will respond soon.`,
+              timestamp: new Date(),
+              actionButtons: [{ id: 'view_tickets', label: 'View my tickets', primary: false }],
+            })
+          })
+          .catch(() => {
+            setIsTyping(false)
+            chat.addMessage({
+              id: Date.now(),
+              sender: 'bot',
+              text: "Sorry, I couldn't create the ticket automatically. Please visit the Client Dashboard to submit one.",
+              timestamp: new Date(),
+            })
+          })
+        return
+      }
+    }
 
     // Gratitude / resolution detected — reply locally without hitting the AI
     if (chat.chatMode !== 'tech' && isResolutionMessage(text)) {
@@ -240,7 +308,13 @@ function Navbar() {
       return
     }
     if (buttonId === 'end_chat') {
-      chat.closeChat()
+      // Show feedback survey when there was a real conversation, otherwise close directly
+      const hasUserMessages = chat.messages.some(m => m.sender === 'user')
+      if (hasUserMessages && conversationId && conversationId !== surveyShownForConvId) {
+        setShowSurvey(true)
+      } else {
+        chat.closeChat()
+      }
       return
     }
     if (buttonId === 'request_handoff') {
@@ -282,12 +356,12 @@ function Navbar() {
         setTicketDetailOpen(true)
       }
     }
-  }, [chat, navigate, handleHandoff])
+  }, [chat, navigate, handleHandoff, conversationId, surveyShownForConvId])
 
-  // Close chat — show survey first if there was a real bot exchange
+  // Close chat — show survey first if there was a real user↔bot exchange
   const handleCloseChat = useCallback(() => {
-    const hasBotMessages = chat.messages.some(m => m.sender === 'bot')
-    if (hasBotMessages && conversationId && conversationId !== surveyShownForConvId) {
+    const hasUserMessages = chat.messages.some(m => m.sender === 'user')
+    if (hasUserMessages && conversationId && conversationId !== surveyShownForConvId) {
       setShowSurvey(true)
     } else {
       chat.closeChat()
@@ -344,6 +418,8 @@ function Navbar() {
     }
   }, [chat])
 
+  const { resetTheme } = useContext(ThemeContext)
+
   const handleLogout = async () => {
     try {
       if (conversationIdRef.current) {
@@ -359,6 +435,7 @@ function Navbar() {
     setSurveyShownForConvId(null)
     chat.clearChat()
     await logout()
+    resetTheme()
     navigate('/login')
   }
 

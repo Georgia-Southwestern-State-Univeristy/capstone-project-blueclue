@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as svc from '../services/mlAdminService'
 
@@ -71,7 +71,9 @@ export default function MLAdminDashboard() {
   const [feedback, setFeedback]           = useState(null)
   const [driftReports, setDriftReports]   = useState([])
   const [modelVersions, setModelVersions] = useState(null)
-  const [retrainRuns, setRetrainRuns]     = useState([])
+  const [retrainRuns, setRetrainRuns]         = useState([])
+  const [retrainRunsLoading, setRetrainRunsLoading] = useState(false)
+  const retrainPollingRef = useRef(null)
 
   // Action state
   const [actionLoading, setActionLoading] = useState('')
@@ -106,6 +108,28 @@ export default function MLAdminDashboard() {
 
   useEffect(() => { loadDashboard() }, [loadDashboard])
 
+  // Refresh retraining run list
+  const refreshRetrainRuns = useCallback(async () => {
+    setRetrainRunsLoading(true)
+    try {
+      const r = await svc.getRetrainingRuns()
+      setRetrainRuns(r?.data || [])
+    } catch { /* silent */ } finally {
+      setRetrainRunsLoading(false)
+    }
+  }, [])
+
+  // Poll every 5s while any run is still "running"
+  useEffect(() => {
+    const hasRunning = retrainRuns.some(r => r.status === 'running')
+    if (!hasRunning) return
+    const id = setInterval(refreshRetrainRuns, 5000)
+    return () => clearInterval(id)
+  }, [retrainRuns, refreshRetrainRuns])
+
+  // Cleanup polling on unmount
+  useEffect(() => () => { if (retrainPollingRef.current) clearInterval(retrainPollingRef.current) }, [])
+
   // Lazy tab loaders
   useEffect(() => {
     if (activeTab === 'Predictions' && predictions.length === 0) {
@@ -120,8 +144,8 @@ export default function MLAdminDashboard() {
     if (activeTab === 'Models' && !modelVersions) {
       svc.getModelVersions().then(r => setModelVersions(r?.data || r)).catch(() => {})
     }
-    if (activeTab === 'Retraining' && retrainRuns.length === 0) {
-      svc.getRetrainingRuns().then(r => setRetrainRuns(r?.data || [])).catch(() => {})
+    if (activeTab === 'Retraining') {
+      refreshRetrainRuns()
     }
   }, [activeTab]) // eslint-disable-line
 
@@ -147,6 +171,8 @@ export default function MLAdminDashboard() {
     try {
       const r = await svc.triggerRetraining(opts)
       setActionMsg({ type: 'success', text: `Retraining started. Run ID: ${r?.data?.run_id}` })
+      // Immediately refresh run list so the new row appears, then polling takes over
+      await refreshRetrainRuns()
     } catch (e) {
       setActionMsg({ type: 'error', text: 'Retraining failed: ' + e.message })
     } finally {
@@ -790,9 +816,19 @@ export default function MLAdminDashboard() {
             </Card>
 
             {/* Run history */}
-            <Card title="Retraining Run History">
+            <Card title="Retraining Run History" className="relative">
+              <button
+                onClick={refreshRetrainRuns}
+                disabled={retrainRunsLoading}
+                className="absolute top-3 right-4 p-1.5 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 transition-colors disabled:opacity-40"
+                title="Refresh run history"
+              >
+                <svg className={`w-4 h-4 ${retrainRunsLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
               {retrainRuns.length === 0 ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No retraining runs yet.</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">{retrainRunsLoading ? 'Loading…' : 'No retraining runs yet.'}</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
