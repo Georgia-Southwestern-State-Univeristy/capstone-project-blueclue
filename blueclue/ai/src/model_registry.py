@@ -69,8 +69,13 @@ class ModelRegistry:
         self.models_dir = os.path.join(base_dir, "models")
         self.registry_path = os.path.join(self.models_dir, REGISTRY_FILE)
         self.max_versions = max_versions
+        self._base_dir = base_dir
         os.makedirs(self.models_dir, exist_ok=True)
         self._data = self._load()
+
+        # Auto-populate from existing model artefacts when the registry is brand-new
+        if not self._data.get("versions"):
+            self._bootstrap_from_existing()
 
     # ── persistence ─────────────────────────────────────────────────────── #
 
@@ -326,6 +331,119 @@ class ModelRegistry:
         return summary
 
     # ── private helpers ──────────────────────────────────────────────────── #
+
+    def _bootstrap_from_existing(self) -> None:
+        """Scan ``models/`` for existing versioned artefacts and seed the registry.
+
+        This runs only when ``registry.json`` is missing or empty, so trained
+        models are immediately visible in the admin dashboard without needing a
+        manual re-registration step.
+
+        Convention for file names
+        -------------------------
+        * category : ``category_classifier_v<N>_<YYYYMMDD>.pkl``
+        * priority  : ``priority_classifier_v<N>_<YYYYMMDD>.pkl``
+        * time      : ``time_predictor_v<N>_<YYYYMMDD>.pkl``
+
+        Model-card JSON files are expected alongside the pkl files:
+        * ``model_card_<version>.json``
+        * ``priority_model_card_<version>.json``
+        * ``time_model_card_<version>.json``
+        """
+        import re
+
+        # (classifier prefix, optional extractor prefix, card prefix)
+        _SPECS: Dict[str, tuple] = {
+            "category": ("category_classifier",       None,                         "model_card"),
+            "priority": ("priority_classifier",       "priority_feature_extractor", "priority_model_card"),
+            "time":     ("time_predictor",             "time_feature_extractor",     "time_model_card"),
+        }
+
+        # Category feature extractor lives in data/features/ next to models/
+        _cat_extractor = os.path.join(
+            os.path.dirname(self.models_dir), "data", "features", "feature_extractor.pkl"
+        )
+
+        any_registered = False
+
+        for model_type, (clf_prefix, ext_prefix, card_prefix) in _SPECS.items():
+            clf_pattern = re.compile(rf"^{re.escape(clf_prefix)}_(v\d+_\d{{8}})\.pkl$")
+            entries: List[Dict] = []
+
+            for fname in sorted(os.listdir(self.models_dir)):
+                m = clf_pattern.match(fname)
+                if not m:
+                    continue
+                version = m.group(1)
+                model_path = os.path.join(self.models_dir, fname)
+
+                # Locate feature extractor
+                if ext_prefix:
+                    ext_candidate = os.path.join(self.models_dir, f"{ext_prefix}_{version}.pkl")
+                    if not os.path.exists(ext_candidate):
+                        ext_candidate = os.path.join(self.models_dir, f"{ext_prefix}_latest.pkl")
+                    ext_path = ext_candidate if os.path.exists(ext_candidate) else None
+                else:
+                    ext_path = _cat_extractor if os.path.exists(_cat_extractor) else None
+
+                # Read metrics + training date from model card
+                card_path = os.path.join(self.models_dir, f"{card_prefix}_{version}.json")
+                metrics: Dict = {}
+                training_date = ""
+                if os.path.exists(card_path):
+                    try:
+                        with open(card_path) as fh:
+                            card_data = json.load(fh)
+                        metrics = card_data.get("metrics", {})
+                        training_date = card_data.get("training_date", "")
+                    except Exception as exc:
+                        logger.warning("Could not read model card %s: %s", card_path, exc)
+
+                registered_at = training_date or datetime.now(tz=timezone.utc).isoformat()
+                entries.append({
+                    "version": version,
+                    "model_type": model_type,
+                    "model_path": model_path,
+                    "extractor_path": ext_path,
+                    "card_path": card_path,
+                    "metrics": metrics,
+                    "is_active": False,
+                    "is_deployed": True,
+                    "registered_at": registered_at,
+                    "deployed_at": registered_at,
+                    "rolled_back_at": None,
+                })
+                any_registered = True
+
+            if not entries:
+                continue
+
+            # Sort chronologically; mark the most recent version as active
+            entries.sort(key=lambda e: e["version"])
+            entries[-1]["is_active"] = True
+
+            self._data.setdefault("versions", {})[model_type] = entries
+            self._data.setdefault("active", {})[model_type] = entries[-1]["version"]
+            self._data.setdefault("history", []).append({
+                "action": "bootstrap",
+                "model_type": model_type,
+                "version": entries[-1]["version"],
+                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            })
+
+        if any_registered:
+            self._save()
+            active_summary = {
+                mt: self._data["active"].get(mt)
+                for mt in self._data.get("versions", {})
+            }
+            logger.info("Model registry bootstrapped from existing files: %s", active_summary)
+        else:
+            logger.warning(
+                "Registry bootstrap found no versioned model files in %s. "
+                "Run the training pipeline to populate the registry.",
+                self.models_dir,
+            )
 
     def _find(self, model_type: str, version: str) -> Optional[Dict]:
         for v in self._data.get("versions", {}).get(model_type, []):

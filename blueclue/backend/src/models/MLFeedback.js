@@ -89,11 +89,11 @@ class MLFeedback {
                 COUNT(*)                                                              AS total,
                 SUM(CASE WHEN category_overridden THEN 1 ELSE 0 END)                 AS category_overrides,
                 SUM(CASE WHEN priority_overridden THEN 1 ELSE 0 END)                 AS priority_overrides,
-                ROUND(100.0 * SUM(CASE WHEN category_overridden THEN 1 ELSE 0 END)
-                      / NULLIF(COUNT(*), 0), 2)                                       AS category_override_pct,
-                ROUND(100.0 * SUM(CASE WHEN priority_overridden THEN 1 ELSE 0 END)
-                      / NULLIF(COUNT(*), 0), 2)                                       AS priority_override_pct,
-                ROUND(AVG(ai_confidence)::NUMERIC, 4)                                AS avg_ai_confidence
+                COALESCE(ROUND(100.0 * SUM(CASE WHEN category_overridden THEN 1 ELSE 0 END)
+                      / NULLIF(COUNT(*), 0), 2), 0.00)                               AS category_override_pct,
+                COALESCE(ROUND(100.0 * SUM(CASE WHEN priority_overridden THEN 1 ELSE 0 END)
+                      / NULLIF(COUNT(*), 0), 2), 0.00)                               AS priority_override_pct,
+                COALESCE(ROUND(AVG(ai_confidence)::NUMERIC, 4), 0.0000)              AS avg_ai_confidence
             FROM ml_prediction_feedback
         `);
         return result.rows[0];

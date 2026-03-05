@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as svc from '../services/mlAdminService'
+import ExplainabilityPanel from '../components/ml/ExplainabilityPanel'
 
 // ─── tiny helper components ────────────────────────────────────────────────
 const Card = ({ title, children, className = '' }) => (
@@ -74,6 +75,9 @@ export default function MLAdminDashboard() {
   const [retrainRuns, setRetrainRuns]         = useState([])
   const [retrainRunsLoading, setRetrainRunsLoading] = useState(false)
   const retrainPollingRef = useRef(null)
+
+  // Explainability row expansion
+  const [explainRow, setExplainRow] = useState(null) // ticket index
 
   // Action state
   const [actionLoading, setActionLoading] = useState('')
@@ -473,44 +477,69 @@ export default function MLAdminDashboard() {
                         <th className="py-2 pr-3">Priority</th>
                         <th className="py-2 pr-3">Confidence</th>
                         <th className="py-2 pr-3">Override?</th>
-                        <th className="py-2">Date</th>
+                        <th className="py-2 pr-3">Date</th>
+                        <th className="py-2">Explain</th>
                       </tr>
                     </thead>
                     <tbody>
                       {predictions.map((p, i) => (
-                        <tr key={i} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750">
-                          <td className="py-1.5 pr-3">
-                            <div className="font-mono text-blue-600 dark:text-blue-400">{p.ticket_number}</div>
-                            <div className="text-gray-400 truncate max-w-[120px]">{p.subject}</div>
-                          </td>
-                          <td className="py-1.5 pr-3">
-                            <span className="capitalize">{p.predicted_category}</span>
-                            {p.category_overridden && (
-                              <div className="text-orange-500">→ {p.user_category}</div>
-                            )}
-                          </td>
-                          <td className="py-1.5 pr-3 capitalize">{p.predicted_priority}</td>
-                          <td className="py-1.5 pr-3">
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-12 bg-gray-200 dark:bg-gray-700 rounded-full h-1">
-                                <div
-                                  className={`h-1 rounded-full ${(p.confidence||0) >= 0.8 ? 'bg-green-500' : (p.confidence||0) >= 0.6 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                                  style={{ width: `${Math.round((p.confidence||0)*100)}%` }}
-                                />
+                        <Fragment key={i}>
+                          <tr className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750">
+                            <td className="py-1.5 pr-3">
+                              <div className="font-mono text-blue-600 dark:text-blue-400">{p.ticket_number}</div>
+                              <div className="text-gray-400 truncate max-w-[120px]">{p.subject}</div>
+                            </td>
+                            <td className="py-1.5 pr-3">
+                              <span className="capitalize">{p.predicted_category}</span>
+                              {p.category_overridden && (
+                                <div className="text-orange-500">→ {p.user_category}</div>
+                              )}
+                            </td>
+                            <td className="py-1.5 pr-3 capitalize">{p.predicted_priority}</td>
+                            <td className="py-1.5 pr-3">
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-12 bg-gray-200 dark:bg-gray-700 rounded-full h-1">
+                                  <div
+                                    className={`h-1 rounded-full ${(p.confidence||0) >= 0.8 ? 'bg-green-500' : (p.confidence||0) >= 0.6 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                    style={{ width: `${Math.round((p.confidence||0)*100)}%` }}
+                                  />
+                                </div>
+                                <span>{Math.round((p.confidence||0)*100)}%</span>
                               </div>
-                              <span>{Math.round((p.confidence||0)*100)}%</span>
-                            </div>
-                          </td>
-                          <td className="py-1.5 pr-3">
-                            {(p.category_overridden || p.priority_overridden)
-                              ? <Badge color="yellow">Overridden</Badge>
-                              : p.fallback_used
-                              ? <Badge color="gray">Fallback</Badge>
-                              : <Badge color="green">Accepted</Badge>
-                            }
-                          </td>
-                          <td className="py-1.5 text-gray-400">{p.created_at?.split('T')[0]}</td>
-                        </tr>
+                            </td>
+                            <td className="py-1.5 pr-3">
+                              {(p.category_overridden || p.priority_overridden)
+                                ? <Badge color="yellow">Overridden</Badge>
+                                : p.fallback_used
+                                ? <Badge color="gray">Fallback</Badge>
+                                : <Badge color="green">Accepted</Badge>
+                              }
+                            </td>
+                            <td className="py-1.5 pr-3 text-gray-400">{p.created_at?.split('T')[0]}</td>
+                            <td className="py-1.5">
+                              <button
+                                onClick={() => setExplainRow(explainRow === i ? null : i)}
+                                className="text-xs px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                                title="Why did the AI choose this?"
+                              >
+                                {explainRow === i ? 'Hide' : 'Why?'}
+                              </button>
+                            </td>
+                          </tr>
+                          {explainRow === i && p.subject && (
+                            <tr key={`explain-${i}`}>
+                              <td colSpan={7} className="pb-3 pt-1 px-2">
+                                <ExplainabilityPanel
+                                  text={`${p.subject}${p.description ? ' ' + p.description : ''}`}
+                                  prediction={p.predicted_category}
+                                  confidence={p.confidence || 0}
+                                  modelType="category"
+                                  autoLoad={true}
+                                />
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       ))}
                     </tbody>
                   </table>
@@ -766,14 +795,44 @@ export default function MLAdminDashboard() {
                   </Card>
                 ))}
 
-                {/* No versions */}
+                {/* No versions in registry – show DB versions as fallback */}
                 {(!modelVersions.registry || Object.keys(modelVersions.registry).length === 0) && (
-                  <Card>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                      No model versions registered yet.
-                      Train models and run the pipeline to populate the registry.
-                    </p>
-                  </Card>
+                  <>
+                    {modelVersions.db_versions?.length > 0 ? (
+                      <Card title="Model Versions (Database Records)">
+                        <p className="text-xs text-yellow-600 dark:text-yellow-400 mb-3">
+                          ⚠ Registry is empty – showing DB records. Restart the ML service to auto-populate the registry from trained model files.
+                        </p>
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700 text-left">
+                              <th className="py-1.5 pr-3">Model Type</th>
+                              <th className="py-1.5 pr-3">Version</th>
+                              <th className="py-1.5 pr-3">Accuracy</th>
+                              <th className="py-1.5">Registered</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {modelVersions.db_versions.map((v, i) => (
+                              <tr key={i} className="border-b border-gray-100 dark:border-gray-800">
+                                <td className="py-1.5 pr-3 capitalize">{v.model_type}</td>
+                                <td className="py-1.5 pr-3 font-mono">{v.version}</td>
+                                <td className="py-1.5 pr-3">{v.accuracy != null ? `${Math.round(v.accuracy * 100)}%` : '—'}</td>
+                                <td className="py-1.5 text-gray-400">{v.created_at?.split('T')[0]}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </Card>
+                    ) : (
+                      <Card>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                          No model versions registered yet.<br />
+                          <span className="text-xs">Train models and run the pipeline to populate the registry.</span>
+                        </p>
+                      </Card>
+                    )}
+                  </>
                 )}
               </>
             )}
