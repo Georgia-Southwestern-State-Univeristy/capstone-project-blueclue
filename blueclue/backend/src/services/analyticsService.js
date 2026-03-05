@@ -327,7 +327,8 @@ export const getTicketVolumeMetrics = async (startDate, endDate, category = null
             TO_CHAR(t.created_at, 'YYYY-MM') as month,
             COUNT(*) as count
         FROM tickets t
-        WHERE t.created_at >= DATE_TRUNC('month', $2::timestamp) - INTERVAL '5 months'
+        WHERE $1::timestamp <= $2::timestamp
+          AND t.created_at >= DATE_TRUNC('month', $2::timestamp) - INTERVAL '5 months'
           AND t.created_at <= $2::timestamp
           AND t.deleted_at IS NULL
           ${categoryFilter}
