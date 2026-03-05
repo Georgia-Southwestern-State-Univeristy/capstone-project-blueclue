@@ -49,7 +49,7 @@ class MLFeedback {
                 f.*,
                 t.ticket_number,
                 t.subject,
-                u.name  AS user_name,
+                u.first_name || ' ' || u.last_name AS user_name,
                 u.email AS user_email
             FROM ml_prediction_feedback f
             LEFT JOIN tickets t ON t.id = f.ticket_id
