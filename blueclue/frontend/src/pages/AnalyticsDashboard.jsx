@@ -417,6 +417,7 @@ function OverviewTab({ data, isTechOnly, onDrillDown }) {
     { label: 'Open', count: ticket_volume.by_status.open, color: '#60a5fa' },
     { label: 'In Progress', count: ticket_volume.by_status.in_progress, color: '#fbbf24' },
     { label: 'Waiting', count: ticket_volume.by_status.waiting_on_customer, color: '#a78bfa' },
+    { label: 'Reopened', count: ticket_volume.by_status.reopened, color: '#f59e0b' },
     { label: 'Resolved', count: ticket_volume.by_status.resolved, color: '#34d399' },
     { label: 'Closed', count: ticket_volume.by_status.closed, color: '#6b7280' },
     { label: 'Cancelled', count: ticket_volume.by_status.cancelled, color: '#ef4444' },

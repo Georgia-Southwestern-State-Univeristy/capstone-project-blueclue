@@ -4,6 +4,7 @@ const defaultSegments = [
   { label: 'Open', count: 0, color: '#60a5fa' },
   { label: 'In Progress', count: 0, color: '#93c5fd' },
   { label: 'Waiting', count: 0, color: '#a78bfa' },
+  { label: 'Reopened', count: 0, color: '#f59e0b' },
   { label: 'Resolved', count: 0, color: '#3b82f6' },
   { label: 'Closed', count: 0, color: '#6b7280' },
 ]
@@ -11,8 +12,11 @@ const defaultSegments = [
 function DonutChart({ segments = defaultSegments, total }) {
   const [hoveredIndex, setHoveredIndex] = useState(null)
 
-  const chartTotal = total ?? segments.reduce((sum, s) => sum + s.count, 0)
-  const safeTotal = chartTotal || 1
+  // Always use the segment sum so the chart is fully filled;
+  // the total prop is only used for the center display number.
+  const segmentSum = segments.reduce((sum, s) => sum + (s.count || 0), 0)
+  const chartTotal = total ?? segmentSum
+  const safeTotal = segmentSum || 1
 
   // Build arc path for a donut segment
   const getArcPath = (percent, offset, radius = 40) => {
@@ -42,7 +46,7 @@ function DonutChart({ segments = defaultSegments, total }) {
         {/* SVG Donut */}
         <div className="relative w-52 h-52 flex-shrink-0">
           <svg viewBox="0 0 100 100" className="w-full h-full" style={{ overflow: 'visible' }}>
-            {chartTotal === 0 ? (
+            {segmentSum === 0 ? (
               <circle cx="50" cy="50" r="40" fill="none" stroke="#374151" strokeWidth="12" />
             ) : (
               segments.map((segment, i) => {
