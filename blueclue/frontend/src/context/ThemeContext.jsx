@@ -205,41 +205,64 @@ export function ThemeProvider({ children }) {
   // Track whether we've loaded from server in this session
   const serverLoaded = useRef(false);
 
-  // ── Load preferences from server on mount (if authenticated) ──
-  useEffect(() => {
-    let cancelled = false;
-    const loadFromServer = async () => {
-      if (!isAuthenticated()) return;
-      try {
-        loadingFromServer.current = true;
-        const data = await fetchThemePreferences();
-        if (cancelled) return;
-        if (data) {
-          if (data.theme)       { setThemeState(data.theme);       try { localStorage.setItem('blueclue-theme', data.theme); } catch {} }
-          if (data.accent)      { setAccentState(data.accent);     try { localStorage.setItem('blueclue-accent', data.accent); } catch {} }
-          if (typeof data.customOverride === 'boolean') {
-            setCustomOverrideState(data.customOverride);
-            try { localStorage.setItem('blueclue-custom-override', String(data.customOverride)); } catch {}
-          }
-          if (data.customSlots && typeof data.customSlots === 'object' && data.customSlots.pageBg) {
-            setCustomSlotsState(data.customSlots);
-            try { localStorage.setItem('blueclue-custom-slots', JSON.stringify(data.customSlots)); } catch {}
-          }
-          if (Array.isArray(data.savedThemes)) {
-            setSavedThemes(data.savedThemes);
-          }
-          serverLoaded.current = true;
+  // ── Load preferences from server (callable on demand) ──
+  const reloadFromServer = useCallback(async () => {
+    if (!isAuthenticated()) return;
+    try {
+      loadingFromServer.current = true;
+      const data = await fetchThemePreferences();
+      if (data) {
+        if (data.theme)       { setThemeState(data.theme);       try { localStorage.setItem('blueclue-theme', data.theme); } catch {} }
+        if (data.accent)      { setAccentState(data.accent);     try { localStorage.setItem('blueclue-accent', data.accent); } catch {} }
+        if (typeof data.customOverride === 'boolean') {
+          setCustomOverrideState(data.customOverride);
+          try { localStorage.setItem('blueclue-custom-override', String(data.customOverride)); } catch {}
         }
-      } catch (err) {
-        console.warn('Failed to load theme preferences from server:', err.message);
-      } finally {
-        // Small delay so the state updates settle before we start syncing
-        setTimeout(() => { loadingFromServer.current = false; }, 300);
+        if (data.customSlots && typeof data.customSlots === 'object' && data.customSlots.pageBg) {
+          setCustomSlotsState(data.customSlots);
+          try { localStorage.setItem('blueclue-custom-slots', JSON.stringify(data.customSlots)); } catch {}
+        }
+        if (Array.isArray(data.savedThemes)) {
+          setSavedThemes(data.savedThemes);
+        }
+        serverLoaded.current = true;
       }
-    };
-    loadFromServer();
-    return () => { cancelled = true; };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    } catch (err) {
+      console.warn('Failed to load theme preferences from server:', err.message);
+    } finally {
+      setTimeout(() => { loadingFromServer.current = false; }, 300);
+    }
+  }, []);
+
+  // ── Load from server on mount ──
+  useEffect(() => {
+    reloadFromServer();
+  }, [reloadFromServer]);
+
+  // ── Reset all theme state to defaults and clear persisted values ──
+  const resetTheme = useCallback(() => {
+    loadingFromServer.current = false;
+    serverLoaded.current = false;
+    if (syncTimer.current) { clearTimeout(syncTimer.current); syncTimer.current = null; }
+    // Clear localStorage
+    try {
+      localStorage.removeItem('blueclue-theme');
+      localStorage.removeItem('blueclue-accent');
+      localStorage.removeItem('blueclue-custom-override');
+      localStorage.removeItem('blueclue-custom-slots');
+    } catch { /* noop */ }
+    // Clear CSS vars and attributes
+    clearCustomVars();
+    document.documentElement.removeAttribute('data-theme');
+    document.documentElement.removeAttribute('data-accent');
+    document.documentElement.removeAttribute('data-custom-override');
+    // Reset state to defaults
+    setThemeState('dark');
+    setAccentState('blue');
+    setCustomOverrideState(false);
+    setCustomSlotsState({ ...DEFAULT_CUSTOM_SLOTS });
+    setSavedThemes([]);
+  }, []);
 
   // ── Debounced sync to server whenever active prefs change ──
   const syncToServer = useCallback(() => {
@@ -386,6 +409,7 @@ export function ThemeProvider({ children }) {
         customSlots, setCustomSlot, resetCustomSlots,
         customOverride, setCustomOverride,
         savedThemes, saveCurrentTheme, loadSavedTheme, deleteTheme, renameTheme,
+        resetTheme, reloadFromServer,
       }}
     >
       {children}

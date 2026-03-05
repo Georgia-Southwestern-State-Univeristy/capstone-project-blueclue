@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useContext } from 'react'
 import { logout, isAuthenticated, getUser } from '../services/authService'
+import { ThemeContext } from '../context/ThemeContext'
 import NotificationBell from './NotificationBell'
 import NotificationDropdown from './NotificationDropdown'
 import ChatWidgetButton from './ChatWidgetButton'
@@ -417,6 +418,8 @@ function Navbar() {
     }
   }, [chat])
 
+  const { resetTheme } = useContext(ThemeContext)
+
   const handleLogout = async () => {
     try {
       if (conversationIdRef.current) {
@@ -432,6 +435,7 @@ function Navbar() {
     setSurveyShownForConvId(null)
     chat.clearChat()
     await logout()
+    resetTheme()
     navigate('/login')
   }
 

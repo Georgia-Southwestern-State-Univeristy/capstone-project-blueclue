@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useContext } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { login as loginService, resendVerification, isAuthenticated, getUser } from '../services/authService'
+import { ThemeContext } from '../context/ThemeContext'
 import logo from '../assets/EditedBlueClueLogo.png'
 
 /** Map a user role to their home dashboard */
@@ -22,6 +23,7 @@ function getRoleHome(role) {
 function Login() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { reloadFromServer } = useContext(ThemeContext)
   const [loginType, setLoginType] = useState('customer') // 'customer', 'technician', 'management'
   const [formData, setFormData] = useState({
     email: '',
@@ -119,6 +121,8 @@ function Login() {
         return
       }
 
+      // Reload theme from server for the newly signed-in user
+      reloadFromServer()
       // Redirect all users to welcome page after login
       navigate('/welcome')
 
