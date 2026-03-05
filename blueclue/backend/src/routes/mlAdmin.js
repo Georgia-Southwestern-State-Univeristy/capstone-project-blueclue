@@ -1,5 +1,5 @@
 // src/routes/mlAdmin.js
-// ML Admin routes – restricted to 'admin' role.
+// ML Admin routes – restricted to 'admin' and 'management' roles.
 
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
@@ -8,9 +8,9 @@ import * as ctrl from '../controllers/mlAdminController.js';
 
 const router = express.Router();
 
-// All ML admin routes require authentication + admin or manager role
+// All ML admin routes require authentication + admin or management role
 router.use(authenticateToken);
-router.use(checkRole(['admin', 'manager']));
+router.use(checkRole('admin', 'management'));
 
 // ── Dashboard ──────────────────────────────────────────────────────────────
 /** GET /api/ml-admin/dashboard  – Full dashboard data in one call */

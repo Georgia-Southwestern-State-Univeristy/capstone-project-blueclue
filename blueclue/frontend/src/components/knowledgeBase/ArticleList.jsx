@@ -105,35 +105,35 @@ const ArticleList = ({ articles, onEdit, onDelete, onTogglePublish, onView }) =>
                                 <div className="flex justify-end gap-2">
                                     <button
                                         onClick={() => onView(article)}
-                                        className="text-gray-400 hover:text-gray-200 transition-colors"
+                                        className="inline-flex items-center px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 text-xs font-medium rounded-lg transition-colors"
                                         title="View article"
                                     >
-                                        View
+                                        👁 View
                                     </button>
                                     <button
                                         onClick={() => onEdit(article)}
-                                        className="text-blue-400 hover:text-blue-300 transition-colors"
+                                        className="inline-flex items-center px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors"
                                         title="Edit article"
                                     >
-                                        Edit
+                                        ✏️ Edit
                                     </button>
                                     <button
                                         onClick={() => onTogglePublish(article.id, article.is_published)}
-                                        className={`${
+                                        className={`inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                                             article.is_published
-                                                ? 'text-yellow-400 hover:text-yellow-300'
-                                                : 'text-green-400 hover:text-green-300'
-                                        } transition-colors`}
+                                                ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                                                : 'bg-green-600 hover:bg-green-700 text-white'
+                                        }`}
                                         title={article.is_published ? 'Unpublish' : 'Publish'}
                                     >
-                                        {article.is_published ? 'Unpublish' : 'Publish'}
+                                        {article.is_published ? '⬇ Unpublish' : '⬆ Publish'}
                                     </button>
                                     <button
                                         onClick={() => onDelete(article.id)}
-                                        className="text-red-400 hover:text-red-300 transition-colors"
+                                        className="inline-flex items-center px-3 py-1.5 bg-red-700 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors"
                                         title="Delete article"
                                     >
-                                        Delete
+                                        🗑 Delete
                                     </button>
                                 </div>
                             </td>

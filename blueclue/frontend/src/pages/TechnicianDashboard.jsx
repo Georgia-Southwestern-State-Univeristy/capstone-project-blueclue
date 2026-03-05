@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Alert from '../components/Alert'
 import DonutChart from '../components/DonutChart'
 import TicketTimeline from '../components/TicketTimeline'
@@ -15,6 +15,7 @@ import useDashboardLayout from '../hooks/useDashboardLayout'
 import { buildGalleryItems, buildWidgetConfig } from '../widgets'
 import { getAllTickets, updateTicketStatus, assignTicket } from '../services/ticketService'
 import { getTechnicians } from '../services/userService'
+import { useNotificationSocket } from '../hooks/useNotificationSocket'
 
 // ── Default grid layouts ─────────────────────────────────────────────────────
 const LAYOUT_VERSION = 1
@@ -167,6 +168,12 @@ function TechnicianDashboard() {
       setLoading(false)
     }
   }
+
+  // Real-time auto-refresh: stable ref so socket never reconnects on re-render
+  const _ticketFetchRef = useRef(null)
+  _ticketFetchRef.current = fetchTickets
+  const handleTicketChange = useCallback(() => { _ticketFetchRef.current?.() }, [])
+  useNotificationSocket(null, null, handleTicketChange)
 
   const fetchTechnicians = async () => {
     try {

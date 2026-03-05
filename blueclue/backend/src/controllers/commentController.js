@@ -106,6 +106,14 @@ export const createComment = async (req, res) => {
             parentCommentId: parentCommentId || null
         });
 
+        // Set first_response_at if a staff member responds for the first time
+        if (userType === 'tech' || userType === 'management') {
+            await pool.query(
+                `UPDATE tickets SET first_response_at = NOW() WHERE id = $1 AND first_response_at IS NULL`,
+                [ticketId]
+            );
+        }
+
         // Fetch full comment with user details for notifications
         const fullComment = await TicketComment.getById(comment.id);
 
