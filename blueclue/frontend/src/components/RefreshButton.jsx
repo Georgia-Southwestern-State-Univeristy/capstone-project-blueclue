@@ -48,7 +48,7 @@ export default function RefreshButton({ onRefresh, disabled = false, className =
   }, [onRefresh, isRefreshing, disabled])
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="widget-refresh-btn flex items-center gap-2">
       {lastRefreshed && (
         <span className="text-[10px] text-gray-500 hidden sm:inline">
           updated {formatLastRefreshed()}
