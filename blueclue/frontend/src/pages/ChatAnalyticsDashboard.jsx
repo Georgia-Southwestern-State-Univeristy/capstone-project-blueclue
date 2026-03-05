@@ -116,6 +116,26 @@ function PeakHeatmap({ data = [] }) {
   )
 }
 
+// ─── NPS gauge ───────────────────────────────────────────────────────────────
+function NpsGauge({ score, breakdown }) {
+  const s = Number(score ?? 0)
+  const label = s >= 50 ? 'Excellent' : s >= 30 ? 'Great' : s >= 0 ? 'Okay' : 'Needs work'
+  const color = s >= 50 ? 'text-green-400' : s >= 30 ? 'text-emerald-400' : s >= 0 ? 'text-yellow-400' : 'text-red-400'
+  return (
+    <div className="text-center">
+      <div className={`text-5xl font-bold ${color}`}>{score != null ? s : '—'}</div>
+      <div className="text-gray-400 text-sm mt-1">{label}</div>
+      {breakdown && (
+        <div className="flex justify-center gap-4 mt-3 text-xs text-gray-500">
+          <span>👍 {breakdown.promoters ?? 0}</span>
+          <span>😐 {breakdown.passives ?? 0}</span>
+          <span>👎 {breakdown.detractors ?? 0}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Stat card ───────────────────────────────────────────────────────────────
 function StatCard({ label, value, sub, accent = 'blue' }) {
   const ring = { blue: 'border-blue-800', green: 'border-emerald-800', yellow: 'border-yellow-700', purple: 'border-purple-700' }
@@ -163,26 +183,30 @@ export default function ChatAnalyticsDashboard() {
 
   useEffect(() => { load(period) }, [period, load])
 
-  const ov = data?.overview || {}
+  const ov = data?.summary || {}
   const fb = data?.feedback || {}
   const deflect = data?.deflection || {}
-  const resolution = data?.resolutionBreakdown || {}
-  const daily = (data?.dailyTrend || []).map(d => ({ label: d.date?.slice(5), count: Number(d.conversations) }))
+  const resolution = data?.resolution || {}
+  const daily = (data?.dailyConversations || []).map(d => ({ label: d.day?.slice(5), count: Number(d.conversations) }))
   const intents = data?.topIntents || []
-  const peak = data?.peakUsage || []
-  const techUsage = data?.techModeUsage || {}
+  const peak = data?.peakHeatmap || []
+  const techArr = data?.techModeUsage || []
+  const techUsage = {
+    tech_mode_conversations: techArr.reduce?.((s, t) => s + Number(t.conversations || 0), 0) || 0,
+    tech_mode_users: techArr.length || 0,
+  }
 
-  const deflectRate = deflect.deflection_rate != null
-    ? `${Number(deflect.deflection_rate).toFixed(1)}%`
+  const deflectRate = deflect.deflectionRatePct != null
+    ? `${Number(deflect.deflectionRatePct).toFixed(1)}%`
     : '—'
 
   const resSlices = [
-    { label: 'Resolved', value: Number(resolution.resolved || 0), color: '#10b981' },
-    { label: 'Escalated', value: Number(resolution.escalated || 0), color: '#f59e0b' },
-    { label: 'Open', value: Number(resolution.open || 0), color: '#3b82f6' },
+    { label: 'Resolved', value: Number(resolution.resolvedWithoutTicket || 0), color: '#10b981' },
+    { label: 'Escalated', value: Number(resolution.escalatedToHuman || 0), color: '#f59e0b' },
+    { label: 'Open', value: Number(resolution.stillOpen || 0), color: '#3b82f6' },
   ]
 
-  const fbTotal = (Number(fb.positive) || 0) + (Number(fb.negative) || 0) + (Number(fb.no_rating) || 0)
+  const fbTotal = (Number(fb.positive) || 0) + (Number(fb.negative) || 0) + (Number(fb.noRating) || 0)
   const fbRate = fbTotal ? `${Math.round(((Number(fb.positive) || 0) / fbTotal) * 100)}%` : '—'
 
   return (
@@ -220,9 +244,9 @@ export default function ChatAnalyticsDashboard() {
           <>
             {/* Overview cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              <StatCard label="Total Conversations" value={ov.total_conversations} accent="blue" />
-              <StatCard label="Total Messages" value={ov.total_messages} accent="blue" />
-              <StatCard label="Avg Msgs / Conv" value={ov.avg_messages_per_conversation != null ? Number(ov.avg_messages_per_conversation).toFixed(1) : '—'} accent="purple" />
+              <StatCard label="Total Conversations" value={ov.totalConversations} accent="blue" />
+              <StatCard label="Total Messages" value={ov.totalMessages} accent="blue" />
+              <StatCard label="Avg Msgs / Conv" value={ov.avgMessagesPerConv != null ? Number(ov.avgMessagesPerConv).toFixed(1) : '—'} accent="purple" />
               <StatCard label="Tech Mode Convs" value={techUsage.tech_mode_conversations} sub={`${techUsage.tech_mode_users ?? '—'} unique techs`} accent="green" />
             </div>
 
@@ -234,15 +258,15 @@ export default function ChatAnalyticsDashboard() {
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Suggestions shown</span>
-                    <span className="text-white">{deflect.suggestions_shown ?? '—'}</span>
+                    <span className="text-white">{deflect.suggestionsShown ?? '—'}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Articles clicked</span>
-                    <span className="text-white">{deflect.clicked ?? '—'}</span>
+                    <span className="text-white">{deflect.articlesClicked ?? '—'}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Tickets cancelled</span>
-                    <span className="text-green-400">{deflect.tickets_cancelled ?? '—'}</span>
+                    <span className="text-green-400">{deflect.ticketsCancelled ?? '—'}</span>
                   </div>
                   <div className="border-t border-gray-700 pt-2 flex justify-between font-semibold">
                     <span className="text-gray-300">Deflection rate</span>
@@ -274,7 +298,7 @@ export default function ChatAnalyticsDashboard() {
                   <div className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-full bg-gray-600 flex-shrink-0" />
                     <span className="text-gray-400 flex-1">No rating</span>
-                    <span className="text-white">{fb.no_rating ?? 0}</span>
+                    <span className="text-white">{fb.noRating ?? 0}</span>
                   </div>
                   <div className="border-t border-gray-700 pt-2 flex justify-between font-semibold">
                     <span className="text-gray-300">Positive rate</span>
@@ -348,8 +372,8 @@ export default function ChatAnalyticsDashboard() {
                   <p className="text-gray-500 text-sm text-center py-6">Loading…</p>
                 ) : (
                   <NpsGauge
-                    score={gapData?.npsBreakdown?.score}
-                    breakdown={gapData?.npsBreakdown}
+                    score={gapData?.nps?.score}
+                    breakdown={gapData?.nps}
                   />
                 )}
               </div>
@@ -384,13 +408,13 @@ export default function ChatAnalyticsDashboard() {
                 ) : (
                   <>
                     <div className="text-4xl font-bold text-yellow-400 text-center mt-2">
-                      {gapData?.gaps?.length ?? '—'}
+                      {gapData?.knowledgeGaps?.length ?? '—'}
                     </div>
                     <p className="text-gray-500 text-xs text-center mt-1">unresolved gaps</p>
                     <p className="text-gray-400 text-xs text-center mt-3 leading-relaxed">
-                      {gapData?.gaps?.length >= 15
+                      {gapData?.knowledgeGaps?.length >= 15
                         ? 'High gap count — consider KB updates'
-                        : gapData?.gaps?.length > 0
+                        : gapData?.knowledgeGaps?.length > 0
                           ? 'Review gaps below'
                           : 'No significant gaps detected'}
                     </p>
@@ -400,7 +424,7 @@ export default function ChatAnalyticsDashboard() {
             </div>
 
             {/* Knowledge gaps table */}
-            {!gapLoading && gapData?.gaps?.length > 0 && (
+            {!gapLoading && gapData?.knowledgeGaps?.length > 0 && (
               <div className="bg-gray-800 rounded-xl p-5 border border-gray-700 mb-6">
                 <h2 className="font-semibold mb-4 text-gray-200">Top Knowledge Gaps</h2>
                 <p className="text-gray-500 text-xs mb-3">Queries with low-confidence responses or negative feedback — review for KB improvements</p>
@@ -416,7 +440,7 @@ export default function ChatAnalyticsDashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {gapData.gaps.map((gap, i) => (
+                      {gapData.knowledgeGaps.map((gap, i) => (
                         <tr key={i} className="border-t border-gray-700 hover:bg-gray-750">
                           <td className="py-2 pr-4 text-gray-300 max-w-xs truncate" title={gap.query_text}>
                             {gap.query_text}
