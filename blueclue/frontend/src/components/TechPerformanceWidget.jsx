@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, Fragment } from 'react'
 import BaseWidget from './BaseWidget'
+import { useTicketSocket } from '../hooks/useTicketSocket'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
@@ -35,7 +36,7 @@ const rateBg = (pct) => {
 }
 
 /* ── Component ── */
-export default function TechPerformanceWidget({ onTechClick, autoRefreshInterval = 120000 }) {
+export default function TechPerformanceWidget({ onTechClick }) {
   const [techs, setTechs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -65,11 +66,8 @@ export default function TechPerformanceWidget({ onTechClick, autoRefreshInterval
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  useEffect(() => {
-    if (!autoRefreshInterval) return
-    const id = setInterval(fetchData, autoRefreshInterval)
-    return () => clearInterval(id)
-  }, [fetchData, autoRefreshInterval])
+  /* ── Socket-driven refresh ── */
+  useTicketSocket(fetchData)
 
   /* ── Sorting ── */
   const handleSort = (key) => {

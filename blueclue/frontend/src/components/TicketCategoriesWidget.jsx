@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import BaseWidget from './BaseWidget'
 import useContainerSize from '../hooks/useContainerSize'
+import { useTicketSocket } from '../hooks/useTicketSocket'
 
 // Fallback colors when the DB doesn't provide a color_code
 const CATEGORY_COLORS = {
@@ -69,6 +70,9 @@ function TicketCategoriesWidget({
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  /* ── Socket-driven refresh ── */
+  useTicketSocket(fetchData)
 
   const handleRefresh = useCallback(async () => {
     await fetchData()

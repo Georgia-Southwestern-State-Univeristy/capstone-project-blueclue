@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import BaseWidget from './BaseWidget'
+import { useTicketSocket } from '../hooks/useTicketSocket'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
@@ -42,13 +43,11 @@ const formatTimeSince = (hours) => {
  * @param {Function} [props.onView]          - Called with ticket when "View" is clicked
  * @param {Function} [props.onReassign]      - Called with ticket when "Reassign" is clicked
  * @param {Function} [props.onResolve]       - Called with ticket when "Resolve" is clicked
- * @param {number}   [props.autoRefreshInterval=0] - Auto-refresh ms (0 = off)
  */
 function EscalationsWidget({
   onView = null,
   onReassign = null,
   onResolve = null,
-  autoRefreshInterval = 0,
 }) {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
@@ -78,6 +77,9 @@ function EscalationsWidget({
     fetchData()
   }, [fetchData])
 
+  /* ── Socket-driven refresh ── */
+  useTicketSocket(fetchData)
+
   const handleRefresh = useCallback(async () => {
     await fetchData()
   }, [fetchData])
@@ -99,7 +101,6 @@ function EscalationsWidget({
         </svg>
       }
       onRefresh={handleRefresh}
-      autoRefreshInterval={autoRefreshInterval}
       isLoading={loading && data.length === 0}
       error={error}
       isEmpty={data.length === 0 && !loading}

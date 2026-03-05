@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import BaseWidget from './BaseWidget'
 import { getDeletedTickets, restoreTicket } from '../services/ticketService'
+import { useTicketSocket } from '../hooks/useTicketSocket'
 
 const PRIORITY_COLORS = {
   critical: 'text-red-400',
@@ -37,7 +38,7 @@ const CATEGORY_LABELS = {
  * Displays soft-deleted tickets with search, filter, and restore capabilities.
  * Management/admin only.
  */
-function DeletedTicketsWidget({ onTicketClick = null, autoRefreshInterval = 0 }) {
+function DeletedTicketsWidget({ onTicketClick = null }) {
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -67,6 +68,9 @@ function DeletedTicketsWidget({ onTicketClick = null, autoRefreshInterval = 0 })
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  /* ── Socket-driven refresh ── */
+  useTicketSocket(fetchData)
 
   const handleRefresh = useCallback(async () => {
     await fetchData()
@@ -158,7 +162,6 @@ function DeletedTicketsWidget({ onTicketClick = null, autoRefreshInterval = 0 })
         </svg>
       }
       onRefresh={handleRefresh}
-      autoRefreshInterval={autoRefreshInterval}
       isLoading={loading && tickets.length === 0}
       error={error}
       isEmpty={tickets.length === 0 && !loading}

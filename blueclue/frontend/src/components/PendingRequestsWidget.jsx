@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react'
 import { getAssignmentRequests, approveAssignmentRequest, denyAssignmentRequest } from '../services/ticketService'
 import RefreshButton from './RefreshButton'
+import { useTicketSocket } from '../hooks/useTicketSocket'
 
 /**
  * PendingRequestsWidget
@@ -33,6 +34,9 @@ const PendingRequestsWidget = forwardRef(({ onAction, onTicketClick }, ref) => {
   useEffect(() => {
     fetchRequests()
   }, [fetchRequests])
+
+  /* ── Socket-driven refresh ── */
+  useTicketSocket(fetchRequests)
 
   // Expose refresh to parent via ref
   useImperativeHandle(ref, () => ({
