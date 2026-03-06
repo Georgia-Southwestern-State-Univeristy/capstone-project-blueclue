@@ -266,6 +266,16 @@ function Navbar() {
 
   // Request human handoff
   const handleHandoff = useCallback(async () => {
+    if (!conversationIdRef.current) {
+      // No conversation started yet — action button from a stale/persisted session
+      chat.addMessage({
+        id: Date.now(),
+        sender: 'bot',
+        text: "Please send a message first so I can connect you with a technician.",
+        timestamp: new Date(),
+      })
+      return
+    }
     setHandoffStatus('requested')
     try {
       await requestChatHandoff(conversationIdRef.current)
@@ -273,7 +283,7 @@ function Navbar() {
       console.error('Handoff request error:', err)
       setHandoffStatus(null)
     }
-  }, [])
+  }, [chat])
 
   // File upload in chat
   const handleFileUpload = useCallback(async (file) => {
