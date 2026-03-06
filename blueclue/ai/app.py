@@ -58,7 +58,7 @@ ML_SERVICE_PORT = int(os.getenv("ML_SERVICE_PORT", "5000"))
 ML_SERVICE_HOST = os.getenv("ML_SERVICE_HOST", "0.0.0.0")
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 FEATURES_DIR = os.path.join(BASE_DIR, "data", "features")
-CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.5"))
+CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.6"))
 CACHE_MAX_SIZE = int(os.getenv("CACHE_MAX_SIZE", "1024"))
 CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "3600"))  # 1 hour
 
@@ -720,20 +720,37 @@ class DriftManager:
     def init(self, model_manager: "ModelManager"):
         try:
             from src.drift_detector import DriftDetector, build_baseline_from_model_card
-            for mt, card in [
-                ("category", model_manager.category_card),
-                ("priority", model_manager.priority_card),
-            ]:
-                if card:
-                    dist = build_baseline_from_model_card(card, "category_distribution")
-                    if not dist:
-                        dist = build_baseline_from_model_card(card, "priority_distribution")
+            # (model_type, model_card, fallback list-key for uniform distribution)
+            configs = [
+                ("category", model_manager.category_card, "categories"),
+                ("priority", model_manager.priority_card, "priorities"),
+            ]
+            for mt, card, label_list_key in configs:
+                if not card:
+                    continue
+                # Try explicit pre-computed distribution keys first
+                dist: Dict[str, int] = {}
+                for key in ("category_distribution", "priority_distribution", "class_distribution"):
+                    dist = build_baseline_from_model_card(card, key)
                     if dist:
-                        self._detectors[mt] = DriftDetector(
-                            baseline_distribution=dist,
-                            model_type=mt,
-                        )
-                        logger.info("Drift detector ready for %s", mt)
+                        break
+                # Fallback: derive uniform distribution from the class-label list
+                # (model cards store categories/priorities as a plain list, not a dict)
+                if not dist:
+                    class_list: list = card.get(label_list_key, [])
+                    n_samples: int = card.get("training_samples", 0)
+                    if class_list:
+                        n_per = max(1, n_samples // len(class_list)) if n_samples else 1
+                        dist = {cls: n_per for cls in class_list}
+                if dist:
+                    self._detectors[mt] = DriftDetector(
+                        baseline_distribution=dist,
+                        model_type=mt,
+                    )
+                    logger.info("Drift detector ready for %s (%d labels, baseline built from %s)",
+                                mt, len(dist), label_list_key if not build_baseline_from_model_card(card, "category_distribution") else "explicit distribution")
+                else:
+                    logger.warning("Could not build baseline distribution for drift detector: %s", mt)
         except Exception as exc:
             logger.warning("Drift detector init failed: %s", exc)
 
@@ -900,6 +917,16 @@ async def lifespan(app: FastAPI):
             except Exception:
                 pass  # best-effort
         logger.info("Cache warm-up complete (cache size: %d)", len(cache._store))
+        # Reset metrics so warmup requests don't skew the monitoring dashboard.
+        # Real traffic starts counting from zero after this point.
+        metrics.request_count = 0
+        metrics.error_count = 0
+        metrics.latencies = []
+        metrics.confidence_scores = []
+        metrics.category_distribution = {}
+        metrics.priority_distribution = {}
+        metrics.fallback_count = 0
+        logger.info("Metrics collector reset after warmup — live monitoring begins")
 
     yield
     logger.info("ML service shutting down")
