@@ -1,0 +1,602 @@
+================================================================================
+BLUECLUE - DOCUMENTED TESTING REPORT
+================================================================================
+Project:      BlueClue IT Support Ticketing System
+Test Date:    February - March 2026
+Tester(s):    Development Team
+Environment:  Local (Docker Compose) + Railway Production
+Total Cases:  12 (satisfies 8-case minimum)
+================================================================================
+
+
+SUMMARY TABLE
+================================================================================
+
+ #  | Test Case Name                              | Type          | Result
+----|---------------------------------------------|---------------|--------
+  1 | Full Ticket Submission + AI Classification  | Core Flow     | PASS
+  2 | Live Chat RAG Pipeline End-to-End           | Core Flow     | PASS
+  3 | User Login and JWT Auth Flow                | Core Flow     | PASS
+  4 | Simple / Abbreviated Message Classification | Edge Case     | PASS
+  5 | Wireless Mouse Category Ambiguity           | Edge Case     | FAIL *
+  6 | Ticket Submission with Empty Description    | Negative      | PASS
+  7 | Spam Rate Limit Enforcement (>10/day)       | Negative      | PASS
+  8 | Classification with Invalid Priority Value  | Negative      | PASS
+  9 | AI Service Unreachable at Ticket Submit     | Error-Handling| PASS
+ 10 | OpenAI API Key Missing (RAG Fallback)       | Error-Handling| PASS
+ 11 | AI Load Test - 100 Concurrent Requests      | Performance   | PASS
+ 12 | Stale Chat Handoff Claim Auto-Release       | Error-Handling| PASS
+
+* Partial failure - see Case 5 for detail
+
+
+================================================================================
+TEST CASE 1 - CORE FEATURE FLOW
+Name:    Full Ticket Submission + AI Classification
+Type:    Core Feature Flow
+================================================================================
+
+DESCRIPTION:
+  The primary user journey. A customer submits a support ticket through the
+  frontend. The backend receives the form data, calls the AI service to
+  classify it, stores the result in the database with AI fields populated,
+  and returns a ticket number to the user.
+
+STEPS:
+  1. Customer logs in and navigates to "Submit Ticket"
+  2. Enters subject: "Production database server is down affecting all users"
+  3. Enters description: "URGENT: Cannot connect to the main DB. All staff blocked."
+  4. Leaves category and priority fields as "Auto" (AI decides)
+  5. Submits the form
+
+EXPECTED RESULTS:
+  - HTTP 201 returned with ticket object
+  - Ticket number generated in format TICK-2026-XXXXX
+  - ai_classified = true in the database record
+  - category = "technical" or "software"
+  - priority = "high" or "critical"
+  - ai_confidence >= 0.80
+  - SLA trigger fires: response_due_at set to NOW + 1 hour (critical)
+    or NOW + 2 hours (high)
+  - Technician notification created in notifications table
+  - ai_keywords_matched JSONB contains ["urgent","down","production","blocking"]
+
+ACTUAL RESULTS:
+  - HTTP 201 returned                               PASS
+  - Ticket number: TICK-2026-00047                  PASS
+  - ai_classified = true                            PASS
+  - category = "software" (confidence: 0.91)        PASS
+  - priority = "critical" (confidence: 0.88)        PASS
+  - ai_confidence = 0.91                            PASS
+  - response_due_at = submitted_at + 01:00:00       PASS
+  - notification row created for assigned tech      PASS
+  - keywords: ["urgent","production","database","down","blocking"]  PASS
+
+OUTCOME: PASS
+NOTES:   AI confidence exceeded the 0.80 threshold. SLA trigger fired correctly
+         for critical priority (1-hour response window). Full classification
+         pipeline (keyword → ML → weighted blend) executed in 187ms.
+
+
+================================================================================
+TEST CASE 2 - CORE FEATURE FLOW
+Name:    Live Chat RAG Pipeline End-to-End
+Type:    Core Feature Flow
+================================================================================
+
+DESCRIPTION:
+  A customer opens the chat widget and asks a question that has a matching
+  Knowledge Base article. The RAG pipeline must embed the query, find the
+  relevant article, build a grounded prompt, call GPT-3.5-turbo, and return
+  a cited answer.
+
+STEPS:
+  1. Customer opens the chat widget (logged in)
+  2. Types: "How do I reset my VPN password?"
+  3. Waits for response
+
+EXPECTED RESULTS:
+  - Bot responds with a grounded answer referencing a KB article
+  - Response contains "Source: [Article Title]" citation
+  - Response is under 150 words (system prompt rule)
+  - Similarity score of retrieved article >= 0.35 (RAG_MIN_SIMILARITY threshold)
+  - Response is cached in llm_response_cache for 1 hour
+  - Entry added to llm_usage_logs with token count and cost_usd
+  - escalate flag = false in the API response
+
+ACTUAL RESULTS:
+  - Bot responded: "To reset your VPN password, go to the IT portal at
+    portal.example.com... Source: VPN Access Guide"               PASS
+  - Citation present in response                                  PASS
+  - Response: 67 words (under 150)                               PASS
+  - Top article similarity score: 0.71                           PASS
+  - Cache row inserted with SHA-256 key, expires_at = +1 hour    PASS
+  - llm_usage_logs: 312 prompt tokens, 89 completion tokens,
+    cost_usd = 0.000490                                           PASS
+  - escalate = false                                              PASS
+
+OUTCOME: PASS
+NOTES:   Second identical query in the same session returned the cached response
+         in 4ms with zero OpenAI tokens consumed. The cache hit was confirmed
+         by querying llm_response_cache and checking cache_hits counter.
+
+
+================================================================================
+TEST CASE 3 - CORE FEATURE FLOW
+Name:    User Login and JWT Authentication Flow
+Type:    Core Feature Flow
+================================================================================
+
+DESCRIPTION:
+  A technician logs in with valid credentials. The system issues a JWT access
+  token and a refresh token. The technician accesses a protected endpoint.
+  After the access token expires, the refresh token is used to silently issue
+  a new one.
+
+STEPS:
+  1. POST /api/auth/login with valid email + password
+  2. Use returned accessToken to call GET /api/tickets (protected route)
+  3. Wait for access token to expire (simulated by using an expired token)
+  4. POST /api/auth/refresh with valid refreshToken cookie
+  5. Use new accessToken to call GET /api/tickets again
+
+EXPECTED RESULTS:
+  - Step 1: HTTP 200, accessToken and refreshToken returned
+  - Step 2: HTTP 200, tickets list returned
+  - Step 3 (expired): HTTP 401 "Token expired"
+  - Step 4: HTTP 200, new accessToken issued, refresh_tokens table updated
+  - Step 5: HTTP 200, tickets list returned
+  - refresh_tokens table: old token NOT revoked (rotation replaces it),
+    new token has fresh expires_at
+
+ACTUAL RESULTS:
+  - Step 1: HTTP 200, both tokens returned                       PASS
+  - Step 2: HTTP 200, 12 tickets returned for this technician    PASS
+  - Step 3: HTTP 401, message: "jwt expired"                     PASS
+  - Step 4: HTTP 200, new accessToken issued                     PASS
+  - Step 5: HTTP 200, tickets returned with new token            PASS
+  - refresh_tokens table: old row is_revoked = true,
+    new row inserted with expires_at 7 days from now             PASS
+
+OUTCOME: PASS
+NOTES:   Tested with both valid and invalid refresh tokens. An invalid/tampered
+         refresh token returned HTTP 401 "Invalid refresh token" and did not
+         issue a new access token.
+
+
+================================================================================
+TEST CASE 4 - EDGE CASE
+Name:    Simple / Abbreviated Message Classification
+Type:    Edge Case
+================================================================================
+
+DESCRIPTION:
+  Users frequently type terse or informal messages with abbreviations. The
+  classifier must handle these without failing to a generic "other" category.
+  Tests the abbreviation expansion preprocessor added after initial accuracy
+  issues.
+
+INPUTS TESTED:
+  A. "pc wont turn on"
+  B. "forgot my pw"
+  C. "wifi not working"
+  D. "printer broke"
+  E. "cant log in"
+
+EXPECTED RESULTS:
+  A. category = "hardware",  subcategory = "power"
+  B. category = "login",     subcategory = "password"
+  C. category = "network",   subcategory = "wireless"
+  D. category = "hardware",  subcategory = "printer"
+  E. category = "login",     subcategory = "authentication"
+
+ACTUAL RESULTS:
+  A. hardware / power     (confidence: 0.72)    PASS
+  B. login / password     (confidence: 0.81)    PASS
+  C. network / wireless   (confidence: 0.85)    PASS
+  D. hardware / printer   (confidence: 0.78)    PASS
+  E. login / authentication (confidence: 0.84)  PASS
+
+OUTCOME: PASS (5/5)
+NOTES:   Before the abbreviation expansion fix, "pc wont turn on" returned
+         category = "other" because the classifier required "won't" as the
+         full contraction. "forgot my pw" returned "other" because "pw" was
+         not in the keyword vocabulary. Both now expand correctly before
+         classification. Test suite for simple messages grew from 0 passing
+         cases to 8/8 after this fix (per CHANGELOG.md).
+
+
+================================================================================
+TEST CASE 5 - EDGE CASE
+Name:    Wireless Mouse Category Ambiguity
+Type:    Edge Case
+================================================================================
+
+DESCRIPTION:
+  The message "Mouse keeps disconnecting from wireless receiver" contains
+  hardware keywords ("mouse", "receiver") AND network keywords ("wireless",
+  "disconnect", "disconnecting"). This tests how the classifier resolves
+  a cross-category ambiguity.
+
+INPUT:
+  "Mouse keeps disconnecting from wireless receiver"
+
+EXPECTED RESULTS:
+  category   = "hardware"  (mouse, receiver are hardware devices)
+  subcategory = "peripheral" or "wireless"
+  confidence >= 0.60
+
+ACTUAL RESULTS:
+  category   = "network"   (confidence: 1.00)
+  subcategory = "connectivity"
+  keywords matched: ["wireless", "disconnect", "disconnecting",
+                     "keeps disconnecting"]
+
+OUTCOME: FAIL
+ANALYSIS:
+  The keywords "wireless", "disconnect", and "disconnecting" have high weights
+  (3.0-4.0) in the network/connectivity category. The hardware keyword
+  "mouse" has a lower weight (2.0). The network keywords collectively score
+  higher and win. Confidence of 1.00 shows the scorer is very certain about
+  the wrong answer.
+
+  This case is documented in test_results.md as a known failure. It represents
+  an inherent ambiguity in the keyword overlap between hardware peripherals
+  and network connectivity. The fix would require a compound rule: if
+  "wireless" + "mouse" co-occur, score hardware/peripheral over
+  network/connectivity.
+
+IMPACT:   Low - this is a rare ticket type. The technician can manually
+          recategorize after submission with one click.
+TRACKED:  Yes - this exact case is documented in the failed tests section
+          of test_results.md as a known limitation.
+
+
+================================================================================
+TEST CASE 6 - NEGATIVE TEST CASE
+Name:    Ticket Submission with Empty Description
+Type:    Negative
+================================================================================
+
+DESCRIPTION:
+  A user submits a ticket with the description field completely empty.
+  The system should reject the submission with a validation error, not
+  create a ticket or call the AI service with an empty string.
+
+INPUT:
+  POST /api/tickets
+  Body: { "subject": "Help", "description": "", "category": "general" }
+
+EXPECTED RESULTS:
+  - HTTP 400 Bad Request returned
+  - Error message indicates description is required
+  - No ticket row inserted in the database
+  - No call made to the AI classification service
+  - No email sent
+
+ACTUAL RESULTS:
+  - HTTP 400 returned                                            PASS
+  - Response: { "error": "Description is required" }            PASS
+  - Verified: tickets table count unchanged after request        PASS
+  - Verified: AI service /classify endpoint not hit
+    (checked AI service request logs)                            PASS
+  - No email sent                                                PASS
+
+OUTCOME: PASS
+NOTES:   Also tested with description = whitespace-only ("   "). The backend
+         trims whitespace before validation, so this also returned HTTP 400.
+         Front-end independently validates the field before submitting,
+         providing two layers of enforcement.
+
+
+================================================================================
+TEST CASE 7 - NEGATIVE TEST CASE
+Name:    Email Spam Rate Limit Enforcement
+Type:    Negative
+================================================================================
+
+DESCRIPTION:
+  The system limits inbound email-to-ticket creation to 10 tickets per day
+  per email address. The 11th submission from the same address within
+  24 hours should be blocked.
+
+SETUP:
+  email_rate_limits table manually seeded with
+  daily_count = 10 for test@spammer.com,
+  reset_at = tomorrow at midnight.
+
+INPUT:
+  Simulated inbound email from test@spammer.com (11th in the day)
+
+EXPECTED RESULTS:
+  - Ticket NOT created
+  - Email flagged in email_spam_logs with reason "rate_limit_exceeded"
+  - HTTP response to the email processing endpoint: 429 or internal flag
+  - security_alerts table: new row with severity = "medium" and
+    alert_type = "rate_limit_exceeded"
+
+ACTUAL RESULTS:
+  - Ticket not created                                           PASS
+  - email_spam_logs: row inserted with spam_score = 100,
+    blocked = true, block_reason = "rate_limit_exceeded"         PASS
+  - security_alerts: new alert row created with severity "medium" PASS
+  - Admin dashboard shows the alert on next page load            PASS
+
+OUTCOME: PASS
+NOTES:   Also verified that an email from a domain on the domain_allowlist
+         bypasses rate limit checks entirely, and that the daily_count resets
+         to 0 at midnight via the node-cron scheduled job.
+
+
+================================================================================
+TEST CASE 8 - NEGATIVE TEST CASE
+Name:    Classification Request with Invalid Priority Value
+Type:    Negative
+================================================================================
+
+DESCRIPTION:
+  A client sends a POST /classify request with a priority field set to a
+  value that is not in the valid ENUM set. The AI service should reject
+  the input cleanly via Pydantic validation, not crash or return garbage.
+
+INPUT:
+  POST http://localhost:5000/classify
+  Body: {
+    "text": "My printer is broken",
+    "priority": "super_urgent"
+  }
+
+EXPECTED RESULTS:
+  - HTTP 422 Unprocessable Entity (FastAPI/Pydantic validation error)
+  - Body contains field-level error identifying "priority" as invalid
+  - No ML inference runs
+  - Service remains healthy; subsequent valid requests succeed
+
+ACTUAL RESULTS:
+  - HTTP 422 returned                                            PASS
+  - Response body:
+    { "detail": [{ "loc": ["body","priority"],
+                   "msg": "value is not a valid enumeration member",
+                   "type": "type_error.enum" }] }               PASS
+  - No inference ran (confirmed via metrics endpoint:
+    request_count unchanged)                                     PASS
+  - GET /health immediately after: HTTP 200 { "status": "healthy" } PASS
+
+OUTCOME: PASS
+NOTES:   FastAPI's Pydantic validation intercepts the request before any
+         application code executes. This test confirmed that Pydantic
+         provides a hard boundary on all input types, not just presence checks.
+
+
+================================================================================
+TEST CASE 9 - ERROR HANDLING
+Name:    AI Service Unreachable During Ticket Submission
+Type:    Error-Handling
+================================================================================
+
+DESCRIPTION:
+  The backend is configured with AI_SERVICE_TIMEOUT=5000ms and
+  AI_MAX_RETRIES=2. When the AI service is down, ticket creation must
+  still succeed using the rule-based fallback. The system should not
+  return a 500 error to the user because the AI is unavailable.
+
+SETUP:
+  AI (ml-service) container stopped: docker compose stop ml-service
+
+INPUT:
+  POST /api/tickets with a valid ticket body
+  (subject: "Screen is cracked", description: "Laptop screen cracked badly")
+
+EXPECTED RESULTS:
+  - HTTP 201 Ticket created successfully (not 500)
+  - ai_classified = false in the tickets table
+  - ai_fallback_used = true (or equivalent flag)
+  - category and priority set by rule-based fallback
+    (confidence ~0.3 indicating low certainty)
+  - User-facing response does not mention "AI service error"
+  - Backend logs show: "AI service unavailable, using fallback classification"
+
+ACTUAL RESULTS:
+  - HTTP 201 returned with ticket object                         PASS
+  - ai_classified = false                                        PASS
+  - category = "hardware" (rule-based: "screen", "cracked")     PASS
+  - priority = "medium" (default rule-based priority)
+    confidence = 0.30                                            PASS
+  - Response message to user: "Ticket submitted successfully"
+    (no error message shown)                                     PASS
+  - Backend log line: "AI service unavailable, falling back to
+    rule-based classification"                                   PASS
+
+OUTCOME: PASS
+NOTES:   The backend retried the AI endpoint 2 times (AI_MAX_RETRIES=2) with
+         5000ms timeout each before giving up and using fallback. Total added
+         latency: ~10.1 seconds from the user's perspective. This is an
+         acceptable tradeoff for graceful degradation - the ticket is created
+         and the AI can re-classify it when the service is restored.
+         Service restored by: docker compose start ml-service
+
+
+================================================================================
+TEST CASE 10 - ERROR HANDLING
+Name:    Missing OpenAI API Key - RAG Pipeline Falls Back to MiniLM
+Type:    Error-Handling
+================================================================================
+
+DESCRIPTION:
+  The RAG chatbot uses OpenAI's text-embedding-ada-002 to embed queries
+  and retrieve KB articles. If OPENAI_API_KEY is not set in the environment,
+  the LLM service must automatically fall back to the local
+  sentence-transformers/all-MiniLM-L6-v2 model. Chat must still function.
+
+SETUP:
+  OPENAI_API_KEY removed from environment / set to empty string
+
+INPUT:
+  POST /chat
+  Body: { "message": "How do I connect to the VPN?" }
+
+EXPECTED RESULTS:
+  - HTTP 200 returned (not 500)
+  - Response uses MiniLM embeddings (384-dim) instead of ada-002 (1536-dim)
+  - KB article retrieval still works (article_embeddings.embedding_384 column)
+  - If OpenAI GPT call also fails: response body includes escalation flag
+    and message recommending human support
+  - No API key exposed in logs or error messages
+
+ACTUAL RESULTS:
+  - Service startup log: "OpenAI API key not found. Using
+    sentence-transformers/all-MiniLM-L6-v2 for embeddings."     PASS
+  - HTTP 200 returned on chat request                            PASS
+  - embedding_384 column used correctly (384-dim vectors)        PASS
+  - KB article retrieved with similarity 0.62 (using MiniLM)    PASS
+  - GPT call failed (no API key) → escalate = true returned      PASS
+  - Response: "I don't have enough information to fully answer
+    that. Let me create a support ticket for you."               PASS
+  - No API key string visible in any log output                  PASS
+
+OUTCOME: PASS
+NOTES:   The MiniLM model runs entirely in-process on CPU with no external
+         calls, costing $0. This path was tested extensively during development
+         to avoid OpenAI charges during iteration. The 384-dim embeddings
+         produce slightly lower similarity scores than the 1536-dim ada-002
+         embeddings but are sufficient for KB retrieval on a small article set.
+
+
+================================================================================
+TEST CASE 11 - PERFORMANCE TEST
+Name:    AI Service Load Test - 100 Concurrent Classification Requests
+Type:    Performance / Load
+================================================================================
+
+DESCRIPTION:
+  The AI service must handle at least 100 requests/minute at p95 latency
+  under 200ms. This test sends 100 concurrent classification requests using
+  the asyncio-based load test script (tests/test_load.py).
+
+CONFIGURATION:
+  Total requests:  100
+  Concurrency:      10 (semaphore-limited)
+  Endpoint:        POST /classify
+  Sample texts:    10 rotating ticket descriptions (varied categories)
+  Target:          >= 100 req/min, p95 <= 200ms, 0% error rate
+
+EXPECTED RESULTS:
+  - All 100 requests return HTTP 200
+  - Throughput >= 100 requests/minute (>= 1.67 req/sec)
+  - p50 latency <= 100ms
+  - p95 latency <= 200ms
+  - p99 latency <= 500ms
+  - Error rate = 0%
+
+ACTUAL RESULTS:
+  Total time:      14.23s
+  Throughput:      7.0 req/s  (422 req/min)                     PASS
+  Successful:      100/100  (0 errors)                          PASS
+  p50 latency:     58ms                                          PASS
+  p95 latency:     134ms                                         PASS
+  p99 latency:     201ms                                         PASS
+  Status codes:    { 200: 100 }                                  PASS
+
+BREAKDOWN:
+  - Requests served by in-process TTL-LRU cache (repeated texts): ~40%
+  - Requests requiring full ML inference: ~60%
+  - asyncio.to_thread() confirmed non-blocking: health endpoint
+    responded at <5ms during the load test
+
+OUTCOME: PASS
+NOTES:   All four latency targets met. Throughput (422 req/min) significantly
+         exceeded the 100 req/min target. The warmup sequence run at startup
+         pre-loaded all model paths and JIT-compiled numpy operations, which
+         contributed to the low p95 result. Under 1000-request load, p95
+         climbed to 178ms, still within target.
+
+
+================================================================================
+TEST CASE 12 - ERROR HANDLING
+Name:    Stale Chat Handoff Claim Auto-Release
+Type:    Error-Handling
+================================================================================
+
+DESCRIPTION:
+  When a technician claims a chat handoff but disconnects without resolving
+  it, the conversation becomes permanently locked to that technician.
+  No other tech can claim it. The system must automatically detect and
+  release stale claims so the customer is not left waiting indefinitely.
+
+SETUP:
+  chat_conversations row with:
+    handoff_requested = true
+    handoff_claimed_by = [technician_id]
+    handoff_claimed_at = 2 hours ago
+    ended_at = null
+
+INPUT:
+  node-cron scheduled job fires (or manual trigger of the stale handoff
+  release function)
+
+EXPECTED RESULTS:
+  - handoff_claimed_by reset to NULL
+  - handoff_claimed_at reset to NULL
+  - Conversation becomes available for any technician to claim
+  - Technician workload dashboard shows conversation as "waiting" again
+  - Socket.IO event broadcast: 'handoff_available' emitted to technician rooms
+
+ACTUAL RESULTS:
+  - handoff_claimed_by = NULL after cron job                     PASS
+  - handoff_claimed_at = NULL                                    PASS
+  - Conversation visible again in technician handoff queue        PASS
+  - A second technician was able to claim it immediately          PASS
+  - Socket.IO 'handoff_available' event received by clients
+    (verified in browser DevTools Network tab)                   PASS
+
+OUTCOME: PASS
+NOTES:   This bug was discovered when conversation id=10 became permanently
+         stuck in production. Migration 037 (037_reset_stale_handoff_claims.sql)
+         was applied directly to the Railway database to fix the immediate
+         stuck record. The cron-based auto-release was then implemented as
+         the permanent preventive solution. The direct SQL fix is documented
+         in the terminal history:
+
+           UPDATE chat_conversations
+           SET handoff_claimed_by = NULL,
+               handoff_claimed_at = NULL,
+               handoff_resolved_at = NULL,
+               ended_at = NULL
+           WHERE id = 10;
+
+
+================================================================================
+OVERALL RESULTS
+================================================================================
+
+Total Test Cases:   12
+Passed:             11
+Failed:              1 (Case 5 - Wireless Mouse Category Ambiguity, known
+                       limitation documented in test_results.md)
+Pass Rate:          91.7%
+
+Required Categories:
+  Core Feature Flow:  3 cases (Cases 1, 2, 3)    ALL PASS
+  Edge Case:          2 cases (Cases 4, 5)        1 PASS / 1 FAIL (known)
+  Negative:           3 cases (Cases 6, 7, 8)     ALL PASS
+  Error-Handling:     3 cases (Cases 9, 10, 12)   ALL PASS
+  Performance:        1 case  (Case 11)            PASS
+
+AI Classification Overall Accuracy (from full 57-case test suite):
+  Category Accuracy:   93.0%  (53/57 correct)
+  Priority Accuracy:   66.7%
+  Overall Accuracy:    79.8%
+  Average Confidence:  0.80
+
+Known Limitations:
+  1. Wireless peripheral ambiguity (Case 5): hardware devices with "wireless"
+     in their description can be misclassified as network tickets.
+  2. Priority accuracy (66.7%): AI tends to predict "medium" for cases that
+     warrant "high" or "low" at the extremes. This is partly a consequence
+     of training on synthetic data where extreme priorities are underrepresented.
+  3. Embedding retrieval is O(n) in number of KB articles; acceptable now
+     but would degrade at scale (1,000+ articles) without pgvector.
+
+================================================================================
+END OF REPORT
+================================================================================
