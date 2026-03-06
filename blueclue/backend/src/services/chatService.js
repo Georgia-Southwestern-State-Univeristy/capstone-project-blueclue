@@ -107,8 +107,18 @@ const INTENT_DEFINITIONS = {
     articleCategory: null,
   },
   escalation: {
-    keywords: ['speak to human', 'talk to person', 'escalate', 'manager',
-               'supervisor', 'real person', 'human agent'],
+    keywords: [
+      'speak to human', 'talk to person', 'escalate', 'manager',
+      'supervisor', 'real person', 'human agent',
+      // natural / colloquial variants
+      'talk to a tech', 'talk to tech', 'speak to a tech', 'speak to tech',
+      'speak with a tech', 'speak with tech', 'chat with a tech', 'chat with tech',
+      'talk to someone', 'speak to someone', 'speak with someone',
+      'need a technician', 'want a technician', 'talk to technician',
+      'connect me with', 'connect me to', 'transfer me',
+      'wanna talk', 'want to talk', 'need help from a person',
+      'live agent', 'live support', 'human support',
+    ],
     articleSlug: null,
     articleCategory: null,
   },
@@ -356,12 +366,23 @@ async function generateResponse(intent, confidence, userMessage, ctx) {
       suggestions: ['View my tickets', 'Create a new ticket'],
     };
   }
-  if (intent === 'create_ticket' || intent === 'escalation') {
+  if (intent === 'create_ticket') {
     return {
       response: "No problem — I'll help you open a support ticket. A technician will be assigned and will respond as soon as possible.",
       articleLinks: [],
       actionButtons: [{ id: 'create_ticket', label: '🎫 Create a support ticket', primary: true }],
       suggestions: ['Create a support ticket'],
+    };
+  }
+  if (intent === 'escalation') {
+    return {
+      response: "Sure! I can connect you with a live technician right now. Click below to start a live chat, or I can create a support ticket if you'd prefer.",
+      articleLinks: [],
+      actionButtons: [
+        { id: 'request_handoff', label: '💬 Talk to a Technician', primary: true },
+        { id: 'create_ticket',   label: '🎫 Create a support ticket', primary: false },
+      ],
+      suggestions: ['Talk to a Technician', 'Create a support ticket'],
     };
   }
   if (intent === 'general_help' || intent === 'general_inquiry') {
