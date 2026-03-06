@@ -5,10 +5,13 @@ import { getChatAnalytics, getChatKnowledgeGaps } from '../services/chatService'
 function BarChart({ data = [], valueKey = 'count', labelKey = 'label', color = '#3b82f6', height = 120 }) {
   if (!data.length) return <p className="text-gray-500 text-sm text-center py-6">No data</p>
   const max = Math.max(...data.map(d => d[valueKey] || 0), 1)
-  const barW = Math.max(8, Math.floor(400 / data.length) - 4)
+  // Cap bar width to prevent wide solid-color blocks when there are few data points
+  const barW = Math.min(50, Math.max(8, Math.floor(400 / data.length) - 4))
+  // Ensure a minimum viewBox width so bars never fill the entire container
+  const svgW = Math.max(data.length * (barW + 4), 400)
   return (
     <div className="overflow-x-auto">
-      <svg width="100%" viewBox={`0 0 ${data.length * (barW + 4)} ${height + 24}`} preserveAspectRatio="none">
+      <svg width="100%" viewBox={`0 0 ${svgW} ${height + 24}`} preserveAspectRatio="none">
         {data.map((d, i) => {
           const h = Math.round(((d[valueKey] || 0) / max) * height)
           const x = i * (barW + 4)
