@@ -34,6 +34,9 @@ export const initializeSocketHandlers = (io) => {
     // Store the connection
     connectedUsers.set(userId, socket.id);
 
+    // Join user-specific room so controllers can emit to user_${id}
+    socket.join(`user_${userId}`);
+
     // Send connection confirmation
     socket.emit('connected', { 
       message: 'Successfully connected to notification service',
