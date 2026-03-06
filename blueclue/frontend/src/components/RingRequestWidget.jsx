@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getIncomingRingRequests, respondToRingRequest, getUrgencyColor, getUrgencyLabel } from '../services/ringService';
+import { getSocket } from '../services/socketService';
 
 /**
  * RingRequestWidget - Dashboard widget for displaying incoming ring requests
@@ -16,10 +17,28 @@ const RingRequestWidget = ({ onViewTicket }) => {
   useEffect(() => {
     fetchRingRequests();
     
-    // Poll for new requests every 10 seconds
+    // Poll for new requests every 10 seconds as a fallback
     const interval = setInterval(fetchRingRequests, 10000);
+
+    // Fetch immediately when the tab regains focus
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchRingRequests();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    // Listen for instant push via WebSocket — no polling delay
+    const socket = getSocket();
+    if (socket) {
+      socket.on('ring_request', fetchRingRequests);
+    }
     
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      if (socket) {
+        socket.off('ring_request', fetchRingRequests);
+      }
+    };
   }, []);
 
   const fetchRingRequests = async () => {
