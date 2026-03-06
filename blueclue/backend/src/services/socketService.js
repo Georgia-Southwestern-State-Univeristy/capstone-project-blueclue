@@ -111,6 +111,22 @@ export const broadcastNotification = (io, userIds, notification) => {
 };
 
 /**
+ * Emit any named event to a specific user
+ * @param {Server} io - Socket.io server instance
+ * @param {number} userId - Target user ID
+ * @param {string} event - Event name
+ * @param {Object} data - Payload
+ */
+export const emitEventToUser = (io, userId, event, data) => {
+  const socketId = connectedUsers.get(userId);
+  if (socketId) {
+    io.to(socketId).emit(event, data);
+    return true;
+  }
+  return false;
+};
+
+/**
  * Get list of currently connected users
  * @returns {Array<number>} Array of connected user IDs
  */
