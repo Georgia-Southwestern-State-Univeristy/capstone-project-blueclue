@@ -4,7 +4,7 @@ import User from '../models/User.js';
 import TicketCollaborator from '../models/TicketCollaborator.js';
 import Notification from '../models/Notification.js';
 import TicketHistory from '../models/TicketHistory.js';
-import { emitNotificationToUser } from '../services/socketService.js';
+import { emitNotificationToUser, emitEventToUser } from '../services/socketService.js';
 import { sendEmail } from '../services/emailService.js';
 
 /**
@@ -152,6 +152,17 @@ export const sendRingRequest = async (req, res) => {
     // Emit real-time WebSocket notification
     if (req.app.locals.io) {
       emitNotificationToUser(req.app.locals.io, targetTechId, notification);
+      // Also emit a dedicated ring_request event so the widget updates instantly
+      emitEventToUser(req.app.locals.io, targetTechId, 'ring_request', {
+        id: ringRequest.id,
+        ticket_id: ticketId,
+        ticket_subject: ticket.subject,
+        requester_first_name: requestingUser.first_name,
+        requester_last_name: requestingUser.last_name,
+        urgency_level: urgencyLevel,
+        message,
+        created_at: ringRequest.created_at,
+      });
     }
 
     // Send email notification if enabled

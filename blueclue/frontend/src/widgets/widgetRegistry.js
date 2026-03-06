@@ -321,6 +321,21 @@ const WIDGET_REGISTRY = [
     component: () => import('../components/TechTicketQueueWidget'),
     previewPattern: 'card-grid',
   },
+  {
+    key: 'chatPanel',
+    name: 'Chat Handoff',
+    description: 'Live customer chat handoff requests and active conversations',
+    icon: '',
+    category: CATEGORIES.MANAGEMENT,
+    permissions: ROLE_GROUPS.STAFF,
+    size: {
+      defaultW: 6, defaultH: 10,
+      minW: 4, minH: 8,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/TechChatPanel'),
+    previewPattern: 'list-pending',
+  },
   // ── Client-specific widgets ──────────────────────────────────────────────
   {
     key: 'clientTickets',

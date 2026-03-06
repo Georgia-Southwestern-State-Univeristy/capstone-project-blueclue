@@ -183,8 +183,7 @@ export default function TechChatPanel() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-xl flex flex-col overflow-hidden"
-         style={{ minHeight: minimized ? 'auto' : 480, maxHeight: 600 }}>
+    <div className="bg-gray-900 border border-gray-700 rounded-xl flex flex-col overflow-hidden h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-800 border-b border-gray-700 flex-shrink-0">
         <div className="flex items-center gap-2">

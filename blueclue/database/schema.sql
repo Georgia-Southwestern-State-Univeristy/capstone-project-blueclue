@@ -1339,6 +1339,7 @@ CREATE TABLE email_logs (
         'ticket-status-changed',
         'ticket-assigned',
         'password-reset',
+        'ring_response',
         'unknown'
     ))
 );

@@ -5,19 +5,19 @@ import ExplainabilityPanel from '../components/ml/ExplainabilityPanel'
 
 // ─── tiny helper components ────────────────────────────────────────────────
 const Card = ({ title, children, className = '' }) => (
-  <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 ${className}`}>
-    {title && <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wide">{title}</h3>}
+  <div className={`bg-gray-800 rounded-xl border border-gray-700 p-4 ${className}`}>
+    {title && <h3 className="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wide">{title}</h3>}
     {children}
   </div>
 )
 
 const Badge = ({ color = 'blue', children }) => {
   const colors = {
-    green:  'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-    yellow: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300',
-    red:    'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
-    blue:   'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-    gray:   'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+    green:  'bg-green-900 text-green-300',
+    yellow: 'bg-yellow-900 text-yellow-300',
+    red:    'bg-red-900 text-red-300',
+    blue:   'bg-blue-900 text-blue-300',
+    gray:   'bg-gray-700 text-gray-300',
   }
   return (
     <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${colors[color] || colors.blue}`}>
@@ -27,12 +27,12 @@ const Badge = ({ color = 'blue', children }) => {
 }
 
 const Metric = ({ label, value, sub, color = 'default' }) => {
-  const colors = { green: 'text-green-500', red: 'text-red-500', yellow: 'text-yellow-500', default: 'text-blue-600 dark:text-blue-400' }
+  const colors = { green: 'text-green-500', red: 'text-red-500', yellow: 'text-yellow-500', default: 'text-blue-400' }
   return (
     <div className="text-center">
       <div className={`text-2xl font-bold ${colors[color] || colors.default}`}>{value ?? '—'}</div>
-      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{label}</div>
-      {sub && <div className="text-[10px] text-gray-400 dark:text-gray-500">{sub}</div>}
+      <div className="text-xs text-gray-400 mt-0.5">{label}</div>
+      {sub && <div className="text-[10px] text-gray-500">{sub}</div>}
     </div>
   )
 }
@@ -42,10 +42,10 @@ const ConfidenceBar = ({ value, max = 1 }) => {
   const color = pct >= 80 ? 'bg-green-500' : pct >= 60 ? 'bg-yellow-500' : 'bg-red-500'
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+      <div className="flex-1 bg-gray-700 rounded-full h-1.5">
         <div className={`h-1.5 rounded-full ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
-      <span className="text-xs text-gray-600 dark:text-gray-400 w-10 text-right">{pct}%</span>
+      <span className="text-xs text-gray-400 w-10 text-right">{pct}%</span>
     </div>
   )
 }
@@ -83,6 +83,8 @@ export default function MLAdminDashboard() {
   const [actionLoading, setActionLoading] = useState('')
   const [actionMsg, setActionMsg]         = useState(null)
   const [driftRunning, setDriftRunning]   = useState(false)
+  const [driftLoading, setDriftLoading]   = useState(false)
+  const [driftError, setDriftError]       = useState(null)
 
   // Auth guard
   useEffect(() => {
@@ -134,6 +136,20 @@ export default function MLAdminDashboard() {
   // Cleanup polling on unmount
   useEffect(() => () => { if (retrainPollingRef.current) clearInterval(retrainPollingRef.current) }, [])
 
+  // Load drift reports (used on tab open and after each run)
+  const loadDriftReports = useCallback(async () => {
+    setDriftLoading(true)
+    setDriftError(null)
+    try {
+      const r = await svc.getDriftReports({ limit: 20 })
+      setDriftReports(r?.data || [])
+    } catch (e) {
+      setDriftError('Failed to load drift reports: ' + e.message)
+    } finally {
+      setDriftLoading(false)
+    }
+  }, [])
+
   // Lazy tab loaders
   useEffect(() => {
     if (activeTab === 'Predictions' && predictions.length === 0) {
@@ -142,8 +158,8 @@ export default function MLAdminDashboard() {
     if (activeTab === 'Feedback' && !feedback) {
       svc.getFeedback({ limit: 100 }).then(r => setFeedback(r?.data || r)).catch(() => {})
     }
-    if (activeTab === 'Drift' && driftReports.length === 0) {
-      svc.getDriftReports({ limit: 20 }).then(r => setDriftReports(r?.data || [])).catch(() => {})
+    if (activeTab === 'Drift') {
+      loadDriftReports()
     }
     if (activeTab === 'Models' && !modelVersions) {
       svc.getModelVersions().then(r => setModelVersions(r?.data || r)).catch(() => {})
@@ -161,11 +177,12 @@ export default function MLAdminDashboard() {
     try {
       const r = await svc.runDriftDetection(modelType, 30)
       setActionMsg({ type: 'success', text: `Drift report for ${modelType}: drift ${r?.data?.drift_detected ? 'DETECTED' : 'none'}` })
-      svc.getDriftReports({ limit: 20 }).then(r => setDriftReports(r?.data || [])).catch(() => {})
     } catch (e) {
       setActionMsg({ type: 'error', text: 'Drift detection failed: ' + e.message })
     } finally {
       setDriftRunning(false)
+      // Always refresh the list so existing reports remain visible
+      loadDriftReports()
     }
   }
 
@@ -228,7 +245,7 @@ export default function MLAdminDashboard() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  if (loading) return <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center"><Spinner /></div>
+  if (loading) return <div className="min-h-screen bg-gray-950 flex items-center justify-center"><Spinner /></div>
 
   const mlMetrics   = dashboard?.ml_metrics    || {}
   const health      = dashboard?.ml_health     || {}
@@ -248,16 +265,16 @@ export default function MLAdminDashboard() {
   const isHealthy = health.status === 'OK'
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div className="min-h-screen bg-gray-950 text-white">
       <div className="max-w-7xl mx-auto px-4 py-6">
 
         {/* ── Page header ── */}
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
               ML Admin Dashboard
             </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-sm text-gray-400 mt-1">
               Monitoring, explainability, model versioning and retraining
             </p>
           </div>
@@ -278,8 +295,8 @@ export default function MLAdminDashboard() {
         {/* Action message banner */}
         {actionMsg && (
           <div className={`mb-4 p-3 rounded-lg text-sm flex items-center justify-between
-            ${actionMsg.type === 'success' ? 'bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800'
-              : 'bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'}`}>
+            ${actionMsg.type === 'success' ? 'bg-green-950 text-green-300 border border-green-800'
+              : 'bg-red-950 text-red-300 border border-red-800'}`}>
             <span>{actionMsg.text}</span>
             <button onClick={() => setActionMsg(null)} className="ml-3 opacity-60 hover:opacity-100">X</button>
           </div>
@@ -287,21 +304,21 @@ export default function MLAdminDashboard() {
 
         {/* Error banner */}
         {error && (
-          <div className="mb-4 p-3 rounded-lg text-sm bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
+          <div className="mb-4 p-3 rounded-lg text-sm bg-red-950 text-red-300 border border-red-800">
             {error}
           </div>
         )}
 
         {/* ── Tabs ── */}
-        <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700 mb-6 overflow-x-auto">
+        <div className="flex gap-1 border-b border-gray-700 mb-6 overflow-x-auto">
           {TABS.map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors
                 ${activeTab === tab
-                  ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                  ? 'text-blue-400 border-b-2 border-blue-400'
+                  : 'text-gray-400 hover:text-gray-200'}`}
             >
               {tab}
             </button>
@@ -352,7 +369,7 @@ export default function MLAdminDashboard() {
                 <div className="space-y-2">
                   {['p50','p95','p99'].map(p => (
                     <div key={p} className="flex justify-between text-sm">
-                      <span className="text-gray-500 dark:text-gray-400 uppercase text-xs font-mono">{p}</span>
+                      <span className="text-gray-400 uppercase text-xs font-mono">{p}</span>
                       <span className="font-semibold">{mlMetrics.latency_ms?.[p] ?? '—'} ms</span>
                     </div>
                   ))}
@@ -365,7 +382,7 @@ export default function MLAdminDashboard() {
                     const loaded = health.models_loaded?.[mt]
                     return (
                       <div key={mt} className="flex justify-between items-center text-sm">
-                        <span className="capitalize text-gray-600 dark:text-gray-400">{mt}</span>
+                        <span className="capitalize text-gray-400">{mt}</span>
                         <Badge color={loaded ? 'green' : 'red'}>{loaded ? 'Loaded' : 'Missing'}</Badge>
                       </div>
                     )
@@ -380,7 +397,7 @@ export default function MLAdminDashboard() {
                     value={lowConfPct != null ? `${lowConfPct}%` : '—'}
                     color={parseFloat(lowConfPct) > 20 ? 'red' : 'green'}
                   />
-                  <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
+                  <p className="text-xs text-gray-500 text-center">
                     {lowConfCount} of {totalPredictions ?? 0} total
                   </p>
                 </div>
@@ -398,15 +415,15 @@ export default function MLAdminDashboard() {
                     return (
                       <div key={i} className="flex-1 flex flex-col items-center gap-1" title={`${b.bucket}: ${b.count}`}>
                         <div
-                          className={`w-full rounded-t transition-all ${isLow ? 'bg-red-400 dark:bg-red-600' : 'bg-blue-400 dark:bg-blue-500'}`}
+                          className={`w-full rounded-t transition-all ${isLow ? 'bg-red-500' : 'bg-blue-500'}`}
                           style={{ height: `${height}%` }}
                         />
-                        <span className="text-[9px] text-gray-400 dark:text-gray-500 hidden sm:block">{b.bucket.split('-')[0]}</span>
+                        <span className="text-[9px] text-gray-500 hidden sm:block">{b.bucket.split('-')[0]}</span>
                       </div>
                     )
                   })}
                 </div>
-                <p className="text-xs text-red-500 dark:text-red-400 mt-2">
+                <p className="text-xs text-red-400 mt-2">
                   ← Red = low confidence (&lt;0.6). Target: keep below 20% of all predictions.
                 </p>
               </Card>
@@ -422,7 +439,7 @@ export default function MLAdminDashboard() {
                       const total = Object.values(catDist).reduce((s, v) => s + v, 0)
                       return (
                         <div key={cat} className="flex items-center gap-3">
-                          <span className="w-28 text-xs text-gray-600 dark:text-gray-400 capitalize truncate">{cat}</span>
+                          <span className="w-28 text-xs text-gray-400 capitalize truncate">{cat}</span>
                           <ConfidenceBar value={count} max={total} />
                           <span className="text-xs font-mono text-gray-500 w-10 text-right">{count}</span>
                         </div>
@@ -438,7 +455,7 @@ export default function MLAdminDashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700">
+                      <tr className="text-gray-500 border-b border-gray-700">
                         <th className="text-left py-1">Date</th>
                         <th className="text-right py-1">Predictions</th>
                         <th className="text-right py-1">Avg Conf</th>
@@ -448,7 +465,7 @@ export default function MLAdminDashboard() {
                     </thead>
                     <tbody>
                       {dailyStats.slice(0, 14).map((row, i) => (
-                        <tr key={i} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750">
+                        <tr key={i} className="border-b border-gray-800 hover:bg-gray-700/30">
                           <td className="py-1">{row.day?.split('T')[0] ?? row.day}</td>
                           <td className="text-right py-1 font-mono">{row.predictions}</td>
                           <td className="text-right py-1 font-mono">{row.avg_confidence ? `${Math.round(row.avg_confidence * 100)}%` : '—'}</td>
@@ -470,7 +487,7 @@ export default function MLAdminDashboard() {
         {activeTab === 'Predictions' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Last 100 AI classifications</p>
+              <p className="text-sm text-gray-400">Last 100 AI classifications</p>
               <button onClick={handleExport} className="text-sm px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
                 ↓ Export JSON
               </button>
@@ -481,7 +498,7 @@ export default function MLAdminDashboard() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700 text-left">
+                      <tr className="text-gray-500 border-b border-gray-700 text-left">
                         <th className="py-2 pr-3">Ticket</th>
                         <th className="py-2 pr-3">Category</th>
                         <th className="py-2 pr-3">Priority</th>
@@ -494,9 +511,9 @@ export default function MLAdminDashboard() {
                     <tbody>
                       {predictions.map((p, i) => (
                         <Fragment key={i}>
-                          <tr className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750">
+                          <tr className="border-b border-gray-800 hover:bg-gray-700/30">
                             <td className="py-1.5 pr-3">
-                              <div className="font-mono text-blue-600 dark:text-blue-400">{p.ticket_number}</div>
+                              <div className="font-mono text-blue-400">{p.ticket_number}</div>
                               <div className="text-gray-400 truncate max-w-[120px]">{p.subject}</div>
                             </td>
                             <td className="py-1.5 pr-3">
@@ -508,7 +525,7 @@ export default function MLAdminDashboard() {
                             <td className="py-1.5 pr-3 capitalize">{p.predicted_priority}</td>
                             <td className="py-1.5 pr-3">
                               <div className="flex items-center gap-1.5">
-                                <div className="w-12 bg-gray-200 dark:bg-gray-700 rounded-full h-1">
+                                <div className="w-12 bg-gray-700 rounded-full h-1">
                                   <div
                                     className={`h-1 rounded-full ${(p.confidence||0) >= 0.8 ? 'bg-green-500' : (p.confidence||0) >= 0.6 ? 'bg-yellow-500' : 'bg-red-500'}`}
                                     style={{ width: `${Math.round((p.confidence||0)*100)}%` }}
@@ -529,7 +546,7 @@ export default function MLAdminDashboard() {
                             <td className="py-1.5">
                               <button
                                 onClick={() => setExplainRow(explainRow === i ? null : i)}
-                                className="text-xs px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                                className="text-xs px-2 py-0.5 rounded bg-indigo-900 text-indigo-300 hover:bg-indigo-800 transition-colors"
                                 title="Why did the AI choose this?"
                               >
                                 {explainRow === i ? 'Hide' : 'Why?'}
@@ -599,7 +616,7 @@ export default function MLAdminDashboard() {
                     <ul className="space-y-1">
                       {feedback.top_reasons.map((r, i) => (
                         <li key={i} className="flex justify-between text-sm">
-                          <span className="text-gray-700 dark:text-gray-300 italic">"{r.override_reason}"</span>
+                          <span className="text-gray-300 italic">"{r.override_reason}"</span>
                           <Badge color="gray">{r.count}×</Badge>
                         </li>
                       ))}
@@ -612,7 +629,7 @@ export default function MLAdminDashboard() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
-                        <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700 text-left">
+                        <tr className="text-gray-500 border-b border-gray-700 text-left">
                           <th className="py-2 pr-3">Ticket</th>
                           <th className="py-2 pr-3">AI Category</th>
                           <th className="py-2 pr-3">User Category</th>
@@ -623,8 +640,8 @@ export default function MLAdminDashboard() {
                       </thead>
                       <tbody>
                         {(feedback.entries || []).slice(0, 50).map((f, i) => (
-                          <tr key={i} className="border-b border-gray-100 dark:border-gray-800">
-                            <td className="py-1.5 pr-3 font-mono text-blue-600 dark:text-blue-400">{f.ticket_number}</td>
+                          <tr key={i} className="border-b border-gray-800">
+                            <td className="py-1.5 pr-3 font-mono text-blue-400">{f.ticket_number}</td>
                             <td className="py-1.5 pr-3 capitalize">{f.ai_category}</td>
                             <td className="py-1.5 pr-3 capitalize">{f.user_category || '(kept)'}</td>
                             <td className="py-1.5 pr-3">
@@ -663,9 +680,15 @@ export default function MLAdminDashboard() {
               ))}
             </div>
 
-            {driftReports.length === 0 ? (
+            {driftLoading ? (
+              <Card><Spinner /></Card>
+            ) : driftError ? (
               <Card>
-                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                <p className="text-sm text-red-400 text-center py-4">{driftError}</p>
+              </Card>
+            ) : driftReports.length === 0 ? (
+              <Card>
+                <p className="text-sm text-gray-400 text-center py-4">
                   No drift reports yet. Run a drift check above.
                 </p>
               </Card>
@@ -679,27 +702,27 @@ export default function MLAdminDashboard() {
                           <Badge color={r.drift_detected ? 'red' : 'green'}>
                             {r.drift_detected ? 'Drift Detected' : 'No Drift'}
                           </Badge>
-                          <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">{r.model_type}</span>
-                          <span className="text-xs text-gray-400 dark:text-gray-500">{r.report_date}</span>
+                          <span className="text-xs text-gray-400 capitalize">{r.model_type}</span>
+                          <span className="text-xs text-gray-500">{r.report_date}</span>
                         </div>
-                        <p className="text-xs text-gray-600 dark:text-gray-400">{r.notes}</p>
+                        <p className="text-xs text-gray-400">{r.notes}</p>
                       </div>
                       <div className="flex gap-4 text-xs">
                         {r.chi2_statistic != null && (
                           <div className="text-center">
-                            <div className="font-mono font-bold text-gray-700 dark:text-gray-300">{r.chi2_statistic}</div>
-                            <div className="text-gray-400 dark:text-gray-500">χ² (p={r.chi2_p_value})</div>
+                            <div className="font-mono font-bold text-gray-300">{r.chi2_statistic}</div>
+                            <div className="text-gray-500">χ² (p={r.chi2_p_value})</div>
                           </div>
                         )}
                         {r.ks_statistic != null && (
                           <div className="text-center">
-                            <div className="font-mono font-bold text-gray-700 dark:text-gray-300">{r.ks_statistic}</div>
-                            <div className="text-gray-400 dark:text-gray-500">KS (p={r.ks_p_value})</div>
+                            <div className="font-mono font-bold text-gray-300">{r.ks_statistic}</div>
+                            <div className="text-gray-500">KS (p={r.ks_p_value})</div>
                           </div>
                         )}
                         <div className="text-center">
-                          <div className="font-mono font-bold text-gray-700 dark:text-gray-300">{r.sample_size}</div>
-                          <div className="text-gray-400 dark:text-gray-500">samples</div>
+                            <div className="font-mono font-bold text-gray-300">{r.sample_size}</div>
+                            <div className="text-gray-500">samples</div>
                         </div>
                       </div>
                     </div>
@@ -707,7 +730,7 @@ export default function MLAdminDashboard() {
                     {/* Live distribution */}
                     {r.distribution && Object.keys(r.distribution).length > 0 && (
                       <div className="mt-3">
-                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1.5">Live distribution vs baseline:</p>
+                        <p className="text-[10px] text-gray-500 mb-1.5">Live distribution vs baseline:</p>
                         <div className="space-y-1">
                           {Object.entries(r.distribution).sort((a,b)=>b[1]-a[1]).map(([label, count]) => {
                             const total = Object.values(r.distribution).reduce((s,v)=>s+v,0)
@@ -715,11 +738,11 @@ export default function MLAdminDashboard() {
                             const baseTotal = Object.values(r.baseline_dist||{}).reduce((s,v)=>s+v,0)
                             return (
                               <div key={label} className="flex items-center gap-2 text-xs">
-                                <span className="w-20 capitalize truncate text-gray-600 dark:text-gray-400">{label}</span>
+                                <span className="w-20 capitalize truncate text-gray-400">{label}</span>
                                 <div className="flex-1 flex items-center gap-1">
                                   <div title="Live" className="h-2 bg-blue-500 rounded" style={{ width: `${Math.round((count/Math.max(total,1))*120)}px` }} />
                                   {baseTotal > 0 && (
-                                    <div title="Baseline" className="h-2 bg-gray-300 dark:bg-gray-600 rounded" style={{ width: `${Math.round((baseCount/Math.max(baseTotal,1))*120)}px` }} />
+                                    <div title="Baseline" className="h-2 bg-gray-600 rounded" style={{ width: `${Math.round((baseCount/Math.max(baseTotal,1))*120)}px` }} />
                                   )}
                                 </div>
                                 <span className="text-gray-400 w-16">
@@ -729,7 +752,7 @@ export default function MLAdminDashboard() {
                             )
                           })}
                         </div>
-                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">■ Blue = live  ■ Gray = training baseline</p>
+                        <p className="text-[10px] text-gray-500 mt-1">■ Blue = live  ■ Gray = training baseline</p>
                       </div>
                     )}
                   </Card>
@@ -762,7 +785,7 @@ export default function MLAdminDashboard() {
                           disabled={!!actionLoading}
                           className="text-xs px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 text-white rounded-lg transition-colors"
                         >
-                          {actionLoading === `rollback-${mt}` ? 'Rolling back…' : '↩ Rollback'}
+                          {actionLoading === `rollback-${mt}` ? 'Rolling back…' : 'Rollback'}
                         </button>
                       </div>
                     </div>
@@ -771,7 +794,7 @@ export default function MLAdminDashboard() {
                     {info.versions?.length > 0 && (
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700 text-left">
+                          <tr className="text-gray-500 border-b border-gray-700 text-left">
                             <th className="py-1.5 pr-3">Version</th>
                             <th className="py-1.5 pr-3">Accuracy</th>
                             <th className="py-1.5 pr-3">Registered</th>
@@ -780,7 +803,7 @@ export default function MLAdminDashboard() {
                         </thead>
                         <tbody>
                           {info.versions.map((v, i) => (
-                            <tr key={i} className={`border-b border-gray-100 dark:border-gray-800 ${v.is_active ? 'bg-green-50 dark:bg-green-950/20' : ''}`}>
+                            <tr key={i} className={`border-b border-gray-800 ${v.is_active ? 'bg-green-950/20' : ''}`}>
                               <td className="py-1.5 pr-3 font-mono">{v.version}</td>
                               <td className="py-1.5 pr-3">{v.accuracy != null ? `${Math.round(v.accuracy * 100)}%` : '—'}</td>
                               <td className="py-1.5 pr-3 text-gray-400">{v.registered_at?.split('T')[0]}</td>
@@ -810,12 +833,12 @@ export default function MLAdminDashboard() {
                   <>
                     {modelVersions.db_versions?.length > 0 ? (
                       <Card title="Model Versions (Database Records)">
-                        <p className="text-xs text-yellow-600 dark:text-yellow-400 mb-3">
+                        <p className="text-xs text-yellow-400 mb-3">
                           ⚠ Registry is empty – showing DB records. Restart the ML service to auto-populate the registry from trained model files.
                         </p>
                         <table className="w-full text-xs">
                           <thead>
-                            <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700 text-left">
+                            <tr className="text-gray-500 border-b border-gray-700 text-left">
                               <th className="py-1.5 pr-3">Model Type</th>
                               <th className="py-1.5 pr-3">Version</th>
                               <th className="py-1.5 pr-3">Accuracy</th>
@@ -824,7 +847,7 @@ export default function MLAdminDashboard() {
                           </thead>
                           <tbody>
                             {modelVersions.db_versions.map((v, i) => (
-                              <tr key={i} className="border-b border-gray-100 dark:border-gray-800">
+                              <tr key={i} className="border-b border-gray-800">
                                 <td className="py-1.5 pr-3 capitalize">{v.model_type}</td>
                                 <td className="py-1.5 pr-3 font-mono">{v.version}</td>
                                 <td className="py-1.5 pr-3">{v.accuracy != null ? `${Math.round(v.accuracy * 100)}%` : '—'}</td>
@@ -836,7 +859,7 @@ export default function MLAdminDashboard() {
                       </Card>
                     ) : (
                       <Card>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                        <p className="text-sm text-gray-400 text-center py-4">
                           No model versions registered yet.<br />
                           <span className="text-xs">Train models and run the pipeline to populate the registry.</span>
                         </p>
@@ -857,7 +880,7 @@ export default function MLAdminDashboard() {
             {/* Manual trigger */}
             <Card title="Trigger Manual Retraining">
               <div className="space-y-4">
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-gray-400">
                   Retraining will export new tickets from the database, retrain the selected models,
                   evaluate on a hold-out set, and optionally auto-deploy if accuracy improves by the
                   specified threshold.
@@ -878,7 +901,7 @@ export default function MLAdminDashboard() {
                     {actionLoading === 'retrain' ? 'Starting…' : 'Retrain + Auto-deploy (≥2%)'}
                   </button>
                 </div>
-                <p className="text-xs text-gray-400 dark:text-gray-500">
+                <p className="text-xs text-gray-500">
                   Retraining runs in the background. Check server logs or the run history below.
                 </p>
               </div>
@@ -897,12 +920,12 @@ export default function MLAdminDashboard() {
                 </svg>
               </button>
               {retrainRuns.length === 0 ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">{retrainRunsLoading ? 'Loading…' : 'No retraining runs yet.'}</p>
+                <p className="text-sm text-gray-400 text-center py-4">{retrainRunsLoading ? 'Loading…' : 'No retraining runs yet.'}</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-gray-700 text-left">
+                      <tr className="text-gray-500 border-b border-gray-700 text-left">
                         <th className="py-2 pr-3">Run ID</th>
                         <th className="py-2 pr-3">Status</th>
                         <th className="py-2 pr-3">Models</th>
@@ -913,8 +936,8 @@ export default function MLAdminDashboard() {
                     </thead>
                     <tbody>
                       {retrainRuns.map((r, i) => (
-                        <tr key={i} className="border-b border-gray-100 dark:border-gray-800">
-                          <td className="py-1.5 pr-3 font-mono text-blue-600 dark:text-blue-400">{r.id}</td>
+                        <tr key={i} className="border-b border-gray-800">
+                          <td className="py-1.5 pr-3 font-mono text-blue-400">{r.id}</td>
                           <td className="py-1.5 pr-3">
                             <Badge color={r.status === 'success' ? 'green' : r.status === 'running' ? 'blue' : 'red'}>
                               {r.status}

@@ -27,6 +27,7 @@ const DEFAULT_LAYOUTS = {
     { i: 'ticketQueue',      x: 0,  y: 15, w: 12, h: 14, minW: 6,  minH: 8, maxW: 12, maxH: 24 },
     { i: 'availableTickets', x: 0,  y: 29, w: 12, h: 10, minW: 4,  minH: 6, maxW: 12, maxH: 18 },
     { i: 'ringRequests',     x: 0,  y: 39, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'chatPanel',         x: 6,  y: 39, w: 6,  h: 10, minW: 4,  minH: 8, maxW: 12, maxH: 16 },
   ],
   md: [
     { i: 'timeline',         x: 0,  y: 0,  w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
@@ -35,6 +36,7 @@ const DEFAULT_LAYOUTS = {
     { i: 'ticketQueue',      x: 0,  y: 15, w: 12, h: 14, minW: 6,  minH: 8, maxW: 12, maxH: 24 },
     { i: 'availableTickets', x: 0,  y: 29, w: 12, h: 10, minW: 4,  minH: 6, maxW: 12, maxH: 18 },
     { i: 'ringRequests',     x: 0,  y: 39, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'chatPanel',         x: 0,  y: 46, w: 12, h: 10, minW: 4,  minH: 8, maxW: 12, maxH: 16 },
   ],
   sm: [
     { i: 'timeline',         x: 0,  y: 0,  w: 6,  h: 8,  minW: 3,  minH: 6, maxW: 6, maxH: 16 },
@@ -43,12 +45,13 @@ const DEFAULT_LAYOUTS = {
     { i: 'ticketQueue',      x: 0,  y: 22, w: 6,  h: 14, minW: 3,  minH: 8, maxW: 6, maxH: 24 },
     { i: 'availableTickets', x: 0,  y: 36, w: 6,  h: 10, minW: 3,  minH: 6, maxW: 6, maxH: 18 },
     { i: 'ringRequests',     x: 0,  y: 46, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
+    { i: 'chatPanel',         x: 0,  y: 53, w: 6,  h: 10, minW: 4,  minH: 8, maxW: 6, maxH: 16 },
   ],
 }
 
 const TECHNICIAN_WIDGET_KEYS = [
   'timeline', 'statusDonut', 'priorityPie',
-  'ticketQueue', 'availableTickets', 'ringRequests',
+  'ticketQueue', 'availableTickets', 'ringRequests', 'chatPanel',
 ]
 
 const WIDGET_GALLERY_ITEMS = buildGalleryItems({ keys: TECHNICIAN_WIDGET_KEYS })
@@ -95,6 +98,7 @@ function TechnicianWidgetGrid({
       ),
       availableTickets: <AvailableTickets onTicketClick={handleTicketClick} />,
       ringRequests: <RingRequestWidget onViewTicket={handleTicketClick} />,
+      chatPanel: <TechChatPanel />,
     }
     return buildWidgetConfig(TECHNICIAN_WIDGET_KEYS, componentMap)
   }, [tickets, loading, fetchTickets, technicians, handleTicketClick,
@@ -405,8 +409,6 @@ function TechnicianDashboard() {
         />
       )}
 
-      {/* Live Chat Panel — handles pending handoff requests from customers */}
-      <TechChatPanel />
     </div>
   )
 }

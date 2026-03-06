@@ -245,7 +245,7 @@ function Login() {
                     value={formData.password}
                     onChange={handleInputChange}
                     required
-                    placeholder={loginType === 'management' ? 'BlueClue2026!' : 'Default: admin123'}
+                    placeholder="Enter your password"
                     className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -323,9 +323,9 @@ function Login() {
         <div className="mt-6 text-center text-xs text-gray-500">
           <p>
             {loginType === 'technician' 
-              ? 'Technicians: Use your assigned username and default password admin123'
+              ? 'Technicians: Use your assigned username and password'
               : loginType === 'management'
-              ? 'Management: Use username "manager" and password BlueClue2026!'
+              ? 'Management: Contact your administrator for login credentials'
               : loginType === 'guest'
               ? 'Guest sessions expire after 24 hours of inactivity'
               : 'Protected by industry-standard encryption'}

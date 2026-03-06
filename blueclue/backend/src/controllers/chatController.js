@@ -9,6 +9,7 @@ import { redactPII } from '../utils/piiRedactor.js';
 import { classifyTicketWithFallback } from '../services/aiService.js';
 import { calculateFinalPriority } from '../services/priorityService.js';
 import AIConfiguration from '../models/AIConfiguration.js';
+import AIClassification from '../models/AIClassification.js';
 
 // ── Audit helper ─────────────────────────────────────────────────────────────
 async function auditLog(eventType, userId, conversationId, details, req) {
@@ -473,6 +474,18 @@ export const createTicketFromChat = async (req, res) => {
     );
 
     const ticket = result.rows[0];
+
+    // Record classification in ai_classifications so the ML dashboard picks it up
+    if (aiClassified) {
+      await AIClassification.create({
+        ticket_id:           ticket.id,
+        predicted_category:  finalCategory,
+        predicted_priority:  finalPriority,
+        confidence:          aiConfidence,
+        keywords_matched:    null,
+        fallback_used:       false,
+      }).catch(err => console.warn('Failed to save AI classification record (chat ticket):', err.message));
+    }
 
     res.status(201).json({
       status: 'success',
