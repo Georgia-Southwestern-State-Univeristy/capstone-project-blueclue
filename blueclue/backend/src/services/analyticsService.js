@@ -327,7 +327,8 @@ export const getTicketVolumeMetrics = async (startDate, endDate, category = null
             TO_CHAR(t.created_at, 'YYYY-MM') as month,
             COUNT(*) as count
         FROM tickets t
-        WHERE t.created_at >= GREATEST($1::timestamp, DATE_TRUNC('month', $2::timestamp) - INTERVAL '6 months')
+        WHERE $1::timestamp <= $2::timestamp
+          AND t.created_at >= DATE_TRUNC('month', $2::timestamp) - INTERVAL '5 months'
           AND t.created_at <= $2::timestamp
           AND t.deleted_at IS NULL
           ${categoryFilter}
@@ -649,7 +650,8 @@ export const getSLACompliance = async (startDate, endDate, category = null) => {
                 AND t.first_response_at <= t.response_due_at) as response_met,
             COUNT(*) FILTER (WHERE t.first_response_at IS NOT NULL AND t.response_due_at IS NOT NULL 
                 AND t.first_response_at > t.response_due_at) as response_breached,
-            COUNT(*) FILTER (WHERE t.response_due_at IS NOT NULL) as response_applicable,
+            COUNT(*) FILTER (WHERE t.response_due_at IS NOT NULL
+                AND (t.first_response_at IS NOT NULL OR t.response_due_at < NOW())) as response_applicable,
             
             -- Resolution SLA
             COUNT(*) FILTER (WHERE t.resolved_at IS NOT NULL AND t.resolution_due_at IS NOT NULL 

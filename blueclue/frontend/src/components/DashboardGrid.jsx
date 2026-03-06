@@ -620,7 +620,7 @@ export default function DashboardGrid({
                   </>
                 )}
                 {/* Widget content – fill grid cell and scroll if needed */}
-                <div className={`h-full overflow-y-auto ${isEditMode ? 'pointer-events-none select-none' : ''}`}>
+                <div className={`h-full overflow-y-auto ${isEditMode ? 'pointer-events-none select-none edit-mode-active' : ''}`}>
                   {component}
                 </div>
               </div>
@@ -634,7 +634,7 @@ export default function DashboardGrid({
         <div
           className={`fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 ease-in-out
                       ${galleryVisible ? 'translate-y-0' : 'translate-y-full'}`}
-          style={{ height: '220px' }}
+          style={{ height: '250px' }}
         >
           {/* Resize handle / grab bar at top */}
           <div className="flex items-center justify-center h-6 bg-gray-900/95 backdrop-blur-sm

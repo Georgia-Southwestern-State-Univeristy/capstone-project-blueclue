@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Alert from '../components/Alert'
 import DonutChart from '../components/DonutChart'
 import TicketTimeline from '../components/TicketTimeline'
@@ -9,11 +9,13 @@ import RingRequestWidget from '../components/RingRequestWidget'
 import UpdateRequestAlert from '../components/UpdateRequestAlert'
 import UpdateResponseModal from '../components/UpdateResponseModal'
 import TechTicketQueueWidget from '../components/TechTicketQueueWidget'
+import TechChatPanel from '../components/TechChatPanel'
 import DashboardGrid from '../components/DashboardGrid'
 import useDashboardLayout from '../hooks/useDashboardLayout'
 import { buildGalleryItems, buildWidgetConfig } from '../widgets'
 import { getAllTickets, updateTicketStatus, assignTicket } from '../services/ticketService'
 import { getTechnicians } from '../services/userService'
+import { useNotificationSocket } from '../hooks/useNotificationSocket'
 
 // ── Default grid layouts ─────────────────────────────────────────────────────
 const LAYOUT_VERSION = 1
@@ -25,6 +27,7 @@ const DEFAULT_LAYOUTS = {
     { i: 'ticketQueue',      x: 0,  y: 15, w: 12, h: 14, minW: 6,  minH: 8, maxW: 12, maxH: 24 },
     { i: 'availableTickets', x: 0,  y: 29, w: 12, h: 10, minW: 4,  minH: 6, maxW: 12, maxH: 18 },
     { i: 'ringRequests',     x: 0,  y: 39, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'chatPanel',         x: 6,  y: 39, w: 6,  h: 10, minW: 4,  minH: 8, maxW: 12, maxH: 16 },
   ],
   md: [
     { i: 'timeline',         x: 0,  y: 0,  w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
@@ -33,6 +36,7 @@ const DEFAULT_LAYOUTS = {
     { i: 'ticketQueue',      x: 0,  y: 15, w: 12, h: 14, minW: 6,  minH: 8, maxW: 12, maxH: 24 },
     { i: 'availableTickets', x: 0,  y: 29, w: 12, h: 10, minW: 4,  minH: 6, maxW: 12, maxH: 18 },
     { i: 'ringRequests',     x: 0,  y: 39, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'chatPanel',         x: 0,  y: 46, w: 12, h: 10, minW: 4,  minH: 8, maxW: 12, maxH: 16 },
   ],
   sm: [
     { i: 'timeline',         x: 0,  y: 0,  w: 6,  h: 8,  minW: 3,  minH: 6, maxW: 6, maxH: 16 },
@@ -41,12 +45,13 @@ const DEFAULT_LAYOUTS = {
     { i: 'ticketQueue',      x: 0,  y: 22, w: 6,  h: 14, minW: 3,  minH: 8, maxW: 6, maxH: 24 },
     { i: 'availableTickets', x: 0,  y: 36, w: 6,  h: 10, minW: 3,  minH: 6, maxW: 6, maxH: 18 },
     { i: 'ringRequests',     x: 0,  y: 46, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
+    { i: 'chatPanel',         x: 0,  y: 53, w: 6,  h: 10, minW: 4,  minH: 8, maxW: 6, maxH: 16 },
   ],
 }
 
 const TECHNICIAN_WIDGET_KEYS = [
   'timeline', 'statusDonut', 'priorityPie',
-  'ticketQueue', 'availableTickets', 'ringRequests',
+  'ticketQueue', 'availableTickets', 'ringRequests', 'chatPanel',
 ]
 
 const WIDGET_GALLERY_ITEMS = buildGalleryItems({ keys: TECHNICIAN_WIDGET_KEYS })
@@ -72,8 +77,6 @@ function TechnicianWidgetGrid({
       timeline: (
         <TicketTimeline
           tickets={tickets}
-          onRefresh={fetchTickets}
-          isRefreshing={loading}
           onTicketClick={handleTicketClick}
         />
       ),
@@ -83,7 +86,6 @@ function TechnicianWidgetGrid({
         <TechTicketQueueWidget
           tickets={tickets}
           loading={loading}
-          onRefresh={fetchTickets}
           technicians={technicians}
           onTicketClick={handleTicketClick}
           onStatusChange={handleStatusChange}
@@ -96,6 +98,7 @@ function TechnicianWidgetGrid({
       ),
       availableTickets: <AvailableTickets onTicketClick={handleTicketClick} />,
       ringRequests: <RingRequestWidget onViewTicket={handleTicketClick} />,
+      chatPanel: <TechChatPanel />,
     }
     return buildWidgetConfig(TECHNICIAN_WIDGET_KEYS, componentMap)
   }, [tickets, loading, fetchTickets, technicians, handleTicketClick,
@@ -156,7 +159,8 @@ function TechnicianDashboard() {
   }, [tickets]);
 
   const fetchTickets = async () => {
-    setLoading(true)
+    // Only show full loading spinner on initial load
+    if (tickets.length === 0) setLoading(true)
     setError(null)
     try {
       const response = await getAllTickets()
@@ -168,6 +172,12 @@ function TechnicianDashboard() {
       setLoading(false)
     }
   }
+
+  // Real-time auto-refresh: stable ref so socket never reconnects on re-render
+  const _ticketFetchRef = useRef(null)
+  _ticketFetchRef.current = fetchTickets
+  const handleTicketChange = useCallback(() => { _ticketFetchRef.current?.() }, [])
+  useNotificationSocket(null, null, handleTicketChange)
 
   const fetchTechnicians = async () => {
     try {
@@ -183,8 +193,6 @@ function TechnicianDashboard() {
   const handleAssignmentChange = async (ticketId, technicianId) => {
     const ticket = tickets.find(t => t.id === ticketId)
     if (!ticket) return
-
-    const previousAssignedTo = ticket.assigned_to
 
     setAssigningTicketId(ticketId)
 
@@ -284,6 +292,7 @@ function TechnicianDashboard() {
     resolved: activeTickets.filter(t => t.status === 'resolved').length,
     closed: activeTickets.filter(t => t.status === 'closed').length,
     waiting: activeTickets.filter(t => t.status === 'waiting_on_customer').length,
+    reopened: activeTickets.filter(t => t.status === 'reopened').length,
     cancelled: cancelledCount,
     cancellationRate,
     total: activeTickets.length
@@ -294,6 +303,7 @@ function TechnicianDashboard() {
     { label: 'Open', count: stats.open, color: '#60a5fa' },
     { label: 'In Progress', count: stats.in_progress, color: '#93c5fd' },
     { label: 'Waiting', count: stats.waiting, color: '#a78bfa' },
+    { label: 'Reopened', count: stats.reopened, color: '#f59e0b' },
     { label: 'Resolved', count: stats.resolved, color: '#3b82f6' },
     { label: 'Closed', count: stats.closed, color: '#6b7280' },
     { label: 'Cancelled', count: stats.cancelled, color: '#9ca3af' },
@@ -398,6 +408,7 @@ function TechnicianDashboard() {
           updateRequest={selectedUpdateRequest}
         />
       )}
+
     </div>
   )
 }

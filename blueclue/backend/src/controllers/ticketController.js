@@ -107,7 +107,7 @@ const autoDenyPendingRequests = async (ticketId, reviewerId, reason, io, exclude
  */
 export const createTicket = async (req, res) => {
     try {
-        const { subject, description, customer_id, priority, category } = req.body;
+        const { subject, description, customer_id, priority, category, attachments = [] } = req.body;
 
         // Validation
         if (!subject || subject.trim() === '') {
@@ -168,6 +168,15 @@ export const createTicket = async (req, res) => {
             aiPriority
         );
 
+        // Validate attachments (array of { dataUrl, name, size })
+        const sanitizedAttachments = Array.isArray(attachments)
+            ? attachments.slice(0, 5).map(a => ({
+                name: String(a.name || '').slice(0, 255),
+                size: Number(a.size) || 0,
+                dataUrl: String(a.dataUrl || '')
+              }))
+            : [];
+
         // Create ticket with AI classification metadata and priority tracking
         const ticket = await Ticket.create({
             subject: subject.trim(),
@@ -186,7 +195,8 @@ export const createTicket = async (req, res) => {
             ai_keywords_matched: aiResult.aiClassified ? {
                 category_keywords: aiResult.category_keywords || [],
                 priority_keywords: aiResult.priority_keywords || []
-            } : null
+            } : null,
+            attachments: sanitizedAttachments
         });
 
         // Save AI classification to ai_classifications table
@@ -265,6 +275,20 @@ export const createTicket = async (req, res) => {
             // Log email error but don't fail the ticket creation
             console.error('Failed to send ticket confirmation email:', emailError.message);
         }
+
+        // Broadcast new ticket to all connected dashboard users
+        try {
+            const io = req.app.locals.io;
+            if (io) {
+                io.emit('ticket_created', {
+                    ticket_id: ticket.id,
+                    ticket_number: ticket.ticket_number,
+                    priority: ticket.priority,
+                    category: ticket.category,
+                    customer_id: ticket.customer_id
+                });
+            }
+        } catch (_) { /* non-fatal */ }
 
         res.status(201).json(response);
 
@@ -1795,6 +1819,15 @@ export const updateTicketStatus = async (req, res) => {
         // Validate status transition
         const currentStatus = existingTicket.status;
         const allowedTransitions = VALID_TRANSITIONS[currentStatus];
+
+        // Guard: if current status is not in our map (e.g. legacy data), treat as no allowed transitions
+        if (!allowedTransitions) {
+            return res.status(400).json({
+                status: 'error',
+                message: `Ticket has unrecognized status '${currentStatus}'. Cannot transition.`,
+                currentStatus: currentStatus
+            });
+        }
         
         if (!allowedTransitions.includes(status)) {
             return res.status(400).json({
@@ -1886,6 +1919,19 @@ export const updateTicketStatus = async (req, res) => {
         } catch (collabError) {
             console.error('Failed to notify collaborators:', collabError.message);
         }
+
+        // Broadcast status change to everyone so dashboards can auto-refresh
+        try {
+            const io = req.app.locals.io;
+            if (io) {
+                io.emit('ticket_updated', {
+                    ticket_id: updatedTicket.id,
+                    ticket_number: updatedTicket.ticket_number,
+                    status,
+                    previousStatus: existingTicket.status
+                });
+            }
+        } catch (_) { /* non-fatal */ }
 
         res.status(200).json({
             status: 'success',

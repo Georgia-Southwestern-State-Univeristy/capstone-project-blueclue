@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import BaseWidget from './BaseWidget'
 import { getDeletedTickets, restoreTicket } from '../services/ticketService'
+import { useTicketSocket } from '../hooks/useTicketSocket'
 
 const PRIORITY_COLORS = {
   critical: 'text-red-400',
@@ -37,7 +38,7 @@ const CATEGORY_LABELS = {
  * Displays soft-deleted tickets with search, filter, and restore capabilities.
  * Management/admin only.
  */
-function DeletedTicketsWidget({ onRefresh = null, onTicketClick = null, autoRefreshInterval = 0 }) {
+function DeletedTicketsWidget({ onTicketClick = null }) {
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -68,10 +69,12 @@ function DeletedTicketsWidget({ onRefresh = null, onTicketClick = null, autoRefr
     fetchData()
   }, [fetchData])
 
+  /* ── Socket-driven refresh ── */
+  useTicketSocket(fetchData)
+
   const handleRefresh = useCallback(async () => {
     await fetchData()
-    if (onRefresh) await onRefresh()
-  }, [fetchData, onRefresh])
+  }, [fetchData])
 
   const handleRestore = useCallback(async (ticketId, e) => {
     e?.stopPropagation()
@@ -83,7 +86,6 @@ function DeletedTicketsWidget({ onRefresh = null, onTicketClick = null, autoRefr
       await restoreTicket(ticketId)
       setTickets(prev => prev.filter(t => t.id !== ticketId))
       setRestoreSuccess(ticketId)
-      if (onRefresh) await onRefresh()
       // Clear success message after 3s
       setTimeout(() => setRestoreSuccess(null), 3000)
     } catch (err) {
@@ -92,7 +94,7 @@ function DeletedTicketsWidget({ onRefresh = null, onTicketClick = null, autoRefr
     } finally {
       setRestoringId(null)
     }
-  }, [restoringId, onRefresh])
+  }, [restoringId])
 
   // Filtered + searched tickets
   const filteredTickets = useMemo(() => {
@@ -160,7 +162,6 @@ function DeletedTicketsWidget({ onRefresh = null, onTicketClick = null, autoRefr
         </svg>
       }
       onRefresh={handleRefresh}
-      autoRefreshInterval={autoRefreshInterval}
       isLoading={loading && tickets.length === 0}
       error={error}
       isEmpty={tickets.length === 0 && !loading}

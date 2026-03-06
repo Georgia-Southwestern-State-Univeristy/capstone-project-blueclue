@@ -360,13 +360,13 @@ export const getTemplateAnalytics = async () => {
  * Template category display names and colors
  */
 export const TEMPLATE_CATEGORIES = {
-    hardware: { label: 'Hardware', color: '#ef4444', icon: '🖥️' },
-    software: { label: 'Software', color: '#3b82f6', icon: '💿' },
-    access: { label: 'Access & Permissions', color: '#8b5cf6', icon: '🔐' },
-    network: { label: 'Network', color: '#10b981', icon: '🌐' },
-    account: { label: 'Account', color: '#f59e0b', icon: '👤' },
-    general: { label: 'General', color: '#6b7280', icon: '📋' },
-    other: { label: 'Other', color: '#71717a', icon: '📁' }
+    hardware: { label: 'Hardware', color: '#ef4444', icon: '' },
+    software: { label: 'Software', color: '#3b82f6', icon: '' },
+    access: { label: 'Access & Permissions', color: '#8b5cf6', icon: '' },
+    network: { label: 'Network', color: '#10b981', icon: '' },
+    account: { label: 'Account', color: '#f59e0b', icon: '' },
+    general: { label: 'General', color: '#6b7280', icon: '' },
+    other: { label: 'Other', color: '#71717a', icon: '' }
 };
 
 /**

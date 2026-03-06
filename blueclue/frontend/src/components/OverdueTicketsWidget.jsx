@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import BaseWidget from './BaseWidget'
+import { useTicketSocket } from '../hooks/useTicketSocket'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
@@ -60,12 +61,9 @@ const PRIORITY_COLORS = {
  * @param {Object}   props
  * @param {Function} [props.onRefresh]       - Parent refresh callback
  * @param {Function} [props.onTicketClick]   - Called with ticket object when a row is clicked
- * @param {number}   [props.autoRefreshInterval=0] - Auto-refresh in ms (0 = off)
  */
 function OverdueTicketsWidget({
-  onRefresh = null,
   onTicketClick = null,
-  autoRefreshInterval = 0,
 }) {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
@@ -95,10 +93,12 @@ function OverdueTicketsWidget({
     fetchData()
   }, [fetchData])
 
+  /* ── Socket-driven refresh ── */
+  useTicketSocket(fetchData)
+
   const handleRefresh = useCallback(async () => {
     await fetchData()
-    if (onRefresh) await onRefresh()
-  }, [fetchData, onRefresh])
+  }, [fetchData])
 
   // Compute summary counts by alert level
   const summary = {
@@ -130,7 +130,6 @@ function OverdueTicketsWidget({
         </svg>
       }
       onRefresh={handleRefresh}
-      autoRefreshInterval={autoRefreshInterval}
       isLoading={loading && data.length === 0}
       error={error}
       isEmpty={data.length === 0 && !loading}

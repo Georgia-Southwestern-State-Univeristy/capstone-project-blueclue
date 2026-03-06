@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import BaseWidget from './BaseWidget'
+import { useTicketSocket } from '../hooks/useTicketSocket'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
@@ -57,7 +58,7 @@ const PRIORITY_COLORS = {
 }
 
 /* ── Component ── */
-export default function TodaysActionsWidget({ onRefresh, onAction, autoRefreshInterval = 60000 }) {
+export default function TodaysActionsWidget({ onAction }) {
   const [data, setData] = useState({ actions: [], summary: {} })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -85,12 +86,8 @@ export default function TodaysActionsWidget({ onRefresh, onAction, autoRefreshIn
 
   useEffect(() => { fetchActions() }, [fetchActions])
 
-  /* ── Auto-refresh ── */
-  useEffect(() => {
-    if (!autoRefreshInterval) return
-    const id = setInterval(fetchActions, autoRefreshInterval)
-    return () => clearInterval(id)
-  }, [fetchActions, autoRefreshInterval])
+  /* ── Socket-driven refresh ── */
+  useTicketSocket(fetchActions)
 
   /* ── Filtered list ── */
   const filteredActions = useMemo(() => {
@@ -150,7 +147,7 @@ export default function TodaysActionsWidget({ onRefresh, onAction, autoRefreshIn
           </span>
         ) : null
       }
-      onRefresh={() => { fetchActions(); if (onRefresh) onRefresh() }}
+      onRefresh={() => { fetchActions() }}
       isLoading={loading}
       error={error}
       isEmpty={totalCount === 0}

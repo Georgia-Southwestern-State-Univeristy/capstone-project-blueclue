@@ -24,7 +24,13 @@ function UpdateRequestResponseTimeAnalytics() {
   const [error, setError] = useState(null);
   const [days, setDays] = useState(30);
 
+  const userRole = (() => {
+    try { return JSON.parse(localStorage.getItem('blueclue_user'))?.role } catch { return null }
+  })();
+  const canView = ['management', 'admin'].includes(userRole);
+
   const fetchAnalytics = useCallback(async () => {
+    if (!canView) { setLoading(false); return; }
     try {
       setLoading(true);
       setError(null);
@@ -75,6 +81,14 @@ function UpdateRequestResponseTimeAnalytics() {
     return (
       <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
         <p className="text-sm text-red-300">{error}</p>
+      </div>
+    );
+  }
+
+  if (!canView) {
+    return (
+      <div className="bg-gray-700 rounded-lg p-8 text-center">
+        <p className="text-gray-400 text-sm">Available to management and admin only</p>
       </div>
     );
   }

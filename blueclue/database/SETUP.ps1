@@ -29,7 +29,8 @@ if ($Help) {
     Write-Host "  3. Creates schema (tables, ENUMs, functions, triggers)" -ForegroundColor White
     Write-Host "  4. Sets up RBAC system (privileges, role-based defaults)" -ForegroundColor White
     Write-Host "  5. Sets up authentication (guest sessions, technicians)" -ForegroundColor White
-    Write-Host "  6. Loads sample data (unless -SkipSeed is used)" -ForegroundColor White
+    Write-Host "  6. Applies remaining feature migrations (themes, RAG, chat, attachments, etc.)" -ForegroundColor White
+    Write-Host "  7. Loads sample data (unless -SkipSeed is used)" -ForegroundColor White
     Write-Host ""
     Write-Host "Technician Accounts Created:" -ForegroundColor Yellow
     Write-Host "  tnewc@blueclue.com (Thomas Newcomb) - Technician" -ForegroundColor White
@@ -195,6 +196,8 @@ $migrationFiles = @(
     "migrations\024_seed_kb_articles_part4.sql",
     "migrations\025_add_fulltext_search.sql",
     "migrations\026_add_notification_metadata.sql",
+    "migrations\027_add_chat_system.sql",
+    "migrations\028_add_ml_monitoring_tables.sql",
     "migrations\add_response_time_to_update_requests.sql"
 )
 
@@ -342,6 +345,52 @@ if (Test-Path $templatesUpdateMigration) {
 
 Write-Host ""
 
+# Step 4.10: Apply remaining feature migrations
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Step 4.10: Applying remaining feature migrations..." -ForegroundColor Yellow
+Write-Host "============================================================================" -ForegroundColor Cyan
+Write-Host "Adding themes, pgvector/RAG, chat tech mode, handoff, search indexes, feedback, attachments, email type fix, and stale handoff reset..." -ForegroundColor White
+
+$remainingMigrations = @(
+    "migrations\021_add_user_themes.sql",
+    "migrations\029_add_pgvector_rag.sql",
+    "migrations\030_chat_tech_mode.sql",
+    "migrations\031_add_chat_handoff_notification_type.sql",
+    "migrations\032_ticket_search_index.sql",
+    "migrations\033_add_feedback_analytics_system.sql",
+    "migrations\034_add_ticket_attachments.sql",
+    "migrations\035_add_ring_response_email_type.sql",
+    "migrations\036_fix_chat_sender_and_notification_type.sql",
+    "migrations\037_reset_stale_handoff_claims.sql"
+)
+
+$remainingApplied = 0
+foreach ($migration in $remainingMigrations) {
+    if (Test-Path $migration) {
+        Write-Host "  Applying $migration..." -ForegroundColor White
+        $null = psql -U postgres -d blueclue -f $migration -q 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $remainingApplied++
+        } else {
+            Write-Host "  WARNING: Failed to apply $migration" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "  SKIPPED: $migration not found" -ForegroundColor Gray
+    }
+}
+
+Write-Host "Remaining feature migrations applied ($remainingApplied/$($remainingMigrations.Count))" -ForegroundColor Green
+Write-Host "  [OK] User themes system" -ForegroundColor Green
+Write-Host "  [OK] pgvector RAG (AI knowledge retrieval)" -ForegroundColor Green
+Write-Host "  [OK] Chat tech mode" -ForegroundColor Green
+Write-Host "  [OK] Chat handoff notification type" -ForegroundColor Green
+Write-Host "  [OK] Ticket search indexes" -ForegroundColor Green
+Write-Host "  [OK] Feedback analytics system" -ForegroundColor Green
+Write-Host "  [OK] Ticket file attachments" -ForegroundColor Green
+Write-Host "  [OK] Ring response email type constraint" -ForegroundColor Green
+
+Write-Host ""
+
 # Step 5: Load sample data (optional)
 if (-not $SkipSeed) {
     Write-Host "============================================================================" -ForegroundColor Cyan
@@ -475,6 +524,17 @@ Write-Host "  [OK] Categories: Account, Network, Software, Hardware, Security, S
 Write-Host "  [OK] Markdown editing with tags and difficulty levels" -ForegroundColor Green
 Write-Host "  [OK] Full-text search with autocomplete and filtering" -ForegroundColor Green
 Write-Host "  [OK] Related articles recommendations" -ForegroundColor Green
+Write-Host ""
+Write-Host "Chat & AI Enabled:" -ForegroundColor Yellow
+Write-Host "  [OK] Customer chat with bot and human handoff" -ForegroundColor Green
+Write-Host "  [OK] Chat tech mode (technician joins live session)" -ForegroundColor Green
+Write-Host "  [OK] pgvector RAG (AI retrieves relevant KB articles)" -ForegroundColor Green
+Write-Host "  [OK] Feedback analytics system" -ForegroundColor Green
+Write-Host ""
+Write-Host "Additional Features Enabled:" -ForegroundColor Yellow
+Write-Host "  [OK] User theme customization" -ForegroundColor Green
+Write-Host "  [OK] Ticket file attachments" -ForegroundColor Green
+Write-Host "  [OK] Ring response email notifications" -ForegroundColor Green
 Write-Host ""
 Write-Host "Connection String:" -ForegroundColor Yellow
 Write-Host "postgresql://postgres:PASSWORD@localhost:5432/blueclue" -ForegroundColor White

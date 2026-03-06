@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import ArticleList from '../components/knowledgeBase/ArticleList';
@@ -28,10 +28,12 @@ const KnowledgeBaseManagement = () => {
     const [isViewerOpen, setIsViewerOpen] = useState(false);
     const [viewingArticle, setViewingArticle] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [fetchError, setFetchError] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterCategory, setFilterCategory] = useState('');
     const [filterPublished, setFilterPublished] = useState('');
     const [accessDenied, setAccessDenied] = useState(false);
+    const isFetchingRef = useRef(false);
 
     // Check user role on mount
     useEffect(() => {
@@ -55,17 +57,29 @@ const KnowledgeBaseManagement = () => {
     // Fetch articles
     const fetchArticles = useCallback(async () => {
         setLoading(true);
+        setFetchError(null);
         try {
             const params = {};
             if (filterCategory) params.category = filterCategory;
             if (filterPublished !== '') params.published = filterPublished;
             if (searchTerm) params.search = searchTerm;
 
+            const token = localStorage.getItem('blueclue_token');
+            console.log('[KB] token present:', !!token);
+            console.log('[KB] fetching articles with params:', params);
+
             const response = await axios.get('/api/knowledge-base/articles', { params, ...getAuthHeaders() });
-            setArticles(response.data.articles || []);
+            console.log('[KB] response status:', response.status);
+            console.log('[KB] response data:', response.data);
+            const fetched = response.data.articles || [];
+            console.log('[KB] articles count:', fetched.length);
+            setArticles(fetched);
         } catch (error) {
-            console.error('Error fetching articles:', error);
-            alert('Failed to fetch articles');
+            console.error('[KB] Error fetching articles:', error);
+            console.error('[KB] response:', error.response?.status, error.response?.data);
+            const status = error.response?.status;
+            const msg = error.response?.data?.message || error.response?.data?.error || error.message;
+            setFetchError(`Failed to load articles (${status || 'network error'}): ${msg}`);
         } finally {
             setLoading(false);
         }
@@ -75,7 +89,7 @@ const KnowledgeBaseManagement = () => {
     const fetchCategories = async () => {
         try {
             const response = await axios.get('/api/knowledge-base/categories', getAuthHeaders());
-            setCategories(response.data);
+            setCategories(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             console.error('Error fetching categories:', error);
         }
@@ -85,7 +99,7 @@ const KnowledgeBaseManagement = () => {
     const fetchTags = async () => {
         try {
             const response = await axios.get('/api/knowledge-base/tags', getAuthHeaders());
-            setTags(response.data);
+            setTags(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             console.error('Error fetching tags:', error);
         }
@@ -156,12 +170,12 @@ const KnowledgeBaseManagement = () => {
     };
 
     return (
-        <div className="p-6">
+        <div className="p-4 md:p-8 bg-gray-950 min-h-screen">
             <div className="max-w-7xl mx-auto">
                 {/* Access Denied Message */}
                 {accessDenied ? (
-                    <div className="bg-gray-900 rounded-lg border border-red-700 p-12 text-center">
-                        <div className="text-red-500 text-6xl mb-4">🔒</div>
+                    <div className="bg-gray-800 rounded-xl border border-red-700 p-12 text-center">
+                        <div className="text-red-500 text-6xl mb-4"></div>
                         <h2 className="text-2xl font-bold text-white mb-2">Access Denied</h2>
                         <p className="text-gray-400 mb-6">
                             You need admin or technician privileges to access Knowledge Base Management.
@@ -184,8 +198,8 @@ const KnowledgeBaseManagement = () => {
                         </div>
 
                 {/* Tabs */}
-                <div className="bg-gray-900 rounded-lg border border-gray-700 mb-6">
-                    <div className="border-b border-gray-800">
+                <div className="bg-gray-800 rounded-xl border border-gray-700 mb-6">
+                    <div className="border-b border-gray-700">
                         <nav className="-mb-px flex space-x-8 px-6">
                             <button
                                 onClick={() => setActiveTab('articles')}
@@ -225,7 +239,7 @@ const KnowledgeBaseManagement = () => {
                 {activeTab === 'articles' && (
                     <div>
                         {/* Filters and Create Button */}
-                        <div className="bg-gray-900 rounded-lg border border-gray-700 p-4 mb-6">
+                        <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-6">
                             <div className="flex flex-wrap gap-4 items-center">
                                 <input
                                     type="text"
@@ -265,8 +279,16 @@ const KnowledgeBaseManagement = () => {
                         </div>
 
                         {/* Article List */}
-                        {loading ? (
-                            <div className="bg-gray-900 rounded-lg border border-gray-700 p-12 text-center">
+                        {fetchError ? (
+                            <div className="bg-gray-800 rounded-xl border border-red-700 p-8 text-center">
+                                <p className="text-red-400 font-medium mb-2">Error loading articles</p>
+                                <p className="text-gray-400 text-sm">{fetchError}</p>
+                                <button onClick={fetchArticles} className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">
+                                    Retry
+                                </button>
+                            </div>
+                        ) : loading ? (
+                            <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center">
                                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-700 border-t-blue-500"></div>
                                 <p className="mt-4 text-gray-400">Loading articles...</p>
                             </div>

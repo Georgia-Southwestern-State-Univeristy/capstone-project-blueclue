@@ -33,7 +33,7 @@ const PriorityRecommendation = ({
       border: 'border-green-600',
       text: 'text-green-400',
       badge: 'bg-green-600',
-      icon: '✓'
+      icon: ''
     },
     medium: {
       bg: 'bg-yellow-900/30',
@@ -55,10 +55,10 @@ const PriorityRecommendation = ({
 
   // Priority display names and colors
   const priorityInfo = {
-    critical: { label: 'Critical', color: 'text-red-400', icon: '🔴' },
-    high: { label: 'High', color: 'text-orange-400', icon: '🟠' },
-    medium: { label: 'Medium', color: 'text-yellow-400', icon: '🟡' },
-    low: { label: 'Low', color: 'text-green-400', icon: '🟢' }
+    critical: { label: 'Critical', color: 'text-red-400', icon: '' },
+    high: { label: 'High', color: 'text-orange-400', icon: '' },
+    medium: { label: 'Medium', color: 'text-yellow-400', icon: '' },
+    low: { label: 'Low', color: 'text-green-400', icon: '' }
   };
 
   const priority = priorityInfo[aiPriority] || priorityInfo.medium;

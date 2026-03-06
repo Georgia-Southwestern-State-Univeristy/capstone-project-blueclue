@@ -1,0 +1,17 @@
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Cache hashed JS/CSS bundles for 1 year (Vite adds content hash to filenames)
+    location ~* \.(js|css|woff2?|png|jpg|jpeg|gif|svg|ico)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # SPA fallback — all routes serve index.html
+    # API calls go directly to the backend URL (set via VITE_API_URL at build time)
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

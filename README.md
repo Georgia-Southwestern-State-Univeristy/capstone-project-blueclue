@@ -237,15 +237,37 @@ python -m spacy download en_core_web_sm
 
 **AI Service .env configuration:**
 ```env
-# Flask Configuration
-PORT=5000
-FLASK_ENV=development
+# ── Server ──────────────────────────────────────────────────────────────────
+ML_SERVICE_PORT=5000
+ML_SERVICE_HOST=0.0.0.0
+ML_ENV=development        # or 'production'
+ML_WORKERS=2
+
+# ── Database (for RAG / vector search) ──────────────────────────────────────
+DATABASE_URL=postgresql://postgres:your_postgres_password@localhost:5432/blueclue
+
+# ── OpenAI (optional) ───────────────────────────────────────────────────────
+# Leave blank to fall back to free local sentence-transformers embeddings.
+# Chat generation is disabled without a key; rule-based fallback is used.
+OPENAI_API_KEY=sk-...
+LLM_MODEL=gpt-3.5-turbo
+
+# ── ML tuning ───────────────────────────────────────────────────────────────
+CONFIDENCE_THRESHOLD=0.5
 ```
 
-**Verify AI service:**
+> **Heads-up:** The AI service uses **FastAPI + uvicorn**, not Flask.
+> Start it with `uvicorn src.app:app --host 0.0.0.0 --port 5000 --reload`
+> (or `python app.py` which internally calls uvicorn).
+
+**Start the AI service (FastAPI / uvicorn):**
 ```bash
+# Recommended
+uvicorn src.app:app --host 0.0.0.0 --port 5000 --reload
+
+# Shortcut wrapper (calls uvicorn internally)
 python app.py
-# Expected: Running on http://127.0.0.1:5000
+# Expected: Uvicorn running on http://0.0.0.0:5000
 ```
 
 Press `Ctrl+C` to stop the service after verification.
@@ -542,6 +564,142 @@ git push origin feature/your-feature-name
 
 
 
+
+---
+
+## Docker Compose
+
+A `docker-compose.yml` at the repo root builds and runs the ML service and backend together.  
+The database must be reachable externally (local Postgres, Railway plugin, etc.).
+
+```bash
+# Copy the template and set required variables
+cp .env.example .env   # if present, otherwise create an .env file
+# Required: DATABASE_URL, JWT_SECRET
+# Optional: FRONTEND_URL, ML_SERVICE_PORT, BACKEND_PORT
+
+# Build and start all services (ml-service + backend)
+docker compose up --build
+
+# Start only the ML service
+docker compose up ml-service
+
+# Tear down
+docker compose down
+```
+
+The `frontend` block in `docker-compose.yml` is commented out.  
+Uncomment it to build and serve the React app from nginx inside Docker.
+
+**Hot-swapping models without rebuilding:**
+The ML models directory is bind-mounted: `./blueclue/ai/models:/app/models`.  
+Drop updated model files there and restart the container — no rebuild needed.
+
+---
+
+## Cloud Hosting — Railway
+
+BlueClue is designed to deploy on [Railway](https://railway.app).  
+See `docs/setup/RAILWAY_DEPLOYMENT.md` for the full walkthrough.
+
+### Service layout
+
+Create four services in Railway and set each service's **Root Directory**:
+
+| Service | Root Directory | Build Method |
+|---------|---------------|-------------|
+| `database` | — | PostgreSQL plugin (built-in add-on) |
+| `ml-service` | `blueclue/ai` | Dockerfile |
+| `backend` | `blueclue/backend` | Dockerfile |
+| `frontend` | `blueclue/frontend` | Dockerfile (multi-stage nginx) |
+
+### Minimum environment variables (Railway dashboard)
+
+| Service | Variable | Value / Source |
+|---------|----------|---------------|
+| `backend` | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
+| `backend` | `JWT_SECRET` | Strong random string |
+| `backend` | `FRONTEND_URL` | Your Railway frontend public URL |
+| `backend` | `AI_SERVICE_URL` | Your Railway ml-service internal URL |
+| `backend` | `NODE_ENV` | `production` |
+| `ml-service` | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
+| `ml-service` | `OPENAI_API_KEY` | Your OpenAI key (optional) |
+| `ml-service` | `ML_ENV` | `production` |
+| `frontend` | `VITE_API_URL` | Your backend public URL + `/api` |
+
+---
+
+## User Roles
+
+| Role | Dashboard | Capabilities |
+|------|-----------|-------------|
+| `customer` | Client Dashboard | Submit tickets, view own tickets, use chatbot |
+| `guest` | Client Dashboard | Submit tickets without an account |
+| `technician` | Technician Dashboard | Manage assigned tickets, update status |
+| `senior_technician` | Technician Dashboard | Same as technician + reassign to others |
+| `management` | Management Dashboard | All tickets, analytics, manage technicians |
+| `admin` | Management + ML Admin | Full access including ML configuration |
+
+> The ML Admin dashboard (model management, drift detection, retraining) is accessible to `admin` and `management` roles only.
+
+---
+
+## AI Chatbot & ML Pipeline
+
+### How tickets are classified
+
+1. A ticket is submitted (via the form **or** the chatbot).
+2. The backend calls `classifyTicketWithFallback()` in `aiService.js`.
+3. That function POSTs the ticket text to `<AI_SERVICE_URL>/classify`.
+4. The ML service returns `category`, `priority`, and `confidence` from its scikit-learn model.
+5. `calculateFinalPriority()` blends the AI priority with any user-specified priority, weighted by confidence.
+6. If the ML service is unavailable the fallback assigns `category: 'general'`, `priority: 'low'` silently.
+
+### Chatbot capabilities
+
+- Intent detection with NLP (spaCy) and rule-based matching
+- RAG (Retrieval-Augmented Generation) over the knowledge base using pgvector
+- Ticket creation directly from chat — fully ML-classified
+- Handoff to a live technician via TechChatPanel
+- Chat analytics: NPS, deflection rate, peak-hour heatmap
+
+### Retraining models
+
+```bash
+cd blueclue/ai
+source venv/bin/activate   # or .\venv\Scripts\Activate.ps1
+
+# 1. Export labelled data from the database
+python scripts/export_training_data.py
+
+# 2. Prepare features
+python scripts/prepare_ml_data.py
+
+# 3. Retrain all models (category + priority + time-to-resolve)
+python scripts/retrain_pipeline.py
+
+# 4. Verify accuracy
+python test_accuracy.py
+# Expected: ~93% category accuracy
+```
+
+Retrained artefacts are saved to `blueclue/ai/models/`.  
+Model cards (metadata, accuracy, version) are saved to the same directory.
+
+---
+
+## Real-Time Auto-Refresh (WebSocket)
+
+The dashboards update in real time without page reload using Socket.IO:
+
+- **backend** emits `ticket_created` when a new ticket is created.
+- **backend** emits `ticket_updated` when a ticket status changes.
+- **frontend** hook `useNotificationSocket` receives these events and
+  debounces a `fetchTickets()` call with a 300 ms delay.
+
+Socket.IO shares the same port as the Express API (default **3000**).  
+Make sure `FRONTEND_URL` in the backend `.env` matches the browser origin so
+the CORS handshake succeeds.
 
 ---
 

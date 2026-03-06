@@ -34,6 +34,9 @@ export const initializeSocketHandlers = (io) => {
     // Store the connection
     connectedUsers.set(userId, socket.id);
 
+    // Join user-specific room so controllers can emit to user_${id}
+    socket.join(`user_${userId}`);
+
     // Send connection confirmation
     socket.emit('connected', { 
       message: 'Successfully connected to notification service',
@@ -108,6 +111,22 @@ export const broadcastNotification = (io, userIds, notification) => {
   
   console.log(`Notification broadcast to ${sentCount}/${userIds.length} users`);
   return sentCount;
+};
+
+/**
+ * Emit any named event to a specific user
+ * @param {Server} io - Socket.io server instance
+ * @param {number} userId - Target user ID
+ * @param {string} event - Event name
+ * @param {Object} data - Payload
+ */
+export const emitEventToUser = (io, userId, event, data) => {
+  const socketId = connectedUsers.get(userId);
+  if (socketId) {
+    io.to(socketId).emit(event, data);
+    return true;
+  }
+  return false;
 };
 
 /**

@@ -94,14 +94,14 @@ export const showNotificationAlert = (notification) => {
   const { type, message, metadata } = notification;
 
   const titles = {
-    assignment: '🎫 New Ticket Assignment',
-    overdue: '⏰ Overdue Ticket',
-    update_request: '💬 Update Request',
-    mention: '👤 You were mentioned',
-    ring_request: '🔔 Urgent Help Request!'
+    assignment: 'New Ticket Assignment',
+    overdue: 'Overdue Ticket',
+    update_request: 'Update Request',
+    mention: 'You were mentioned',
+    ring_request: 'Urgent Help Request!'
   };
 
-  const title = titles[type] || '🔔 New Notification';
+  const title = titles[type] || 'New Notification';
 
   // For ring requests, include urgency level in the body
   let notificationBody = message;

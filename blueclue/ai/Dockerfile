@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
 LABEL maintainer="BlueClue Team"
-LABEL description="BlueClue ML Inference Service"
+LABEL description="BlueClue ML Inference Service (with LLM + RAG)"
 
 # Prevent Python from writing .pyc and enable unbuffered output
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -9,15 +9,21 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install system dependencies (needed for scipy / scikit-learn wheels)
+# Install system dependencies:
+#   gcc/g++  — scipy / scikit-learn native wheels
+#   libpq-dev curl — psycopg2 / healthchecks
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc g++ && \
+    apt-get install -y --no-install-recommends gcc g++ libpq-dev curl && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Install Python dependencies (includes openai + sentence-transformers)
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
+
+# Pre-download MiniLM model at build time so the container starts faster.
+# Falls back gracefully if the download fails (e.g., no internet during build).
+RUN printf 'try:\n    from sentence_transformers import SentenceTransformer\n    SentenceTransformer("all-MiniLM-L6-v2")\n    print("MiniLM model cached")\nexcept Exception as e:\n    print(f"MiniLM pre-download skipped: {e}")\n' | python3 || true
 
 # Copy application code
 COPY . .
@@ -26,8 +32,8 @@ COPY . .
 EXPOSE 5000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:5000/health || exit 1
 
 # Run with uvicorn in production mode
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "5000", "--workers", "2", "--log-level", "info"]

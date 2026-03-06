@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import TicketSubmissionModal from '../components/TicketSubmissionModal'
 import TicketDetailView from '../components/TicketDetailView'
 import Alert from '../components/Alert'
@@ -9,6 +9,7 @@ import useDashboardLayout from '../hooks/useDashboardLayout'
 import { buildGalleryItems, buildWidgetConfig } from '../widgets'
 import { createTicket, getAllTickets, getAllTicketsForTimeline } from '../services/ticketService'
 import { getCurrentUser } from '../services/authService'
+import { useNotificationSocket } from '../hooks/useNotificationSocket'
 
 // ── Default grid layouts ─────────────────────────────────────────────────────
 const LAYOUT_VERSION = 1
@@ -146,6 +147,17 @@ function ClientDashboard() {
       setIsTimelineLoading(false)
     }
   }
+
+  // Real-time auto-refresh: stable refs so the socket never reconnects on re-render
+  const _ticketFetchRef = useRef(null)
+  const _timelineFetchRef = useRef(null)
+  _ticketFetchRef.current = fetchTickets
+  _timelineFetchRef.current = fetchTimelineTickets
+  const handleTicketChange = useCallback(() => {
+    _ticketFetchRef.current?.()
+    _timelineFetchRef.current?.()
+  }, [])
+  useNotificationSocket(null, null, handleTicketChange)
 
   // Handle form submission
   const handleSubmit = async (formData) => {

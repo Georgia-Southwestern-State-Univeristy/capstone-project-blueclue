@@ -4,15 +4,26 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Create PostgreSQL connection pool using individual parameters
+// Support both a full DATABASE_URL connection string (Railway/Heroku style)
+// and individual DB_* variables (local development style).
+const poolConfig = process.env.DATABASE_URL
+    ? {
+          connectionString: process.env.DATABASE_URL,
+          ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      }
+    : {
+          user: process.env.DB_USER || 'postgres',
+          host: process.env.DB_HOST || 'localhost',
+          database: process.env.DB_NAME || 'blueclue',
+          password: process.env.DB_PASSWORD,
+          port: parseInt(process.env.DB_PORT || '5432'),
+      };
+
+// Create PostgreSQL connection pool
 const pool = new Pool({
-    user: process.env.DB_USER || 'postgres',
-    host: process.env.DB_HOST || 'localhost',
-    database: process.env.DB_NAME || 'blueclue',
-    password: process.env.DB_PASSWORD,
-    port: parseInt(process.env.DB_PORT || '5432'),
-    max: 20, // Maximum number of clients in the pool
-    idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
+    ...poolConfig,
+    max: 10, // Maximum number of clients in the pool
+    idleTimeoutMillis: 120000, // Close idle clients after 2 minutes (outlasts the 60s notification poll)
     connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
 });
 

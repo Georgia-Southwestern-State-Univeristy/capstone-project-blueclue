@@ -23,10 +23,10 @@ const PriorityWarningModal = ({
   const confidencePercentage = Math.round(aiConfidence * 100);
 
   const priorityInfo = {
-    critical: { label: 'Critical', color: 'text-red-400', bgColor: 'bg-red-900/30', icon: '🔴' },
-    high: { label: 'High', color: 'text-orange-400', bgColor: 'bg-orange-900/30', icon: '🟠' },
-    medium: { label: 'Medium', color: 'text-yellow-400', bgColor: 'bg-yellow-900/30', icon: '🟡' },
-    low: { label: 'Low', color: 'text-green-400', bgColor: 'bg-green-900/30', icon: '🟢' }
+    critical: { label: 'Critical', color: 'text-red-400', bgColor: 'bg-red-900/30', icon: '' },
+    high: { label: 'High', color: 'text-orange-400', bgColor: 'bg-orange-900/30', icon: '' },
+    medium: { label: 'Medium', color: 'text-yellow-400', bgColor: 'bg-yellow-900/30', icon: '' },
+    low: { label: 'Low', color: 'text-green-400', bgColor: 'bg-green-900/30', icon: '' }
   };
 
   const userInfo = priorityInfo[userPriority] || priorityInfo.medium;
@@ -47,7 +47,7 @@ const PriorityWarningModal = ({
         <div className="bg-yellow-900/30 border-b border-yellow-600 px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-yellow-600 flex items-center justify-center text-2xl">
-              ⚠️
+              !
             </div>
             <div>
               <h3 className="text-lg font-bold text-yellow-400">
@@ -109,7 +109,7 @@ const PriorityWarningModal = ({
           {/* Explanation */}
           <div className="bg-blue-900/20 border border-blue-700 rounded-lg p-4 space-y-2">
             <h4 className="text-sm font-semibold text-blue-400 flex items-center gap-2">
-              <span>💡</span>
+              <span></span>
               <span>Why is this important?</span>
             </h4>
             <ul className="text-sm text-gray-300 space-y-1 ml-6">
@@ -155,7 +155,6 @@ const PriorityWarningModal = ({
             onClick={onAcceptAI}
             className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
           >
-            <span>✓</span>
             <span>Use AI Recommendation ({aiInfo.label})</span>
           </button>
           <button
@@ -170,7 +169,7 @@ const PriorityWarningModal = ({
             className="px-4 py-3 text-gray-400 hover:text-gray-300 transition-colors"
             title="Cancel ticket creation"
           >
-            ✕
+            X
           </button>
         </div>
       </div>

@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { FileText, TrendingUp, Loader2, ArrowRight } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
-
 const RelatedArticles = ({ articleId, limit = 5 }) => {
     const [relatedArticles, setRelatedArticles] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -18,7 +16,7 @@ const RelatedArticles = ({ articleId, limit = 5 }) => {
             
             try {
                 const response = await axios.get(
-                    `${API_BASE_URL}/api/knowledge-base/articles/${articleId}/related?limit=${limit}`
+                    `/api/knowledge-base/articles/${articleId}/related?limit=${limit}`
                 );
                 setRelatedArticles(response.data.related || []);
             } catch (err) {
@@ -136,7 +134,7 @@ const RelatedArticles = ({ articleId, limit = 5 }) => {
                             </div>
 
                             {/* Tags */}
-                            {article.tags && article.tags.length > 0 && (
+                            {article.tags && Array.isArray(article.tags) && article.tags.length > 0 && (
                                 <div className="flex flex-wrap gap-1 mt-3">
                                     {article.tags.slice(0, 3).map((tag, idx) => (
                                         <span

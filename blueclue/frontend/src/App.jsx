@@ -14,6 +14,8 @@ import FAQ from './pages/FAQ'
 import ArticlePublicView from './pages/ArticlePublicView'
 import FAQSearch from './pages/FAQSearch'
 import TemplateManager from './pages/TemplateManager'
+import MLAdminDashboard from './pages/MLAdminDashboard'
+import ChatAnalyticsDashboard from './pages/ChatAnalyticsDashboard'
 import Navbar from './components/Navbar'
 import ProtectedRoute from './components/ProtectedRoute'
 
@@ -68,6 +70,16 @@ function App() {
         <Route path="/template-manager" element={
           <ProtectedRoute allowedRoles={['management', 'admin']}>
             <TemplateManager />
+          </ProtectedRoute>
+        } />
+        <Route path="/ml-admin" element={
+          <ProtectedRoute allowedRoles={['management', 'admin']}>
+            <MLAdminDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/chat-analytics" element={
+          <ProtectedRoute allowedRoles={['management', 'admin']}>
+            <ChatAnalyticsDashboard />
           </ProtectedRoute>
         } />
       </Routes>

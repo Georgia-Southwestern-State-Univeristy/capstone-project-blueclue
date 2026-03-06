@@ -102,18 +102,18 @@ const FAQ = () => {
 
     const getCategoryIcon = (categoryName) => {
         const icons = {
-            'Hardware': '🖥️',
-            'Software': '💻',
-            'Network': '🌐',
-            'Account': '👤',
-            'Email': '📧',
-            'Security': '🔒',
-            'Printer': '🖨️',
-            'Mobile': '📱',
-            'Access': '🔑',
-            'Other': '📋'
+            'Hardware': '',
+            'Software': '',
+            'Network': '',
+            'Account': '',
+            'Email': '',
+            'Security': '',
+            'Printer': '',
+            'Mobile': '',
+            'Access': '',
+            'Other': ''
         };
-        return icons[categoryName] || '📄';
+        return icons[categoryName] || '';
     };
 
     if (loading && !selectedCategory) {
@@ -185,7 +185,7 @@ const FAQ = () => {
                                 {/* Most Helpful */}
                                 <div className="bg-gray-900 border border-gray-700 rounded-lg p-6">
                                     <h3 className="text-lg font-semibold text-gray-200 mb-4 flex items-center">
-                                        <span className="mr-2">👍</span>
+                                        <span className="mr-2"></span>
                                         Most Helpful Articles
                                     </h3>
                                     <ul className="space-y-3">
@@ -208,7 +208,7 @@ const FAQ = () => {
                                 {/* Most Viewed */}
                                 <div className="bg-gray-900 border border-gray-700 rounded-lg p-6">
                                     <h3 className="text-lg font-semibold text-gray-200 mb-4 flex items-center">
-                                        <span className="mr-2">👁️</span>
+                                        <span className="mr-2"></span>
                                         Most Viewed This Week
                                     </h3>
                                     <ul className="space-y-3">
@@ -312,7 +312,7 @@ const FAQ = () => {
                     <h3 className="text-2xl font-bold text-gray-200 mb-3">Still need help?</h3>
                     <p className="text-gray-300 mb-6">Can't find what you're looking for? Create a support ticket and our team will assist you.</p>
                     <button
-                        onClick={() => navigate('/submit-ticket')}
+                        onClick={() => navigate('/client-dashboard')}
                         className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-3 rounded-lg transition-colors"
                     >
                         Create a Ticket

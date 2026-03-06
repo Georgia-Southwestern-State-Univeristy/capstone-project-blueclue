@@ -1,11 +1,29 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useContext } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom'
-import { login as loginService, resendVerification } from '../services/authService'
+import { login as loginService, resendVerification, isAuthenticated, getUser } from '../services/authService'
+import { ThemeContext } from '../context/ThemeContext'
 import logo from '../assets/EditedBlueClueLogo.png'
+
+/** Map a user role to their home dashboard */
+function getRoleHome(role) {
+  switch (role) {
+    case 'management':
+    case 'admin':
+      return '/management-dashboard'
+    case 'technician':
+    case 'senior_technician':
+      return '/technician'
+    case 'customer':
+    case 'guest':
+    default:
+      return '/client-dashboard'
+  }
+}
 
 function Login() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { reloadFromServer } = useContext(ThemeContext)
   const [loginType, setLoginType] = useState('customer') // 'customer', 'technician', 'management'
   const [formData, setFormData] = useState({
     email: '',
@@ -18,6 +36,15 @@ function Login() {
   const [showResendVerification, setShowResendVerification] = useState(false)
   const [resendingEmail, setResendingEmail] = useState(false)
   const [unverifiedEmail, setUnverifiedEmail] = useState('')
+
+  // ── If already authenticated, redirect to appropriate dashboard ─────────
+  useEffect(() => {
+    if (isAuthenticated()) {
+      const user = getUser()
+      const destination = location.state?.from || getRoleHome(user?.role)
+      navigate(destination, { replace: true })
+    }
+  }, [navigate, location.state])
 
   // Check for messages from navigation state (e.g., from registration)
   useEffect(() => {
@@ -94,6 +121,8 @@ function Login() {
         return
       }
 
+      // Reload theme from server for the newly signed-in user
+      reloadFromServer()
       // Redirect all users to welcome page after login
       navigate('/welcome')
 
@@ -216,7 +245,7 @@ function Login() {
                     value={formData.password}
                     onChange={handleInputChange}
                     required
-                    placeholder={loginType === 'management' ? 'BlueClue2026!' : 'Default: admin123'}
+                    placeholder="Enter your password"
                     className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -294,9 +323,9 @@ function Login() {
         <div className="mt-6 text-center text-xs text-gray-500">
           <p>
             {loginType === 'technician' 
-              ? 'Technicians: Use your assigned username and default password admin123'
+              ? 'Technicians: Use your assigned username and password'
               : loginType === 'management'
-              ? 'Management: Use username "manager" and password BlueClue2026!'
+              ? 'Management: Contact your administrator for login credentials'
               : loginType === 'guest'
               ? 'Guest sessions expire after 24 hours of inactivity'
               : 'Protected by industry-standard encryption'}

@@ -281,11 +281,11 @@ export const getUrgencyColor = (urgencyLevel) => {
 export const getUrgencyLabel = (urgencyLevel) => {
   switch (urgencyLevel) {
     case 'high':
-      return '🔴 High';
+      return 'High';
     case 'medium':
-      return '🟠 Medium';
+      return 'Medium';
     case 'low':
-      return '🟢 Low';
+      return 'Low';
     default:
       return urgencyLevel;
   }

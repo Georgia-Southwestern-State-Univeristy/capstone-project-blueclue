@@ -7,6 +7,9 @@ import dotenv from 'dotenv';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
+import { fileURLToPath } from 'url';
+import path from 'path';
+import fs from 'fs';
 import pool from './config/database.js';
 import ticketRoutes from './routes/tickets.js';
 import authRoutes from './routes/auth.js';
@@ -29,8 +32,11 @@ import dashboardLayoutRoutes from './routes/dashboardLayouts.js';
 import knowledgeBaseRoutes from './routes/knowledgeBase.js';
 import templateRoutes from './routes/templates.js';
 import themeRoutes from './routes/themes.js';
+import chatRoutes from './routes/chat.js';
+import mlAdminRoutes from './routes/mlAdmin.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 import { startUpdateRequestReminderJob } from './jobs/updateRequestReminders.js';
+import { startChatQualityJob } from './jobs/chatQualityJob.js';
 
 dotenv.config();
 
@@ -50,6 +56,7 @@ initializeSocketHandlers(io);
 
 // Start scheduled jobs
 startUpdateRequestReminderJob(io);
+startChatQualityJob();
 
 // Make io accessible to routes/controllers
 app.set('io', io);
@@ -58,13 +65,28 @@ app.locals.io = io;
 // Middleware
 app.use(helmet());
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: (origin, callback) => {
+        const allowed = (process.env.FRONTEND_URL || 'http://localhost:5173').split(',').map(u => u.trim());
+        // Allow requests with no origin (e.g. mobile, Postman) and configured origins
+        if (!origin || allowed.includes(origin) || origin.endsWith('.railway.app')) {
+            callback(null, true);
+        } else {
+            callback(new Error(`CORS blocked: ${origin}`));
+        }
+    },
     credentials: true
 }));
 app.use(morgan('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // For parsing Mailgun webhook form data
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' })); // For parsing Mailgun webhook form data
 app.use(cookieParser());
+
+// ── Static file serving (chat uploads) ──────────────────────────────────────
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
+const uploadsDir = path.resolve(__dirname, '../../uploads');
+fs.mkdirSync(path.join(uploadsDir, 'chat'), { recursive: true });
+app.use('/uploads', express.static(uploadsDir, { maxAge: '7d' }));
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -86,6 +108,8 @@ app.use('/api/dashboard-layouts', dashboardLayoutRoutes); // Dashboard layout pe
 app.use('/api/knowledge-base', knowledgeBaseRoutes); // Knowledge base management
 app.use('/api/templates', templateRoutes); // Ticket templates
 app.use('/api/themes', themeRoutes); // User theme preferences
+app.use('/api/chat', chatRoutes); // Chat bot routes
+app.use('/api/ml-admin', mlAdminRoutes); // ML Admin – monitoring, explainability, versioning
 app.use('/api/dev', devRoutes);
 app.use('/api/admin', adminRoutes);
 

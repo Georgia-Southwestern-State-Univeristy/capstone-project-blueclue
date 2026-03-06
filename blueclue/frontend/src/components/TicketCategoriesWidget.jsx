@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import BaseWidget from './BaseWidget'
 import useContainerSize from '../hooks/useContainerSize'
+import { useTicketSocket } from '../hooks/useTicketSocket'
 
 // Fallback colors when the DB doesn't provide a color_code
 const CATEGORY_COLORS = {
@@ -31,7 +32,6 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
  */
 function TicketCategoriesWidget({
   tickets = [],
-  onRefresh = null,
   activeCategory = null,
   onCategorySelect = null,
   onTicketClick = null,
@@ -71,10 +71,12 @@ function TicketCategoriesWidget({
     fetchData()
   }, [fetchData])
 
+  /* ── Socket-driven refresh ── */
+  useTicketSocket(fetchData)
+
   const handleRefresh = useCallback(async () => {
     await fetchData()
-    if (onRefresh) await onRefresh()
-  }, [fetchData, onRefresh])
+  }, [fetchData])
 
   // Build segments from API data, falling back to client-side computation
   const { segments, total } = useMemo(() => {

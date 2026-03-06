@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import BaseWidget from './BaseWidget'
+import { getAllTickets } from '../services/ticketService'
 
 const PRIORITY_OPTIONS = [
   { value: 'critical', label: 'Critical', color: '#ef4444' },
@@ -45,14 +46,26 @@ const STATUS_OPTIONS = [
  * @param {Function} [props.onWidgetFilterChange] - Called with (filterKey, value) when a dropdown changes
  */
 function UnassignedVsAssignedWidget({
-  tickets = [],
-  onRefresh = null,
+  tickets: externalTickets = [],
   activeFilter = null,
   onFilter = null,
   widgetFilters = {},
   onWidgetFilterChange = null,
 }) {
   const [hoveredIndex, setHoveredIndex] = useState(null)
+  const [localTickets, setLocalTickets] = useState(null)
+
+  const tickets = localTickets || externalTickets
+
+  // Self-refresh: fetch tickets independently so the refresh button works
+  const handleRefresh = useCallback(async () => {
+    try {
+      const response = await getAllTickets()
+      setLocalTickets(response.data || [])
+    } catch (err) {
+      console.error('Assignment Status refresh failed:', err)
+    }
+  }, [])
 
   // Apply widget-level filters (priority, category, status) to tickets
   const filteredByDropdowns = useMemo(() => {
@@ -132,7 +145,7 @@ function UnassignedVsAssignedWidget({
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
         </svg>
       }
-      onRefresh={onRefresh}
+      onRefresh={handleRefresh}
       isEmpty={tickets.length === 0}
       emptyMessage="No tickets to display"
       emptyIcon={

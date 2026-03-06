@@ -54,7 +54,7 @@ const WIDGET_REGISTRY = [
     key: 'timeline',
     name: 'Ticket Timeline',
     description: 'Visual timeline of ticket activity and trends over time',
-    icon: '📊',
+    icon: '',
     category: CATEGORIES.ANALYTICS,
     permissions: ROLE_GROUPS.ALL,
     size: {
@@ -69,7 +69,7 @@ const WIDGET_REGISTRY = [
     key: 'ticketControl',
     name: 'Ticket Control',
     description: 'Full ticket management table with search, filters, and actions',
-    icon: '🎛️',
+    icon: '',
     category: CATEGORIES.TICKETS,
     permissions: ROLE_GROUPS.STAFF,
     size: {
@@ -84,7 +84,7 @@ const WIDGET_REGISTRY = [
     key: 'assignedChart',
     name: 'Assigned vs Unassigned',
     description: 'Donut chart showing ticket assignment distribution',
-    icon: '🍩',
+    icon: '',
     category: CATEGORIES.ANALYTICS,
     permissions: ROLE_GROUPS.MANAGERS,
     size: {
@@ -99,7 +99,7 @@ const WIDGET_REGISTRY = [
     key: 'categoriesChart',
     name: 'Ticket Categories',
     description: 'Category breakdown with drilldown into individual tickets',
-    icon: '📁',
+    icon: '',
     category: CATEGORIES.ANALYTICS,
     permissions: ROLE_GROUPS.STAFF,
     size: {
@@ -114,7 +114,7 @@ const WIDGET_REGISTRY = [
     key: 'overdue',
     name: 'Overdue Tickets',
     description: 'Tickets that have passed their SLA due date',
-    icon: '⏰',
+    icon: '',
     category: CATEGORIES.TICKETS,
     permissions: ROLE_GROUPS.STAFF,
     size: {
@@ -129,7 +129,7 @@ const WIDGET_REGISTRY = [
     key: 'escalations',
     name: 'Escalations',
     description: 'Critical and high-priority tickets requiring attention',
-    icon: '🔺',
+    icon: '',
     category: CATEGORIES.TICKETS,
     permissions: ROLE_GROUPS.STAFF,
     size: {
@@ -144,7 +144,7 @@ const WIDGET_REGISTRY = [
     key: 'todaysActions',
     name: "Today's Actions",
     description: 'Action items: overdue, urgent unassigned, and due today',
-    icon: '✅',
+    icon: '',
     category: CATEGORIES.TICKETS,
     permissions: ROLE_GROUPS.STAFF,
     size: {
@@ -159,7 +159,7 @@ const WIDGET_REGISTRY = [
     key: 'topRequesters',
     name: 'Top Requesters',
     description: 'Most active ticket requesters and their patterns',
-    icon: '👥',
+    icon: '',
     category: CATEGORIES.ANALYTICS,
     permissions: ROLE_GROUPS.MANAGERS,
     size: {
@@ -174,7 +174,7 @@ const WIDGET_REGISTRY = [
     key: 'techPerformance',
     name: 'Tech Performance',
     description: 'Technician resolution times and workload metrics',
-    icon: '⚡',
+    icon: '',
     category: CATEGORIES.PERFORMANCE,
     permissions: ROLE_GROUPS.MANAGERS,
     size: {
@@ -189,7 +189,7 @@ const WIDGET_REGISTRY = [
     key: 'deletedTickets',
     name: 'Deleted Tickets',
     description: 'Recently soft-deleted tickets with restore option',
-    icon: '🗑️',
+    icon: '',
     category: CATEGORIES.MANAGEMENT,
     permissions: ROLE_GROUPS.MANAGERS,
     size: {
@@ -204,7 +204,7 @@ const WIDGET_REGISTRY = [
     key: 'pendingRequests',
     name: 'Pending Requests',
     description: 'Assignment requests awaiting management approval',
-    icon: '📋',
+    icon: '',
     category: CATEGORIES.MANAGEMENT,
     permissions: ROLE_GROUPS.MANAGERS,
     size: {
@@ -219,7 +219,7 @@ const WIDGET_REGISTRY = [
     key: 'responseTime',
     name: 'Response Times',
     description: 'Update request response time analytics and trends',
-    icon: '⏱️',
+    icon: '',
     category: CATEGORIES.ANALYTICS,
     permissions: ROLE_GROUPS.MANAGERS,
     size: {
@@ -234,7 +234,7 @@ const WIDGET_REGISTRY = [
     key: 'ringRequests',
     name: 'Ring for Help',
     description: 'Incoming ring-for-help requests from technicians',
-    icon: '🔔',
+    icon: '',
     category: CATEGORIES.MANAGEMENT,
     permissions: ROLE_GROUPS.STAFF,
     size: {
@@ -249,7 +249,7 @@ const WIDGET_REGISTRY = [
     key: 'availableTickets',
     name: 'Available Tickets',
     description: 'Unassigned tickets available for self-assignment',
-    icon: '📥',
+    icon: '',
     category: CATEGORIES.TICKETS,
     permissions: ROLE_GROUPS.TECHS,
     size: {
@@ -264,7 +264,7 @@ const WIDGET_REGISTRY = [
     key: 'quickActions',
     name: 'Quick Actions',
     description: 'Shortcut panel for common management operations',
-    icon: '⚡',
+    icon: '',
     category: CATEGORIES.MANAGEMENT,
     permissions: ROLE_GROUPS.MANAGERS,
     size: {
@@ -280,7 +280,7 @@ const WIDGET_REGISTRY = [
     key: 'statusDonut',
     name: 'Status Overview',
     description: 'Donut chart showing ticket status distribution',
-    icon: '📊',
+    icon: '',
     category: CATEGORIES.ANALYTICS,
     permissions: ROLE_GROUPS.STAFF,
     size: {
@@ -295,7 +295,7 @@ const WIDGET_REGISTRY = [
     key: 'priorityPie',
     name: 'Priority Breakdown',
     description: 'Pie chart showing ticket priority distribution',
-    icon: '📈',
+    icon: '',
     category: CATEGORIES.ANALYTICS,
     permissions: ROLE_GROUPS.STAFF,
     size: {
@@ -310,7 +310,7 @@ const WIDGET_REGISTRY = [
     key: 'ticketQueue',
     name: 'Ticket Queue',
     description: 'Ticket queue with search, filters, and management actions',
-    icon: '📋',
+    icon: '',
     category: CATEGORIES.TICKETS,
     permissions: ROLE_GROUPS.STAFF,
     size: {
@@ -321,12 +321,27 @@ const WIDGET_REGISTRY = [
     component: () => import('../components/TechTicketQueueWidget'),
     previewPattern: 'card-grid',
   },
+  {
+    key: 'chatPanel',
+    name: 'Chat Handoff',
+    description: 'Live customer chat handoff requests and active conversations',
+    icon: '',
+    category: CATEGORIES.MANAGEMENT,
+    permissions: ROLE_GROUPS.STAFF,
+    size: {
+      defaultW: 6, defaultH: 10,
+      minW: 4, minH: 8,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/TechChatPanel'),
+    previewPattern: 'list-pending',
+  },
   // ── Client-specific widgets ──────────────────────────────────────────────
   {
     key: 'clientTickets',
     name: 'My Tickets',
     description: 'Your submitted tickets with status tracking',
-    icon: '🎫',
+    icon: '',
     category: CATEGORIES.TICKETS,
     permissions: [ROLES.CUSTOMER, ROLES.GUEST],
     size: {

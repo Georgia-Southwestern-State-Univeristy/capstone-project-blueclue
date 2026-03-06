@@ -108,7 +108,7 @@ function RingRequestPopup({ notification, onRespond, onClose }) {
               disabled={isResponding}
               className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-800 disabled:opacity-50 text-white font-semibold py-2 px-4 rounded transition-colors"
             >
-              {isResponding ? 'Responding...' : '✓ Accept & Help'}
+              {isResponding ? 'Responding...' : 'Accept & Help'}
             </button>
             <button
               onClick={() => handleResponse('decline')}

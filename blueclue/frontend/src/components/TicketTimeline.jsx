@@ -1,16 +1,18 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react'
 import { getRecentAssignmentActivity } from '../services/ticketService'
+import RefreshButton from './RefreshButton'
 
 /**
  * Hourly timeline bar chart showing ticket submissions over the last 3 days,
  * with a recent assignment activity feed below.
  */
-function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, onTicketClick = null }) {
+function TicketTimeline({ tickets = [], onTicketClick = null }) {
   const [hoveredIndex, setHoveredIndex] = useState(null)
   const scrollRef = useRef(null)
   const [activity, setActivity] = useState([])
   const [activityLoading, setActivityLoading] = useState(false)
   const [showActivity, setShowActivity] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Scroll to rightmost position on mobile
   const scrollToEnd = useCallback(() => {
@@ -45,6 +47,16 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
   useEffect(() => {
     fetchActivity()
   }, [fetchActivity, tickets]) // re-fetch when tickets change (after refresh)
+
+  // Self-contained refresh handler
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true)
+    try {
+      await fetchActivity()
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600)
+    }
+  }, [fetchActivity])
 
   // Build 72 hourly buckets (3 days * 24 hours), ending at current hour
   const buckets = useMemo(() => {
@@ -141,25 +153,14 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
             </span>
             <span>Last 3 days</span>
           </div>
-          {onRefresh && (
-            <button
-              onClick={onRefresh}
-              disabled={isRefreshing}
-              title={isRefreshing ? 'Refreshing...' : 'Refresh timeline'}
-              className={`w-8 h-8 flex items-center justify-center rounded-full bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed transition-all ${isRefreshing ? 'animate-spin' : ''}`}
-            >
-              <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
-          )}
+          <RefreshButton onRefresh={handleRefresh} disabled={isRefreshing} />
         </div>
       </div>
 
       {/* Chart area — scrollable on mobile only, allow tooltips to overflow */}
       <div
         ref={scrollRef}
-        className="flex-1 flex flex-col justify-end min-h-0 overflow-x-visible overflow-y-hidden pt-16 pr-8 scrollbar-hide md:scrollbar-default"
+        className="flex-1 flex flex-col justify-end min-h-0 overflow-x-visible overflow-y-visible pt-16 pr-8 scrollbar-hide md:scrollbar-default"
         style={{ WebkitOverflowScrolling: 'touch', position: 'relative', zIndex: 1 }}
       >
         <div className="flex items-end gap-1 h-36 md:min-w-0">
@@ -229,11 +230,11 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
                 {/* Tooltip — allow overflow for right-most bar */}
                 {isHovered && (
                   <div
-                    className="absolute top-0 bg-gray-800 border border-gray-600 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-20 pointer-events-none"
+                    className="absolute bg-gray-800 border border-gray-600 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-20 pointer-events-none"
                     style={
                       isRightMost
-                        ? { right: 0, left: 'auto', transform: 'translateY(-100%)' }
-                        : { left: '50%', transform: 'translateX(-50%) translateY(-100%)' }
+                        ? { top: '1rem', right: 0, left: 'auto', transform: 'translateY(-100%)' }
+                        : { top: '1rem', left: '50%', transform: 'translateX(-50%) translateY(-100%)' }
                     }
                   >
                     <p className="font-medium">{formatHour(bucket.hourStart)}</p>
@@ -357,9 +358,9 @@ function TicketTimeline({ tickets = [], onRefresh = null, isRefreshing = false, 
                     </svg>
                   )
                   const fulfiller = details.fulfilled_by_name || entry.changed_by_name || 'Technician'
-                  const statusBadge = details.is_resolved ? '✅ Resolved' : 
-                                     details.is_blocked ? '🚫 Blocked' : 
-                                     details.needs_more_time ? '⏰ Needs Time' : 'Updated'
+                  const statusBadge = details.is_resolved ? 'Resolved' : 
+                                     details.is_blocked ? 'Blocked' : 
+                                     details.needs_more_time ? 'Needs Time' : 'Updated'
                   description = (
                     <span>
                       <span className="text-white font-medium">{fulfiller}</span>

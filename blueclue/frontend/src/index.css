@@ -724,3 +724,8 @@ nav, .bg-gray-950, .bg-gray-900, .bg-gray-800 {
 .rgl-edit-mode .react-grid-item.cssTransforms {
   transition: none !important;
 }
+
+/* Hide widget refresh buttons while layout editing mode is active */
+.edit-mode-active .widget-refresh-btn {
+  display: none !important;
+}

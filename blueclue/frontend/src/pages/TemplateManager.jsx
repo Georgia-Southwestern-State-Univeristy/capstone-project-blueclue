@@ -236,7 +236,8 @@ function TemplateManager() {
     }
     
     return (
-        <div className="p-8 bg-gray-950 min-h-screen">
+        <div className="p-4 md:p-8 bg-gray-950 min-h-screen">
+          <div className="max-w-7xl mx-auto">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
                 <div>
@@ -277,19 +278,19 @@ function TemplateManager() {
             {/* Analytics Summary */}
             {analytics && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
                         <div className="text-2xl font-bold text-white">{analytics.summary?.total_templates || 0}</div>
                         <div className="text-sm text-gray-400">Total Templates</div>
                     </div>
-                    <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
                         <div className="text-2xl font-bold text-green-400">{analytics.summary?.active_templates || 0}</div>
                         <div className="text-sm text-gray-400">Active Templates</div>
                     </div>
-                    <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
                         <div className="text-2xl font-bold text-blue-400">{analytics.summary?.total_usage || 0}</div>
                         <div className="text-sm text-gray-400">Total Usage</div>
                     </div>
-                    <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
                         <div className="text-2xl font-bold text-purple-400">
                             {analytics.summary?.avg_resolution_hours ? `${parseFloat(analytics.summary.avg_resolution_hours).toFixed(1)}h` : 'N/A'}
                         </div>
@@ -342,7 +343,7 @@ function TemplateManager() {
             
             {/* Templates List */}
             {filteredTemplates.length === 0 ? (
-                <div className="bg-gray-800 rounded-lg border border-gray-700 p-12 text-center">
+                <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center">
                     <svg className="w-16 h-16 mx-auto text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
@@ -362,7 +363,7 @@ function TemplateManager() {
                     )}
                 </div>
             ) : (
-                <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+                <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
                     <table className="w-full">
                         <thead className="bg-gray-900/50">
                             <tr>
@@ -472,6 +473,7 @@ function TemplateManager() {
                 onClose={() => setIsPreviewModalOpen(false)}
                 template={selectedTemplate}
             />
+          </div>
         </div>
     )
 }

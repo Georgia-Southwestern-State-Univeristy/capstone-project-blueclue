@@ -140,11 +140,11 @@ export const login = async (req, res) => {
                 });
             }
 
-            // Find customer or admin by email (case-insensitive)
+            // Find customer, admin, or management user by email (case-insensitive)
             const result = await pool.query(
                 `SELECT id, email, password_hash, first_name, last_name, role, is_active, email_verified 
                  FROM users 
-                 WHERE LOWER(email) = LOWER($1) AND role IN ('customer', 'admin')`,
+                 WHERE LOWER(email) = LOWER($1) AND role IN ('customer', 'admin', 'management')`,
                 [email]
             );
 

@@ -24,8 +24,8 @@ export const requestUpdate = async (req, res) => {
       });
     }
 
-    // Verify user has management role
-    if (req.user.role !== 'management') {
+    // Verify user has management or admin role
+    if (!['management', 'admin'].includes(req.user.role)) {
       return res.status(403).json({
         status: 'error',
         message: 'Only management can request updates'
@@ -50,8 +50,8 @@ export const requestUpdate = async (req, res) => {
       });
     }
 
-    // Verify assignee is a technician
-    if (assignee.role !== 'technician') {
+    // Verify assignee is a technician or senior technician
+    if (!['technician', 'senior_technician'].includes(assignee.role)) {
       return res.status(400).json({
         status: 'error',
         message: 'Can only request updates from technicians'
@@ -173,15 +173,17 @@ export const getUpdateRequests = async (req, res) => {
     const { status, role } = req.query;
 
     let requests;
+    const isTech = ['technician', 'senior_technician'].includes(req.user.role);
+    const isMgmt = ['management', 'admin'].includes(req.user.role);
 
-    if (req.user.role === 'technician') {
+    if (isTech) {
       // Techs see requests assigned to them
       if (status === 'pending') {
         requests = await UpdateRequest.getPendingForTech(userId);
       } else {
         requests = await UpdateRequest.getByTicketId(userId);
       }
-    } else if (req.user.role === 'management') {
+    } else if (isMgmt) {
       // Management sees all pending requests or their requested ones
       if (role === 'all') {
         requests = await UpdateRequest.getAllPending();
@@ -449,8 +451,8 @@ export const handleExtensionRequest = async (req, res) => {
     const { id } = req.params;
     const { approved } = req.body;
 
-    // Verify user is management
-    if (req.user.role !== 'management') {
+    // Verify user is management or admin
+    if (!['management', 'admin'].includes(req.user.role)) {
       return res.status(403).json({
         status: 'error',
         message: 'Only management can approve/deny extension requests'
@@ -572,8 +574,8 @@ export const getTechStats = async (req, res) => {
     const { techId } = req.params;
     const { days = 30 } = req.query;
 
-    // Only management or the tech themselves can view stats
-    if (req.user.role !== 'management' && req.user.id !== parseInt(techId)) {
+    // Only management, admin, or the tech themselves can view stats
+    if (!['management', 'admin'].includes(req.user.role) && req.user.id !== parseInt(techId)) {
       return res.status(403).json({
         status: 'error',
         message: 'Insufficient permissions'
@@ -602,8 +604,8 @@ export const getTechStats = async (req, res) => {
  */
 export const getResponseTimeAnalytics = async (req, res) => {
   try {
-    // Only allow management to view analytics
-    if (req.user.role !== 'management') {
+    // Only allow management and admin to view analytics
+    if (!['management', 'admin'].includes(req.user.role)) {
       return res.status(403).json({
         status: 'error',
         message: 'Insufficient permissions'
