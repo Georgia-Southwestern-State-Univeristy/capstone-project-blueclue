@@ -788,9 +788,15 @@ export const requestHandoff = async (req, res) => {
       return res.status(403).json({ status: 'error', message: 'Unauthorized.' });
     }
 
-    // Mark conversation as handoff-requested
+    // Mark conversation as handoff-requested, resetting any stale claim/resolve from a previous session
     await pool.query(
-      `UPDATE chat_conversations SET handoff_requested_at = NOW() WHERE id = $1`,
+      `UPDATE chat_conversations
+         SET handoff_requested_at  = NOW(),
+             handoff_claimed_by    = NULL,
+             handoff_claimed_at    = NULL,
+             handoff_resolved_at   = NULL,
+             ended_at              = NULL
+       WHERE id = $1`,
       [conversationId]
     );
 
@@ -952,7 +958,11 @@ export const resolveHandoff = async (req, res) => {
 
     const result = await pool.query(
       `UPDATE chat_conversations
-         SET handoff_resolved_at = NOW(), ended_at = NOW()
+         SET handoff_resolved_at  = NOW(),
+             ended_at             = NOW(),
+             handoff_claimed_by   = NULL,
+             handoff_claimed_at   = NULL,
+             handoff_requested_at = NULL
        WHERE id = $1 AND handoff_claimed_by = $2
        RETURNING id, user_id`,
       [conversationId, techUser.id]
