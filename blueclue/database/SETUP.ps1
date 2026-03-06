@@ -349,7 +349,7 @@ Write-Host ""
 Write-Host "============================================================================" -ForegroundColor Cyan
 Write-Host "Step 4.10: Applying remaining feature migrations..." -ForegroundColor Yellow
 Write-Host "============================================================================" -ForegroundColor Cyan
-Write-Host "Adding themes, pgvector/RAG, chat tech mode, handoff, search indexes, feedback, attachments, and email type fix..." -ForegroundColor White
+Write-Host "Adding themes, pgvector/RAG, chat tech mode, handoff, search indexes, feedback, attachments, email type fix, and stale handoff reset..." -ForegroundColor White
 
 $remainingMigrations = @(
     "migrations\021_add_user_themes.sql",
@@ -360,7 +360,8 @@ $remainingMigrations = @(
     "migrations\033_add_feedback_analytics_system.sql",
     "migrations\034_add_ticket_attachments.sql",
     "migrations\035_add_ring_response_email_type.sql",
-    "migrations\036_fix_chat_sender_and_notification_type.sql"
+    "migrations\036_fix_chat_sender_and_notification_type.sql",
+    "migrations\037_reset_stale_handoff_claims.sql"
 )
 
 $remainingApplied = 0
