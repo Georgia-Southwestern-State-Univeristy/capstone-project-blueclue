@@ -6,7 +6,10 @@ const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://
 let socket = null;
 
 export const getSocket = () => {
-  if (!socket || !socket.connected) {
+  // Only create a new socket instance if one doesn't exist yet.
+  // Never recreate during socket.io's own reconnect window — that causes
+  // an exponential connection storm where each effect re-run spawns another socket.
+  if (!socket) {
     const token = localStorage.getItem('blueclue_token');
     
     if (!token) {

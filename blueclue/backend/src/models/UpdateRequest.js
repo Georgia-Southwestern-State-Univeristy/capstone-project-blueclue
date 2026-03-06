@@ -253,11 +253,16 @@ class UpdateRequest {
         t.subject as ticket_subject,
         assignee.email as assignee_email,
         assignee.first_name as assignee_first_name,
-        assignee.last_name as assignee_last_name
+        assignee.last_name as assignee_last_name,
+        requester.first_name as requester_first_name,
+        requester.last_name as requester_last_name,
+        requester.email as requester_email
        FROM ticket_update_requests ur
        JOIN tickets t ON ur.ticket_id = t.id
        JOIN users assignee ON ur.assigned_to = assignee.id
+       JOIN users requester ON ur.requested_by = requester.id
        WHERE ur.status = 'pending'
+         AND ur.assigned_to IS NOT NULL
          AND ur.reminded_at IS NULL
          AND CURRENT_TIMESTAMP > (ur.created_at + (ur.deadline - ur.created_at) * 0.5)`
     );
