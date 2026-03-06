@@ -118,6 +118,10 @@ const INTENT_DEFINITIONS = {
       'connect me with', 'connect me to', 'transfer me',
       'wanna talk', 'want to talk', 'need help from a person',
       'live agent', 'live support', 'human support',
+      // short / bare forms
+      'talk to a person', 'need a person', 'get a person',
+      'human please', 'agent please', 'technician please',
+      'real human', 'actual person', 'live person', 'live technician',
     ],
     articleSlug: null,
     articleCategory: null,
@@ -513,6 +517,42 @@ export async function processChatMessage(userId, message, conversationId = null,
 
     // ── Determine user role (for LLM prompt tuning) ──────────────────────────
     const userRole = await _getUserRole(userId);
+
+    // ── Pre-flight intent check: escalation always bypasses LLM ─────────────
+    const preIntent = recognizeIntent(message);
+    if (!techMode && preIntent.intent === 'escalation') {
+      await ChatMessage.create({
+        conversationId: conversation.id,
+        sender: 'user',
+        message,
+        intent: 'escalation',
+        confidence: 0.90,
+      });
+      const botMsg = await ChatMessage.create({
+        conversationId: conversation.id,
+        sender: 'bot',
+        message: "Sure! I can connect you with a live technician right now. Click below to start a live chat, or I can create a support ticket if you'd prefer.",
+        intent: 'escalation',
+        confidence: 0.90,
+      });
+      return {
+        response: "Sure! I can connect you with a live technician right now. Click below to start a live chat, or I can create a support ticket if you'd prefer.",
+        articleLinks: [],
+        actionButtons: [
+          { id: 'request_handoff', label: '💬 Talk to a Technician', primary: true },
+          { id: 'create_ticket',   label: '🎫 Create a support ticket', primary: false },
+        ],
+        suggestions: ['Talk to a Technician', 'Create a support ticket'],
+        conversationId: conversation.id,
+        messageId: botMsg.id,
+        intent: 'escalation',
+        confidence: 0.90,
+        suggestHandoff: false,
+        autoEscalate: false,
+        autoEscalateReason: null,
+        llm: null,
+      };
+    }
 
     // ── Attempt LLM + RAG path ───────────────────────────────────────────────
     const llmResult = await processMessageWithLLM({
