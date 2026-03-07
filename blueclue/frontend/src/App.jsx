@@ -18,10 +18,13 @@ import MLAdminDashboard from './pages/MLAdminDashboard'
 import ChatAnalyticsDashboard from './pages/ChatAnalyticsDashboard'
 import Navbar from './components/Navbar'
 import ProtectedRoute from './components/ProtectedRoute'
+import usePageTitle from './hooks/usePageTitle'
 
-function App() {
+function AppRoutes() {
+  usePageTitle()
+
   return (
-    <BrowserRouter>
+    <>
       <Navbar />
       <Routes>
         <Route path="/" element={<Login />} />
@@ -83,6 +86,14 @@ function App() {
           </ProtectedRoute>
         } />
       </Routes>
+    </>
+  )
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppRoutes />
     </BrowserRouter>
   )
 }
