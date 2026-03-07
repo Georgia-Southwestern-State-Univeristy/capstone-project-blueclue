@@ -34,12 +34,24 @@ export const validateMailgunSignature = (req, res, next) => {
 
     try {
         // Mailgun sends signature data in the body
-        const timestamp = req.body.timestamp;
-        const token = req.body.token;
-        const signature = req.body.signature;
+        // Support both JSON format (new) and form-urlencoded (legacy)
+        let timestamp, token, signature;
+        
+        if (req.body.signature && typeof req.body.signature === 'object') {
+            // JSON format: signature is nested object
+            timestamp = req.body.signature.timestamp;
+            token = req.body.signature.token;
+            signature = req.body.signature.signature;
+        } else {
+            // Form-urlencoded format: flat structure
+            timestamp = req.body.timestamp;
+            token = req.body.token;
+            signature = req.body.signature;
+        }
 
         if (!timestamp || !token || !signature) {
             console.error('❌ Missing signature fields in webhook');
+            console.error('   Body structure:', JSON.stringify(req.body, null, 2).substring(0, 500));
             return res.status(401).json({
                 status: 'error',
                 message: 'Invalid webhook signature format'
