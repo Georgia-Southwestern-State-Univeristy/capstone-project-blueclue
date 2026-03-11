@@ -31,8 +31,20 @@ export const handleInboundEmail = async (req, res) => {
         console.log('📧 Received inbound email webhook');
         console.log('📧 Headers:', JSON.stringify(req.headers, null, 2));
 
-        // Mailgun sends data in req.body (already parsed by express.urlencoded)
-        const emailData = req.body;
+        // Mailgun sends data in req.body - support both JSON and form-urlencoded
+        // JSON format: { "event-data": { ...emailData }, "signature": {...} }
+        // Form format: { sender: "...", from: "...", subject: "...", ... }
+        let emailData;
+        
+        if (req.body['event-data']) {
+            // JSON format (new Mailgun webhooks)
+            console.log('📧 Format: JSON (event-data)');
+            emailData = req.body['event-data'];
+        } else {
+            // Form-urlencoded format (legacy)
+            console.log('📧 Format: Form-urlencoded (legacy)');
+            emailData = req.body;
+        }
 
         // Log received data for debugging (sanitize sensitive info)
         console.log('📧 Email data:', JSON.stringify({
