@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import LoadingSpinner from './LoadingSpinner';
+import { useToast } from '../hooks/useToast';
 
 /**
  * AIPriorityConfigPanel Component
@@ -10,7 +11,7 @@ const AIPriorityConfigPanel = () => {
   const [editedConfig, setEditedConfig] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState(null);
+  const toast = useToast();
   const [successMessage, setSuccessMessage] = useState(null);
   const [analytics, setAnalytics] = useState(null);
 
@@ -35,7 +36,7 @@ const AIPriorityConfigPanel = () => {
       setConfig(data.data.config_value);
       setEditedConfig(data.data.config_value);
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -61,7 +62,6 @@ const AIPriorityConfigPanel = () => {
   const handleSave = async () => {
     try {
       setIsSaving(true);
-      setError(null);
       setSuccessMessage(null);
 
       const response = await fetch('/api/config/ai/priority-weights', {
@@ -85,7 +85,7 @@ const AIPriorityConfigPanel = () => {
       
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setIsSaving(false);
     }
@@ -98,7 +98,6 @@ const AIPriorityConfigPanel = () => {
 
     try {
       setIsSaving(true);
-      setError(null);
 
       const response = await fetch('/api/config/ai/priority_weights/reset', {
         method: 'POST',
@@ -114,7 +113,7 @@ const AIPriorityConfigPanel = () => {
       setEditedConfig(data.data.config_value);
       setSuccessMessage('Configuration reset to defaults!');
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setIsSaving(false);
     }
@@ -153,12 +152,6 @@ const AIPriorityConfigPanel = () => {
       </div>
 
       {/* Messages */}
-      {error && (
-        <div className="bg-red-900/30 border border-red-600 text-red-300 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
-
       {successMessage && (
         <div className="bg-green-900/30 border border-green-600 text-green-300 px-4 py-3 rounded-lg">
           {successMessage}
