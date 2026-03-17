@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import LoadingSpinner from './LoadingSpinner'
-import Alert from './Alert'
 import RequestAssignmentModal from './RequestAssignmentModal'
 import RefreshButton from './RefreshButton'
 import { getAvailableTickets, requestAssignment } from '../services/ticketService'
+import { useToast } from '../hooks/useToast'
 
 /**
  * Priority badge styling
@@ -42,8 +42,7 @@ function AvailableTickets({ onTicketClick }) {
   // Data state
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [successMessage, setSuccessMessage] = useState(null)
+  const toast = useToast()
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState('')
@@ -60,12 +59,11 @@ function AvailableTickets({ onTicketClick }) {
   // Fetch available tickets
   const fetchAvailableTickets = async () => {
     setLoading(true)
-    setError(null)
     try {
       const response = await getAvailableTickets()
       setTickets(response.data || [])
     } catch (err) {
-      setError(err.message || 'Failed to load available tickets')
+      toast.error(err.message || 'Failed to load available tickets')
     } finally {
       setLoading(false)
     }
@@ -164,10 +162,9 @@ function AvailableTickets({ onTicketClick }) {
       setTickets(prev => prev.filter(t => t.id !== ticketId))
       setIsModalOpen(false)
       setSelectedTicket(null)
-      setSuccessMessage('Ticket assigned to you successfully!')
-      setTimeout(() => setSuccessMessage(null), 5000)
+      toast.success('Ticket assigned to you successfully!')
     } catch (err) {
-      setError(err.message || 'Failed to request assignment')
+      toast.error(err.message || 'Failed to request assignment')
     } finally {
       setIsSubmitting(false)
     }
@@ -302,28 +299,6 @@ function AvailableTickets({ onTicketClick }) {
           </div>
         )}
       </div>
-
-      {/* Success Alert */}
-      {successMessage && (
-        <div className="px-6 pt-4">
-          <Alert
-            type="success"
-            message={successMessage}
-            onClose={() => setSuccessMessage(null)}
-          />
-        </div>
-      )}
-
-      {/* Error Alert */}
-      {error && (
-        <div className="px-6 pt-4">
-          <Alert
-            type="error"
-            message={error}
-            onClose={() => setError(null)}
-          />
-        </div>
-      )}
 
       {/* Loading State */}
       {loading && (
