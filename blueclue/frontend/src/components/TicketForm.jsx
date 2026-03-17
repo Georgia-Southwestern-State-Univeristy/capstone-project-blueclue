@@ -6,6 +6,7 @@ import { suggestArticles } from '../services/chatService'
 import ArticleSuggestionCard from './ArticleSuggestionCard'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { useToast } from '../hooks/useToast'
 
 const SUGGESTION_WORD_THRESHOLD = 20
 const SUGGESTION_DEBOUNCE_MS    = 1200
@@ -34,8 +35,8 @@ function TicketForm({ onSubmit }) {
   // Loading state
   const [isLoading, setIsLoading] = useState(false)
 
-  // Error state
-  const [error, setError] = useState(null)
+  // Toast notifications
+  const toast = useToast()
 
   // Validation errors state
   const [validationErrors, setValidationErrors] = useState({
@@ -82,7 +83,6 @@ function TicketForm({ onSubmit }) {
       title: false,
       description: false
     })
-    setError(null)
     setAppliedTemplate(null) // Clear template tracking
     setImages([])           // Clear image attachments
     setImageError('')
@@ -313,7 +313,6 @@ function TicketForm({ onSubmit }) {
     }
 
     setIsLoading(true)
-    setError(null)
 
     try {
       // Prepare submission data, including template info if applicable
@@ -341,9 +340,9 @@ function TicketForm({ onSubmit }) {
       // Reset form after successful submission
       resetForm()
     } catch (err) {
-      // Only set local error if no onSubmit handler (parent handles the error display)
+      // Only show toast if no onSubmit handler (parent handles the error display)
       if (!onSubmit) {
-        setError(err.message || 'An error occurred while submitting the ticket')
+        toast.error(err.message || 'An error occurred while submitting the ticket')
       }
     } finally {
       setIsLoading(false)
@@ -352,16 +351,6 @@ function TicketForm({ onSubmit }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Error display */}
-      {error && (
-        <div 
-          role="alert"
-          className="bg-red-950 border border-red-700 text-red-300 px-4 py-3 rounded-lg"
-        >
-          {error}
-        </div>
-      )}
-      
       {/* Template Selector */}
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-1">
