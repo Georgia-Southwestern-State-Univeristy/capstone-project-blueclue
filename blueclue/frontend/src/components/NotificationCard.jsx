@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { markNotificationAsRead, deleteNotification } from '../services/notificationService';
 
-function NotificationCard({ notification, onUpdate, onTicketClick }) {
+function NotificationCard({ notification, onUpdate, onTicketClick, onError }) {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleClick = async () => {
@@ -12,6 +12,10 @@ function NotificationCard({ notification, onUpdate, onTicketClick }) {
         onUpdate();
       } catch (err) {
         console.error('Failed to mark as read:', err);
+        // Show error to user
+        if (onError) {
+          onError('Failed to mark notification as read. Please try again.');
+        }
       }
     }
     // If notification has a ticket, navigate to it
@@ -28,6 +32,10 @@ function NotificationCard({ notification, onUpdate, onTicketClick }) {
     } catch (err) {
       console.error('Failed to delete notification:', err);
       setIsDeleting(false);
+      // Show error to user
+      if (onError) {
+        onError('Failed to delete notification. Please try again.');
+      }
     }
   };
 
