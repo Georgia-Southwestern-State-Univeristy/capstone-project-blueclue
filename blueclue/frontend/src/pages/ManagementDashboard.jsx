@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useToast } from '../hooks/useToast'
 import LoadingSpinner from '../components/LoadingSpinner'
-import Alert from '../components/Alert'
 import BaseWidget from '../components/BaseWidget'
 import DashboardGrid from '../components/DashboardGrid'
 import useDashboardLayout from '../hooks/useDashboardLayout'
@@ -18,7 +18,7 @@ import DeletedTicketsWidget from '../components/DeletedTicketsWidget'
 import QuickActionsPanel from '../components/QuickActionsPanel'
 import TicketDetailView from '../components/TicketDetailView'
 import UpdateRequestResponseTimeAnalytics from '../components/UpdateRequestResponseTimeAnalytics'
-import { getAllTickets, getCancellationStats } from '../services/ticketService'
+import { getAllTickets } from '../services/ticketService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
 import { buildGalleryItems, buildWidgetConfig } from '../widgets'
 
@@ -86,7 +86,7 @@ const WIDGET_GALLERY_ITEMS = buildGalleryItems({ keys: MANAGEMENT_WIDGET_KEYS })
  * Renders all dashboard widgets inside a drag-and-drop grid.
  */
 function ManagementWidgetGrid({
-  tickets, filteredTickets, loading, fetchTickets,
+  tickets, filteredTickets, fetchTickets,
   assignmentFilter, setAssignmentFilter,
   widgetFilters, handleWidgetFilterChange,
   categoryFilter, setCategoryFilter,
@@ -147,7 +147,7 @@ function ManagementWidgetGrid({
       ),
     }
     return buildWidgetConfig(MANAGEMENT_WIDGET_KEYS, componentMap)
-  }, [tickets, loading, fetchTickets, assignmentFilter, setAssignmentFilter,
+  }, [tickets, fetchTickets, assignmentFilter, setAssignmentFilter,
       widgetFilters, handleWidgetFilterChange, categoryFilter, setCategoryFilter,
       handleTicketClick, pendingRequestsRef])
 
@@ -247,8 +247,8 @@ function ManagementWidgetGrid({
  */
 function ManagementDashboard() {
   // State management
+  const toast = useToast()
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
   const [tickets, setTickets] = useState([])
   const pendingRequestsRef = useRef(null)
 
@@ -275,7 +275,6 @@ function ManagementDashboard() {
   const [widgetFilters, setWidgetFilters] = useState({ priority: null, category: null, status: null })
   const [categoryFilter, setCategoryFilter] = useState(null) // selected category key or null
   const [includeCancelled, setIncludeCancelled] = useState(false)
-  const [cancellationData, setCancellationData] = useState(null)
 
   const handleWidgetFilterChange = useCallback((key, value) => {
     setWidgetFilters((prev) => ({ ...prev, [key]: value }))
@@ -292,38 +291,26 @@ function ManagementDashboard() {
     cancellationRate: 0
   })
 
-  const fetchTickets = async () => {
+  const fetchTickets = useCallback(async () => {
     // Only show full loading spinner on initial load
     if (tickets.length === 0) setLoading(true)
-    setError(null)
     try {
       const response = await getAllTickets()
       setTickets(response.data || [])
     } catch (err) {
-      setError(err.message || 'Failed to load tickets')
+      toast.error(err.message || 'Failed to load tickets')
       console.error('Error fetching tickets:', err)
     } finally {
       setLoading(false)
     }
-  }
+  }, [tickets.length, toast])
   // Keep ref pointing at latest fetchTickets so socket callback is always current
   _ticketFetchRef.current = fetchTickets
-
-  // Fetch cancellation stats from backend
-  const fetchCancellationStats = async () => {
-    try {
-      const response = await getCancellationStats('30d')
-      setCancellationData(response.data || null)
-    } catch (err) {
-      console.error('Error fetching cancellation stats:', err)
-    }
-  }
 
   // Fetch tickets on component mount
   useEffect(() => {
     fetchTickets()
-    fetchCancellationStats()
-  }, [])
+  }, [fetchTickets])
 
   // Check for ticket to auto-open from Ring for Help
   useEffect(() => {
@@ -422,17 +409,6 @@ function ManagementDashboard() {
         </p>
       </div>
 
-      {/* Error Alert */}
-      {error && (
-        <div className="mb-6">
-          <Alert 
-            type="error" 
-            message={error}
-            onClose={() => setError(null)}
-          />
-        </div>
-      )}
-
       {/* Include Cancelled Toggle + Summary Statistics Grid */}
       <div className="flex items-center justify-end mb-3">
         <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -495,7 +471,6 @@ function ManagementDashboard() {
       <ManagementWidgetGrid
         tickets={tickets}
         filteredTickets={filteredTickets}
-        loading={loading}
         fetchTickets={fetchTickets}
         assignmentFilter={assignmentFilter}
         setAssignmentFilter={setAssignmentFilter}
