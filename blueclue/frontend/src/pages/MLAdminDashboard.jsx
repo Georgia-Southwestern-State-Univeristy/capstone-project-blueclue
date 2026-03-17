@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useToast } from '../hooks/useToast'
 import * as svc from '../services/mlAdminService'
 import ExplainabilityPanel from '../components/ml/ExplainabilityPanel'
 
@@ -61,9 +62,9 @@ const TABS = ['Overview', 'Predictions', 'Feedback', 'Drift', 'Models', 'Retrain
 // ─── Main component ─────────────────────────────────────────────────────────
 export default function MLAdminDashboard() {
   const navigate = useNavigate()
+  const toast = useToast()
   const [activeTab, setActiveTab] = useState('Overview')
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
 
   // Data state
@@ -81,7 +82,6 @@ export default function MLAdminDashboard() {
 
   // Action state
   const [actionLoading, setActionLoading] = useState('')
-  const [actionMsg, setActionMsg]         = useState(null)
   const [driftRunning, setDriftRunning]   = useState(false)
   const [driftLoading, setDriftLoading]   = useState(false)
   const [driftError, setDriftError]       = useState(null)
@@ -105,7 +105,7 @@ export default function MLAdminDashboard() {
       const data = await svc.getMLDashboard()
       setDashboard(data?.data || data)
     } catch (e) {
-      setError('Failed to load ML dashboard: ' + e.message)
+      toast.error('Failed to load ML dashboard: ' + e.message)
     } finally {
       setRefreshing(false)
       setLoading(false)
@@ -153,16 +153,31 @@ export default function MLAdminDashboard() {
   // Lazy tab loaders
   useEffect(() => {
     if (activeTab === 'Predictions' && predictions.length === 0) {
-      svc.getRecentPredictions(100).then(r => setPredictions(r?.data || [])).catch(() => {})
+      svc.getRecentPredictions(100)
+        .then(r => setPredictions(r?.data || []))
+        .catch(e => {
+          console.error('Failed to load predictions:', e)
+          toast.error('Failed to load predictions: ' + (e.message || 'Unknown error'))
+        })
     }
     if (activeTab === 'Feedback' && !feedback) {
-      svc.getFeedback({ limit: 100 }).then(r => setFeedback(r?.data || r)).catch(() => {})
+      svc.getFeedback({ limit: 100 })
+        .then(r => setFeedback(r?.data || r))
+        .catch(e => {
+          console.error('Failed to load feedback:', e)
+          toast.error('Failed to load feedback: ' + (e.message || 'Unknown error'))
+        })
     }
     if (activeTab === 'Drift') {
       loadDriftReports()
     }
     if (activeTab === 'Models' && !modelVersions) {
-      svc.getModelVersions().then(r => setModelVersions(r?.data || r)).catch(() => {})
+      svc.getModelVersions()
+        .then(r => setModelVersions(r?.data || r))
+        .catch(e => {
+          console.error('Failed to load model versions:', e)
+          toast.error('Failed to load model versions: ' + (e.message || 'Unknown error'))
+        })
     }
     if (activeTab === 'Retraining') {
       refreshRetrainRuns()
@@ -173,12 +188,11 @@ export default function MLAdminDashboard() {
 
   const handleRunDrift = async (modelType) => {
     setDriftRunning(true)
-    setActionMsg(null)
     try {
       const r = await svc.runDriftDetection(modelType, 30)
-      setActionMsg({ type: 'success', text: `Drift report for ${modelType}: drift ${r?.data?.drift_detected ? 'DETECTED' : 'none'}` })
+      toast.success(`Drift report for ${modelType}: drift ${r?.data?.drift_detected ? 'DETECTED' : 'none'}`)
     } catch (e) {
-      setActionMsg({ type: 'error', text: 'Drift detection failed: ' + e.message })
+      toast.error('Drift detection failed: ' + e.message)
     } finally {
       setDriftRunning(false)
       // Always refresh the list so existing reports remain visible
@@ -188,14 +202,13 @@ export default function MLAdminDashboard() {
 
   const handleRetrain = async (opts) => {
     setActionLoading('retrain')
-    setActionMsg(null)
     try {
       const r = await svc.triggerRetraining(opts)
-      setActionMsg({ type: 'success', text: `Retraining started. Run ID: ${r?.data?.run_id}` })
+      toast.success(`Retraining started. Run ID: ${r?.data?.run_id}`)
       // Immediately refresh run list so the new row appears, then polling takes over
       await refreshRetrainRuns()
     } catch (e) {
-      setActionMsg({ type: 'error', text: 'Retraining failed: ' + e.message })
+      toast.error('Retraining failed: ' + e.message)
     } finally {
       setActionLoading('')
     }
@@ -206,10 +219,15 @@ export default function MLAdminDashboard() {
     setActionLoading(`deploy-${version}`)
     try {
       await svc.deployModel(modelType, version)
-      setActionMsg({ type: 'success', text: `Deployed ${modelType} v${version}` })
-      svc.getModelVersions().then(r => setModelVersions(r?.data || r)).catch(() => {})
+      toast.success(`Deployed ${modelType} v${version}`)
+      svc.getModelVersions()
+        .then(r => setModelVersions(r?.data || r))
+        .catch(e => {
+          console.error('Failed to refresh model versions after deploy:', e)
+          // Don't show error to user since deploy succeeded - just log it
+        })
     } catch (e) {
-      setActionMsg({ type: 'error', text: 'Deploy failed: ' + e.message })
+      toast.error('Deploy failed: ' + e.message)
     } finally {
       setActionLoading('')
     }
@@ -220,10 +238,15 @@ export default function MLAdminDashboard() {
     setActionLoading(`rollback-${modelType}`)
     try {
       const r = await svc.rollbackModel(modelType)
-      setActionMsg({ type: 'success', text: r?.data?.message || 'Rollback complete' })
-      svc.getModelVersions().then(r => setModelVersions(r?.data || r)).catch(() => {})
+      toast.success(r?.data?.message || 'Rollback complete')
+      svc.getModelVersions()
+        .then(r => setModelVersions(r?.data || r))
+        .catch(e => {
+          console.error('Failed to refresh model versions after rollback:', e)
+          // Don't show error to user since rollback succeeded - just log it
+        })
     } catch (e) {
-      setActionMsg({ type: 'error', text: 'Rollback failed: ' + e.message })
+      toast.error('Rollback failed: ' + e.message)
     } finally {
       setActionLoading('')
     }
@@ -239,7 +262,7 @@ export default function MLAdminDashboard() {
       a.click()
       URL.revokeObjectURL(url)
     } catch (e) {
-      setActionMsg({ type: 'error', text: 'Export failed: ' + e.message })
+      toast.error('Export failed: ' + e.message)
     }
   }
 
@@ -291,23 +314,6 @@ export default function MLAdminDashboard() {
             </button>
           </div>
         </div>
-
-        {/* Action message banner */}
-        {actionMsg && (
-          <div className={`mb-4 p-3 rounded-lg text-sm flex items-center justify-between
-            ${actionMsg.type === 'success' ? 'bg-green-950 text-green-300 border border-green-800'
-              : 'bg-red-950 text-red-300 border border-red-800'}`}>
-            <span>{actionMsg.text}</span>
-            <button onClick={() => setActionMsg(null)} className="ml-3 opacity-60 hover:opacity-100">X</button>
-          </div>
-        )}
-
-        {/* Error banner */}
-        {error && (
-          <div className="mb-4 p-3 rounded-lg text-sm bg-red-950 text-red-300 border border-red-800">
-            {error}
-          </div>
-        )}
 
         {/* ── Tabs ── */}
         <div className="flex gap-1 border-b border-gray-700 mb-6 overflow-x-auto">
