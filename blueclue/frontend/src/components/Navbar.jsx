@@ -282,6 +282,13 @@ function Navbar() {
     } catch (err) {
       console.error('Handoff request error:', err)
       setHandoffStatus(null)
+      // Inform user of the failure
+      chat.addMessage({
+        id: Date.now(),
+        sender: 'bot',
+        text: "Sorry, I couldn't connect you to a technician right now. Please try again or submit a support ticket from your dashboard.",
+        timestamp: new Date(),
+      })
     }
   }, [chat])
 
