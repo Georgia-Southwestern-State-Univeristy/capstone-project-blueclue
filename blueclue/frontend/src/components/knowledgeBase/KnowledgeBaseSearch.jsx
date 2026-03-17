@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, Filter, X, ChevronDown, Loader2 } from 'lucide-react';
 import axios from 'axios';
+import { useToast } from '../../contexts/useToast';
 
 const KnowledgeBaseSearch = () => {
     const [searchQuery, setSearchQuery] = useState('');
@@ -11,6 +12,7 @@ const KnowledgeBaseSearch = () => {
     const [totalResults, setTotalResults] = useState(0);
     const [hasMore, setHasMore] = useState(false);
     const [offset, setOffset] = useState(0);
+    const toast = useToast();
 
     // Filters
     const [selectedCategory, setSelectedCategory] = useState('');
@@ -76,6 +78,10 @@ const KnowledgeBaseSearch = () => {
             setOffset(loadMore ? offset + 20 : 20);
         } catch (error) {
             console.error('Search error:', error);
+            toast.error('Failed to search knowledge base. Please try again.');
+            if (!loadMore) {
+                setResults([]);
+            }
         } finally {
             setLoading(false);
         }
@@ -96,6 +102,8 @@ const KnowledgeBaseSearch = () => {
             setShowSuggestions(true);
         } catch (error) {
             console.error('Autocomplete error:', error);
+            // Autocomplete failures are non-critical - fail silently
+            setSuggestions([]);
         }
     };
 
