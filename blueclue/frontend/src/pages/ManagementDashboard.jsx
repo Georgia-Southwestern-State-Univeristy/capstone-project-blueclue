@@ -18,6 +18,7 @@ import DeletedTicketsWidget from '../components/DeletedTicketsWidget'
 import QuickActionsPanel from '../components/QuickActionsPanel'
 import TicketDetailView from '../components/TicketDetailView'
 import UpdateRequestResponseTimeAnalytics from '../components/UpdateRequestResponseTimeAnalytics'
+import AuditHealthWidget from '../components/AuditHealthWidget'
 import { getAllTickets } from '../services/ticketService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
 import { buildGalleryItems, buildWidgetConfig } from '../widgets'
@@ -25,7 +26,7 @@ import { buildGalleryItems, buildWidgetConfig } from '../widgets'
 // Default grid layouts for management dashboard widgets
 // 12-column grid, rowHeight=60px.  Height in px ≈ h×60 + (h-1)×16
 // Each item: { i: key, x, y, w, h, minW, minH }
-const LAYOUT_VERSION = 4 // bump to force stale localStorage reset
+const LAYOUT_VERSION = 5 // bump to force stale localStorage reset
 const DEFAULT_LAYOUTS = {
   lg: [
     { i: 'timeline',       x: 0,  y: 0,  w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
@@ -40,6 +41,7 @@ const DEFAULT_LAYOUTS = {
     { i: 'deletedTickets', x: 0,  y: 48, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
     { i: 'pendingRequests',x: 6,  y: 48, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
     { i: 'responseTime',   x: 0,  y: 55, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'auditHealth',    x: 0,  y: 62, w: 12, h: 10, minW: 4,  minH: 6, maxW: 12, maxH: 16 },
   ],
   md: [
     { i: 'timeline',       x: 0,  y: 0,  w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
@@ -54,6 +56,7 @@ const DEFAULT_LAYOUTS = {
     { i: 'deletedTickets', x: 0,  y: 62, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
     { i: 'pendingRequests',x: 0,  y: 69, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
     { i: 'responseTime',   x: 0,  y: 76, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'auditHealth',    x: 0,  y: 83, w: 12, h: 10, minW: 4,  minH: 6, maxW: 12, maxH: 16 },
   ],
   sm: [
     { i: 'timeline',       x: 0,  y: 0,  w: 6,  h: 8,  minW: 3,  minH: 6, maxW: 6, maxH: 16 },
@@ -68,6 +71,7 @@ const DEFAULT_LAYOUTS = {
     { i: 'deletedTickets', x: 0,  y: 70, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
     { i: 'pendingRequests',x: 0,  y: 77, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
     { i: 'responseTime',   x: 0,  y: 84, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
+    { i: 'auditHealth',    x: 0,  y: 91, w: 6,  h: 10, minW: 4,  minH: 6, maxW: 6, maxH: 16 },
   ],
 }
 
@@ -76,6 +80,7 @@ const MANAGEMENT_WIDGET_KEYS = [
   'timeline', 'ticketControl', 'assignedChart', 'categoriesChart',
   'overdue', 'escalations', 'todaysActions', 'topRequesters',
   'techPerformance', 'deletedTickets', 'pendingRequests', 'responseTime',
+  'auditHealth',
 ]
 
 // Widget metadata for the gallery sidebar — derived from the widget registry
@@ -145,6 +150,7 @@ function ManagementWidgetGrid({
           <UpdateRequestResponseTimeAnalytics />
         </BaseWidget>
       ),
+      auditHealth: <AuditHealthWidget />,
     }
     return buildWidgetConfig(MANAGEMENT_WIDGET_KEYS, componentMap)
   }, [tickets, fetchTickets, assignmentFilter, setAssignmentFilter,
