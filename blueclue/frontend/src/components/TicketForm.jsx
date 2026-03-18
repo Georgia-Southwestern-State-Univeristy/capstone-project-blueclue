@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import LoadingSpinner from './LoadingSpinner'
-import TemplateSelector from './TemplateSelector'
+import TemplateBrowser from './TemplateBrowser'
 import { recordTemplateUsage } from '../services/templateService'
 import { suggestArticles } from '../services/chatService'
 import ArticleSuggestionCard from './ArticleSuggestionCard'
@@ -64,6 +64,9 @@ function TicketForm({ onSubmit }) {
   const [suggestionDismissed, setSuggestionDismissed] = useState(false)
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false)
   const suggestionTimerRef = useRef(null)
+
+  // Template browser modal open state
+  const [isTemplateBrowserOpen, setIsTemplateBrowserOpen] = useState(false)
 
   // Description display mode: 'edit' | 'preview'
   const [descriptionMode, setDescriptionMode] = useState('edit')
@@ -351,12 +354,25 @@ function TicketForm({ onSubmit }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Template Selector */}
+      {/* Template Browser */}
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-1">
           Quick Start
         </label>
-        <TemplateSelector
+        <button
+          type="button"
+          onClick={() => setIsTemplateBrowserOpen(true)}
+          disabled={isLoading}
+          className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-left text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+        >
+          <svg className="w-5 h-5 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <span className="text-gray-300">Browse Templates</span>
+        </button>
+        <TemplateBrowser
+          isOpen={isTemplateBrowserOpen}
+          onClose={() => setIsTemplateBrowserOpen(false)}
           onTemplateSelect={handleTemplateSelect}
           disabled={isLoading}
         />
