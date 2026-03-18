@@ -5,6 +5,7 @@
  */
 
 import * as adminService from '../services/adminService.js';
+import pool from '../config/database.js';
 
 /**
  * GET /api/admin/email-logs
@@ -379,6 +380,67 @@ export const resolveSecurityAlert = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/admin/audit-health
+ * Get audit logging health status
+ */
+export const getAuditLogHealth = async (req, res) => {
+  try {
+    // Update health status first
+    await pool.query('SELECT update_audit_log_health()');
+
+    // Retrieve current health status
+    const result = await pool.query(
+      `SELECT 
+        log_type,
+        last_entry_at,
+        entry_count_24h,
+        is_healthy,
+        last_check_at,
+        notes
+       FROM audit_log_health
+       ORDER BY log_type ASC`
+    );
+
+    // Calculate time since last entry for each log type
+    const healthData = result.rows.map(row => {
+      let timeSinceLastEntry = null;
+      if (row.last_entry_at) {
+        const diffMs = Date.now() - new Date(row.last_entry_at).getTime();
+        const minutes = Math.floor(diffMs / 60000);
+        const hours = Math.floor(minutes / 60);
+        const days = Math.floor(hours / 24);
+
+        if (days > 0) {
+          timeSinceLastEntry = `${days}d ${hours % 24}h ago`;
+        } else if (hours > 0) {
+          timeSinceLastEntry = `${hours}h ${minutes % 60}m ago`;
+        } else {
+          timeSinceLastEntry = `${minutes}m ago`;
+        }
+      }
+
+      return {
+        ...row,
+        time_since_last_entry: timeSinceLastEntry
+      };
+    });
+
+    res.json({
+      success: true,
+      health: healthData,
+      overall_healthy: healthData.every(h => h.is_healthy)
+    });
+  } catch (error) {
+    console.error('Error fetching audit log health:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch audit log health',
+      error: error.message
+    });
+  }
+};
+
 export default {
   getEmailLogs,
   getEmailLogDetails,
@@ -390,5 +452,6 @@ export default {
   getSystemSettings,
   updateSystemSetting,
   getSecurityAlerts,
-  resolveSecurityAlert
+  resolveSecurityAlert,
+  getAuditLogHealth
 };
