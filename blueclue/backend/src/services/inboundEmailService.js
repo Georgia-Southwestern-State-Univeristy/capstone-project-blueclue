@@ -15,6 +15,17 @@ import {
     createVerificationChallenge 
 } from './spamProtectionService.js';
 
+// Attachment limits (match frontend TicketForm.jsx)
+const MAX_ATTACHMENTS = 5;
+const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_ATTACHMENT_TYPES = [
+    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+    'application/pdf',
+    'text/plain', 'text/csv',
+    'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+];
+
 // ============================================================================
 // EMAIL PARSING
 // ============================================================================
@@ -330,6 +341,60 @@ const extractThreadId = (emailData) => {
 };
 
 /**
+ * Download attachment from Mailgun URL and convert to Base64 data URL
+ * @param {string} url - Temporary Mailgun URL
+ * @param {string} contentType - MIME type
+ * @param {string} filename - Original filename
+ * @returns {Promise<Object>} - { dataUrl, name, size } or null if failed
+ */
+const downloadAndConvertAttachment = async (url, contentType, filename) => {
+    try {
+        // Set timeout for download
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        
+        const response = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+                'Authorization': `Basic ${Buffer.from(`api:${process.env.MAILGUN_API_KEY}`).toString('base64')}`
+            }
+        });
+        
+        clearTimeout(timeout);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to download attachment: ${response.status}`);
+        }
+        
+        // Get content as buffer (native fetch uses arrayBuffer, convert to Node Buffer)
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const size = buffer.length;
+        
+        // Check size limit
+        if (size > MAX_ATTACHMENT_SIZE_BYTES) {
+            console.warn(`⚠️  Attachment ${filename} too large (${(size / 1024 / 1024).toFixed(2)}MB), skipping`);
+            return null;
+        }
+        
+        // Convert to Base64 data URL
+        const base64 = buffer.toString('base64');
+        const dataUrl = `data:${contentType};base64,${base64}`;
+        
+        console.log(`✅ Downloaded ${filename} (${(size / 1024).toFixed(1)}KB)`);
+        
+        return {
+            dataUrl,
+            name: filename,
+            size
+        };
+    } catch (error) {
+        console.error(`❌ Failed to download attachment ${filename}:`, error.message);
+        return null;
+    }
+};
+
+/**
  * Extract attachment metadata from email
  * Note: Actual file handling would require additional storage setup
  */
@@ -601,13 +666,47 @@ export const createTicketFromEmail = async (emailData) => {
         // Check for email thread ID (for replies to existing tickets)
         const threadId = extractThreadId(emailData);
         
-        // Extract attachment information
+        // Extract and process attachments
         const attachmentInfo = extractAttachmentInfo(emailData);
+        let processedAttachments = [];
+        
         if (attachmentInfo.hasAttachments) {
-            console.log(`📎 ${attachmentInfo.count} attachment(s) detected`);
-            attachmentInfo.attachments.forEach(att => {
-                console.log(`   - ${att.name} (${att.contentType}, ${(att.size / 1024).toFixed(1)}KB)`);
-            });
+            console.log(`📎 Processing ${attachmentInfo.count} attachment(s)...`);
+            
+            // Limit to MAX_ATTACHMENTS
+            const attachmentsToProcess = attachmentInfo.attachments
+                .slice(0, MAX_ATTACHMENTS)
+                .filter(att => {
+                    // Check if attachment type is allowed
+                    if (!ALLOWED_ATTACHMENT_TYPES.includes(att.contentType)) {
+                        console.warn(`⚠️  Skipping unsupported attachment type: ${att.contentType}`);
+                        return false;
+                    }
+                    // Check size before downloading
+                    if (att.size > MAX_ATTACHMENT_SIZE_BYTES) {
+                        console.warn(`⚠️  Skipping attachment ${att.name} - exceeds size limit (${(att.size / 1024 / 1024).toFixed(2)}MB)`);
+                        return false;
+                    }
+                    return true;
+                });
+            
+            // Download and convert attachments in parallel
+            const downloadPromises = attachmentsToProcess.map(att => 
+                downloadAndConvertAttachment(att.url, att.contentType, att.name)
+            );
+            
+            const results = await Promise.allSettled(downloadPromises);
+            processedAttachments = results
+                .filter(r => r.status === 'fulfilled' && r.value !== null)
+                .map(r => r.value);
+            
+            console.log(`✅ Successfully processed ${processedAttachments.length}/${attachmentInfo.count} attachment(s)`);
+            
+            if (processedAttachments.length > 0) {
+                processedAttachments.forEach(att => {
+                    console.log(`   - ${att.name} (${(att.size / 1024).toFixed(1)}KB)`);
+                });
+            }
         }
 
         // Find or create user
@@ -639,7 +738,7 @@ export const createTicketFromEmail = async (emailData) => {
             console.log('🚨 Priority elevated to HIGH due to urgent keywords');
         }
 
-        // Create ticket with enhanced metadata
+        // Create ticket with enhanced metadata and attachments
         const ticket = await Ticket.create({
             subject: ticketSubject,
             description: ticketDescription,
@@ -655,7 +754,8 @@ export const createTicketFromEmail = async (emailData) => {
                 category_keywords: aiResult.category_keywords || [],
                 priority_keywords: aiResult.priority_keywords || []
             } : null,
-            email_message_id: messageId // Store for reply-to-update tracking
+            email_message_id: messageId, // Store for reply-to-update tracking
+            attachments: processedAttachments // Add Base64-encoded attachments
         });
 
         console.log(`✅ Ticket #${ticket.id} created from email`);
