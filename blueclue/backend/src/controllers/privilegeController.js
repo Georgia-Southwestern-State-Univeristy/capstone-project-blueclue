@@ -1,20 +1,17 @@
-// src/controllers/privilegeController.js
+﻿// src/controllers/privilegeController.js
 import UserPrivilege from '../models/UserPrivilege.js';
 import pool from '../config/database.js';
+import { BadRequestError, ForbiddenError, NotFoundError, ConflictError } from '../middleware/errorHandler.js';
 
 /**
  * Get all privileges for a specific user
  * GET /api/users/:id/privileges
  */
 export const getUserPrivileges = async (req, res) => {
-    try {
         const userId = parseInt(req.params.id);
 
         if (isNaN(userId)) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Invalid user ID'
-            });
+            throw new BadRequestError('Invalid user ID');
         }
 
         // Check if requesting user has permission
@@ -23,10 +20,7 @@ export const getUserPrivileges = async (req, res) => {
             // Check if user has privilege management permission
             const canManage = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_MANAGE_CATEGORIES');
             if (!canManage) {
-                return res.status(403).json({
-                    status: 'error',
-                    message: 'Access denied. Cannot view other users privileges.'
-                });
+                throw new ForbiddenError('Access denied. Cannot view other users privileges.');
             }
         }
 
@@ -39,13 +33,6 @@ export const getUserPrivileges = async (req, res) => {
                 privileges
             }
         });
-    } catch (error) {
-        console.error('Error fetching user privileges:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to fetch user privileges'
-        });
-    }
 };
 
 /**
@@ -53,23 +40,16 @@ export const getUserPrivileges = async (req, res) => {
  * POST /api/users/:id/privileges
  */
 export const grantPrivilege = async (req, res) => {
-    try {
         const userId = parseInt(req.params.id);
         const { privilege_type, value = 'true', notes } = req.body;
 
         if (isNaN(userId)) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Invalid user ID'
-            });
+            throw new BadRequestError('Invalid user ID');
         }
 
         // Validation
         if (!privilege_type) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'privilege_type is required'
-            });
+            throw new BadRequestError('privilege_type is required');
         }
 
         // Verify the privilege type exists
@@ -79,10 +59,7 @@ export const grantPrivilege = async (req, res) => {
         );
 
         if (privilegeTypeCheck.rows.length === 0) {
-            return res.status(400).json({
-                status: 'error',
-                message: `Invalid privilege type: ${privilege_type}`
-            });
+            throw new BadRequestError(`Invalid privilege type: ${privilege_type}`);
         }
 
         // Verify the target user exists
@@ -92,10 +69,7 @@ export const grantPrivilege = async (req, res) => {
         );
 
         if (userCheck.rows.length === 0) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'User not found'
-            });
+            throw new NotFoundError('User not found');
         }
 
         // Check if privilege already exists
@@ -105,10 +79,7 @@ export const grantPrivilege = async (req, res) => {
         );
 
         if (existingPrivilege.rows.length > 0) {
-            return res.status(409).json({
-                status: 'error',
-                message: 'User already has this privilege'
-            });
+            throw new ConflictError('User already has this privilege');
         }
 
         // Grant the privilege
@@ -125,13 +96,6 @@ export const grantPrivilege = async (req, res) => {
             message: 'Privilege granted successfully',
             data: privilege
         });
-    } catch (error) {
-        console.error('Error granting privilege:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to grant privilege'
-        });
-    }
 };
 
 /**
@@ -139,15 +103,11 @@ export const grantPrivilege = async (req, res) => {
  * DELETE /api/users/:id/privileges/:privilegeId
  */
 export const revokePrivilege = async (req, res) => {
-    try {
         const userId = parseInt(req.params.id);
         const privilegeId = parseInt(req.params.privilegeId);
 
         if (isNaN(userId) || isNaN(privilegeId)) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Invalid user ID or privilege ID'
-            });
+            throw new BadRequestError('Invalid user ID or privilege ID');
         }
 
         // Get the privilege to verify it belongs to the user
@@ -157,10 +117,7 @@ export const revokePrivilege = async (req, res) => {
         );
 
         if (privilegeCheck.rows.length === 0) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Privilege not found or does not belong to this user'
-            });
+            throw new NotFoundError('Privilege not found or does not belong to this user');
         }
 
         // Delete the privilege
@@ -171,13 +128,6 @@ export const revokePrivilege = async (req, res) => {
             message: 'Privilege revoked successfully',
             data: deletedPrivilege
         });
-    } catch (error) {
-        console.error('Error revoking privilege:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to revoke privilege'
-        });
-    }
 };
 
 /**
@@ -185,7 +135,6 @@ export const revokePrivilege = async (req, res) => {
  * GET /api/privileges/types
  */
 export const getPrivilegeTypes = async (req, res) => {
-    try {
         const result = await pool.query(
             'SELECT * FROM privilege_types WHERE is_active = true ORDER BY privilege_code'
         );
@@ -194,13 +143,6 @@ export const getPrivilegeTypes = async (req, res) => {
             status: 'success',
             data: result.rows
         });
-    } catch (error) {
-        console.error('Error fetching privilege types:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to fetch privilege types'
-        });
-    }
 };
 
 /**
@@ -208,14 +150,10 @@ export const getPrivilegeTypes = async (req, res) => {
  * GET /api/privileges/:privilegeType/users
  */
 export const getUsersWithPrivilege = async (req, res) => {
-    try {
         const { privilegeType } = req.params;
 
         if (!privilegeType) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Privilege type is required'
-            });
+            throw new BadRequestError('Privilege type is required');
         }
 
         const users = await UserPrivilege.getUsersWithPrivilege(privilegeType);
@@ -227,11 +165,4 @@ export const getUsersWithPrivilege = async (req, res) => {
                 users
             }
         });
-    } catch (error) {
-        console.error('Error fetching users with privilege:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to fetch users'
-        });
-    }
 };
