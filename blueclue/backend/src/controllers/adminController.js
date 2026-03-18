@@ -5,38 +5,34 @@
  */
 
 import * as adminService from '../services/adminService.js';
+import pool from '../config/database.js';
+import { 
+    BadRequestError, 
+    NotFoundError 
+} from '../middleware/errorHandler.js';
 
 /**
  * GET /api/admin/email-logs
  * Get paginated list of email logs with filtering
  */
 export const getEmailLogs = async (req, res) => {
-  try {
-    const options = {
-      page: parseInt(req.query.page) || 1,
-      limit: parseInt(req.query.limit) || 50,
-      status: req.query.status,
-      isBlocked: req.query.isBlocked === 'true' ? true : req.query.isBlocked === 'false' ? false : undefined,
-      isSpam: req.query.isSpam === 'true' ? true : req.query.isSpam === 'false' ? false : undefined,
-      senderEmail: req.query.senderEmail,
-      startDate: req.query.startDate,
-      endDate: req.query.endDate
-    };
+  const options = {
+    page: parseInt(req.query.page) || 1,
+    limit: parseInt(req.query.limit) || 50,
+    status: req.query.status,
+    isBlocked: req.query.isBlocked === 'true' ? true : req.query.isBlocked === 'false' ? false : undefined,
+    isSpam: req.query.isSpam === 'true' ? true : req.query.isSpam === 'false' ? false : undefined,
+    senderEmail: req.query.senderEmail,
+    startDate: req.query.startDate,
+    endDate: req.query.endDate
+  };
 
-    const result = await adminService.getEmailLogs(options);
+  const result = await adminService.getEmailLogs(options);
 
-    res.json({
-      status: 'success',
-      data: result
-    });
-  } catch (error) {
-    console.error('Error fetching email logs:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch email logs',
-      error: error.message
-    });
-  }
+  res.json({
+    status: 'success',
+    data: result
+  });
 };
 
 /**
@@ -44,38 +40,18 @@ export const getEmailLogs = async (req, res) => {
  * Get full details of a specific email log
  */
 export const getEmailLogDetails = async (req, res) => {
-  try {
-    const { id } = req.params;
+  const { id } = req.params;
 
-    if (!id || isNaN(id)) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid email log ID'
-      });
-    }
-
-    const emailLog = await adminService.getEmailLogDetails(parseInt(id));
-
-    res.json({
-      status: 'success',
-      data: emailLog
-    });
-  } catch (error) {
-    console.error('Error fetching email log details:', error);
-
-    if (error.message.includes('not found')) {
-      return res.status(404).json({
-        status: 'error',
-        message: error.message
-      });
-    }
-
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch email log details',
-      error: error.message
-    });
+  if (!id || isNaN(id)) {
+    throw new BadRequestError('Invalid email log ID');
   }
+
+  const emailLog = await adminService.getEmailLogDetails(parseInt(id));
+
+  res.json({
+    status: 'success',
+    data: emailLog
+  });
 };
 
 /**
@@ -83,40 +59,20 @@ export const getEmailLogDetails = async (req, res) => {
  * Retry creating ticket from a failed email parse
  */
 export const retryFailedParse = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const overrides = req.body.overrides || {};
+  const { id } = req.params;
+  const overrides = req.body.overrides || {};
 
-    if (!id || isNaN(id)) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid email log ID'
-      });
-    }
-
-    const result = await adminService.retryFailedParse(parseInt(id), overrides);
-
-    res.json({
-      status: 'success',
-      data: result,
-      message: `Ticket #${result.ticket_number} created successfully from email log #${id}`
-    });
-  } catch (error) {
-    console.error('Error retrying failed parse:', error);
-
-    if (error.message.includes('not found') || error.message.includes('already has ticket')) {
-      return res.status(400).json({
-        status: 'error',
-        message: error.message
-      });
-    }
-
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to retry email parse',
-      error: error.message
-    });
+  if (!id || isNaN(id)) {
+    throw new BadRequestError('Invalid email log ID');
   }
+
+  const result = await adminService.retryFailedParse(parseInt(id), overrides);
+
+  res.json({
+    status: 'success',
+    data: result,
+    message: `Ticket #${result.ticket_number} created successfully from email log #${id}`
+  });
 };
 
 /**
@@ -124,23 +80,14 @@ export const retryFailedParse = async (req, res) => {
  * Get dashboard statistics
  */
 export const getDashboardStats = async (req, res) => {
-  try {
-    const days = parseInt(req.query.days) || 7;
+  const days = parseInt(req.query.days) || 7;
 
-    const stats = await adminService.getDashboardStats(days);
+  const stats = await adminService.getDashboardStats(days);
 
-    res.json({
-      status: 'success',
-      data: stats
-    });
-  } catch (error) {
-    console.error('Error fetching dashboard stats:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch dashboard statistics',
-      error: error.message
-    });
-  }
+  res.json({
+    status: 'success',
+    data: stats
+  });
 };
 
 /**
@@ -148,24 +95,15 @@ export const getDashboardStats = async (req, res) => {
  * Get all allowlisted domains
  */
 export const getAllowlist = async (req, res) => {
-  try {
-    const activeOnly = req.query.activeOnly !== 'false'; // Default true
+  const activeOnly = req.query.activeOnly !== 'false'; // Default true
 
-    const allowlist = await adminService.getAllowlist(activeOnly);
+  const allowlist = await adminService.getAllowlist(activeOnly);
 
-    res.json({
-      status: 'success',
-      data: allowlist,
-      count: allowlist.length
-    });
-  } catch (error) {
-    console.error('Error fetching allowlist:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch allowlist',
-      error: error.message
-    });
-  }
+  res.json({
+    status: 'success',
+    data: allowlist,
+    count: allowlist.length
+  });
 };
 
 /**
@@ -173,32 +111,20 @@ export const getAllowlist = async (req, res) => {
  * Add domain to allowlist
  */
 export const addToAllowlist = async (req, res) => {
-  try {
-    const { domain, reason } = req.body;
-    const addedBy = req.user?.email || req.user?.username || 'admin'; // From auth middleware
+  const { domain, reason } = req.body;
+  const addedBy = req.user?.email || req.user?.username || 'admin'; // From auth middleware
 
-    if (!domain) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Domain is required'
-      });
-    }
-
-    const entry = await adminService.addToAllowlist(domain, reason || 'Manually added', addedBy);
-
-    res.status(201).json({
-      status: 'success',
-      data: entry,
-      message: `Domain '${domain}' added to allowlist`
-    });
-  } catch (error) {
-    console.error('Error adding to allowlist:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to add domain to allowlist',
-      error: error.message
-    });
+  if (!domain) {
+    throw new BadRequestError('Domain is required');
   }
+
+  const entry = await adminService.addToAllowlist(domain, reason || 'Manually added', addedBy);
+
+  res.status(201).json({
+    status: 'success',
+    data: entry,
+    message: `Domain '${domain}' added to allowlist`
+  });
 };
 
 /**
@@ -206,37 +132,22 @@ export const addToAllowlist = async (req, res) => {
  * Remove domain from allowlist
  */
 export const removeFromAllowlist = async (req, res) => {
-  try {
-    const { domain } = req.params;
+  const { domain } = req.params;
 
-    if (!domain) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Domain is required'
-      });
-    }
-
-    const success = await adminService.removeFromAllowlist(domain);
-
-    if (!success) {
-      return res.status(404).json({
-        status: 'error',
-        message: `Domain '${domain}' not found in allowlist`
-      });
-    }
-
-    res.json({
-      status: 'success',
-      message: `Domain '${domain}' removed from allowlist`
-    });
-  } catch (error) {
-    console.error('Error removing from allowlist:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to remove domain from allowlist',
-      error: error.message
-    });
+  if (!domain) {
+    throw new BadRequestError('Domain is required');
   }
+
+  const success = await adminService.removeFromAllowlist(domain);
+
+  if (!success) {
+    throw new NotFoundError(`Domain '${domain}' not found in allowlist`);
+  }
+
+  res.json({
+    status: 'success',
+    message: `Domain '${domain}' removed from allowlist`
+  });
 };
 
 /**
@@ -244,23 +155,14 @@ export const removeFromAllowlist = async (req, res) => {
  * Get all system settings
  */
 export const getSystemSettings = async (req, res) => {
-  try {
-    const publicOnly = req.query.public === 'true';
+  const publicOnly = req.query.public === 'true';
 
-    const settings = await adminService.getSystemSettings(publicOnly);
+  const settings = await adminService.getSystemSettings(publicOnly);
 
-    res.json({
-      status: 'success',
-      data: settings
-    });
-  } catch (error) {
-    console.error('Error fetching system settings:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch system settings',
-      error: error.message
-    });
-  }
+  res.json({
+    status: 'success',
+    data: settings
+  });
 };
 
 /**
@@ -268,48 +170,25 @@ export const getSystemSettings = async (req, res) => {
  * Update a specific system setting
  */
 export const updateSystemSetting = async (req, res) => {
-  try {
-    const { key } = req.params;
-    const { value } = req.body;
-    const updatedBy = req.user?.email || req.user?.username || 'admin';
+  const { key } = req.params;
+  const { value } = req.body;
+  const updatedBy = req.user?.email || req.user?.username || 'admin';
 
-    if (!key) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Setting key is required'
-      });
-    }
-
-    if (value === undefined) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Setting value is required'
-      });
-    }
-
-    const setting = await adminService.updateSystemSetting(key, value, updatedBy);
-
-    res.json({
-      status: 'success',
-      data: setting,
-      message: `Setting '${key}' updated successfully`
-    });
-  } catch (error) {
-    console.error('Error updating system setting:', error);
-
-    if (error.message.includes('not found')) {
-      return res.status(404).json({
-        status: 'error',
-        message: error.message
-      });
-    }
-
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to update system setting',
-      error: error.message
-    });
+  if (!key) {
+    throw new BadRequestError('Setting key is required');
   }
+
+  if (value === undefined) {
+    throw new BadRequestError('Setting value is required');
+  }
+
+  const setting = await adminService.updateSystemSetting(key, value, updatedBy);
+
+  res.json({
+    status: 'success',
+    data: setting,
+    message: `Setting '${key}' updated successfully`
+  });
 };
 
 /**
@@ -317,25 +196,16 @@ export const updateSystemSetting = async (req, res) => {
  * Get security alerts from spam protection
  */
 export const getSecurityAlerts = async (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit) || 50;
-    const unresolvedOnly = req.query.unresolvedOnly === 'true';
+  const limit = parseInt(req.query.limit) || 50;
+  const unresolvedOnly = req.query.unresolvedOnly === 'true';
 
-    const alerts = await adminService.getSecurityAlerts(limit, unresolvedOnly);
+  const alerts = await adminService.getSecurityAlerts(limit, unresolvedOnly);
 
-    res.json({
-      status: 'success',
-      data: alerts,
-      count: alerts.length
-    });
-  } catch (error) {
-    console.error('Error fetching security alerts:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch security alerts',
-      error: error.message
-    });
-  }
+  res.json({
+    status: 'success',
+    data: alerts,
+    count: alerts.length
+  });
 };
 
 /**
@@ -343,40 +213,20 @@ export const getSecurityAlerts = async (req, res) => {
  * Mark a security alert as resolved
  */
 export const resolveSecurityAlert = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const resolvedBy = req.user?.email || req.user?.username || 'admin';
+  const { id } = req.params;
+  const resolvedBy = req.user?.email || req.user?.username || 'admin';
 
-    if (!id || isNaN(id)) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid alert ID'
-      });
-    }
-
-    const alert = await adminService.resolveSecurityAlert(parseInt(id), resolvedBy);
-
-    res.json({
-      status: 'success',
-      data: alert,
-      message: `Security alert #${id} resolved`
-    });
-  } catch (error) {
-    console.error('Error resolving security alert:', error);
-
-    if (error.message.includes('not found')) {
-      return res.status(404).json({
-        status: 'error',
-        message: error.message
-      });
-    }
-
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to resolve security alert',
-      error: error.message
-    });
+  if (!id || isNaN(id)) {
+    throw new BadRequestError('Invalid alert ID');
   }
+
+  const alert = await adminService.resolveSecurityAlert(parseInt(id), resolvedBy);
+
+  res.json({
+    status: 'success',
+    data: alert,
+    message: `Security alert #${id} resolved`
+  });
 };
 
 export default {
