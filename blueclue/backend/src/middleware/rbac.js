@@ -5,6 +5,7 @@
 
 import UserPrivilege from '../models/UserPrivilege.js';
 import CategoryAccess from '../models/CategoryAccess.js';
+import { UnauthorizedError, ForbiddenError, BadRequestError, InternalServerError } from './errorHandler.js';
 
 /**
  * Check if user has a specific privilege
@@ -22,12 +23,8 @@ export const checkPrivilege = (privilegeType, options = {}) => {
 
     return async (req, res, next) => {
         try {
-            // Require authentication
             if (!req.user) {
-                return res.status(401).json({
-                    status: 'error',
-                    message: 'Authentication required'
-                });
+                return next(new UnauthorizedError('Authentication required'));
             }
 
             // Admins and management bypass privilege checks (if enabled)
@@ -35,24 +32,15 @@ export const checkPrivilege = (privilegeType, options = {}) => {
                 return next();
             }
 
-            // Check if user has the required privilege
             const hasPrivilege = await UserPrivilege.hasPrivilege(req.user.id, privilegeType);
 
             if (!hasPrivilege) {
-                return res.status(403).json({
-                    status: 'error',
-                    message: `Access denied. Required privilege: ${privilegeType}`,
-                    required_privilege: privilegeType
-                });
+                return next(new ForbiddenError(`Access denied. Required privilege: ${privilegeType}`, { required_privilege: privilegeType }));
             }
 
             next();
         } catch (error) {
-            console.error('Privilege check error:', error);
-            return res.status(500).json({
-                status: 'error',
-                message: 'Error checking user privileges'
-            });
+            next(new InternalServerError('Error checking user privileges'));
         }
     };
 };
@@ -78,12 +66,8 @@ export const checkCategoryAccess = (categoryIdOrGetter, accessLevel, options = {
 
     return async (req, res, next) => {
         try {
-            // Require authentication
             if (!req.user) {
-                return res.status(401).json({
-                    status: 'error',
-                    message: 'Authentication required'
-                });
+                return next(new UnauthorizedError('Authentication required'));
             }
 
             // Admins bypass category access checks (if enabled)
@@ -99,21 +83,13 @@ export const checkCategoryAccess = (categoryIdOrGetter, accessLevel, options = {
                 categoryId = categoryIdOrGetter;
             }
 
-            // Validate category ID
             if (!categoryId) {
-                return res.status(400).json({
-                    status: 'error',
-                    message: 'Category ID is required'
-                });
+                return next(new BadRequestError('Category ID is required'));
             }
 
-            // Parse category ID to integer
             categoryId = parseInt(categoryId);
             if (isNaN(categoryId)) {
-                return res.status(400).json({
-                    status: 'error',
-                    message: 'Invalid category ID'
-                });
+                return next(new BadRequestError('Invalid category ID'));
             }
 
             // Check bypass privilege if specified
@@ -124,25 +100,15 @@ export const checkCategoryAccess = (categoryIdOrGetter, accessLevel, options = {
                 }
             }
 
-            // Check if user has the required category access
             const hasAccess = await CategoryAccess.hasAccess(req.user.id, categoryId, accessLevel);
 
             if (!hasAccess) {
-                return res.status(403).json({
-                    status: 'error',
-                    message: `Access denied. Required access level: ${accessLevel} for this category`,
-                    required_access: accessLevel,
-                    category_id: categoryId
-                });
+                return next(new ForbiddenError(`Access denied. Required access level: ${accessLevel} for this category`, { required_access: accessLevel, category_id: categoryId }));
             }
 
             next();
         } catch (error) {
-            console.error('Category access check error:', error);
-            return res.status(500).json({
-                status: 'error',
-                message: 'Error checking category access'
-            });
+            next(new InternalServerError('Error checking category access'));
         }
     };
 };
@@ -164,12 +130,8 @@ export const checkAnyCategoryAccess = (categoriesGetter, accessLevel, options = 
 
     return async (req, res, next) => {
         try {
-            // Require authentication
             if (!req.user) {
-                return res.status(401).json({
-                    status: 'error',
-                    message: 'Authentication required'
-                });
+                return next(new UnauthorizedError('Authentication required'));
             }
 
             // Admins bypass category access checks (if enabled)
@@ -177,9 +139,8 @@ export const checkAnyCategoryAccess = (categoriesGetter, accessLevel, options = 
                 return next();
             }
 
-            // Get accessible categories for the user
             const accessibleCategories = await CategoryAccess.getUserAccessibleCategories(
-                req.user.id, 
+                req.user.id,
                 accessLevel
             );
 
@@ -189,22 +150,14 @@ export const checkAnyCategoryAccess = (categoriesGetter, accessLevel, options = 
                 return next();
             }
 
-            // Otherwise, check if user has access to at least one category
             if (accessibleCategories.length === 0) {
-                return res.status(403).json({
-                    status: 'error',
-                    message: 'No category access found. Contact administrator for access.'
-                });
+                return next(new ForbiddenError('No category access found. Contact administrator for access.'));
             }
 
             req.accessibleCategories = accessibleCategories;
             next();
         } catch (error) {
-            console.error('Category access check error:', error);
-            return res.status(500).json({
-                status: 'error',
-                message: 'Error checking category access'
-            });
+            next(new InternalServerError('Error checking category access'));
         }
     };
 };
@@ -225,12 +178,8 @@ export const checkAnyPrivilege = (privilegeTypes, options = {}) => {
 
     return async (req, res, next) => {
         try {
-            // Require authentication
             if (!req.user) {
-                return res.status(401).json({
-                    status: 'error',
-                    message: 'Authentication required'
-                });
+                return next(new UnauthorizedError('Authentication required'));
             }
 
             // Admins and management bypass privilege checks (if enabled)
@@ -238,7 +187,6 @@ export const checkAnyPrivilege = (privilegeTypes, options = {}) => {
                 return next();
             }
 
-            // Check if user has any of the required privileges
             const privilegeChecks = await Promise.all(
                 privilegeTypes.map(type => UserPrivilege.hasPrivilege(req.user.id, type))
             );
@@ -246,20 +194,12 @@ export const checkAnyPrivilege = (privilegeTypes, options = {}) => {
             const hasAnyPrivilege = privilegeChecks.some(result => result === true);
 
             if (!hasAnyPrivilege) {
-                return res.status(403).json({
-                    status: 'error',
-                    message: `Access denied. Required one of: ${privilegeTypes.join(', ')}`,
-                    required_privileges: privilegeTypes
-                });
+                return next(new ForbiddenError(`Access denied. Required one of: ${privilegeTypes.join(', ')}`, { required_privileges: privilegeTypes }));
             }
 
             next();
         } catch (error) {
-            console.error('Privilege check error:', error);
-            return res.status(500).json({
-                status: 'error',
-                message: 'Error checking user privileges'
-            });
+            next(new InternalServerError('Error checking user privileges'));
         }
     };
 };
@@ -280,12 +220,8 @@ export const checkAllPrivileges = (privilegeTypes, options = {}) => {
 
     return async (req, res, next) => {
         try {
-            // Require authentication
             if (!req.user) {
-                return res.status(401).json({
-                    status: 'error',
-                    message: 'Authentication required'
-                });
+                return next(new UnauthorizedError('Authentication required'));
             }
 
             // Admins and management bypass privilege checks (if enabled)
@@ -293,7 +229,6 @@ export const checkAllPrivileges = (privilegeTypes, options = {}) => {
                 return next();
             }
 
-            // Check if user has all required privileges
             const privilegeChecks = await Promise.all(
                 privilegeTypes.map(type => UserPrivilege.hasPrivilege(req.user.id, type))
             );
@@ -301,24 +236,13 @@ export const checkAllPrivileges = (privilegeTypes, options = {}) => {
             const hasAllPrivileges = privilegeChecks.every(result => result === true);
 
             if (!hasAllPrivileges) {
-                // Find which privileges are missing
                 const missingPrivileges = privilegeTypes.filter((type, index) => !privilegeChecks[index]);
-                
-                return res.status(403).json({
-                    status: 'error',
-                    message: `Access denied. Missing required privileges: ${missingPrivileges.join(', ')}`,
-                    required_privileges: privilegeTypes,
-                    missing_privileges: missingPrivileges
-                });
+                return next(new ForbiddenError(`Access denied. Missing required privileges: ${missingPrivileges.join(', ')}`, { required_privileges: privilegeTypes, missing_privileges: missingPrivileges }));
             }
 
             next();
         } catch (error) {
-            console.error('Privilege check error:', error);
-            return res.status(500).json({
-                status: 'error',
-                message: 'Error checking user privileges'
-            });
+            next(new InternalServerError('Error checking user privileges'));
         }
     };
 };
@@ -336,32 +260,14 @@ export const checkAllPrivileges = (privilegeTypes, options = {}) => {
  */
 export const checkRole = (...allowedRoles) => {
     return (req, res, next) => {
-        try {
-            // Require authentication
-            if (!req.user) {
-                return res.status(401).json({
-                    status: 'error',
-                    message: 'Authentication required'
-                });
-            }
-
-            // Check if user's role is in the allowed roles
-            if (!allowedRoles.includes(req.user.role)) {
-                return res.status(403).json({
-                    status: 'error',
-                    message: `Access denied. Required role(s): ${allowedRoles.join(', ')}`,
-                    required_roles: allowedRoles,
-                    current_role: req.user.role
-                });
-            }
-
-            next();
-        } catch (error) {
-            console.error('Role check error:', error);
-            return res.status(500).json({
-                status: 'error',
-                message: 'Error checking user role'
-            });
+        if (!req.user) {
+            return next(new UnauthorizedError('Authentication required'));
         }
+
+        if (!allowedRoles.includes(req.user.role)) {
+            return next(new ForbiddenError(`Access denied. Required role(s): ${allowedRoles.join(', ')}`, { required_roles: allowedRoles, current_role: req.user.role }));
+        }
+
+        next();
     };
 };
