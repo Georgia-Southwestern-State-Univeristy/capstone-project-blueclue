@@ -12,6 +12,7 @@ export default function CreateTicketWidget({ onSubmit }) {
       title="Create a Ticket"
       icon="✏️"
       noPadding={false}
+      className="ring-1 ring-blue-700/50"
     >
       <TicketForm onSubmit={onSubmit} />
     </BaseWidget>

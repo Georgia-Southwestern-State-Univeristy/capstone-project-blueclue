@@ -4,6 +4,7 @@ import TicketDetailView from '../components/TicketDetailView'
 import TicketTimeline from '../components/TicketTimeline'
 import ClientTicketListWidget from '../components/ClientTicketListWidget'
 import CreateTicketWidget from '../components/CreateTicketWidget'
+import WelcomeBanner from '../components/WelcomeBanner'
 import DashboardGrid from '../components/DashboardGrid'
 import useDashboardLayout from '../hooks/useDashboardLayout'
 import { buildGalleryItems, buildWidgetConfig } from '../widgets'
@@ -191,12 +192,55 @@ function ClientDashboard() {
     setIsDetailOpen(true)
   }
 
+  // Quick stats for visual hierarchy
+  const openCount = tickets.filter(t => t.status?.toLowerCase() === 'open').length
+  const inProgressCount = tickets.filter(t => t.status?.toLowerCase().replace(/_/g, ' ') === 'in progress').length
+
+  // Scroll to the Create Ticket widget
+  const createWidgetRef = useRef(null)
+  const scrollToCreate = useCallback(() => {
+    createWidgetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
   return (
     <div className="p-8 bg-gray-950 min-h-screen">
-      <h1 className="text-3xl font-bold text-white mb-2">Client Dashboard</h1>
-      <p className="text-gray-400 mb-6">
-        Submit support tickets and track their status
-      </p>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-1">Client Dashboard</h1>
+          <p className="text-gray-400">
+            Submit support tickets and track their status
+          </p>
+        </div>
+
+        {/* At-a-glance stats — only shown when user has tickets */}
+        {!isLoading && tickets.length > 0 && (
+          <div className="flex items-center gap-4 text-sm">
+            <div className="flex items-center gap-1.5 text-yellow-400">
+              <span className="w-2 h-2 rounded-full bg-yellow-400" />
+              <span className="font-medium">{openCount}</span>
+              <span className="text-gray-500">Open</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-blue-400">
+              <span className="w-2 h-2 rounded-full bg-blue-400" />
+              <span className="font-medium">{inProgressCount}</span>
+              <span className="text-gray-500">In Progress</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-gray-400">
+              <span className="font-medium">{tickets.length}</span>
+              <span className="text-gray-500">Total</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Guided onboarding banner */}
+      <WelcomeBanner
+        ticketCount={tickets.length}
+        onScrollToCreate={scrollToCreate}
+      />
+
+      {/* Anchor for scroll-to-create */}
+      <div ref={createWidgetRef} />
 
       {/* Widget Grid */}
       <ClientWidgetGrid

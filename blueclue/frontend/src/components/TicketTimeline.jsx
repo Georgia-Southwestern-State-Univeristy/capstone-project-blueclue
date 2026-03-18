@@ -163,6 +163,17 @@ function TicketTimeline({ tickets = [], onTicketClick = null }) {
         className="flex-1 flex flex-col justify-end min-h-0 overflow-x-visible overflow-y-visible pt-16 pr-8 scrollbar-hide md:scrollbar-default"
         style={{ WebkitOverflowScrolling: 'touch', position: 'relative', zIndex: 1 }}
       >
+        {/* Empty state when no activity exists */}
+        {total === 0 && totalAssignments === 0 && totalUpdates === 0 && totalCancellations === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center z-[2] pointer-events-none">
+            <svg className="w-10 h-10 text-gray-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            <p className="text-gray-400 text-sm font-medium">No activity yet</p>
+            <p className="text-gray-500 text-xs mt-0.5">Submit a ticket and your timeline will appear here</p>
+          </div>
+        )}
         <div className="flex items-end gap-1 h-36 md:min-w-0">
           {buckets.map((bucket, i) => {
             const totalHeight = bucket.count + bucket.assignCount + bucket.updateCount + bucket.cancelCount
