@@ -33,7 +33,8 @@ const getStatusColor = (status) => {
 export default function ClientTicketListWidget({ tickets, isLoading, onTicketClick, onSubmitClick }) {
   return (
     <div className="bg-gray-900 p-6 rounded-lg border border-gray-700 shadow-sm h-full flex flex-col">
-      <h2 className="text-xl font-semibold text-white mb-4">Your Tickets</h2>
+      <h2 className="text-xl font-semibold text-white mb-1">Your Tickets</h2>
+      <p className="text-xs text-gray-400 mb-4">Track the status of all your submitted tickets</p>
 
       {isLoading ? (
         <div className="flex justify-center py-8"><LoadingSpinner /></div>

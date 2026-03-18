@@ -132,7 +132,10 @@ function TicketTimeline({ tickets = [], onTicketClick = null }) {
   return (
     <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-4 h-full flex flex-col overflow-visible">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h3 className="text-base font-semibold text-white">Ticket Timeline</h3>
+        <div>
+          <h3 className="text-base font-semibold text-white">Ticket Timeline</h3>
+          <p className="text-xs text-gray-400">View your ticket activity over the last 3 days</p>
+        </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
             <span className="flex items-center gap-1">
