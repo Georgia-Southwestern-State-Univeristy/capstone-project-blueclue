@@ -1,18 +1,55 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { ToastContext } from './ToastContextDef'
 import Toast from '../components/Toast'
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
+  const [isOnCooldown, setIsOnCooldown] = useState(false)
+  const cooldownTimerRef = useRef(null)
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (cooldownTimerRef.current) {
+        clearTimeout(cooldownTimerRef.current)
+      }
+    }
+  }, [])
 
   const addToast = useCallback((message, type = 'info', duration = 5000) => {
-    const id = Date.now() + Math.random()
-    setToasts(prev => [...prev, { id, message, type, duration }])
-    return id
-  }, [])
+    // Prevent duplicate toasts with the same message and type
+    setToasts(prev => {
+      const isDuplicate = prev.some(
+        toast => toast.message === message && toast.type === type
+      )
+      
+      if (isDuplicate) {
+        return prev // Don't add duplicate
+      }
+      
+      // If on cooldown, skip adding new toast
+      if (isOnCooldown) {
+        return prev
+      }
+      
+      const id = Date.now() + Math.random()
+      return [...prev, { id, message, type, duration }]
+    })
+  }, [isOnCooldown])
 
   const removeToast = useCallback((id) => {
     setToasts(prev => prev.filter(toast => toast.id !== id))
+    
+    // Start cooldown period (2 seconds) to prevent toast spam
+    if (cooldownTimerRef.current) {
+      clearTimeout(cooldownTimerRef.current)
+    }
+    
+    setIsOnCooldown(true)
+    cooldownTimerRef.current = setTimeout(() => {
+      setIsOnCooldown(false)
+      cooldownTimerRef.current = null
+    }, 2000) // 2-second cooldown
   }, [])
 
   const toast = {

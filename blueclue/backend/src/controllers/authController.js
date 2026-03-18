@@ -20,6 +20,35 @@ import {
 const SALT_ROUNDS = 10;
 
 /**
+ * Log a login attempt to the audit trail
+ * @param {Object} params - Login attempt details
+ * @param {number|null} params.userId - User ID (null if user not found)
+ * @param {string|null} params.username - Username attempted
+ * @param {string|null} params.email - Email attempted
+ * @param {string} params.attemptType - 'username' or 'email'
+ * @param {boolean} params.success - Whether login succeeded
+ * @param {string|null} params.failureReason - Reason for failure
+ * @param {Object} params.req - Express request object for IP/user agent
+ * @param {string|null} params.sessionId - Session ID for successful logins
+ */
+async function logLoginAttempt({ userId, username, email, attemptType, success, failureReason, req, sessionId = null }) {
+    try {
+        const ipAddress = req.ip || req.connection.remoteAddress || null;
+        const userAgent = req.headers['user-agent'] || null;
+
+        await pool.query(
+            `INSERT INTO login_attempts 
+             (user_id, username, email, attempt_type, success, failure_reason, ip_address, user_agent, session_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [userId, username, email, attemptType, success, failureReason, ipAddress, userAgent, sessionId]
+        );
+    } catch (error) {
+        // Non-critical - log but don't fail the login process
+        console.error('❌ Failed to log login attempt:', error.message);
+    }
+}
+
+/**
  * Login - handles technicians (username) and customers (email)
  * POST /api/auth/login
  * 
@@ -137,6 +166,46 @@ export const login = async (req, res) => {
         
         if (!password) {
             throw new BadRequestError('Password is required for customer login.');
+            const refreshToken = generateRefreshToken({
+                id: user.id,
+                role: user.role
+            });
+
+            // Store refresh token
+            const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+            await pool.query(
+                `INSERT INTO refresh_tokens (user_id, token, expires_at)
+                 VALUES ($1, $2, $3)`,
+                [user.id, refreshToken, refreshExpiresAt]
+            );
+
+            // Log successful login attempt
+            await logLoginAttempt({
+                userId: user.id,
+                username,
+                email: user.email,
+                attemptType: 'username',
+                success: true,
+                failureReason: null,
+                req,
+                sessionId: refreshToken
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: 'Login successful.',
+                token,
+                refreshToken,
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    username: user.username,
+                    firstName: user.first_name,
+                    lastName: user.last_name,
+                    role: user.role,
+                    forcePasswordChange: user.force_password_change
+                }
+            });
         }
 
         // Find customer, admin, or management user by email (case-insensitive)
@@ -148,6 +217,35 @@ export const login = async (req, res) => {
         );
 
         console.log('📊 Query result:', { found: result.rows.length > 0, role: result.rows[0]?.role });
+            // Find customer, admin, or management user by email (case-insensitive)
+            const result = await pool.query(
+                `SELECT id, email, password_hash, first_name, last_name, role, is_active, email_verified 
+                 FROM users 
+                 WHERE LOWER(email) = LOWER($1) AND role IN ('customer', 'admin', 'management')`,
+                [email]
+            );
+
+            console.log('📊 Query result:', { found: result.rows.length > 0, role: result.rows[0]?.role });
+
+            if (result.rows.length === 0) {
+                console.log('❌ User not found in database');
+                
+                // Log failed attempt - account not found
+                await logLoginAttempt({
+                    userId: null,
+                    username: null,
+                    email,
+                    attemptType: 'email',
+                    success: false,
+                    failureReason: 'account_not_found',
+                    req
+                });
+
+                return res.status(401).json({
+                    success: false,
+                    message: 'Invalid email or password.'
+                });
+            }
 
         if (result.rows.length === 0) {
             console.log('❌ User not found in database');
@@ -171,6 +269,74 @@ export const login = async (req, res) => {
             console.log('❌ Password does not match');
             throw new UnauthorizedError('Invalid email or password.');
         }
+            // Check if account is active
+            if (!user.is_active) {
+                console.log('❌ Account is not active');
+                
+                // Log failed attempt - account disabled
+                await logLoginAttempt({
+                    userId: user.id,
+                    username: null,
+                    email,
+                    attemptType: 'email',
+                    success: false,
+                    failureReason: 'account_disabled',
+                    req
+                });
+
+                return res.status(403).json({
+                    success: false,
+                    message: 'Account is disabled. Contact support.'
+                });
+            }
+
+            // Verify password
+            console.log('🔑 Comparing password...');
+            const passwordMatch = await bcrypt.compare(password, user.password_hash);
+            console.log('🔑 Password match result:', { passwordMatch });
+            
+            if (!passwordMatch) {
+                console.log('❌ Password does not match');
+                
+                // Log failed attempt - invalid credentials
+                await logLoginAttempt({
+                    userId: user.id,
+                    username: null,
+                    email,
+                    attemptType: 'email',
+                    success: false,
+                    failureReason: 'invalid_credentials',
+                    req
+                });
+
+                return res.status(401).json({
+                    success: false,
+                    message: 'Invalid email or password.'
+                });
+            }
+
+            // Check if email is verified (only for customers, not admins)
+            if (user.role === 'customer' && !user.email_verified) {
+                console.log('❌ Email not verified');
+                
+                // Log failed attempt - email not verified
+                await logLoginAttempt({
+                    userId: user.id,
+                    username: null,
+                    email,
+                    attemptType: 'email',
+                    success: false,
+                    failureReason: 'email_not_verified',
+                    req
+                });
+
+                return res.status(403).json({
+                    success: false,
+                    message: 'Please verify your email address before logging in. Check your inbox for the verification link.',
+                    code: 'EMAIL_NOT_VERIFIED',
+                    email: user.email
+                });
+            }
 
         // Check if email is verified (only for customers, not admins)
         if (user.role === 'customer' && !user.email_verified) {
@@ -190,6 +356,45 @@ export const login = async (req, res) => {
             'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1',
             [user.id]
         );
+            const refreshToken = generateRefreshToken({
+                id: user.id,
+                role: user.role
+            });
+
+            // Store refresh token
+            const refreshExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+            await pool.query(
+                `INSERT INTO refresh_tokens (user_id, token, expires_at)
+                 VALUES ($1, $2, $3)`,
+                [user.id, refreshToken, refreshExpiresAt]
+            );
+
+            // Log successful login attempt
+            await logLoginAttempt({
+                userId: user.id,
+                username: null,
+                email,
+                attemptType: 'email',
+                success: true,
+                failureReason: null,
+                req,
+                sessionId: refreshToken
+            });
+
+            return res.status(200).json({
+                success: true,
+                message: 'Login successful.',
+                token,
+                refreshToken,
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    firstName: user.first_name,
+                    lastName: user.last_name,
+                    role: user.role
+                }
+            });
+        }
 
         // Generate tokens
         const token = generateToken({
