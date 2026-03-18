@@ -352,6 +352,22 @@ const WIDGET_REGISTRY = [
     component: () => import('../components/ClientTicketListWidget'),
     previewPattern: 'data-table',
   },
+  // ── Management/Admin System Monitoring ───────────────────────────────────
+  {
+    key: 'auditHealth',
+    name: 'Audit Health',
+    description: 'Real-time audit logging system health status and monitoring',
+    icon: '🔍',
+    category: CATEGORIES.MANAGEMENT,
+    permissions: ROLE_GROUPS.MANAGERS,
+    size: {
+      defaultW: 12, defaultH: 10,
+      minW: 4, minH: 6,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/AuditHealthWidget'),
+    previewPattern: 'list-pending',
+  },
 ]
 
 export default WIDGET_REGISTRY
