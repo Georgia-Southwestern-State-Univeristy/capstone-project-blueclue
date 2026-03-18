@@ -21,7 +21,7 @@ const DESCRIPTION_MAX = 2000
 const MAX_IMAGES = 5
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024 // 5 MB
 
-function TicketForm({ onSubmit }) {
+function TicketForm({ onSubmit, formId }) {
   // Form data state
   const [formData, setFormData] = useState({
     title: '',
@@ -353,7 +353,7 @@ function TicketForm({ onSubmit }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form id={formId} onSubmit={handleSubmit} className="space-y-6">
       {/* Template Browser */}
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-1">
@@ -646,7 +646,8 @@ function TicketForm({ onSubmit }) {
           htmlFor="priority"
           className="block text-sm font-medium text-gray-300 mb-1"
         >
-          Priority <span className="text-gray-500 text-xs">(optional - AI will suggest if not selected)</span>
+          Priority <span className="text-gray-500 text-xs">(please select priority below)</span>
+          <span className="block text-gray-500 text-xs mt-0.5">Optional, if not selected AI will determine for you</span>
         </label>
         <select
           id="priority"
