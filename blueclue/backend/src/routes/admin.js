@@ -14,9 +14,16 @@ import * as adminController from '../controllers/adminController.js';
 
 const router = express.Router();
 
-// All routes require authentication and admin role
+// All routes require authentication and admin role (except where overridden below)
 router.use(authenticateToken);
-router.use(checkRole('admin'));
+router.use((req, res, next) => {
+  // Skip role check for audit-health - it has its own middleware
+  if (req.path === '/audit-health') {
+    return next();
+  }
+  // All other routes require admin
+  return checkRole('admin')(req, res, next);
+});
 
 // ==================== OUTBOUND Email Logs (Existing) ====================
 // Email logs routes for confirmation/verification emails
@@ -112,5 +119,22 @@ router.get('/security-alerts', adminController.getSecurityAlerts);
  * Mark a security alert as resolved
  */
 router.post('/security-alerts/:id/resolve', adminController.resolveSecurityAlert);
+
+// ==================== Audit Health & Alert Rules ====================
+
+/**
+ * GET /api/admin/audit-health
+ * Get audit logging health status (login attempts, privilege audit, ticket history)
+ * Returns: { health: [...], overall_healthy: true/false }
+ * Accessible to: management, admin
+ */
+router.get('/audit-health', checkRole('management', 'admin'), adminController.getAuditLogHealth);
+
+/**
+ * Alert Rules Management
+ * All alert rules routes are mounted at /api/admin/alert-rules
+ */
+import alertRulesRouter from './alertRules.js';
+router.use('/alert-rules', alertRulesRouter);
 
 export default router;
