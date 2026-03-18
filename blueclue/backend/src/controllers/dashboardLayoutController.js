@@ -1,5 +1,6 @@
-// src/controllers/dashboardLayoutController.js
+﻿// src/controllers/dashboardLayoutController.js
 import DashboardLayout from '../models/DashboardLayout.js';
+import { BadRequestError, NotFoundError } from '../middleware/errorHandler.js';
 
 // ─── Active Layout ───────────────────────────────────────────────
 
@@ -8,7 +9,6 @@ import DashboardLayout from '../models/DashboardLayout.js';
  * Query: ?type=management
  */
 export const getActiveLayout = async (req, res) => {
-  try {
     const userId = req.user.id;
     const dashboardType = req.query.type || 'management';
 
@@ -27,10 +27,6 @@ export const getActiveLayout = async (req, res) => {
         updatedAt: layout.updated_at
       }
     });
-  } catch (error) {
-    console.error('Error fetching active layout:', error);
-    res.status(500).json({ error: 'Failed to fetch dashboard layout' });
-  }
 };
 
 /**
@@ -38,12 +34,11 @@ export const getActiveLayout = async (req, res) => {
  * Body: { type, layoutData, hiddenWidgets, layoutVersion }
  */
 export const saveActiveLayout = async (req, res) => {
-  try {
     const userId = req.user.id;
     const { type = 'management', layoutData, hiddenWidgets = [], layoutVersion = 1 } = req.body;
 
     if (!layoutData) {
-      return res.status(400).json({ error: 'layoutData is required' });
+      throw new BadRequestError('layoutData is required');
     }
 
     const saved = await DashboardLayout.upsertActiveLayout(
@@ -59,10 +54,6 @@ export const saveActiveLayout = async (req, res) => {
         updatedAt: saved.updated_at
       }
     });
-  } catch (error) {
-    console.error('Error saving active layout:', error);
-    res.status(500).json({ error: 'Failed to save dashboard layout' });
-  }
 };
 
 /**
@@ -70,17 +61,12 @@ export const saveActiveLayout = async (req, res) => {
  * Query: ?type=management
  */
 export const deleteActiveLayout = async (req, res) => {
-  try {
     const userId = req.user.id;
     const dashboardType = req.query.type || 'management';
 
     const deleted = await DashboardLayout.deleteActiveLayout(userId, dashboardType);
 
     res.json({ success: deleted });
-  } catch (error) {
-    console.error('Error deleting active layout:', error);
-    res.status(500).json({ error: 'Failed to delete dashboard layout' });
-  }
 };
 
 // ─── Saved / Named Layouts ───────────────────────────────────────
@@ -90,7 +76,6 @@ export const deleteActiveLayout = async (req, res) => {
  * Query: ?type=management
  */
 export const getSavedLayouts = async (req, res) => {
-  try {
     const userId = req.user.id;
     const dashboardType = req.query.type || 'management';
 
@@ -106,10 +91,6 @@ export const getSavedLayouts = async (req, res) => {
     }));
 
     res.json({ layouts });
-  } catch (error) {
-    console.error('Error fetching saved layouts:', error);
-    res.status(500).json({ error: 'Failed to fetch saved layouts' });
-  }
 };
 
 /**
@@ -117,12 +98,11 @@ export const getSavedLayouts = async (req, res) => {
  * Body: { type, name, layoutData, hiddenWidgets }
  */
 export const createSavedLayout = async (req, res) => {
-  try {
     const userId = req.user.id;
     const { type = 'management', name, layoutData, hiddenWidgets = [] } = req.body;
 
     if (!name || !layoutData) {
-      return res.status(400).json({ error: 'name and layoutData are required' });
+      throw new BadRequestError('name and layoutData are required');
     }
 
     const saved = await DashboardLayout.createSavedLayout(
@@ -139,10 +119,6 @@ export const createSavedLayout = async (req, res) => {
         updatedAt: saved.updated_at
       }
     });
-  } catch (error) {
-    console.error('Error creating saved layout:', error);
-    res.status(500).json({ error: 'Failed to create saved layout' });
-  }
 };
 
 /**
@@ -150,45 +126,35 @@ export const createSavedLayout = async (req, res) => {
  * Body: { name }
  */
 export const renameSavedLayout = async (req, res) => {
-  try {
     const userId = req.user.id;
     const layoutId = parseInt(req.params.id, 10);
     const { name } = req.body;
 
     if (!name) {
-      return res.status(400).json({ error: 'name is required' });
+      throw new BadRequestError('name is required');
     }
 
     const updated = await DashboardLayout.renameSavedLayout(layoutId, userId, name);
 
     if (!updated) {
-      return res.status(404).json({ error: 'Layout not found or access denied' });
+      throw new NotFoundError('Layout not found or access denied');
     }
 
     res.json({ layout: updated });
-  } catch (error) {
-    console.error('Error renaming saved layout:', error);
-    res.status(500).json({ error: 'Failed to rename saved layout' });
-  }
 };
 
 /**
  * DELETE /api/dashboard-layouts/saved/:id
  */
 export const deleteSavedLayout = async (req, res) => {
-  try {
     const userId = req.user.id;
     const layoutId = parseInt(req.params.id, 10);
 
     const deleted = await DashboardLayout.deleteSavedLayout(layoutId, userId);
 
     if (!deleted) {
-      return res.status(404).json({ error: 'Layout not found or access denied' });
+      throw new NotFoundError('Layout not found or access denied');
     }
 
     res.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting saved layout:', error);
-    res.status(500).json({ error: 'Failed to delete saved layout' });
-  }
 };
