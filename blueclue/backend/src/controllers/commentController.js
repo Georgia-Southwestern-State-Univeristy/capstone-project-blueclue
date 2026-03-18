@@ -1,4 +1,4 @@
-// src/controllers/commentController.js
+﻿// src/controllers/commentController.js
 import TicketComment from '../models/TicketComment.js';
 import Ticket from '../models/Ticket.js';
 import Notification from '../models/Notification.js';
@@ -6,41 +6,34 @@ import TicketCollaborator from '../models/TicketCollaborator.js';
 import pool from '../config/database.js';
 import { sendCommentNotificationToTech, sendCommentNotificationToClient } from '../services/emailService.js';
 import { emitNotificationToUser, emitUnreadCountToUser } from '../services/socketService.js';
+import { BadRequestError, NotFoundError, ForbiddenError } from '../middleware/errorHandler.js';
 
 /**
  * Get all comments for a ticket
  * GET /api/tickets/:ticketId/comments
  */
 export const getCommentsByTicket = async (req, res) => {
-    try {
-        const { ticketId } = req.params;
-        const userId = req.user.id;
-        const userRole = req.user.role;
+    const { ticketId } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
 
-        // Verify user has access to this ticket
-        const ticket = await Ticket.getById(ticketId);
-        if (!ticket) {
-            return res.status(404).json({ error: 'Ticket not found' });
-        }
-
-        // Customer can only view their own tickets
-        if (userRole === 'customer' && ticket.customer_id !== userId) {
-            return res.status(403).json({ error: 'Access denied' });
-        }
-
-        const comments = await TicketComment.getByTicketId(ticketId, userRole, userId);
-        
-        res.json({
-            success: true,
-            data: comments
-        });
-    } catch (error) {
-        console.error('Error fetching comments:', error);
-        res.status(500).json({ 
-            error: 'Failed to fetch comments',
-            details: error.message 
-        });
+    // Verify user has access to this ticket
+    const ticket = await Ticket.getById(ticketId);
+    if (!ticket) {
+        throw new NotFoundError('Ticket not found');
     }
+
+    // Customer can only view their own tickets
+    if (userRole === 'customer' && ticket.customer_id !== userId) {
+        throw new ForbiddenError('Access denied');
+    }
+
+    const comments = await TicketComment.getByTicketId(ticketId, userRole, userId);
+    
+    res.json({
+        success: true,
+        data: comments
+    });
 };
 
 /**
@@ -48,44 +41,43 @@ export const getCommentsByTicket = async (req, res) => {
  * POST /api/tickets/:ticketId/comments
  */
 export const createComment = async (req, res) => {
-    try {
-        const { ticketId } = req.params;
-        const { content, isInternal, parentCommentId } = req.body;
-        const userId = req.user.id;
-        const userRole = req.user.role;
+    const { ticketId } = req.params;
+    const { content, isInternal, parentCommentId } = req.body;
+    const userId = req.user.id;
+    const userRole = req.user.role;
 
-        // Validation
-        if (!content || content.trim().length === 0) {
-            return res.status(400).json({ error: 'Comment content is required' });
-        }
+    // Validation
+    if (!content || content.trim().length === 0) {
+        throw new BadRequestError('Comment content is required');
+    }
 
-        if (content.length > 2000) {
-            return res.status(400).json({ error: 'Comment cannot exceed 2000 characters' });
-        }
+    if (content.length > 2000) {
+        throw new BadRequestError('Comment cannot exceed 2000 characters');
+    }
 
-        // Verify ticket exists
-        const ticket = await Ticket.getById(ticketId);
-        if (!ticket) {
-            return res.status(404).json({ error: 'Ticket not found' });
-        }
+    // Verify ticket exists
+    const ticket = await Ticket.getById(ticketId);
+    if (!ticket) {
+        throw new NotFoundError('Ticket not found');
+    }
 
-        // Customer can only comment on their own tickets
-        if (userRole === 'customer' && ticket.customer_id !== userId) {
-            return res.status(403).json({ error: 'Access denied' });
-        }
+    // Customer can only comment on their own tickets
+    if (userRole === 'customer' && ticket.customer_id !== userId) {
+        throw new ForbiddenError('Access denied');
+    }
 
-        // Only techs and management can create internal comments
-        if (isInternal && userRole === 'customer') {
-            return res.status(403).json({ error: 'Customers cannot create internal comments' });
-        }
+    // Only techs and management can create internal comments
+    if (isInternal && userRole === 'customer') {
+        throw new ForbiddenError('Customers cannot create internal comments');
+    }
 
-        // Verify parent comment exists if specified
-        if (parentCommentId) {
-            const parentComment = await TicketComment.getById(parentCommentId);
-            if (!parentComment || parentComment.ticket_id !== parseInt(ticketId)) {
-                return res.status(404).json({ error: 'Parent comment not found' });
-            }
+    // Verify parent comment exists if specified
+    if (parentCommentId) {
+        const parentComment = await TicketComment.getById(parentCommentId);
+        if (!parentComment || parentComment.ticket_id !== parseInt(ticketId)) {
+            throw new NotFoundError('Parent comment not found');
         }
+    }
 
         // Map user role to user_type enum
         let userType = 'client';
@@ -244,23 +236,10 @@ export const createComment = async (req, res) => {
                         }
                     }
                 }
-            } catch (error) {
-                console.error('Failed to send comment notifications:', error);
-                // Don't throw - notification failure shouldn't affect the response
+            } catch (notifyErr) {
+                console.error('Failed to send comment notifications:', notifyErr.message);
             }
         });
-
-        res.status(201).json({
-            success: true,
-            data: comment
-        });
-    } catch (error) {
-        console.error('Error creating comment:', error);
-        res.status(500).json({ 
-            error: 'Failed to create comment',
-            details: error.message 
-        });
-    }
 };
 
 /**
@@ -268,53 +247,37 @@ export const createComment = async (req, res) => {
  * PATCH /api/comments/:commentId
  */
 export const updateComment = async (req, res) => {
-    try {
-        const { commentId } = req.params;
-        const { content, isInternal } = req.body;
-        const userId = req.user.id;
-        const userRole = req.user.role;
+    const { commentId } = req.params;
+    const { content, isInternal } = req.body;
+    const userId = req.user.id;
+    const userRole = req.user.role;
 
-        // Validation
-        if (content && content.length > 2000) {
-            return res.status(400).json({ error: 'Comment cannot exceed 2000 characters' });
-        }
+    if (content && content.length > 2000) {
+        throw new BadRequestError('Comment cannot exceed 2000 characters');
+    }
 
-        // Only techs and management can update is_internal flag
-        if (isInternal !== undefined && userRole === 'customer') {
-            return res.status(403).json({ error: 'Customers cannot modify internal comment status' });
-        }
+    if (isInternal !== undefined && userRole === 'customer') {
+        throw new ForbiddenError('Customers cannot modify internal comment status');
+    }
 
-        const comment = await TicketComment.update(commentId, userId, {
-            content: content?.trim(),
-            isInternal
-        });
+    const comment = await TicketComment.update(commentId, userId, {
+        content: content?.trim(),
+        isInternal
+    });
 
-        if (!comment) {
-            return res.status(404).json({ 
-                error: 'Comment not found or cannot be edited (only editable within 15 minutes)' 
-            });
-        }
+    if (!comment) {
+        throw new NotFoundError('Comment not found or cannot be edited (only editable within 15 minutes)');
+    }
 
-        // Emit real-time event
-        const io = req.app.get('io');
-        if (io) {
-            io.to(`ticket_${comment.ticket_id}`).emit('comment_updated', {
-                ticketId: comment.ticket_id,
-                comment
-            });
-        }
-
-        res.json({
-            success: true,
-            data: comment
-        });
-    } catch (error) {
-        console.error('Error updating comment:', error);
-        res.status(500).json({ 
-            error: 'Failed to update comment',
-            details: error.message 
+    const io = req.app.get('io');
+    if (io) {
+        io.to(`ticket_${comment.ticket_id}`).emit('comment_updated', {
+            ticketId: comment.ticket_id,
+            comment
         });
     }
+
+    res.json({ success: true, data: comment });
 };
 
 /**
@@ -322,39 +285,27 @@ export const updateComment = async (req, res) => {
  * DELETE /api/comments/:commentId
  */
 export const deleteComment = async (req, res) => {
-    try {
-        const { commentId } = req.params;
-        const userId = req.user.id;
-        const userRole = req.user.role;
+    const { commentId } = req.params;
+    const userId = req.user.id;
+    const userRole = req.user.role;
 
-        const isManagement = userRole === 'management' || userRole === 'manager';
+    const isManagement = userRole === 'management' || userRole === 'manager';
 
-        const comment = await TicketComment.delete(commentId, userId, isManagement);
+    const comment = await TicketComment.delete(commentId, userId, isManagement);
 
-        if (!comment) {
-            return res.status(404).json({ error: 'Comment not found' });
-        }
+    if (!comment) {
+        throw new NotFoundError('Comment not found');
+    }
 
-        // Emit real-time event
-        const io = req.app.get('io');
-        if (io) {
-            io.to(`ticket_${comment.ticket_id}`).emit('comment_deleted', {
-                ticketId: comment.ticket_id,
-                commentId
-            });
-        }
-
-        res.json({
-            success: true,
-            message: 'Comment deleted successfully'
-        });
-    } catch (error) {
-        console.error('Error deleting comment:', error);
-        res.status(500).json({ 
-            error: 'Failed to delete comment',
-            details: error.message 
+    const io = req.app.get('io');
+    if (io) {
+        io.to(`ticket_${comment.ticket_id}`).emit('comment_deleted', {
+            ticketId: comment.ticket_id,
+            commentId
         });
     }
+
+    res.json({ success: true, message: 'Comment deleted successfully' });
 };
 
 /**
@@ -362,25 +313,21 @@ export const deleteComment = async (req, res) => {
  * POST /api/comments/:commentId/reactions
  */
 export const addReaction = async (req, res) => {
-    try {
-        const { commentId } = req.params;
-        const { emoji } = req.body;
-        const userId = req.user.id;
+    const { commentId } = req.params;
+    const { emoji } = req.body;
+    const userId = req.user.id;
 
-        // Validate emoji
-        const allowedEmojis = ['👍', '❤️', '😊', '🎉', '✅', '👏'];
-        if (!emoji || !allowedEmojis.includes(emoji)) {
-            return res.status(400).json({ 
-                error: 'Invalid emoji',
-                allowedEmojis 
-            });
-        }
+    // Validate emoji
+    const allowedEmojis = ['👍', '❤️', '😊', '🎉', '✅', '👏'];
+    if (!emoji || !allowedEmojis.includes(emoji)) {
+        throw new BadRequestError('Invalid emoji', { allowedEmojis });
+    }
 
-        const comment = await TicketComment.addReaction(commentId, userId, emoji);
+    const comment = await TicketComment.addReaction(commentId, userId, emoji);
 
-        if (!comment) {
-            return res.status(404).json({ error: 'Comment not found' });
-        }
+    if (!comment) {
+        throw new NotFoundError('Comment not found');
+    }
 
         // Emit real-time event
         const io = req.app.get('io');
@@ -394,17 +341,10 @@ export const addReaction = async (req, res) => {
             });
         }
 
-        res.json({
-            success: true,
-            data: comment
-        });
-    } catch (error) {
-        console.error('Error adding reaction:', error);
-        res.status(500).json({ 
-            error: 'Failed to add reaction',
-            details: error.message 
-        });
-    }
+    res.json({
+        success: true,
+        data: comment
+    });
 };
 
 /**
@@ -412,39 +352,31 @@ export const addReaction = async (req, res) => {
  * DELETE /api/comments/:commentId/reactions/:emoji
  */
 export const removeReaction = async (req, res) => {
-    try {
-        const { commentId, emoji } = req.params;
-        const userId = req.user.id;
+    const { commentId, emoji } = req.params;
+    const userId = req.user.id;
 
-        const comment = await TicketComment.removeReaction(commentId, userId, emoji);
+    const comment = await TicketComment.removeReaction(commentId, userId, emoji);
 
-        if (!comment) {
-            return res.status(404).json({ error: 'Comment not found' });
-        }
+    if (!comment) {
+        throw new NotFoundError('Comment not found');
+    }
 
-        // Emit real-time event
-        const io = req.app.get('io');
-        if (io) {
-            io.to(`ticket_${comment.ticket_id}`).emit('reaction_removed', {
-                ticketId: comment.ticket_id,
-                commentId,
-                emoji,
-                userId,
-                reactionCount: comment.reaction_count
-            });
-        }
-
-        res.json({
-            success: true,
-            data: comment
-        });
-    } catch (error) {
-        console.error('Error removing reaction:', error);
-        res.status(500).json({ 
-            error: 'Failed to remove reaction',
-            details: error.message 
+    // Emit real-time event
+    const io = req.app.get('io');
+    if (io) {
+        io.to(`ticket_${comment.ticket_id}`).emit('reaction_removed', {
+            ticketId: comment.ticket_id,
+            commentId,
+            emoji,
+            userId,
+            reactionCount: comment.reaction_count
         });
     }
+
+    res.json({
+        success: true,
+        data: comment
+    });
 };
 
 /**
@@ -452,26 +384,18 @@ export const removeReaction = async (req, res) => {
  * GET /api/tickets/:ticketId/comments/search?q=searchTerm
  */
 export const searchComments = async (req, res) => {
-    try {
-        const { ticketId } = req.params;
-        const { q: searchTerm } = req.query;
-        const userRole = req.user.role_name || req.user.role;
+    const { ticketId } = req.params;
+    const { q: searchTerm } = req.query;
+    const userRole = req.user.role_name || req.user.role;
 
-        if (!searchTerm || searchTerm.trim().length === 0) {
-            return res.status(400).json({ error: 'Search term is required' });
-        }
-
-        const comments = await TicketComment.search(ticketId, searchTerm.trim(), userRole);
-
-        res.json({
-            success: true,
-            data: comments
-        });
-    } catch (error) {
-        console.error('Error searching comments:', error);
-        res.status(500).json({ 
-            error: 'Failed to search comments',
-            details: error.message 
-        });
+    if (!searchTerm || searchTerm.trim().length === 0) {
+        throw new BadRequestError('Search term is required');
     }
+
+    const comments = await TicketComment.search(ticketId, searchTerm.trim(), userRole);
+
+    res.json({
+        success: true,
+        data: comments
+    });
 };
