@@ -19,7 +19,8 @@ import QuickActionsPanel from '../components/QuickActionsPanel'
 import TicketDetailView from '../components/TicketDetailView'
 import UpdateRequestResponseTimeAnalytics from '../components/UpdateRequestResponseTimeAnalytics'
 import AuditHealthWidget from '../components/AuditHealthWidget'
-import { getAllTickets } from '../services/ticketService'
+import CreateTicketWidget from '../components/CreateTicketWidget'
+import { getAllTickets, createTicket } from '../services/ticketService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
 import { buildGalleryItems, buildWidgetConfig } from '../widgets'
 
@@ -80,7 +81,7 @@ const MANAGEMENT_WIDGET_KEYS = [
   'timeline', 'ticketControl', 'assignedChart', 'categoriesChart',
   'overdue', 'escalations', 'todaysActions', 'topRequesters',
   'techPerformance', 'deletedTickets', 'pendingRequests', 'responseTime',
-  'auditHealth',
+  'auditHealth', 'createTicket',
 ]
 
 // Widget metadata for the gallery sidebar — derived from the widget registry
@@ -96,6 +97,7 @@ function ManagementWidgetGrid({
   widgetFilters, handleWidgetFilterChange,
   categoryFilter, setCategoryFilter,
   handleTicketClick, pendingRequestsRef,
+  onSubmitTicket,
 }) {
   const {
     layouts,
@@ -151,11 +153,12 @@ function ManagementWidgetGrid({
         </BaseWidget>
       ),
       auditHealth: <AuditHealthWidget />,
+      createTicket: <CreateTicketWidget onSubmit={onSubmitTicket} />,
     }
     return buildWidgetConfig(MANAGEMENT_WIDGET_KEYS, componentMap)
   }, [tickets, fetchTickets, assignmentFilter, setAssignmentFilter,
       widgetFilters, handleWidgetFilterChange, categoryFilter, setCategoryFilter,
-      handleTicketClick, pendingRequestsRef])
+      handleTicketClick, pendingRequestsRef, onSubmitTicket])
 
   return (
     <>
@@ -277,6 +280,23 @@ function ManagementDashboard() {
     setSelectedTicketId(ticketId)
     setIsDetailOpen(true)
   }
+
+  // Handle ticket creation from the CreateTicketWidget
+  const handleSubmitTicket = async (formData) => {
+    try {
+      const response = await createTicket(formData)
+      const ticketId = response.ticket?.id || response.ticket?.ticket_id || response.data?.id || response.data?.ticket_id
+      toast.success(ticketId
+        ? `Ticket #${ticketId} created successfully!`
+        : 'Ticket submitted successfully!')
+      await fetchTickets()
+    } catch (error) {
+      console.error('Failed to create ticket:', error)
+      toast.error(error.message || 'Failed to submit ticket. Please try again.')
+      throw error
+    }
+  }
+
   const [assignmentFilter, setAssignmentFilter] = useState(null) // 'assigned' | 'unassigned' | null
   const [widgetFilters, setWidgetFilters] = useState({ priority: null, category: null, status: null })
   const [categoryFilter, setCategoryFilter] = useState(null) // selected category key or null
@@ -486,6 +506,7 @@ function ManagementDashboard() {
         setCategoryFilter={setCategoryFilter}
         handleTicketClick={handleTicketClick}
         pendingRequestsRef={pendingRequestsRef}
+        onSubmitTicket={handleSubmitTicket}
       />
 
       {/* Ticket Detail View Modal */}

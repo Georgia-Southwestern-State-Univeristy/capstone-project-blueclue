@@ -343,7 +343,7 @@ const WIDGET_REGISTRY = [
     description: 'Submit a new support ticket directly from the dashboard',
     icon: '✏️',
     category: CATEGORIES.TICKETS,
-    permissions: [ROLES.CUSTOMER, ROLES.GUEST],
+    permissions: ROLE_GROUPS.ALL,
     size: {
       defaultW: 12, defaultH: 10,
       minW: 6, minH: 6,
