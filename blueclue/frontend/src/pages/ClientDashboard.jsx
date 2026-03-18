@@ -3,6 +3,7 @@ import TicketSubmissionModal from '../components/TicketSubmissionModal'
 import TicketDetailView from '../components/TicketDetailView'
 import TicketTimeline from '../components/TicketTimeline'
 import ClientTicketListWidget from '../components/ClientTicketListWidget'
+import CreateTicketWidget from '../components/CreateTicketWidget'
 import DashboardGrid from '../components/DashboardGrid'
 import useDashboardLayout from '../hooks/useDashboardLayout'
 import { buildGalleryItems, buildWidgetConfig } from '../widgets'
@@ -12,23 +13,26 @@ import { useNotificationSocket } from '../hooks/useNotificationSocket'
 import { useToast } from '../hooks/useToast'
 
 // ── Default grid layouts ─────────────────────────────────────────────────────
-const LAYOUT_VERSION = 1
+const LAYOUT_VERSION = 2
 const DEFAULT_LAYOUTS = {
   lg: [
-    { i: 'timeline',      x: 0, y: 0,  w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
-    { i: 'clientTickets',  x: 0, y: 8,  w: 12, h: 12, minW: 6,  minH: 6, maxW: 12, maxH: 20 },
+    { i: 'createTicket',   x: 0, y: 0,  w: 12, h: 10, minW: 6,  minH: 6, maxW: 12, maxH: 18 },
+    { i: 'timeline',       x: 0, y: 10, w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
+    { i: 'clientTickets',  x: 0, y: 18, w: 12, h: 12, minW: 6,  minH: 6, maxW: 12, maxH: 20 },
   ],
   md: [
-    { i: 'timeline',      x: 0, y: 0,  w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
-    { i: 'clientTickets',  x: 0, y: 8,  w: 12, h: 12, minW: 6,  minH: 6, maxW: 12, maxH: 20 },
+    { i: 'createTicket',   x: 0, y: 0,  w: 12, h: 10, minW: 6,  minH: 6, maxW: 12, maxH: 18 },
+    { i: 'timeline',       x: 0, y: 10, w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
+    { i: 'clientTickets',  x: 0, y: 18, w: 12, h: 12, minW: 6,  minH: 6, maxW: 12, maxH: 20 },
   ],
   sm: [
-    { i: 'timeline',      x: 0, y: 0,  w: 6, h: 8,  minW: 3, minH: 6, maxW: 6, maxH: 16 },
-    { i: 'clientTickets',  x: 0, y: 8,  w: 6, h: 12, minW: 3, minH: 6, maxW: 6, maxH: 20 },
+    { i: 'createTicket',   x: 0, y: 0,  w: 6, h: 10, minW: 3, minH: 6, maxW: 6, maxH: 18 },
+    { i: 'timeline',       x: 0, y: 10, w: 6, h: 8,  minW: 3, minH: 6, maxW: 6, maxH: 16 },
+    { i: 'clientTickets',  x: 0, y: 18, w: 6, h: 12, minW: 3, minH: 6, maxW: 6, maxH: 20 },
   ],
 }
 
-const CLIENT_WIDGET_KEYS = ['timeline', 'clientTickets']
+const CLIENT_WIDGET_KEYS = ['createTicket', 'timeline', 'clientTickets']
 const WIDGET_GALLERY_ITEMS = buildGalleryItems({ keys: CLIENT_WIDGET_KEYS })
 
 /**
@@ -37,7 +41,7 @@ const WIDGET_GALLERY_ITEMS = buildGalleryItems({ keys: CLIENT_WIDGET_KEYS })
 function ClientWidgetGrid({
   tickets, timelineTickets, isLoading, isTimelineLoading,
   fetchTickets, fetchTimelineTickets,
-  handleTicketClick, handleSubmitClick,
+  handleTicketClick, handleSubmitClick, onSubmitTicket,
 }) {
   const {
     layouts, isEditMode, editModeToggledRef, onLayoutChange,
@@ -47,6 +51,9 @@ function ClientWidgetGrid({
 
   const widgetConfig = useMemo(() => {
     const componentMap = {
+      createTicket: (
+        <CreateTicketWidget onSubmit={onSubmitTicket} />
+      ),
       timeline: (
         <TicketTimeline
           tickets={timelineTickets}
@@ -66,7 +73,7 @@ function ClientWidgetGrid({
     }
     return buildWidgetConfig(CLIENT_WIDGET_KEYS, componentMap)
   }, [tickets, timelineTickets, isLoading, isTimelineLoading,
-      fetchTickets, fetchTimelineTickets, handleTicketClick, handleSubmitClick])
+      fetchTickets, fetchTimelineTickets, handleTicketClick, handleSubmitClick, onSubmitTicket])
 
   return (
     <DashboardGrid
@@ -201,6 +208,7 @@ function ClientDashboard() {
         fetchTimelineTickets={fetchTimelineTickets}
         handleTicketClick={handleTicketClick}
         handleSubmitClick={() => setIsModalOpen(true)}
+        onSubmitTicket={handleSubmit}
       />
 
       {/* Ticket Submission Modal */}
