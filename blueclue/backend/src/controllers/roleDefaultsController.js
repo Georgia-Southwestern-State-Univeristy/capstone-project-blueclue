@@ -1,4 +1,5 @@
-import CategoryAccess from '../models/CategoryAccess.js';
+﻿import CategoryAccess from '../models/CategoryAccess.js';
+import { BadRequestError } from '../middleware/errorHandler.js';
 
 /**
  * Get role-based default category access for a specific role
@@ -6,16 +7,12 @@ import CategoryAccess from '../models/CategoryAccess.js';
  * @access Admin only
  */
 export const getRoleDefaults = async (req, res) => {
-    try {
         const { role } = req.params;
         
         // Validate role
         const validRoles = ['customer', 'technician', 'admin'];
         if (!validRoles.includes(role)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid role. Must be: customer, technician, or admin'
-            });
+            throw new BadRequestError('Invalid role. Must be: customer, technician, or admin');
         }
 
         const defaults = await CategoryAccess.getRoleDefaults(role);
@@ -25,14 +22,6 @@ export const getRoleDefaults = async (req, res) => {
             role,
             defaults
         });
-    } catch (error) {
-        console.error('Error getting role defaults:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to get role defaults',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -41,7 +30,6 @@ export const getRoleDefaults = async (req, res) => {
  * @access Admin only
  */
 export const getUserAccessSummary = async (req, res) => {
-    try {
         const { userId } = req.params;
 
         const summary = await CategoryAccess.getUserAccessSummary(parseInt(userId));
@@ -53,14 +41,6 @@ export const getUserAccessSummary = async (req, res) => {
             defaults: summary.defaults,
             total_access: summary.overrides.length + summary.defaults.length
         });
-    } catch (error) {
-        console.error('Error getting user access summary:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to get user access summary',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -69,7 +49,6 @@ export const getUserAccessSummary = async (req, res) => {
  * @access Admin only
  */
 export const getUserOverride = async (req, res) => {
-    try {
         const { userId, categoryId } = req.params;
 
         const override = await CategoryAccess.getUserOverride(
@@ -90,14 +69,6 @@ export const getUserOverride = async (req, res) => {
             has_override: true,
             override
         });
-    } catch (error) {
-        console.error('Error checking user override:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to check user override',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -107,17 +78,13 @@ export const getUserOverride = async (req, res) => {
  * @access Authenticated users
  */
 export const getAccessibleCategories = async (req, res) => {
-    try {
         const userId = req.user.id;
         const accessLevel = req.query.access_level || 'view';
 
         // Validate access level
         const validLevels = ['view', 'edit', 'assign'];
         if (!validLevels.includes(accessLevel)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid access_level. Must be: view, edit, or assign'
-            });
+            throw new BadRequestError('Invalid access_level. Must be: view, edit, or assign');
         }
 
         const categories = await CategoryAccess.getUserAccessibleCategories(userId, accessLevel);
@@ -127,12 +94,4 @@ export const getAccessibleCategories = async (req, res) => {
             access_level: accessLevel,
             categories
         });
-    } catch (error) {
-        console.error('Error getting accessible categories:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to get accessible categories',
-            error: error.message
-        });
-    }
 };
