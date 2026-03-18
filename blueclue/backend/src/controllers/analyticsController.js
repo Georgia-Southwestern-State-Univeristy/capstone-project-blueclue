@@ -1,14 +1,14 @@
-// src/controllers/analyticsController.js
+﻿// src/controllers/analyticsController.js
 import pool from '../config/database.js';
 import PriorityOverride from '../models/PriorityOverride.js';
 import * as analyticsService from '../services/analyticsService.js';
+import { ForbiddenError } from '../middleware/errorHandler.js';
 
 /**
  * Get AI priority analytics overview
  * GET /api/analytics/ai-priority
  */
 export const getAIPriorityAnalytics = async (req, res) => {
-    try {
         // Get basic override statistics
         const overrideStats = await PriorityOverride.getStatistics();
 
@@ -60,14 +60,6 @@ export const getAIPriorityAnalytics = async (req, res) => {
             }
         });
 
-    } catch (error) {
-        console.error('Analytics error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve analytics',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -75,7 +67,6 @@ export const getAIPriorityAnalytics = async (req, res) => {
  * GET /api/analytics/ai-performance
  */
 export const getAIPerformanceMetrics = async (req, res) => {
-    try {
         const { category, startDate, endDate } = req.query;
 
         let whereClause = `WHERE ai_classified = true AND status IN ('resolved', 'closed')`;
@@ -154,14 +145,6 @@ export const getAIPerformanceMetrics = async (req, res) => {
             }
         });
 
-    } catch (error) {
-        console.error('Performance metrics error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve performance metrics',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -169,7 +152,6 @@ export const getAIPerformanceMetrics = async (req, res) => {
  * GET /api/analytics/category-insights
  */
 export const getCategoryInsights = async (req, res) => {
-    try {
         const query = `
             SELECT 
                 category,
@@ -205,14 +187,6 @@ export const getCategoryInsights = async (req, res) => {
             data: result.rows
         });
 
-    } catch (error) {
-        console.error('Category insights error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve category insights',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -221,7 +195,6 @@ export const getCategoryInsights = async (req, res) => {
  * @query {number} days - Number of days to analyze (default: 30)
  */
 export const getCollaborationAnalytics = async (req, res) => {
-    try {
         const days = parseInt(req.query.days) || 30;
 
         // Overall collaboration statistics
@@ -396,14 +369,6 @@ export const getCollaborationAnalytics = async (req, res) => {
             }
         });
 
-    } catch (error) {
-        console.error('Get collaboration analytics error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve collaboration analytics',
-            error: error.message
-        });
-    }
 };
 
 export default {
@@ -422,7 +387,6 @@ export default {
  * Returns assigned vs unassigned ticket counts and percentages
  */
 export const getAssignmentStats = async (req, res) => {
-    try {
         const result = await pool.query(`
             SELECT
                 COUNT(*) AS total,
@@ -451,10 +415,6 @@ export const getAssignmentStats = async (req, res) => {
                 unassigned_pct: parseFloat(row.unassigned_pct)
             }
         });
-    } catch (error) {
-        console.error('Assignment stats error:', error);
-        res.status(500).json({ status: 'error', message: 'Failed to retrieve assignment stats', error: error.message });
-    }
 };
 
 /**
@@ -462,7 +422,6 @@ export const getAssignmentStats = async (req, res) => {
  * Returns ticket counts by category with color codes
  */
 export const getCategoryBreakdown = async (req, res) => {
-    try {
         const result = await pool.query(`
             SELECT
                 t.category,
@@ -490,10 +449,6 @@ export const getCategoryBreakdown = async (req, res) => {
                 percentage: parseFloat(r.percentage)
             }))
         });
-    } catch (error) {
-        console.error('Category breakdown error:', error);
-        res.status(500).json({ status: 'error', message: 'Failed to retrieve category breakdown', error: error.message });
-    }
 };
 
 /**
@@ -501,7 +456,6 @@ export const getCategoryBreakdown = async (req, res) => {
  * Returns list of overdue tickets with days overdue and alert level
  */
 export const getOverdueTickets = async (req, res) => {
-    try {
         const result = await pool.query(`
             SELECT
                 t.id,
@@ -540,10 +494,6 @@ export const getOverdueTickets = async (req, res) => {
                 };
             })
         });
-    } catch (error) {
-        console.error('Overdue tickets error:', error);
-        res.status(500).json({ status: 'error', message: 'Failed to retrieve overdue tickets', error: error.message });
-    }
 };
 
 /**
@@ -551,7 +501,6 @@ export const getOverdueTickets = async (req, res) => {
  * Returns per-technician workload: open ticket counts, avg resolution time, color grade
  */
 export const getTechWorkload = async (req, res) => {
-    try {
         const result = await pool.query(`
             SELECT
                 u.id AS tech_id,
@@ -617,10 +566,6 @@ export const getTechWorkload = async (req, res) => {
         });
 
         res.json({ status: 'success', count: data.length, data });
-    } catch (error) {
-        console.error('Tech workload error:', error);
-        res.status(500).json({ status: 'error', message: 'Failed to retrieve tech workload', error: error.message });
-    }
 };
 
 /**
@@ -630,7 +575,6 @@ export const getTechWorkload = async (req, res) => {
  * open-status tickets that have gone without response past their SLA as escalations.
  */
 export const getEscalations = async (req, res) => {
-    try {
         const result = await pool.query(`
             SELECT
                 t.id,
@@ -672,10 +616,6 @@ export const getEscalations = async (req, res) => {
         `);
 
         res.json({ status: 'success', count: result.rows.length, data: result.rows });
-    } catch (error) {
-        console.error('Escalations error:', error);
-        res.status(500).json({ status: 'error', message: 'Failed to retrieve escalations', error: error.message });
-    }
 };
 
 /**
@@ -686,7 +626,6 @@ export const getEscalations = async (req, res) => {
  *  - Unassigned high/critical tickets
  */
 export const getTodaysActions = async (req, res) => {
-    try {
         // Tickets with resolution due today
         const dueTodayResult = await pool.query(`
             SELECT
@@ -753,10 +692,6 @@ export const getTodaysActions = async (req, res) => {
                 unassigned_urgent: unassignedUrgentResult.rows.length
             }
         });
-    } catch (error) {
-        console.error('Todays actions error:', error);
-        res.status(500).json({ status: 'error', message: 'Failed to retrieve todays actions', error: error.message });
-    }
 };
 
 /**
@@ -765,7 +700,6 @@ export const getTodaysActions = async (req, res) => {
  * Accepted timeRange values: 7d, 30d, 90d, all  (default 30d)
  */
 export const getTopRequesters = async (req, res) => {
-    try {
         const { timeRange = '30d' } = req.query;
 
         // Map timeRange to interval
@@ -810,10 +744,6 @@ export const getTopRequesters = async (req, res) => {
                 avg_resolution_hours: r.avg_resolution_hours ? parseFloat(r.avg_resolution_hours) : null
             }))
         });
-    } catch (error) {
-        console.error('Top requesters error:', error);
-        res.status(500).json({ status: 'error', message: 'Failed to retrieve top requesters', error: error.message });
-    }
 };
 
 /**
@@ -821,7 +751,6 @@ export const getTopRequesters = async (req, res) => {
  * Returns cancellation metrics: total cancelled, rate, trends, top reasons, by category
  */
 export const getCancellationStats = async (req, res) => {
-    try {
         const { timeRange = '30d' } = req.query;
         const intervalMap = { '7d': '7 days', '30d': '30 days', '90d': '90 days' };
         const interval = intervalMap[timeRange]; // null for 'all'
@@ -923,10 +852,6 @@ export const getCancellationStats = async (req, res) => {
                 }))
             }
         });
-    } catch (error) {
-        console.error('Cancellation stats error:', error);
-        res.status(500).json({ status: 'error', message: 'Failed to retrieve cancellation stats', error: error.message });
-    }
 };
 
 /**
@@ -935,7 +860,6 @@ export const getCancellationStats = async (req, res) => {
  *  - avg resolution time, first response time, tickets resolved (30d), satisfaction placeholder
  */
 export const getTechPerformance = async (req, res) => {
-    try {
         const result = await pool.query(`
             SELECT
                 u.id AS tech_id,
@@ -1003,10 +927,6 @@ export const getTechPerformance = async (req, res) => {
                 satisfaction_score: null  // placeholder — no satisfaction data yet
             }))
         });
-    } catch (error) {
-        console.error('Tech performance error:', error);
-        res.status(500).json({ status: 'error', message: 'Failed to retrieve tech performance', error: error.message });
-    }
 };
 
 /**
@@ -1014,7 +934,6 @@ export const getTechPerformance = async (req, res) => {
  * GET /api/analytics/reopens
  */
 export const getReopenAnalytics = async (req, res) => {
-    try {
         const { days = 30 } = req.query;
 
         // Overall reopen statistics
@@ -1173,14 +1092,6 @@ export const getReopenAnalytics = async (req, res) => {
                 }))
             }
         });
-    } catch (error) {
-        console.error('Reopen analytics error:', error);
-        res.status(500).json({ 
-            status: 'error', 
-            message: 'Failed to retrieve reopen analytics', 
-            error: error.message 
-        });
-    }
 };
 
 // ============================================================================
@@ -1197,7 +1108,6 @@ export const getReopenAnalytics = async (req, res) => {
  * @query {number} techId - Filter by technician (for tech-only view)
  */
 export const getResolutionTime = async (req, res) => {
-    try {
         const { startDate, endDate, preset, category, techId } = req.query;
         const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
         
@@ -1219,14 +1129,6 @@ export const getResolutionTime = async (req, res) => {
             data,
             filters: { startDate: start, endDate: end, category, techId: effectiveTechId }
         });
-    } catch (error) {
-        console.error('Resolution time analytics error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve resolution time metrics',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -1238,7 +1140,6 @@ export const getResolutionTime = async (req, res) => {
  * @query {string} category - Filter by category
  */
 export const getTicketVolume = async (req, res) => {
-    try {
         const { startDate, endDate, preset, category, techId } = req.query;
         const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
         
@@ -1260,14 +1161,6 @@ export const getTicketVolume = async (req, res) => {
             data,
             filters: { startDate: start, endDate: end, category, techId: effectiveTechId }
         });
-    } catch (error) {
-        console.error('Ticket volume analytics error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve ticket volume metrics',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -1279,7 +1172,6 @@ export const getTicketVolume = async (req, res) => {
  * @query {number} techId - Specific technician ID (optional)
  */
 export const getTechPerformanceDashboard = async (req, res) => {
-    try {
         const { startDate, endDate, preset, techId } = req.query;
         const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
         
@@ -1300,14 +1192,6 @@ export const getTechPerformanceDashboard = async (req, res) => {
             data,
             filters: { startDate: start, endDate: end, techId: effectiveTechId }
         });
-    } catch (error) {
-        console.error('Tech performance analytics error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve technician performance metrics',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -1318,16 +1202,12 @@ export const getTechPerformanceDashboard = async (req, res) => {
  * @query {string} preset - Date preset (today, week, month, quarter, year)
  */
 export const getCategoriesDashboard = async (req, res) => {
-    try {
         const { startDate, endDate, preset } = req.query;
         const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
         
         // Technicians cannot access full category analytics - management only
         if (req.user.role === 'technician' || req.user.role === 'senior_technician') {
-            return res.status(403).json({
-                status: 'error',
-                message: 'Category analysis is only available to management'
-            });
+            throw new ForbiddenError('Category analysis is only available to management');
         }
         
         const data = await analyticsService.getCategoryAnalysis(
@@ -1340,14 +1220,6 @@ export const getCategoriesDashboard = async (req, res) => {
             data,
             filters: { startDate: start, endDate: end }
         });
-    } catch (error) {
-        console.error('Categories analytics error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve category analysis',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -1359,16 +1231,12 @@ export const getCategoriesDashboard = async (req, res) => {
  * @query {string} category - Filter by category
  */
 export const getSLAComplianceDashboard = async (req, res) => {
-    try {
         const { startDate, endDate, preset, category } = req.query;
         const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
         
         // Technicians cannot access full SLA analytics - management only
         if (req.user.role === 'technician' || req.user.role === 'senior_technician') {
-            return res.status(403).json({
-                status: 'error',
-                message: 'SLA compliance is only available to management'
-            });
+            throw new ForbiddenError('SLA compliance is only available to management');
         }
         
         const data = await analyticsService.getSLACompliance(
@@ -1382,14 +1250,6 @@ export const getSLAComplianceDashboard = async (req, res) => {
             data,
             filters: { startDate: start, endDate: end, category }
         });
-    } catch (error) {
-        console.error('SLA compliance analytics error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve SLA compliance metrics',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -1400,7 +1260,6 @@ export const getSLAComplianceDashboard = async (req, res) => {
  * @query {string} preset - Date preset (today, week, month, quarter, year)
  */
 export const getAdditionalMetricsDashboard = async (req, res) => {
-    try {
         const { startDate, endDate, preset } = req.query;
         const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
         
@@ -1414,14 +1273,6 @@ export const getAdditionalMetricsDashboard = async (req, res) => {
             data,
             filters: { startDate: start, endDate: end }
         });
-    } catch (error) {
-        console.error('Additional metrics error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve additional metrics',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -1432,7 +1283,6 @@ export const getAdditionalMetricsDashboard = async (req, res) => {
  * @query {string} preset - Date preset (today, week, month, quarter, year)
  */
 export const getDashboardSummary = async (req, res) => {
-    try {
         const { startDate, endDate, preset } = req.query;
         const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
         
@@ -1477,14 +1327,6 @@ export const getDashboardSummary = async (req, res) => {
             filters: { startDate: start, endDate: end },
             user_role: req.user.role
         });
-    } catch (error) {
-        console.error('Dashboard summary error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve dashboard summary',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -1497,16 +1339,12 @@ export const getDashboardSummary = async (req, res) => {
  * @query {string} preset - Date preset (today, week, month, quarter, year)
  */
 export const exportAnalytics = async (req, res) => {
-    try {
         const { format = 'csv', type = 'summary', startDate, endDate, preset } = req.query;
         const { start, end } = analyticsService.parseDateRange(startDate, endDate, preset);
         
         // Only management can export
         if (req.user.role === 'technician' || req.user.role === 'senior_technician') {
-            return res.status(403).json({
-                status: 'error',
-                message: 'Export is only available to management'
-            });
+            throw new ForbiddenError('Export is only available to management');
         }
         
         const exportData = await analyticsService.generateExportData(
@@ -1519,14 +1357,6 @@ export const exportAnalytics = async (req, res) => {
         res.setHeader('Content-Type', exportData.contentType);
         res.setHeader('Content-Disposition', `attachment; filename="${exportData.filename}"`);
         res.send(exportData.content);
-    } catch (error) {
-        console.error('Export analytics error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to export analytics data',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -1535,25 +1365,13 @@ export const exportAnalytics = async (req, res) => {
  * Management only
  */
 export const clearCache = async (req, res) => {
-    try {
         // Only management can clear cache
         if (req.user.role !== 'management' && req.user.role !== 'admin') {
-            return res.status(403).json({
-                status: 'error',
-                message: 'Cache management is only available to management'
-            });
+            throw new ForbiddenError('Cache management is only available to management');
         }
         
         const result = analyticsService.clearAnalyticsCache();
         res.json(result);
-    } catch (error) {
-        console.error('Clear cache error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to clear cache',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -1570,7 +1388,6 @@ export const clearCache = async (req, res) => {
  * @query {number} limit - Items per page
  */
 export const getTicketsByFilter = async (req, res) => {
-    try {
         const { 
             startDate, endDate, preset, 
             category, priority, status, techId,
@@ -1680,12 +1497,4 @@ export const getTicketsByFilter = async (req, res) => {
             },
             filters: { startDate: start, endDate: end, category, priority, status, techId: effectiveTechId, slaBreach }
         });
-    } catch (error) {
-        console.error('Tickets by filter error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve filtered tickets',
-            error: error.message
-        });
-    }
 };
