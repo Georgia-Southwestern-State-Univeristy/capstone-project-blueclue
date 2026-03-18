@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import TicketSubmissionModal from '../components/TicketSubmissionModal'
 import TicketDetailView from '../components/TicketDetailView'
-import Alert from '../components/Alert'
 import TicketTimeline from '../components/TicketTimeline'
 import ClientTicketListWidget from '../components/ClientTicketListWidget'
 import DashboardGrid from '../components/DashboardGrid'
@@ -10,6 +9,7 @@ import { buildGalleryItems, buildWidgetConfig } from '../widgets'
 import { createTicket, getAllTickets, getAllTicketsForTimeline } from '../services/ticketService'
 import { getCurrentUser } from '../services/authService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
+import { useToast } from '../hooks/useToast'
 
 // ── Default grid layouts ─────────────────────────────────────────────────────
 const LAYOUT_VERSION = 1
@@ -93,7 +93,7 @@ function ClientWidgetGrid({
 
 function ClientDashboard() {
   // State management
-  const [alert, setAlert] = useState(null)
+  const toast = useToast()
   const [tickets, setTickets] = useState([])
   const [timelineTickets, setTimelineTickets] = useState([])
   const [isLoading, setIsLoading] = useState(true)
@@ -123,10 +123,7 @@ function ClientDashboard() {
       setTickets(userTickets)
     } catch (error) {
       console.error('Failed to fetch tickets:', error)
-      setAlert({
-        type: 'error',
-        message: 'Failed to load tickets. Please try again.'
-      })
+      toast.error('Failed to load tickets. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -163,14 +160,10 @@ function ClientDashboard() {
   const handleSubmit = async (formData) => {
     try {
       const response = await createTicket(formData)
-      // Show success alert
       const ticketId = response.ticket?.id || response.ticket?.ticket_id || response.data?.id || response.data?.ticket_id
-      setAlert({
-        type: 'success',
-        message: ticketId
-          ? `Ticket #${ticketId} created successfully!`
-          : 'Ticket submitted successfully!'
-      })
+      toast.success(ticketId
+        ? `Ticket #${ticketId} created successfully!`
+        : 'Ticket submitted successfully!')
 
       // Close modal
       setIsModalOpen(false)
@@ -180,17 +173,9 @@ function ClientDashboard() {
       await fetchTimelineTickets()
     } catch (error) {
       console.error('Failed to create ticket:', error)
-      setAlert({
-        type: 'error',
-        message: error.message || 'Failed to submit ticket. Please try again.'
-      })
+      toast.error(error.message || 'Failed to submit ticket. Please try again.')
       throw error
     }
-  }
-
-  // Clear alert
-  const handleAlertClose = () => {
-    setAlert(null)
   }
 
   // Open the ticket detail modal
@@ -205,18 +190,6 @@ function ClientDashboard() {
       <p className="text-gray-400 mb-6">
         Submit support tickets and track their status
       </p>
-
-      {/* Alert display */}
-      {alert && (
-        <div className="mb-6">
-          <Alert
-            type={alert.type}
-            message={alert.message}
-            onClose={handleAlertClose}
-            autoDismiss={alert.type === 'success' ? 5000 : 0}
-          />
-        </div>
-      )}
 
       {/* Widget Grid */}
       <ClientWidgetGrid

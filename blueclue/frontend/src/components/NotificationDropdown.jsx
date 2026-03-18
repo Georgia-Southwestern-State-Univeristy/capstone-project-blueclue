@@ -136,6 +136,11 @@ function NotificationDropdown({ isOpen, onClose, onNotificationUpdate, onTicketC
                   if (onTicketClick) onTicketClick(ticketId);
                   onClose();
                 }}
+                onError={(message) => {
+                  setError(message);
+                  // Auto-clear error after 5 seconds
+                  setTimeout(() => setError(null), 5000);
+                }}
               />
             ))}
           </div>

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import LoadingSpinner from './LoadingSpinner';
 import PriorityRecommendation from './PriorityRecommendation';
 import PriorityWarningModal from './PriorityWarningModal';
+import { useToast } from '../hooks/useToast';
 
 // Validation constants
 const TITLE_MIN = 5;
@@ -29,8 +30,8 @@ function TicketFormEnhanced({ onSubmit }) {
   // Loading state
   const [isLoading, setIsLoading] = useState(false);
 
-  // Error state
-  const [error, setError] = useState(null);
+  // Toast notifications
+  const toast = useToast();
 
   // Validation errors state
   const [validationErrors, setValidationErrors] = useState({
@@ -65,7 +66,6 @@ function TicketFormEnhanced({ onSubmit }) {
       title: false,
       description: false
     });
-    setError(null);
     setAiClassification(null);
     setShowAiRecommendation(false);
     setShowPriorityWarning(false);
@@ -251,7 +251,6 @@ function TicketFormEnhanced({ onSubmit }) {
   // Perform actual submission
   const performSubmit = async () => {
     setIsLoading(true);
-    setError(null);
 
     try {
       const submitData = {
@@ -270,7 +269,7 @@ function TicketFormEnhanced({ onSubmit }) {
       setOverrideReason(null);
     } catch (err) {
       if (!onSubmit) {
-        setError(err.message || 'An error occurred while submitting the ticket');
+        toast.error(err.message || 'An error occurred while submitting the ticket');
       }
     } finally {
       setIsLoading(false);
@@ -302,16 +301,6 @@ function TicketFormEnhanced({ onSubmit }) {
   return (
     <>
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Error display */}
-        {error && (
-          <div 
-            role="alert"
-            className="bg-red-950 border border-red-700 text-red-300 px-4 py-3 rounded-lg"
-          >
-            {error}
-          </div>
-        )}
-
         {/* Title field */}
         <div>
           <label 

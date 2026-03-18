@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import Alert from '../components/Alert'
+import { useToast } from '../hooks/useToast'
 import DonutChart from '../components/DonutChart'
 import TicketTimeline from '../components/TicketTimeline'
 import PieChart from '../components/PieChart'
@@ -60,7 +60,7 @@ const WIDGET_GALLERY_ITEMS = buildGalleryItems({ keys: TECHNICIAN_WIDGET_KEYS })
  * TechnicianWidgetGrid — drag-and-drop widget grid for the technician dashboard
  */
 function TechnicianWidgetGrid({
-  tickets, loading, fetchTickets,
+  tickets, loading,
   technicians, handleTicketClick,
   handleStatusChange, handleAssignmentChange,
   updatingTicketId, assigningTicketId, ticketErrors,
@@ -101,7 +101,7 @@ function TechnicianWidgetGrid({
       chatPanel: <TechChatPanel />,
     }
     return buildWidgetConfig(TECHNICIAN_WIDGET_KEYS, componentMap)
-  }, [tickets, loading, fetchTickets, technicians, handleTicketClick,
+  }, [tickets, loading, technicians, handleTicketClick,
       handleStatusChange, handleAssignmentChange, updatingTicketId,
       assigningTicketId, ticketErrors, includeCancelled, stats,
       donutSegments, prioritySegments])
@@ -130,9 +130,9 @@ function TechnicianWidgetGrid({
 }
 
 function TechnicianDashboard() {
+  const toast = useToast()
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
   const [updatingTicketId, setUpdatingTicketId] = useState(null)
   const [ticketErrors, setTicketErrors] = useState({})
   const [technicians, setTechnicians] = useState([])
@@ -146,6 +146,7 @@ function TechnicianDashboard() {
   useEffect(() => {
     fetchTickets()
     fetchTechnicians()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Check for ticket to auto-open from Ring for Help
@@ -161,12 +162,11 @@ function TechnicianDashboard() {
   const fetchTickets = async () => {
     // Only show full loading spinner on initial load
     if (tickets.length === 0) setLoading(true)
-    setError(null)
     try {
       const response = await getAllTickets()
       setTickets(response.data || [])
     } catch (err) {
-      setError(err.message || 'Failed to load tickets')
+      toast.error(err.message || 'Failed to load tickets')
       console.error('Error fetching tickets:', err)
     } finally {
       setLoading(false)
@@ -185,7 +185,21 @@ function TechnicianDashboard() {
       setTechnicians(techList || [])
     } catch (err) {
       console.error('Error fetching technicians:', err)
-      // Don't show error to user, just log it
+      // Set a non-blocking inline error for the assignment dropdown
+      // Don't use the main error state as this is a secondary feature
+      setTicketErrors(prev => ({
+        ...prev,
+        technician_list: 'Could not load technician list for assignments'
+      }))
+      
+      // Auto-clear after 5 seconds
+      setTimeout(() => {
+        setTicketErrors(prev => {
+          const newErrors = { ...prev }
+          delete newErrors.technician_list
+          return newErrors
+        })
+      }, 5000)
     }
   }
 
@@ -351,17 +365,6 @@ function TechnicianDashboard() {
         </label>
       </div>
 
-      {/* Error Alert */}
-      {error && (
-        <div className="mb-6">
-          <Alert 
-            type="error" 
-            message={error}
-            onClose={() => setError(null)}
-          />
-        </div>
-      )}
-
       {/* Update Request Alert Banner */}
       <div className="mb-6">
         <UpdateRequestAlert
@@ -373,7 +376,6 @@ function TechnicianDashboard() {
       <TechnicianWidgetGrid
         tickets={tickets}
         loading={loading}
-        fetchTickets={fetchTickets}
         technicians={technicians}
         handleTicketClick={handleTicketClick}
         handleStatusChange={handleStatusChange}

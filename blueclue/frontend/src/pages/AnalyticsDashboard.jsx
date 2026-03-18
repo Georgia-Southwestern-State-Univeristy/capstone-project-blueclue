@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LoadingSpinner from '../components/LoadingSpinner'
-import Alert from '../components/Alert'
 import { LineChart, BarChart, StackedBarChart, Heatmap, MetricCard } from '../components/analytics'
 import DonutChart from '../components/DonutChart'
 import * as analyticsService from '../services/analyticsService'
 import TicketDetailView from '../components/TicketDetailView'
+import { useToast } from '../hooks/useToast'
 
 /**
  * Analytics Dashboard
@@ -17,7 +17,7 @@ function AnalyticsDashboard() {
   // User info
   const [userRole, setUserRole] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const toast = useToast()
   
   // Date range state
   const [datePreset, setDatePreset] = useState('month')
@@ -66,7 +66,6 @@ function AnalyticsDashboard() {
   // Fetch dashboard data
   const fetchData = useCallback(async () => {
     setLoading(true)
-    setError(null)
     
     try {
       const params = showCustomRange 
@@ -76,7 +75,7 @@ function AnalyticsDashboard() {
       const response = await analyticsService.getDashboardSummary(params)
       setDashboardData(response.data)
     } catch (err) {
-      setError(err.message || 'Failed to load analytics data')
+      toast.error(err.message || 'Failed to load analytics data')
       console.error('Analytics fetch error:', err)
     } finally {
       setLoading(false)
@@ -156,7 +155,7 @@ function AnalyticsDashboard() {
       }
       await analyticsService.downloadAnalytics(params)
     } catch (err) {
-      setError(err.message || 'Export failed')
+      toast.error(err.message || 'Export failed')
     } finally {
       setExporting(false)
     }
@@ -300,11 +299,6 @@ function AnalyticsDashboard() {
           </div>
         )}
       </div>
-
-      {/* Error Display */}
-      {error && (
-        <Alert type="error" message={error} onClose={() => setError(null)} />
-      )}
 
       {/* Tab Navigation */}
       <div className="flex flex-wrap gap-2 border-b border-gray-800 mb-6">
