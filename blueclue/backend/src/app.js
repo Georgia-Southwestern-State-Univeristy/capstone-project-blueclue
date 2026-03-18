@@ -37,6 +37,7 @@ import mlAdminRoutes from './routes/mlAdmin.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 import { startUpdateRequestReminderJob } from './jobs/updateRequestReminders.js';
 import { startChatQualityJob } from './jobs/chatQualityJob.js';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { startAlertDetectionJob } from './jobs/alertDetectionJob.js';
 
 dotenv.config();
@@ -161,6 +162,12 @@ app.get('/api/test-db', async (req, res) => {
         });
     }
 });
+
+// 404 Handler - must be after all other routes
+app.use(notFoundHandler);
+
+// Error Handler - must be the last middleware
+app.use(errorHandler);
 
 httpServer.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);

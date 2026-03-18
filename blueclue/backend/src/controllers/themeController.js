@@ -1,12 +1,12 @@
-// src/controllers/themeController.js
+﻿// src/controllers/themeController.js
 import UserThemePreference from '../models/UserThemePreference.js';
+import { BadRequestError, NotFoundError } from '../middleware/errorHandler.js';
 
 /**
  * Get the authenticated user's theme preferences
  * GET /api/themes
  */
 export const getThemePreferences = async (req, res) => {
-  try {
     const userId = req.user.id;
     const pref = await UserThemePreference.getByUserId(userId);
 
@@ -20,10 +20,6 @@ export const getThemePreferences = async (req, res) => {
         savedThemes: pref.saved_themes || [],
       },
     });
-  } catch (error) {
-    console.error('Error fetching theme preferences:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to fetch theme preferences' });
-  }
 };
 
 /**
@@ -31,16 +27,15 @@ export const getThemePreferences = async (req, res) => {
  * PUT /api/themes
  */
 export const updateThemePreferences = async (req, res) => {
-  try {
     const userId = req.user.id;
     const { theme, accent, customOverride, customSlots } = req.body;
 
     // Validation
     if (theme && !['dark', 'light'].includes(theme)) {
-      return res.status(400).json({ status: 'error', message: 'theme must be "dark" or "light"' });
+      throw new BadRequestError('theme must be "dark" or "light"');
     }
     if (accent && !['blue', 'green', 'purple', 'highcontrast', 'custom'].includes(accent)) {
-      return res.status(400).json({ status: 'error', message: 'Invalid accent value' });
+      throw new BadRequestError('Invalid accent value');
     }
 
     // Merge with existing to allow partial updates
@@ -63,10 +58,6 @@ export const updateThemePreferences = async (req, res) => {
         savedThemes: pref.saved_themes || [],
       },
     });
-  } catch (error) {
-    console.error('Error updating theme preferences:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to update theme preferences' });
-  }
 };
 
 /**
@@ -74,15 +65,14 @@ export const updateThemePreferences = async (req, res) => {
  * POST /api/themes/saved
  */
 export const saveTheme = async (req, res) => {
-  try {
     const userId = req.user.id;
     const { name, theme, accent, customOverride, customSlots } = req.body;
 
     if (!name || !name.trim()) {
-      return res.status(400).json({ status: 'error', message: 'Theme name is required' });
+      throw new BadRequestError('Theme name is required');
     }
     if (name.length > 50) {
-      return res.status(400).json({ status: 'error', message: 'Theme name must be 50 characters or less' });
+      throw new BadRequestError('Theme name must be 50 characters or less');
     }
 
     const pref = await UserThemePreference.saveTheme(userId, name.trim(), {
@@ -94,10 +84,6 @@ export const saveTheme = async (req, res) => {
       message: 'Theme saved',
       data: { savedThemes: pref.saved_themes || [] },
     });
-  } catch (error) {
-    console.error('Error saving theme:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to save theme' });
-  }
 };
 
 /**
@@ -105,17 +91,16 @@ export const saveTheme = async (req, res) => {
  * DELETE /api/themes/saved/:id
  */
 export const deleteSavedTheme = async (req, res) => {
-  try {
     const userId = req.user.id;
     const themeId = parseInt(req.params.id);
 
     if (isNaN(themeId)) {
-      return res.status(400).json({ status: 'error', message: 'Invalid theme ID' });
+      throw new BadRequestError('Invalid theme ID');
     }
 
     const pref = await UserThemePreference.deleteSavedTheme(userId, themeId);
     if (!pref) {
-      return res.status(404).json({ status: 'error', message: 'Theme not found' });
+      throw new NotFoundError('Theme not found');
     }
 
     res.json({
@@ -123,10 +108,6 @@ export const deleteSavedTheme = async (req, res) => {
       message: 'Saved theme deleted',
       data: { savedThemes: pref.saved_themes || [] },
     });
-  } catch (error) {
-    console.error('Error deleting saved theme:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to delete saved theme' });
-  }
 };
 
 /**
@@ -134,16 +115,15 @@ export const deleteSavedTheme = async (req, res) => {
  * PATCH /api/themes/saved/:id
  */
 export const renameSavedTheme = async (req, res) => {
-  try {
     const userId = req.user.id;
     const themeId = parseInt(req.params.id);
     const { name } = req.body;
 
     if (isNaN(themeId)) {
-      return res.status(400).json({ status: 'error', message: 'Invalid theme ID' });
+      throw new BadRequestError('Invalid theme ID');
     }
     if (!name || !name.trim()) {
-      return res.status(400).json({ status: 'error', message: 'Name is required' });
+      throw new BadRequestError('Name is required');
     }
 
     const pref = await UserThemePreference.renameSavedTheme(userId, themeId, name.trim());
@@ -153,8 +133,4 @@ export const renameSavedTheme = async (req, res) => {
       message: 'Saved theme renamed',
       data: { savedThemes: pref.saved_themes || [] },
     });
-  } catch (error) {
-    console.error('Error renaming saved theme:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to rename saved theme' });
-  }
 };

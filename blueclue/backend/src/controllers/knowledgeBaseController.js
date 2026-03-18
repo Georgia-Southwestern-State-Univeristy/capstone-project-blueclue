@@ -1,4 +1,5 @@
 import pool from '../config/database.js';
+import { BadRequestError, NotFoundError, ConflictError } from '../middleware/errorHandler.js';
 
 // ============================================================================
 // ARTICLE CRUD OPERATIONS
@@ -8,159 +9,149 @@ import pool from '../config/database.js';
  * Get all articles (with filtering for management dashboard)
  */
 const getAllArticles = async (req, res) => {
-    try {
-        const { 
-            published, 
-            category, 
-            search, 
-            sort = 'created_at', 
-            order = 'DESC',
-            limit = 50,
-            offset = 0
-        } = req.query;
+    const { 
+        published, 
+        category, 
+        search, 
+        sort = 'created_at', 
+        order = 'DESC',
+        limit = 50,
+        offset = 0
+    } = req.query;
 
-        let query = `
-            SELECT 
-                a.*,
-                u.first_name || ' ' || u.last_name as author_name,
-                u.email as author_email,
-                CASE 
-                    WHEN a.helpful_votes + a.not_helpful_votes = 0 THEN 0
-                    ELSE ROUND(a.helpful_votes::numeric / (a.helpful_votes + a.not_helpful_votes) * 100, 1)
-                END as helpfulness_percentage,
-                (SELECT COUNT(*) FROM article_versions WHERE article_id = a.id) as version_count
-            FROM knowledge_articles a
-            JOIN users u ON a.created_by = u.id
-            WHERE a.deleted_at IS NULL
-        `;
+    let query = `
+        SELECT 
+            a.*,
+            u.first_name || ' ' || u.last_name as author_name,
+            u.email as author_email,
+            CASE 
+                WHEN a.helpful_votes + a.not_helpful_votes = 0 THEN 0
+                ELSE ROUND(a.helpful_votes::numeric / (a.helpful_votes + a.not_helpful_votes) * 100, 1)
+            END as helpfulness_percentage,
+            (SELECT COUNT(*) FROM article_versions WHERE article_id = a.id) as version_count
+        FROM knowledge_articles a
+        JOIN users u ON a.created_by = u.id
+        WHERE a.deleted_at IS NULL
+    `;
 
-        const params = [];
-        let paramCount = 1;
+    const params = [];
+    let paramCount = 1;
 
-        if (published !== undefined) {
-            query += ` AND a.is_published = $${paramCount}::boolean`;
-            params.push(published === 'true' || published === true);
-            paramCount++;
-        }
-
-        if (category) {
-            query += ` AND a.category = $${paramCount}`;
-            params.push(category);
-            paramCount++;
-        }
-
-        if (search) {
-            query += ` AND (a.title ILIKE $${paramCount} OR a.content ILIKE $${paramCount})`;
-            params.push(`%${search}%`);
-            paramCount++;
-        }
-
-        // Validate sort column to prevent SQL injection
-        const allowedSorts = ['created_at', 'updated_at', 'title', 'views', 'helpful_votes', 'published_at'];
-        const sortColumn = allowedSorts.includes(sort) ? sort : 'created_at';
-        const sortOrder = order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
-
-        query += ` ORDER BY a.${sortColumn} ${sortOrder}`;
-        query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
-        params.push(parseInt(limit), parseInt(offset));
-
-        const result = await pool.query(query, params);
-
-        // Get total count for pagination
-        let countQuery = 'SELECT COUNT(*) FROM knowledge_articles WHERE deleted_at IS NULL';
-        const countParams = [];
-        let countParamNum = 1;
-
-        if (published !== undefined) {
-            countQuery += ` AND is_published = $${countParamNum}::boolean`;
-            countParams.push(published === 'true' || published === true);
-            countParamNum++;
-        }
-
-        if (category) {
-            countQuery += ` AND category = $${countParamNum}`;
-            countParams.push(category);
-            countParamNum++;
-        }
-
-        if (search) {
-            countQuery += ` AND (title ILIKE $${countParamNum} OR content ILIKE $${countParamNum})`;
-            countParams.push(`%${search}%`);
-        }
-
-        const countResult = await pool.query(countQuery, countParams);
-
-        res.json({
-            articles: result.rows,
-            total: parseInt(countResult.rows[0].count),
-            limit: parseInt(limit),
-            offset: parseInt(offset)
-        });
-    } catch (error) {
-        console.error('Error fetching articles:', error);
-        res.status(500).json({ error: 'Failed to fetch articles' });
+    if (published !== undefined) {
+        query += ` AND a.is_published = $${paramCount}::boolean`;
+        params.push(published === 'true' || published === true);
+        paramCount++;
     }
+
+    if (category) {
+        query += ` AND a.category = $${paramCount}`;
+        params.push(category);
+        paramCount++;
+    }
+
+    if (search) {
+        query += ` AND (a.title ILIKE $${paramCount} OR a.content ILIKE $${paramCount})`;
+        params.push(`%${search}%`);
+        paramCount++;
+    }
+
+    // Validate sort column to prevent SQL injection
+    const allowedSorts = ['created_at', 'updated_at', 'title', 'views', 'helpful_votes', 'published_at'];
+    const sortColumn = allowedSorts.includes(sort) ? sort : 'created_at';
+    const sortOrder = order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+    query += ` ORDER BY a.${sortColumn} ${sortOrder}`;
+    query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+    params.push(parseInt(limit), parseInt(offset));
+
+    const result = await pool.query(query, params);
+
+    // Get total count for pagination
+    let countQuery = 'SELECT COUNT(*) FROM knowledge_articles WHERE deleted_at IS NULL';
+    const countParams = [];
+    let countParamNum = 1;
+
+    if (published !== undefined) {
+        countQuery += ` AND is_published = $${countParamNum}::boolean`;
+        countParams.push(published === 'true' || published === true);
+        countParamNum++;
+    }
+
+    if (category) {
+        countQuery += ` AND category = $${countParamNum}`;
+        countParams.push(category);
+        countParamNum++;
+    }
+
+    if (search) {
+        countQuery += ` AND (title ILIKE $${countParamNum} OR content ILIKE $${countParamNum})`;
+        countParams.push(`%${search}%`);
+    }
+
+    const countResult = await pool.query(countQuery, countParams);
+
+    res.json({
+        articles: result.rows,
+        total: parseInt(countResult.rows[0].count),
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+    });
 };
 
 /**
  * Get single article by ID
  */
 const getArticleById = async (req, res) => {
-    try {
-        const { id } = req.params;
+    const { id } = req.params;
 
-        const result = await pool.query(`
-            SELECT 
-                a.*,
-                u.first_name || ' ' || u.last_name as author_name,
-                u.email as author_email,
-                uu.first_name || ' ' || uu.last_name as updated_by_name,
-                CASE 
-                    WHEN a.helpful_votes + a.not_helpful_votes = 0 THEN 0
-                    ELSE ROUND(a.helpful_votes::numeric / (a.helpful_votes + a.not_helpful_votes) * 100, 1)
-                END as helpfulness_percentage
-            FROM knowledge_articles a
-            JOIN users u ON a.created_by = u.id
-            LEFT JOIN users uu ON a.updated_by = uu.id
-            WHERE a.id = $1::integer AND a.deleted_at IS NULL
-        `, [id]);
+    const result = await pool.query(`
+        SELECT 
+            a.*,
+            u.first_name || ' ' || u.last_name as author_name,
+            u.email as author_email,
+            uu.first_name || ' ' || uu.last_name as updated_by_name,
+            CASE 
+                WHEN a.helpful_votes + a.not_helpful_votes = 0 THEN 0
+                ELSE ROUND(a.helpful_votes::numeric / (a.helpful_votes + a.not_helpful_votes) * 100, 1)
+            END as helpfulness_percentage
+        FROM knowledge_articles a
+        JOIN users u ON a.created_by = u.id
+        LEFT JOIN users uu ON a.updated_by = uu.id
+        WHERE a.id = $1::integer AND a.deleted_at IS NULL
+    `, [id]);
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Article not found' });
-        }
-
-        res.json(result.rows[0]);
-    } catch (error) {
-        console.error('Error fetching article:', error);
-        res.status(500).json({ error: 'Failed to fetch article' });
+    if (result.rows.length === 0) {
+        throw new NotFoundError('Article not found');
     }
+
+    res.json(result.rows[0]);
 };
 
 /**
  * Create new article
  */
 const createArticle = async (req, res) => {
+    const {
+        title,
+        content,
+        category,
+        tags = [],
+        difficulty = 'beginner',
+        is_public = true,
+        is_published = false,
+        excerpt,
+        meta_description
+    } = req.body;
+
+    const userId = req.user.id;
+
+    // Generate slug from title
+    const slug = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+
     try {
-        const {
-            title,
-            content,
-            category,
-            tags = [],
-            difficulty = 'beginner',
-            is_public = true,
-            is_published = false,
-            excerpt,
-            meta_description
-        } = req.body;
-
-        const userId = req.user.id;
-
-        // Generate slug from title
-        const slug = title
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-|-$/g, '');
-
         const result = await pool.query(`
             INSERT INTO knowledge_articles (
                 title, content, category, tags, difficulty,
@@ -179,13 +170,10 @@ const createArticle = async (req, res) => {
 
         res.status(201).json(result.rows[0]);
     } catch (error) {
-        console.error('Error creating article:', error);
-        
         if (error.code === '23505' && error.constraint === 'knowledge_articles_slug_key') {
-            return res.status(409).json({ error: 'An article with a similar title already exists' });
+            throw new ConflictError('An article with a similar title already exists');
         }
-        
-        res.status(500).json({ error: 'Failed to create article' });
+        throw error;
     }
 };
 
@@ -193,28 +181,28 @@ const createArticle = async (req, res) => {
  * Update existing article
  */
 const updateArticle = async (req, res) => {
+    const { id } = req.params;
+    const {
+        title,
+        content,
+        category,
+        tags,
+        difficulty,
+        is_public,
+        is_published,
+        excerpt,
+        meta_description
+    } = req.body;
+
+    const userId = req.user.id;
+
+    // Generate new slug if title changed
+    const slug = title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '');
+
     try {
-        const { id } = req.params;
-        const {
-            title,
-            content,
-            category,
-            tags,
-            difficulty,
-            is_public,
-            is_published,
-            excerpt,
-            meta_description
-        } = req.body;
-
-        const userId = req.user.id;
-
-        // Generate new slug if title changed
-        const slug = title
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-|-$/g, '');
-
         const result = await pool.query(`
             UPDATE knowledge_articles
             SET 
@@ -239,18 +227,15 @@ const updateArticle = async (req, res) => {
         ]);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Article not found' });
+            throw new NotFoundError('Article not found');
         }
 
         res.json(result.rows[0]);
     } catch (error) {
-        console.error('Error updating article:', error);
-        
         if (error.code === '23505' && error.constraint === 'knowledge_articles_slug_key') {
-            return res.status(409).json({ error: 'An article with a similar title already exists' });
+            throw new ConflictError('An article with a similar title already exists');
         }
-        
-        res.status(500).json({ error: 'Failed to update article' });
+        throw error;
     }
 };
 
@@ -258,58 +243,48 @@ const updateArticle = async (req, res) => {
  * Soft delete article
  */
 const deleteArticle = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const userId = req.user.id;
+    const { id } = req.params;
+    const userId = req.user.id;
 
-        const result = await pool.query(`
-            UPDATE knowledge_articles
-            SET 
-                deleted_at = CURRENT_TIMESTAMP,
-                deleted_by = $1::integer
-            WHERE id = $2::integer AND deleted_at IS NULL
-            RETURNING id, title
-        `, [userId, id]);
+    const result = await pool.query(`
+        UPDATE knowledge_articles
+        SET 
+            deleted_at = CURRENT_TIMESTAMP,
+            deleted_by = $1::integer
+        WHERE id = $2::integer AND deleted_at IS NULL
+        RETURNING id, title
+    `, [userId, id]);
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Article not found' });
-        }
-
-        res.json({ message: 'Article deleted successfully', article: result.rows[0] });
-    } catch (error) {
-        console.error('Error deleting article:', error);
-        res.status(500).json({ error: 'Failed to delete article' });
+    if (result.rows.length === 0) {
+        throw new NotFoundError('Article not found');
     }
+
+    res.json({ message: 'Article deleted successfully', article: result.rows[0] });
 };
 
 /**
  * Publish/unpublish article
  */
 const togglePublishArticle = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { is_published } = req.body;
-        const userId = req.user.id;
+    const { id } = req.params;
+    const { is_published } = req.body;
+    const userId = req.user.id;
 
-        const result = await pool.query(`
-            UPDATE knowledge_articles
-            SET 
-                is_published = $1::boolean,
-                updated_by = $2::integer,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = $3::integer AND deleted_at IS NULL
-            RETURNING *
-        `, [is_published, userId, id]);
+    const result = await pool.query(`
+        UPDATE knowledge_articles
+        SET 
+            is_published = $1::boolean,
+            updated_by = $2::integer,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $3::integer AND deleted_at IS NULL
+        RETURNING *
+    `, [is_published, userId, id]);
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Article not found' });
-        }
-
-        res.json(result.rows[0]);
-    } catch (error) {
-        console.error('Error toggling publish status:', error);
-        res.status(500).json({ error: 'Failed to update publish status' });
+    if (result.rows.length === 0) {
+        throw new NotFoundError('Article not found');
     }
+
+    res.json(result.rows[0]);
 };
 
 // ============================================================================
@@ -320,32 +295,27 @@ const togglePublishArticle = async (req, res) => {
  * Get all categories
  */
 const getCategories = async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT 
-                c.*,
-                COUNT(a.id) as article_count
-            FROM knowledge_categories c
-            LEFT JOIN knowledge_articles a ON a.category = c.name AND a.deleted_at IS NULL
-            WHERE c.is_active = true
-            GROUP BY c.id
-            ORDER BY c.sort_order, c.name
-        `);
+    const result = await pool.query(`
+        SELECT 
+            c.*,
+            COUNT(a.id) as article_count
+        FROM knowledge_categories c
+        LEFT JOIN knowledge_articles a ON a.category = c.name AND a.deleted_at IS NULL
+        WHERE c.is_active = true
+        GROUP BY c.id
+        ORDER BY c.sort_order, c.name
+    `);
 
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching categories:', error);
-        res.status(500).json({ error: 'Failed to fetch categories' });
-    }
+    res.json(result.rows);
 };
 
 /**
  * Create new category
  */
 const createCategory = async (req, res) => {
-    try {
-        const { name, display_name, description, icon, sort_order = 0 } = req.body;
+    const { name, display_name, description, icon, sort_order = 0 } = req.body;
 
+    try {
         const result = await pool.query(`
             INSERT INTO knowledge_categories (name, display_name, description, icon, sort_order)
             VALUES ($1, $2, $3, $4, $5::integer)
@@ -354,13 +324,10 @@ const createCategory = async (req, res) => {
 
         res.status(201).json(result.rows[0]);
     } catch (error) {
-        console.error('Error creating category:', error);
-        
         if (error.code === '23505') {
-            return res.status(409).json({ error: 'Category already exists' });
+            throw new ConflictError('Category already exists');
         }
-        
-        res.status(500).json({ error: 'Failed to create category' });
+        throw error;
     }
 };
 
@@ -368,72 +335,61 @@ const createCategory = async (req, res) => {
  * Update category
  */
 const updateCategory = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { display_name, description, icon, sort_order, is_active } = req.body;
+    const { id } = req.params;
+    const { display_name, description, icon, sort_order, is_active } = req.body;
 
-        const result = await pool.query(`
-            UPDATE knowledge_categories
-            SET 
-                display_name = COALESCE($1, display_name),
-                description = COALESCE($2, description),
-                icon = COALESCE($3, icon),
-                sort_order = COALESCE($4::integer, sort_order),
-                is_active = COALESCE($5::boolean, is_active),
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = $6::integer
-            RETURNING *
-        `, [display_name, description, icon, sort_order, is_active, id]);
+    const result = await pool.query(`
+        UPDATE knowledge_categories
+        SET 
+            display_name = COALESCE($1, display_name),
+            description = COALESCE($2, description),
+            icon = COALESCE($3, icon),
+            sort_order = COALESCE($4::integer, sort_order),
+            is_active = COALESCE($5::boolean, is_active),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $6::integer
+        RETURNING *
+    `, [display_name, description, icon, sort_order, is_active, id]);
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Category not found' });
-        }
-
-        res.json(result.rows[0]);
-    } catch (error) {
-        console.error('Error updating category:', error);
-        res.status(500).json({ error: 'Failed to update category' });
+    if (result.rows.length === 0) {
+        throw new NotFoundError('Category not found');
     }
+
+    res.json(result.rows[0]);
 };
 
 /**
  * Delete category (deactivate)
  */
 const deleteCategory = async (req, res) => {
-    try {
-        const { id } = req.params;
+    const { id } = req.params;
 
-        // Check if category has articles
-        const checkResult = await pool.query(`
-            SELECT COUNT(*) as count
-            FROM knowledge_articles
-            WHERE category = (SELECT name FROM knowledge_categories WHERE id = $1::integer)
-              AND deleted_at IS NULL
-        `, [id]);
+    // Check if category has articles
+    const checkResult = await pool.query(`
+        SELECT COUNT(*) as count
+        FROM knowledge_articles
+        WHERE category = (SELECT name FROM knowledge_categories WHERE id = $1::integer)
+          AND deleted_at IS NULL
+    `, [id]);
 
-        if (parseInt(checkResult.rows[0].count) > 0) {
-            return res.status(400).json({ 
-                error: 'Cannot delete category with existing articles',
-                article_count: parseInt(checkResult.rows[0].count)
-            });
-        }
-
-        const result = await pool.query(`
-            UPDATE knowledge_categories
-            SET is_active = false, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1::integer
-            RETURNING *
-        `, [id]);
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Category not found' });
-        }
-
-        res.json({ message: 'Category deactivated successfully', category: result.rows[0] });
-    } catch (error) {
-        console.error('Error deleting category:', error);
-        res.status(500).json({ error: 'Failed to delete category' });
+    if (parseInt(checkResult.rows[0].count) > 0) {
+        throw new BadRequestError('Cannot delete category with existing articles', {
+            article_count: parseInt(checkResult.rows[0].count)
+        });
     }
+
+    const result = await pool.query(`
+        UPDATE knowledge_categories
+        SET is_active = false, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1::integer
+        RETURNING *
+    `, [id]);
+
+    if (result.rows.length === 0) {
+        throw new NotFoundError('Category not found');
+    }
+
+    res.json({ message: 'Category deactivated successfully', category: result.rows[0] });
 };
 
 // ============================================================================
@@ -444,83 +400,73 @@ const deleteCategory = async (req, res) => {
  * Get all unique tags from articles
  */
 const getAllTags = async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT DISTINCT jsonb_array_elements_text(tags) as tag, COUNT(*) as usage_count
-            FROM knowledge_articles
-            WHERE deleted_at IS NULL AND tags IS NOT NULL
-            GROUP BY tag
-            ORDER BY usage_count DESC, tag
-        `);
+    const result = await pool.query(`
+        SELECT DISTINCT jsonb_array_elements_text(tags) as tag, COUNT(*) as usage_count
+        FROM knowledge_articles
+        WHERE deleted_at IS NULL AND tags IS NOT NULL
+        GROUP BY tag
+        ORDER BY usage_count DESC, tag
+    `);
 
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching tags:', error);
-        res.status(500).json({ error: 'Failed to fetch tags' });
-    }
+    res.json(result.rows);
 };
 
 /**
  * Bulk update tags for multiple articles
  */
 const bulkUpdateTags = async (req, res) => {
+    const { article_ids, tags_to_add = [], tags_to_remove = [] } = req.body;
+    const userId = req.user.id;
+
+    if (!article_ids || !Array.isArray(article_ids) || article_ids.length === 0) {
+        throw new BadRequestError('article_ids array is required');
+    }
+
+    const client = await pool.connect();
+    
     try {
-        const { article_ids, tags_to_add = [], tags_to_remove = [] } = req.body;
-        const userId = req.user.id;
+        await client.query('BEGIN');
 
-        if (!article_ids || !Array.isArray(article_ids) || article_ids.length === 0) {
-            return res.status(400).json({ error: 'article_ids array is required' });
-        }
+        for (const articleId of article_ids) {
+            // Get current tags
+            const currentResult = await client.query(
+                'SELECT tags FROM knowledge_articles WHERE id = $1::integer AND deleted_at IS NULL',
+                [articleId]
+            );
 
-        const client = await pool.connect();
-        
-        try {
-            await client.query('BEGIN');
+            if (currentResult.rows.length === 0) continue;
 
-            for (const articleId of article_ids) {
-                // Get current tags
-                const currentResult = await client.query(
-                    'SELECT tags FROM knowledge_articles WHERE id = $1::integer AND deleted_at IS NULL',
-                    [articleId]
-                );
-
-                if (currentResult.rows.length === 0) continue;
-
-                let currentTags = currentResult.rows[0].tags || [];
-                
-                // Remove tags
-                if (tags_to_remove.length > 0) {
-                    currentTags = currentTags.filter(tag => !tags_to_remove.includes(tag));
-                }
-
-                // Add tags (avoid duplicates)
-                if (tags_to_add.length > 0) {
-                    tags_to_add.forEach(tag => {
-                        if (!currentTags.includes(tag)) {
-                            currentTags.push(tag);
-                        }
-                    });
-                }
-
-                // Update article
-                await client.query(`
-                    UPDATE knowledge_articles
-                    SET tags = $1::jsonb, updated_by = $2::integer, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = $3::integer
-                `, [JSON.stringify(currentTags), userId, articleId]);
+            let currentTags = currentResult.rows[0].tags || [];
+            
+            // Remove tags
+            if (tags_to_remove.length > 0) {
+                currentTags = currentTags.filter(tag => !tags_to_remove.includes(tag));
             }
 
-            await client.query('COMMIT');
-            res.json({ message: 'Tags updated successfully', updated_count: article_ids.length });
-        } catch (error) {
-            await client.query('ROLLBACK');
-            throw error;
-        } finally {
-            client.release();
+            // Add tags (avoid duplicates)
+            if (tags_to_add.length > 0) {
+                tags_to_add.forEach(tag => {
+                    if (!currentTags.includes(tag)) {
+                        currentTags.push(tag);
+                    }
+                });
+            }
+
+            // Update article
+            await client.query(`
+                UPDATE knowledge_articles
+                SET tags = $1::jsonb, updated_by = $2::integer, updated_at = CURRENT_TIMESTAMP
+                WHERE id = $3::integer
+            `, [JSON.stringify(currentTags), userId, articleId]);
         }
+
+        res.json({ message: 'Tags updated successfully', updated_count: article_ids.length });
+        await client.query('COMMIT');
     } catch (error) {
-        console.error('Error bulk updating tags:', error);
-        res.status(500).json({ error: 'Failed to update tags' });
+        await client.query('ROLLBACK');
+        throw error;
+    } finally {
+        client.release();
     }
 };
 
@@ -532,75 +478,60 @@ const bulkUpdateTags = async (req, res) => {
  * Get version history for an article
  */
 const getArticleVersions = async (req, res) => {
-    try {
-        const { id } = req.params;
+    const { id } = req.params;
 
-        const result = await pool.query(`
-            SELECT * FROM article_version_history
-            WHERE article_id = $1::integer
-            ORDER BY version_number DESC
-        `, [id]);
+    const result = await pool.query(`
+        SELECT * FROM article_version_history
+        WHERE article_id = $1::integer
+        ORDER BY version_number DESC
+    `, [id]);
 
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching article versions:', error);
-        res.status(500).json({ error: 'Failed to fetch article versions' });
-    }
+    res.json(result.rows);
 };
 
 /**
  * Get specific version details
  */
 const getVersionById = async (req, res) => {
-    try {
-        const { id, versionNumber } = req.params;
+    const { id, versionNumber } = req.params;
 
-        const result = await pool.query(`
-            SELECT 
-                av.*,
-                u.first_name || ' ' || u.last_name as edited_by_name
-            FROM article_versions av
-            JOIN users u ON av.edited_by = u.id
-            WHERE av.article_id = $1::integer AND av.version_number = $2::integer
-        `, [id, versionNumber]);
+    const result = await pool.query(`
+        SELECT 
+            av.*,
+            u.first_name || ' ' || u.last_name as edited_by_name
+        FROM article_versions av
+        JOIN users u ON av.edited_by = u.id
+        WHERE av.article_id = $1::integer AND av.version_number = $2::integer
+    `, [id, versionNumber]);
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Version not found' });
-        }
-
-        res.json(result.rows[0]);
-    } catch (error) {
-        console.error('Error fetching version:', error);
-        res.status(500).json({ error: 'Failed to fetch version' });
+    if (result.rows.length === 0) {
+        throw new NotFoundError('Version not found');
     }
+
+    res.json(result.rows[0]);
 };
 
 /**
  * Restore article to a previous version
  */
 const restoreVersion = async (req, res) => {
-    try {
-        const { id, versionNumber } = req.params;
-        const userId = req.user.id;
+    const { id, versionNumber } = req.params;
+    const userId = req.user.id;
 
-        await pool.query('SELECT restore_article_version($1::integer, $2::integer, $3::integer)', 
-            [id, versionNumber, userId]
-        );
+    await pool.query('SELECT restore_article_version($1::integer, $2::integer, $3::integer)', 
+        [id, versionNumber, userId]
+    );
 
-        // Fetch the restored article
-        const result = await pool.query(
-            'SELECT * FROM knowledge_articles WHERE id = $1::integer',
-            [id]
-        );
+    // Fetch the restored article
+    const result = await pool.query(
+        'SELECT * FROM knowledge_articles WHERE id = $1::integer',
+        [id]
+    );
 
-        res.json({ 
-            message: 'Article restored successfully', 
-            article: result.rows[0] 
-        });
-    } catch (error) {
-        console.error('Error restoring version:', error);
-        res.status(500).json({ error: 'Failed to restore version' });
-    }
+    res.json({ 
+        message: 'Article restored successfully', 
+        article: result.rows[0] 
+    });
 };
 
 // ============================================================================
@@ -611,77 +542,67 @@ const restoreVersion = async (req, res) => {
  * Get analytics dashboard data
  */
 const getAnalytics = async (req, res) => {
-    try {
-        // Get overall stats
-        const statsResult = await pool.query('SELECT * FROM kb_management_stats');
-        
-        // Get most viewed articles
-        const mostViewedResult = await pool.query(`
-            SELECT id, title, category, views, helpful_votes, not_helpful_votes,
-                   CASE 
-                       WHEN helpful_votes + not_helpful_votes = 0 THEN 0
-                       ELSE ROUND(helpful_votes::numeric / (helpful_votes + not_helpful_votes) * 100, 1)
-                   END as helpfulness_percentage
-            FROM knowledge_articles
-            WHERE deleted_at IS NULL AND is_published = true
-            ORDER BY views DESC
-            LIMIT 10
-        `);
+    // Get overall stats
+    const statsResult = await pool.query('SELECT * FROM kb_management_stats');
+    
+    // Get most viewed articles
+    const mostViewedResult = await pool.query(`
+        SELECT id, title, category, views, helpful_votes, not_helpful_votes,
+               CASE 
+                   WHEN helpful_votes + not_helpful_votes = 0 THEN 0
+                   ELSE ROUND(helpful_votes::numeric / (helpful_votes + not_helpful_votes) * 100, 1)
+               END as helpfulness_percentage
+        FROM knowledge_articles
+        WHERE deleted_at IS NULL AND is_published = true
+        ORDER BY views DESC
+        LIMIT 10
+    `);
 
-        // Get least viewed articles (published but low engagement)
-        const leastViewedResult = await pool.query(`
-            SELECT id, title, category, views, published_at
-            FROM knowledge_articles
-            WHERE deleted_at IS NULL AND is_published = true
-            ORDER BY views ASC, published_at DESC
-            LIMIT 10
-        `);
+    // Get least viewed articles (published but low engagement)
+    const leastViewedResult = await pool.query(`
+        SELECT id, title, category, views, published_at
+        FROM knowledge_articles
+        WHERE deleted_at IS NULL AND is_published = true
+        ORDER BY views ASC, published_at DESC
+        LIMIT 10
+    `);
 
-        // Get articles by category with stats
-        const categoryStatsResult = await pool.query(`
-            SELECT 
-                category,
-                COUNT(*) as article_count,
-                SUM(views) as total_views,
-                AVG(views) as avg_views,
-                SUM(helpful_votes) as total_helpful,
-                SUM(not_helpful_votes) as total_not_helpful
-            FROM knowledge_articles
-            WHERE deleted_at IS NULL AND is_published = true
-            GROUP BY category
-            ORDER BY article_count DESC
-        `);
+    // Get articles by category with stats
+    const categoryStatsResult = await pool.query(`
+        SELECT 
+            category,
+            COUNT(*) as article_count,
+            SUM(views) as total_views,
+            AVG(views) as avg_views,
+            SUM(helpful_votes) as total_helpful,
+            SUM(not_helpful_votes) as total_not_helpful
+        FROM knowledge_articles
+        WHERE deleted_at IS NULL AND is_published = true
+        GROUP BY category
+        ORDER BY article_count DESC
+    `);
 
-        res.json({
-            overview: statsResult.rows[0],
-            most_viewed: mostViewedResult.rows,
-            least_viewed: leastViewedResult.rows,
-            by_category: categoryStatsResult.rows
-        });
-    } catch (error) {
-        console.error('Error fetching analytics:', error);
-        res.status(500).json({ error: 'Failed to fetch analytics' });
-    }
+    res.json({
+        overview: statsResult.rows[0],
+        most_viewed: mostViewedResult.rows,
+        least_viewed: leastViewedResult.rows,
+        by_category: categoryStatsResult.rows
+    });
 };
 
 /**
  * Increment article view count
  */
 const incrementViewCount = async (req, res) => {
-    try {
-        const { id } = req.params;
+    const { id } = req.params;
 
-        await pool.query(`
-            UPDATE knowledge_articles
-            SET views = views + 1
-            WHERE id = $1::integer AND deleted_at IS NULL
-        `, [id]);
+    await pool.query(`
+        UPDATE knowledge_articles
+        SET views = views + 1
+        WHERE id = $1::integer AND deleted_at IS NULL
+    `, [id]);
 
-        res.json({ message: 'View count incremented' });
-    } catch (error) {
-        console.error('Error incrementing view count:', error);
-        res.status(500).json({ error: 'Failed to increment view count' });
-    }
+    res.json({ message: 'View count incremented' });
 };
 
 /**
@@ -689,47 +610,42 @@ const incrementViewCount = async (req, res) => {
  * GET /api/knowledge-base/public/articles/:id
  */
 const getPublicArticle = async (req, res) => {
-    try {
-        const { id } = req.params;
+    const { id } = req.params;
 
-        const result = await pool.query(`
-            SELECT 
-                a.id,
-                a.title,
-                a.slug,
-                a.content,
-                a.category,
-                a.tags,
-                a.difficulty,
-                a.excerpt,
-                a.views,
-                a.helpful_votes,
-                a.not_helpful_votes,
-                a.published_at,
-                a.created_at,
-                a.updated_at,
-                u.first_name || ' ' || u.last_name as author_name,
-                CASE 
-                    WHEN a.helpful_votes + a.not_helpful_votes = 0 THEN 0
-                    ELSE ROUND(a.helpful_votes::numeric / (a.helpful_votes + a.not_helpful_votes) * 100, 1)
-                END as helpfulness_percentage
-            FROM knowledge_articles a
-            JOIN users u ON a.created_by = u.id
-            WHERE a.id = $1::integer 
-                AND a.deleted_at IS NULL
-                AND a.is_published = true
-                AND a.is_public = true
-        `, [id]);
+    const result = await pool.query(`
+        SELECT 
+            a.id,
+            a.title,
+            a.slug,
+            a.content,
+            a.category,
+            a.tags,
+            a.difficulty,
+            a.excerpt,
+            a.views,
+            a.helpful_votes,
+            a.not_helpful_votes,
+            a.published_at,
+            a.created_at,
+            a.updated_at,
+            u.first_name || ' ' || u.last_name as author_name,
+            CASE 
+                WHEN a.helpful_votes + a.not_helpful_votes = 0 THEN 0
+                ELSE ROUND(a.helpful_votes::numeric / (a.helpful_votes + a.not_helpful_votes) * 100, 1)
+            END as helpfulness_percentage
+        FROM knowledge_articles a
+        JOIN users u ON a.created_by = u.id
+        WHERE a.id = $1::integer 
+            AND a.deleted_at IS NULL
+            AND a.is_published = true
+            AND a.is_public = true
+    `, [id]);
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Article not found' });
-        }
-
-        res.json(result.rows[0]);
-    } catch (error) {
-        console.error('Error fetching public article:', error);
-        res.status(500).json({ error: 'Failed to fetch article' });
+    if (result.rows.length === 0) {
+        throw new NotFoundError('Article not found');
     }
+
+    res.json(result.rows[0]);
 };
 
 /**
@@ -737,148 +653,147 @@ const getPublicArticle = async (req, res) => {
  * GET /api/knowledge-base/search?q=query&category=&tags=&difficulty=&sort=relevance&limit=20&offset=0
  */
 const searchArticles = async (req, res) => {
-    try {
-        const {
-            q = '',
-            category,
-            tags,
-            difficulty,
-            sort = 'relevance',
-            limit = 20,
-            offset = 0
-        } = req.query;
+    const {
+        q = '',
+        category,
+        tags,
+        difficulty,
+        sort = 'relevance',
+        limit = 20,
+        offset = 0
+    } = req.query;
 
-        const params = [];
-        let paramCount = 1;
+    const params = [];
+    let paramCount = 1;
 
-        // Base query with full-text search ranking
-        let query = `
-            SELECT 
-                a.id,
-                a.title,
-                a.slug,
-                a.category,
-                a.tags,
-                a.difficulty,
-                a.excerpt,
-                a.views,
-                a.helpful_votes,
-                a.not_helpful_votes,
-                a.published_at,
-                a.created_at,
-                a.updated_at,
-                u.first_name || ' ' || u.last_name as author_name,
-                CASE 
-                    WHEN a.helpful_votes + a.not_helpful_votes = 0 THEN 0
-                    ELSE ROUND(a.helpful_votes::numeric / (a.helpful_votes + a.not_helpful_votes) * 100, 1)
-                END as helpfulness_percentage,
-                -- Highlighted snippet from content (first 300 chars)
-                LEFT(a.content, 300) as snippet
+    // Base query with full-text search ranking
+    let query = `
+        SELECT 
+            a.id,
+            a.title,
+            a.slug,
+            a.category,
+            a.tags,
+            a.difficulty,
+            a.excerpt,
+            a.views,
+            a.helpful_votes,
+            a.not_helpful_votes,
+            a.published_at,
+            a.created_at,
+            a.updated_at,
+            u.first_name || ' ' || u.last_name as author_name,
+            CASE 
+                WHEN a.helpful_votes + a.not_helpful_votes = 0 THEN 0
+                ELSE ROUND(a.helpful_votes::numeric / (a.helpful_votes + a.not_helpful_votes) * 100, 1)
+            END as helpfulness_percentage,
+            -- Highlighted snippet from content (first 300 chars)
+            LEFT(a.content, 300) as snippet
+    `;
+
+    // Add relevance ranking if there's a search query
+    if (q && q.trim() !== '') {
+        query += `,
+            ts_rank_cd(
+                a.search_vector, 
+                plainto_tsquery('english', $${paramCount}),
+                32 /* rank with cover density */
+            ) + (a.helpful_votes * 0.01) as relevance_score
         `;
+        params.push(q.trim());
+        paramCount++;
+    } else {
+        query += `, 0 as relevance_score `;
+    }
 
-        // Add relevance ranking if there's a search query
-        if (q && q.trim() !== '') {
-            query += `,
-                ts_rank_cd(
-                    a.search_vector, 
-                    plainto_tsquery('english', $${paramCount}),
-                    32 /* rank with cover density */
-                ) + (a.helpful_votes * 0.01) as relevance_score
-            `;
-            params.push(q.trim());
-            paramCount++;
-        } else {
-            query += `, 0 as relevance_score `;
-        }
+    query += `
+        FROM knowledge_articles a
+        JOIN users u ON a.created_by = u.id
+        WHERE a.deleted_at IS NULL 
+            AND a.is_published = true
+            AND a.is_public = true
+    `;
 
-        query += `
-            FROM knowledge_articles a
-            JOIN users u ON a.created_by = u.id
-            WHERE a.deleted_at IS NULL 
-                AND a.is_published = true
-                AND a.is_public = true
-        `;
+    // Add full-text search filter
+    if (q && q.trim() !== '') {
+        query += ` AND a.search_vector @@ plainto_tsquery('english', $${paramCount - 1})`;
+    }
 
-        // Add full-text search filter
-        if (q && q.trim() !== '') {
-            query += ` AND a.search_vector @@ plainto_tsquery('english', $${paramCount - 1})`;
-        }
+    // Add category filter
+    if (category) {
+        query += ` AND a.category = $${paramCount}`;
+        params.push(category);
+        paramCount++;
+    }
 
-        // Add category filter
-        if (category) {
-            query += ` AND a.category = $${paramCount}`;
-            params.push(category);
-            paramCount++;
-        }
+    // Add difficulty filter
+    if (difficulty) {
+        query += ` AND a.difficulty = $${paramCount}`;
+        params.push(difficulty);
+        paramCount++;
+    }
 
-        // Add difficulty filter
-        if (difficulty) {
-            query += ` AND a.difficulty = $${paramCount}`;
-            params.push(difficulty);
-            paramCount++;
-        }
+    // Add tags filter (check if any tag matches)
+    if (tags) {
+        const tagArray = Array.isArray(tags) ? tags : [tags];
+        query += ` AND a.tags ?| $${paramCount}::text[]`;
+        params.push(tagArray);
+        paramCount++;
+    }
 
-        // Add tags filter (check if any tag matches)
-        if (tags) {
-            const tagArray = Array.isArray(tags) ? tags : [tags];
-            query += ` AND a.tags ?| $${paramCount}::text[]`;
-            params.push(tagArray);
-            paramCount++;
-        }
+    // Add sorting
+    const allowedSorts = {
+        'relevance': 'relevance_score DESC, a.helpful_votes DESC',
+        'date': 'a.published_at DESC',
+        'popularity': 'a.views DESC',
+        'helpful': 'a.helpful_votes DESC',
+        'recent': 'a.created_at DESC'
+    };
+    const sortClause = allowedSorts[sort] || allowedSorts['relevance'];
+    query += ` ORDER BY ${sortClause}`;
 
-        // Add sorting
-        const allowedSorts = {
-            'relevance': 'relevance_score DESC, a.helpful_votes DESC',
-            'date': 'a.published_at DESC',
-            'popularity': 'a.views DESC',
-            'helpful': 'a.helpful_votes DESC',
-            'recent': 'a.created_at DESC'
-        };
-        const sortClause = allowedSorts[sort] || allowedSorts['relevance'];
-        query += ` ORDER BY ${sortClause}`;
+    // Add pagination
+    query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+    params.push(parseInt(limit), parseInt(offset));
 
-        // Add pagination
-        query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
-        params.push(parseInt(limit), parseInt(offset));
+    const result = await pool.query(query, params);
 
-        const result = await pool.query(query, params);
+    // Get total count for pagination
+    let countQuery = `
+        SELECT COUNT(*) 
+        FROM knowledge_articles a
+        WHERE a.deleted_at IS NULL 
+            AND a.is_published = true
+            AND a.is_public = true
+    `;
+    const countParams = [];
+    let countParamNum = 1;
 
-        // Get total count for pagination
-        let countQuery = `
-            SELECT COUNT(*) 
-            FROM knowledge_articles a
-            WHERE a.deleted_at IS NULL 
-                AND a.is_published = true
-                AND a.is_public = true
-        `;
-        const countParams = [];
-        let countParamNum = 1;
+    if (q && q.trim() !== '') {
+        countQuery += ` AND a.search_vector @@ plainto_tsquery('english', $${countParamNum})`;
+        countParams.push(q.trim());
+        countParamNum++;
+    }
 
-        if (q && q.trim() !== '') {
-            countQuery += ` AND a.search_vector @@ plainto_tsquery('english', $${countParamNum})`;
-            countParams.push(q.trim());
-            countParamNum++;
-        }
+    if (category) {
+        countQuery += ` AND a.category = $${countParamNum}`;
+        countParams.push(category);
+        countParamNum++;
+    }
 
-        if (category) {
-            countQuery += ` AND a.category = $${countParamNum}`;
-            countParams.push(category);
-            countParamNum++;
-        }
+    if (difficulty) {
+        countQuery += ` AND a.difficulty = $${countParamNum}`;
+        countParams.push(difficulty);
+        countParamNum++;
+    }
 
-        if (difficulty) {
-            countQuery += ` AND a.difficulty = $${countParamNum}`;
-            countParams.push(difficulty);
-            countParamNum++;
-        }
+    if (tags) {
+        const tagArray = Array.isArray(tags) ? tags : [tags];
+        countQuery += ` AND a.tags ?| $${countParamNum}::text[]`;
+        countParams.push(tagArray);
+    }
 
-        if (tags) {
-            const tagArray = Array.isArray(tags) ? tags : [tags];
-            countQuery += ` AND a.tags ?| $${countParamNum}::text[]`;
-            countParams.push(tagArray);
-        }
-
-        const countResult = await pool.query(countQuery, countParams);
+    const countResult = await pool.query(countQuery, countParams);
 
         res.json({
             results: result.rows,
@@ -887,10 +802,6 @@ const searchArticles = async (req, res) => {
             offset: parseInt(offset),
             hasMore: parseInt(offset) + result.rows.length < parseInt(countResult.rows[0].count)
         });
-    } catch (error) {
-        console.error('Error searching articles:', error);
-        res.status(500).json({ error: 'Failed to search articles' });
-    }
 };
 
 /**
@@ -898,41 +809,36 @@ const searchArticles = async (req, res) => {
  * GET /api/knowledge-base/search/autocomplete?q=query
  */
 const getSearchSuggestions = async (req, res) => {
-    try {
-        const { q = '' } = req.query;
+    const { q = '' } = req.query;
 
-        if (!q || q.trim().length < 2) {
-            return res.json({ suggestions: [] });
-        }
-
-        const result = await pool.query(`
-            SELECT 
-                id,
-                title,
-                slug,
-                category,
-                ts_rank_cd(search_vector, plainto_tsquery('english', $1)) as rank
-            FROM knowledge_articles
-            WHERE deleted_at IS NULL 
-                AND is_published = true
-                AND is_public = true
-                AND search_vector @@ plainto_tsquery('english', $1)
-            ORDER BY rank DESC, views DESC
-            LIMIT 5
-        `, [q.trim()]);
-
-        res.json({
-            suggestions: result.rows.map(row => ({
-                id: row.id,
-                title: row.title,
-                slug: row.slug,
-                category: row.category
-            }))
-        });
-    } catch (error) {
-        console.error('Error fetching search suggestions:', error);
-        res.status(500).json({ error: 'Failed to fetch suggestions' });
+    if (!q || q.trim().length < 2) {
+        return res.json({ suggestions: [] });
     }
+
+    const result = await pool.query(`
+        SELECT 
+            id,
+            title,
+            slug,
+            category,
+            ts_rank_cd(search_vector, plainto_tsquery('english', $1)) as rank
+        FROM knowledge_articles
+        WHERE deleted_at IS NULL 
+            AND is_published = true
+            AND is_public = true
+            AND search_vector @@ plainto_tsquery('english', $1)
+        ORDER BY rank DESC, views DESC
+        LIMIT 5
+    `, [q.trim()]);
+
+    res.json({
+        suggestions: result.rows.map(row => ({
+            id: row.id,
+            title: row.title,
+            slug: row.slug,
+            category: row.category
+        }))
+    });
 };
 
 /**
@@ -940,28 +846,27 @@ const getSearchSuggestions = async (req, res) => {
  * GET /api/knowledge-base/articles/:id/related
  */
 const getRelatedArticles = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { limit = 5 } = req.query;
+    const { id } = req.params;
+    const { limit = 5 } = req.query;
 
-        // First, get the current article's tags and category
-        const articleResult = await pool.query(`
-            SELECT id, category, tags
-            FROM knowledge_articles
-            WHERE id = $1::integer AND deleted_at IS NULL
-        `, [id]);
+    // First, get the current article's tags and category
+    const articleResult = await pool.query(`
+        SELECT id, category, tags
+        FROM knowledge_articles
+        WHERE id = $1::integer AND deleted_at IS NULL
+    `, [id]);
 
-        if (articleResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Article not found' });
-        }
+    if (articleResult.rows.length === 0) {
+        throw new NotFoundError('Article not found');
+    }
 
-        const article = articleResult.rows[0];
+    const article = articleResult.rows[0];
 
-        // Find related articles based on:
-        // 1. Same category (weight: 3)
-        // 2. Shared tags (weight: 2 per tag)
-        // 3. Views and helpfulness (weight: 1)
-        const result = await pool.query(`
+    // Find related articles based on:
+    // 1. Same category (weight: 3)
+    // 2. Shared tags (weight: 2 per tag)
+    // 3. Views and helpfulness (weight: 1)
+    const result = await pool.query(`
             WITH article_tags AS (
                 SELECT jsonb_array_elements_text($2) as tag
             )
@@ -1002,13 +907,9 @@ const getRelatedArticles = async (req, res) => {
             LIMIT $4
         `, [id, JSON.stringify(article.tags || []), article.category, parseInt(limit)]);
 
-        res.json({
-            related: result.rows
-        });
-    } catch (error) {
-        console.error('Error fetching related articles:', error);
-        res.status(500).json({ error: 'Failed to fetch related articles' });
-    }
+    res.json({
+        related: result.rows
+    });
 };
 
 /**
@@ -1017,15 +918,15 @@ const getRelatedArticles = async (req, res) => {
  * Body: { wasHelpful: boolean, feedback?: string }
  */
 const submitFeedback = async (req, res) => {
+    const { id } = req.params;
+    const { wasHelpful, feedback } = req.body;
+    const userId = req.user?.id || null; // Optional - allow anonymous feedback
+
+    if (typeof wasHelpful !== 'boolean') {
+        throw new BadRequestError('wasHelpful must be a boolean');
+    }
+
     try {
-        const { id } = req.params;
-        const { wasHelpful, feedback } = req.body;
-        const userId = req.user?.id || null; // Optional - allow anonymous feedback
-
-        if (typeof wasHelpful !== 'boolean') {
-            return res.status(400).json({ error: 'wasHelpful must be a boolean' });
-        }
-
         // Insert feedback (trigger will automatically update article vote counts)
         const query = `
             INSERT INTO article_feedback (article_id, user_id, was_helpful, feedback)
@@ -1045,16 +946,11 @@ const submitFeedback = async (req, res) => {
             feedback: result.rows[0]
         });
     } catch (error) {
-        console.error('Error submitting feedback:', error);
-        
         // Handle unique constraint violation for anonymous users
         if (error.code === '23505') {
-            return res.status(409).json({ 
-                error: 'You have already submitted feedback for this article' 
-            });
+            throw new ConflictError('You have already submitted feedback for this article');
         }
-        
-        res.status(500).json({ error: 'Failed to submit feedback' });
+        throw error;
     }
 };
 

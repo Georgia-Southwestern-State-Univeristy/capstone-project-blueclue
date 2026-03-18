@@ -5,22 +5,19 @@
 // Provides comprehensive audit trail for security and compliance
 
 import pool from '../config/database.js';
+import { ForbiddenError } from '../middleware/errorHandler.js';
 
 // ============================================================================
 // GET /api/audit/privileges
 // Get audit log for privilege changes (admin/management only)
 // ============================================================================
 export const getPrivilegeAuditLog = async (req, res) => {
-    try {
         const { user_id, table_name, action, limit = 100, offset = 0 } = req.query;
         const userRole = req.user.role;
 
         // Only admin and management can view audit logs
         if (userRole !== 'admin' && userRole !== 'management') {
-            return res.status(403).json({
-                success: false,
-                message: 'Access denied. Only administrators and management can view audit logs.'
-            });
+            throw new ForbiddenError('Access denied. Only administrators and management can view audit logs.');
         }
 
         // Build query with filters
@@ -101,14 +98,6 @@ export const getPrivilegeAuditLog = async (req, res) => {
             }
         });
 
-    } catch (error) {
-        console.error('Error fetching privilege audit log:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch audit log',
-            error: error.message
-        });
-    }
 };
 
 // ============================================================================
@@ -116,7 +105,6 @@ export const getPrivilegeAuditLog = async (req, res) => {
 // Get audit log for a specific user (admin/management only)
 // ============================================================================
 export const getUserAuditLog = async (req, res) => {
-    try {
         const { userId } = req.params;
         const userRole = req.user.role;
         const limit = parseInt(req.query.limit) || 50;
@@ -124,10 +112,7 @@ export const getUserAuditLog = async (req, res) => {
 
         // Only admin and management can view audit logs
         if (userRole !== 'admin' && userRole !== 'management') {
-            return res.status(403).json({
-                success: false,
-                message: 'Access denied. Only administrators and management can view audit logs.'
-            });
+            throw new ForbiddenError('Access denied. Only administrators and management can view audit logs.');
         }
 
         const query = `
@@ -166,14 +151,6 @@ export const getUserAuditLog = async (req, res) => {
             }
         });
 
-    } catch (error) {
-        console.error('Error fetching user audit log:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch user audit log',
-            error: error.message
-        });
-    }
 };
 
 // ============================================================================
@@ -181,17 +158,13 @@ export const getUserAuditLog = async (req, res) => {
 // Get recent privilege changes (last 24 hours) - admin/management only
 // ============================================================================
 export const getRecentAuditLog = async (req, res) => {
-    try {
         const userRole = req.user.role;
         const hours = parseInt(req.query.hours) || 24;
         const limit = parseInt(req.query.limit) || 100;
 
         // Only admin and management can view audit logs
         if (userRole !== 'admin' && userRole !== 'management') {
-            return res.status(403).json({
-                success: false,
-                message: 'Access denied. Only administrators and management can view audit logs.'
-            });
+            throw new ForbiddenError('Access denied. Only administrators and management can view audit logs.');
         }
 
         const query = `
@@ -218,14 +191,6 @@ export const getRecentAuditLog = async (req, res) => {
             count: result.rows.length
         });
 
-    } catch (error) {
-        console.error('Error fetching recent audit log:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch recent audit log',
-            error: error.message
-        });
-    }
 };
 
 // ============================================================================
@@ -233,15 +198,11 @@ export const getRecentAuditLog = async (req, res) => {
 // Get audit summary statistics - admin/management only
 // ============================================================================
 export const getAuditSummary = async (req, res) => {
-    try {
         const userRole = req.user.role;
 
         // Only admin and management can view audit logs
         if (userRole !== 'admin' && userRole !== 'management') {
-            return res.status(403).json({
-                success: false,
-                message: 'Access denied. Only administrators and management can view audit logs.'
-            });
+            throw new ForbiddenError('Access denied. Only administrators and management can view audit logs.');
         }
 
         // Get summary statistics
@@ -282,12 +243,4 @@ export const getAuditSummary = async (req, res) => {
             timeframe: 'Last 30 days'
         });
 
-    } catch (error) {
-        console.error('Error fetching audit summary:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch audit summary',
-            error: error.message
-        });
-    }
 };

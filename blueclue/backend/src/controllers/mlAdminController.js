@@ -5,14 +5,15 @@
 import MLFeedback from '../models/MLFeedback.js';
 import MLModelVersion from '../models/MLModelVersion.js';
 import pool from '../config/database.js';
+import { BadRequestError } from '../middleware/errorHandler.js';
 
 const _rawAiUrl      = process.env.AI_SERVICE_URL || 'http://localhost:5000';
 const AI_SERVICE_URL  = /^https?:\/\//i.test(_rawAiUrl) ? _rawAiUrl : `http://${_rawAiUrl}`;
 const AI_TIMEOUT     = parseInt(process.env.AI_SERVICE_TIMEOUT, 10) || 8000;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Internal helper: call Python ML service
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 async function callMLService(path, { method = 'GET', body = null } = {}) {
     const controller = new AbortController();
@@ -35,16 +36,15 @@ async function callMLService(path, { method = 'GET', body = null } = {}) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Monitoring dashboard
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * GET /api/ml-admin/dashboard
  * Returns everything the ML admin dashboard needs in one call.
  */
 export const getDashboard = async (req, res) => {
-    try {
         const [
             mlMetrics,
             mlHealth,
@@ -116,36 +116,27 @@ export const getDashboard = async (req, res) => {
                 db_stats,
             },
         });
-    } catch (err) {
-        console.error('ML Admin dashboard error:', err);
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Explainability
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * POST /api/ml-admin/explain
  * Body: { text, subject?, model_type?, prediction?, confidence? }
  */
 export const explainPrediction = async (req, res) => {
-    try {
         const data = await callMLService('/explain', {
             method: 'POST',
             body: req.body,
         });
         return res.json({ success: true, data });
-    } catch (err) {
-        console.error('Explain error:', err);
-        return res.status(502).json({ success: false, message: err.message });
-    }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Feedback collection
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * POST /api/ml-admin/feedback
@@ -153,7 +144,6 @@ export const explainPrediction = async (req, res) => {
  * Body: FeedbackRequest (mirrors the Python schema)
  */
 export const submitFeedback = async (req, res) => {
-    try {
         const {
             ticket_id, classification_id,
             ai_category, ai_priority, ai_confidence,
@@ -163,7 +153,7 @@ export const submitFeedback = async (req, res) => {
         } = req.body;
 
         if (!ticket_id) {
-            return res.status(400).json({ success: false, message: 'ticket_id is required' });
+            throw new BadRequestError('ticket_id is required');
         }
 
         const record = await MLFeedback.create({
@@ -181,10 +171,6 @@ export const submitFeedback = async (req, res) => {
         });
 
         return res.status(201).json({ success: true, data: record });
-    } catch (err) {
-        console.error('Feedback submit error:', err);
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
 };
 
 /**
@@ -193,7 +179,6 @@ export const submitFeedback = async (req, res) => {
  * Query: limit, category, overridden_only
  */
 export const getFeedback = async (req, res) => {
-    try {
         const limit    = Math.min(parseInt(req.query.limit, 10) || 100, 500);
         const category = req.query.category || null;
         const onlyOverrides = req.query.overridden_only === 'true';
@@ -205,34 +190,25 @@ export const getFeedback = async (req, res) => {
         ]);
 
         return res.json({ success: true, data: { entries, stats, top_reasons: reasons } });
-    } catch (err) {
-        console.error('Get feedback error:', err);
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
 };
 
 /**
  * GET /api/ml-admin/feedback/override-rates
  */
 export const getOverrideRates = async (req, res) => {
-    try {
         const rates = await MLFeedback.getOverrideRates();
         return res.json({ success: true, data: rates });
-    } catch (err) {
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Drift detection
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * POST /api/ml-admin/drift/run
  * Body: { model_type, window_days }
  */
 export const runDriftDetection = async (req, res) => {
-    try {
         const data = await callMLService('/drift/run', {
             method: 'POST',
             body: { model_type: req.body.model_type || 'category', window_days: req.body.window_days || 30 },
@@ -266,10 +242,6 @@ export const runDriftDetection = async (req, res) => {
         }
 
         return res.json({ success: true, data });
-    } catch (err) {
-        console.error('Drift run error:', err);
-        return res.status(502).json({ success: false, message: err.message });
-    }
 };
 
 /**
@@ -277,7 +249,6 @@ export const runDriftDetection = async (req, res) => {
  * Query: model_type, limit
  */
 export const getDriftReports = async (req, res) => {
-    try {
         const modelType = req.query.model_type || null;
         const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
 
@@ -292,21 +263,17 @@ export const getDriftReports = async (req, res) => {
 
         const result = await pool.query(query, values);
         return res.json({ success: true, data: result.rows });
-    } catch (err) {
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Model version management
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * GET /api/ml-admin/models/versions
  * Query: model_type
  */
 export const getModelVersions = async (req, res) => {
-    try {
         // Try Python registry first (most up-to-date)
         const mlData = await callMLService(
             `/models/versions${req.query.model_type ? '?model_type=' + req.query.model_type : ''}`
@@ -322,10 +289,6 @@ export const getModelVersions = async (req, res) => {
                 db_versions: dbVersions,
             },
         });
-    } catch (err) {
-        console.error('Get model versions error:', err);
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
 };
 
 /**
@@ -333,10 +296,9 @@ export const getModelVersions = async (req, res) => {
  * Body: { model_type, version }
  */
 export const deployModelVersion = async (req, res) => {
-    try {
         const { model_type, version } = req.body;
         if (!model_type || !version) {
-            return res.status(400).json({ success: false, message: 'model_type and version are required' });
+            throw new BadRequestError('model_type and version are required');
         }
 
         const data = await callMLService('/models/deploy', {
@@ -348,10 +310,6 @@ export const deployModelVersion = async (req, res) => {
         await MLModelVersion.setActive(model_type, version).catch(() => null);
 
         return res.json({ success: true, data });
-    } catch (err) {
-        console.error('Deploy error:', err);
-        return res.status(502).json({ success: false, message: err.message });
-    }
 };
 
 /**
@@ -359,10 +317,9 @@ export const deployModelVersion = async (req, res) => {
  * Body: { model_type, target_version? }
  */
 export const rollbackModel = async (req, res) => {
-    try {
         const { model_type, target_version } = req.body;
         if (!model_type) {
-            return res.status(400).json({ success: false, message: 'model_type is required' });
+            throw new BadRequestError('model_type is required');
         }
 
         const data = await callMLService('/models/rollback', {
@@ -375,34 +332,25 @@ export const rollbackModel = async (req, res) => {
         }
 
         return res.json({ success: true, data });
-    } catch (err) {
-        console.error('Rollback error:', err);
-        return res.status(502).json({ success: false, message: err.message });
-    }
 };
 
 /**
  * GET /api/ml-admin/models/registry/history
  */
 export const getRegistryHistory = async (req, res) => {
-    try {
         const data = await callMLService('/models/registry/history');
         return res.json({ success: true, data });
-    } catch (err) {
-        return res.status(502).json({ success: false, message: err.message });
-    }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Retraining
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * POST /api/ml-admin/retrain
  * Body: { model_types?, auto_deploy?, improvement_threshold? }
  */
 export const triggerRetraining = async (req, res) => {
-    try {
         const modelTypes   = req.body.model_types || ['category', 'priority', 'time'];
         const triggeredBy  = req.body.triggered_by || 'manual';
 
@@ -424,10 +372,6 @@ export const triggerRetraining = async (req, res) => {
 
         const data = await callMLService('/retrain', { method: 'POST', body: payload });
         return res.json({ success: true, data: { ...data, db_run_id: dbRunId } });
-    } catch (err) {
-        console.error('Retrain trigger error:', err);
-        return res.status(502).json({ success: false, message: err.message });
-    }
 };
 
 /**
@@ -435,33 +379,25 @@ export const triggerRetraining = async (req, res) => {
  * Lists retraining run reports from DB.
  */
 export const getRetrainingRuns = async (req, res) => {
-    try {
         const result = await pool.query(
             `SELECT * FROM ml_retraining_runs ORDER BY started_at DESC LIMIT 50`
         );
         return res.json({ success: true, data: result.rows });
-    } catch (err) {
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Model health summary
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * GET /api/ml-admin/health
  */
 export const getMLHealth = async (req, res) => {
-    try {
         const [health, metrics] = await Promise.all([
             callMLService('/health'),
             callMLService('/metrics/rolling'),
         ]);
         return res.json({ success: true, data: { health, metrics } });
-    } catch (err) {
-        return res.status(502).json({ success: false, message: err.message });
-    }
 };
 
 /**
@@ -469,7 +405,6 @@ export const getMLHealth = async (req, res) => {
  * Returns recent AI classifications from DB.
  */
 export const getRecentPredictions = async (req, res) => {
-    try {
         const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
         const result = await pool.query(`
             SELECT
@@ -489,9 +424,6 @@ export const getRecentPredictions = async (req, res) => {
             LIMIT $1
         `, [limit]);
         return res.json({ success: true, data: result.rows });
-    } catch (err) {
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
 };
 
 /**
@@ -499,7 +431,6 @@ export const getRecentPredictions = async (req, res) => {
  * Export prediction log as JSON for analysis.
  */
 export const exportPredictions = async (req, res) => {
-    try {
         const since = req.query.since
             ? new Date(req.query.since)
             : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -521,7 +452,4 @@ export const exportPredictions = async (req, res) => {
         res.setHeader('Content-Disposition', 'attachment; filename="predictions_export.json"');
         res.setHeader('Content-Type', 'application/json');
         return res.json(result.rows);
-    } catch (err) {
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
 };

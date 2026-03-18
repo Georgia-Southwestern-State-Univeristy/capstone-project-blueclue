@@ -5,6 +5,7 @@ import TicketHistory from '../models/TicketHistory.js';
 import Notification from '../models/Notification.js';
 import { emitNotificationToUser, emitUnreadCountToUser } from '../services/socketService.js';
 import { sendTicketAssignment } from '../services/emailService.js';
+import { BadRequestError, NotFoundError, ConflictError } from '../middleware/errorHandler.js';
 
 /**
  * Get assignment requests (filterable by status).
@@ -12,18 +13,14 @@ import { sendTicketAssignment } from '../services/emailService.js';
  * GET /api/assignment-requests
  */
 export const getPendingRequests = async (req, res) => {
-    try {
-        const { status = 'pending', page = 1, limit = 25 } = req.query;
-        const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { status = 'pending', page = 1, limit = 25 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
 
-        // Validate status filter
-        const validStatuses = ['pending', 'approved', 'denied', 'all'];
-        if (!validStatuses.includes(status)) {
-            return res.status(400).json({
-                status: 'error',
-                message: `Invalid status filter. Must be one of: ${validStatuses.join(', ')}`
-            });
-        }
+    // Validate status filter
+    const validStatuses = ['pending', 'approved', 'denied', 'all'];
+    if (!validStatuses.includes(status)) {
+        throw new BadRequestError(`Invalid status filter. Must be one of: ${validStatuses.join(', ')}`);
+    }
 
         // --- 24-hour expiration: auto-deny requests older than 24 hours ---
         try {
@@ -123,22 +120,13 @@ export const getPendingRequests = async (req, res) => {
 
         const result = await pool.query(dataQuery, params);
 
-        res.status(200).json({
-            status: 'success',
-            data: result.rows,
-            count: totalCount,
-            page: parseInt(page),
-            totalPages: Math.ceil(totalCount / parseInt(limit))
-        });
-
-    } catch (error) {
-        console.error('Get pending requests error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to fetch assignment requests',
-            error: error.message
-        });
-    }
+    res.status(200).json({
+        status: 'success',
+        data: result.rows,
+        count: totalCount,
+        page: parseInt(page),
+        totalPages: Math.ceil(totalCount / parseInt(limit))
+    });
 };
 
 /**
@@ -147,55 +135,47 @@ export const getPendingRequests = async (req, res) => {
  */
 export const approveRequest = async (req, res) => {
     const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
 
-        const { id } = req.params;
+    await client.query('BEGIN');
 
-        // Fetch the request
-        const requestResult = await client.query(
-            `SELECT ar.*, t.status AS ticket_status, t.assigned_to AS ticket_assigned_to
-             FROM ticket_assignment_requests ar
-             JOIN tickets t ON ar.ticket_id = t.id
-             WHERE ar.id = $1`,
-            [id]
-        );
+    const { id } = req.params;
 
-        if (requestResult.rows.length === 0) {
-            await client.query('ROLLBACK');
-            return res.status(404).json({
-                status: 'error',
-                message: 'Assignment request not found'
-            });
-        }
+    // Fetch the request
+    const requestResult = await client.query(
+        `SELECT ar.*, t.status AS ticket_status, t.assigned_to AS ticket_assigned_to
+         FROM ticket_assignment_requests ar
+         JOIN tickets t ON ar.ticket_id = t.id
+         WHERE ar.id = $1`,
+        [id]
+    );
 
-        const request = requestResult.rows[0];
+    if (requestResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        client.release();
+        throw new NotFoundError('Assignment request not found');
+    }
 
-        if (request.status !== 'pending') {
-            await client.query('ROLLBACK');
-            return res.status(409).json({
-                status: 'error',
-                message: `This request has already been ${request.status}.`
-            });
-        }
+    const request = requestResult.rows[0];
 
-        // Check if the ticket was already assigned in the meantime
-        if (request.ticket_assigned_to) {
-            await client.query('ROLLBACK');
-            return res.status(409).json({
-                status: 'error',
-                message: 'This ticket has already been assigned to another technician.'
-            });
-        }
+    if (request.status !== 'pending') {
+        await client.query('ROLLBACK');
+        client.release();
+        throw new ConflictError(`This request has already been ${request.status}.`);
+    }
 
-        // Check if the ticket is still in a valid status
-        if (['closed', 'cancelled', 'resolved'].includes(request.ticket_status)) {
-            await client.query('ROLLBACK');
-            return res.status(400).json({
-                status: 'error',
-                message: `Cannot assign a ticket with status: ${request.ticket_status}`
-            });
-        }
+    // Check if the ticket was already assigned in the meantime
+    if (request.ticket_assigned_to) {
+        await client.query('ROLLBACK');
+        client.release();
+        throw new ConflictError('This ticket has already been assigned to another technician.');
+    }
+
+    // Check if the ticket is still in a valid status
+    if (['closed', 'cancelled', 'resolved'].includes(request.ticket_status)) {
+        await client.query('ROLLBACK');
+        client.release();
+        throw new BadRequestError(`Cannot assign a ticket with status: ${request.ticket_status}`);
+    }
 
         // 1. Update the request status to approved
         await client.query(
@@ -315,23 +295,14 @@ export const approveRequest = async (req, res) => {
             console.error('Failed to send approval notification to tech:', notifError);
         }
 
-        res.status(200).json({
-            status: 'success',
-            message: 'Assignment request approved. Ticket has been assigned.',
-            data: updatedResult.rows[0]
-        });
+    res.status(200).json({
+        status: 'success',
+        message: 'Assignment request approved. Ticket has been assigned.',
+        data: updatedResult.rows[0]
+    });
 
-    } catch (error) {
-        await client.query('ROLLBACK');
-        console.error('Approve request error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to approve assignment request',
-            error: error.message
-        });
-    } finally {
-        client.release();
-    }
+    await client.query('COMMIT');
+    client.release();
 };
 
 /**
@@ -339,31 +310,24 @@ export const approveRequest = async (req, res) => {
  * PATCH /api/assignment-requests/:id/deny
  */
 export const denyRequest = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { reason } = req.body;
+    const { id } = req.params;
+    const { reason } = req.body;
 
-        // Fetch the request
-        const requestResult = await pool.query(
-            `SELECT * FROM ticket_assignment_requests WHERE id = $1`,
-            [id]
-        );
+    // Fetch the request
+    const requestResult = await pool.query(
+        `SELECT * FROM ticket_assignment_requests WHERE id = $1`,
+        [id]
+    );
 
-        if (requestResult.rows.length === 0) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Assignment request not found'
-            });
-        }
+    if (requestResult.rows.length === 0) {
+        throw new NotFoundError('Assignment request not found');
+    }
 
-        const request = requestResult.rows[0];
+    const request = requestResult.rows[0];
 
-        if (request.status !== 'pending') {
-            return res.status(409).json({
-                status: 'error',
-                message: `This request has already been ${request.status}.`
-            });
-        }
+    if (request.status !== 'pending') {
+        throw new ConflictError(`This request has already been ${request.status}.`);
+    }
 
         // Update the request to denied
         const updateResult = await pool.query(
@@ -426,18 +390,9 @@ export const denyRequest = async (req, res) => {
             console.error('Failed to send denial notification to tech:', notifError);
         }
 
-        res.status(200).json({
-            status: 'success',
-            message: 'Assignment request denied.',
-            data: enrichedResult.rows[0]
-        });
-
-    } catch (error) {
-        console.error('Deny request error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to deny assignment request',
-            error: error.message
-        });
-    }
+    res.status(200).json({
+        status: 'success',
+        message: 'Assignment request denied.',
+        data: enrichedResult.rows[0]
+    });
 };

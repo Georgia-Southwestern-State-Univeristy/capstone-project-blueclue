@@ -1,4 +1,5 @@
-import pool from '../config/database.js';
+﻿import pool from '../config/database.js';
+import { BadRequestError, NotFoundError } from '../middleware/errorHandler.js';
 import {
     sendVerificationEmail,
     sendWelcomeEmail,
@@ -14,7 +15,6 @@ import {
  * @access Admin
  */
 export const getEmailLogs = async (req, res) => {
-    try {
         const {
             page = 1,
             limit = 50,
@@ -109,14 +109,6 @@ export const getEmailLogs = async (req, res) => {
             }
         });
 
-    } catch (error) {
-        console.error('Error fetching email logs:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to fetch email logs',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -125,7 +117,6 @@ export const getEmailLogs = async (req, res) => {
  * @access Admin
  */
 export const getEmailStats = async (req, res) => {
-    try {
         const { timeRange = '24h' } = req.query;
         
         // Determine interval based on time range
@@ -215,14 +206,6 @@ export const getEmailStats = async (req, res) => {
             }
         });
 
-    } catch (error) {
-        console.error('Error fetching email statistics:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to fetch email statistics',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -231,7 +214,6 @@ export const getEmailStats = async (req, res) => {
  * @access Admin
  */
 export const getEmailLogById = async (req, res) => {
-    try {
         const { id } = req.params;
 
         const result = await pool.query(
@@ -240,10 +222,7 @@ export const getEmailLogById = async (req, res) => {
         );
 
         if (result.rows.length === 0) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Email log not found'
-            });
+            throw new NotFoundError('Email log not found');
         }
 
         res.json({
@@ -251,14 +230,6 @@ export const getEmailLogById = async (req, res) => {
             data: result.rows[0]
         });
 
-    } catch (error) {
-        console.error('Error fetching email log:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to fetch email log',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -267,7 +238,6 @@ export const getEmailLogById = async (req, res) => {
  * @access Admin
  */
 export const cleanupOldLogs = async (req, res) => {
-    try {
         const result = await pool.query('SELECT cleanup_old_email_logs()');
         const deletedCount = result.rows[0].cleanup_old_email_logs;
 
@@ -279,14 +249,6 @@ export const cleanupOldLogs = async (req, res) => {
             }
         });
 
-    } catch (error) {
-        console.error('Error cleaning up email logs:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to cleanup email logs',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -295,7 +257,6 @@ export const cleanupOldLogs = async (req, res) => {
  * @access Admin
  */
 export const getEmailAlerts = async (req, res) => {
-    try {
         // Check failure rate in the last hour
         const hourlyCheck = await pool.query(`
             SELECT 
@@ -368,14 +329,6 @@ export const getEmailAlerts = async (req, res) => {
             }
         });
 
-    } catch (error) {
-        console.error('Error checking email alerts:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to check email alerts',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -384,7 +337,6 @@ export const getEmailAlerts = async (req, res) => {
  * @access Admin
  */
 export const resendFailedEmail = async (req, res) => {
-    try {
         const { id } = req.params;
         
         // Fetch the email log
@@ -394,20 +346,14 @@ export const resendFailedEmail = async (req, res) => {
         );
         
         if (logResult.rows.length === 0) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Email log not found'
-            });
+            throw new NotFoundError('Email log not found');
         }
         
         const log = logResult.rows[0];
         
         // Check if email is actually failed or pending
         if (log.status === 'success') {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Cannot resend successful emails'
-            });
+            throw new BadRequestError('Cannot resend successful emails');
         }
         
         // Reconstruct and resend based on email type
@@ -512,10 +458,7 @@ export const resendFailedEmail = async (req, res) => {
                 break;
                 
             default:
-                return res.status(400).json({
-                    status: 'error',
-                    message: `Cannot resend email type: ${log.email_type}`
-                });
+                throw new BadRequestError(`Cannot resend email type: ${log.email_type}`);
         }
         
         res.json({
@@ -529,14 +472,6 @@ export const resendFailedEmail = async (req, res) => {
             }
         });
         
-    } catch (error) {
-        console.error('Error resending email:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to resend email',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -545,7 +480,6 @@ export const resendFailedEmail = async (req, res) => {
  * @access Admin
  */
 export const resendBulkFailedEmails = async (req, res) => {
-    try {
         const {
             emailType,
             startDate,
@@ -649,20 +583,18 @@ export const resendBulkFailedEmails = async (req, res) => {
                     status: 'success',
                     resentAt: new Date().toISOString()
                 });
-                
-            } catch (error) {
+            } catch (err) {
                 failCount++;
                 results.push({
                     id: row.id,
                     status: 'failed',
-                    error: error.message
+                    error: err.message
                 });
             }
         }
 
         res.json({
             status: 'success',
-            message: `Processed ${logsResult.rows.length} emails`,
             data: {
                 processed: logsResult.rows.length,
                 successful: successCount,
@@ -670,15 +602,6 @@ export const resendBulkFailedEmails = async (req, res) => {
                 results
             }
         });
-
-    } catch (error) {
-        console.error('Error resending bulk emails:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to resend bulk emails',
-            error: error.message
-        });
-    }
 };
 
 /**
