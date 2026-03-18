@@ -5,86 +5,65 @@ import TicketHistory from '../models/TicketHistory.js';
 import User from '../models/User.js';
 import { sendEmail } from '../services/emailService.js';
 import { emitNotificationToUser } from '../services/socketService.js';
+import { BadRequestError, NotFoundError, ForbiddenError } from '../middleware/errorHandler.js';
 
 /**
  * Add a collaborator to a ticket
  * POST /api/tickets/:id/collaborators
  */
 export const addCollaborator = async (req, res) => {
-  try {
-    const ticketId = parseInt(req.params.id);
-    const { userId, role = 'assisting', note } = req.body;
-    const addedBy = req.user.id;
+  const ticketId = parseInt(req.params.id);
+  const { userId, role = 'assisting', note } = req.body;
+  const addedBy = req.user.id;
 
-    // Validate input
-    if (!userId) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'User ID is required'
-      });
-    }
+  // Validate input
+  if (!userId) {
+    throw new BadRequestError('User ID is required');
+  }
 
-    if (!['primary', 'assisting'].includes(role)) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid role. Must be "primary" or "assisting"'
-      });
-    }
+  if (!['primary', 'assisting'].includes(role)) {
+    throw new BadRequestError('Invalid role. Must be "primary" or "assisting"');
+  }
 
-    // Get ticket
-    const ticket = await Ticket.getById(ticketId);
-    if (!ticket) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Ticket not found'
-      });
-    }
+  // Get ticket
+  const ticket = await Ticket.getById(ticketId);
+  if (!ticket) {
+    throw new NotFoundError('Ticket not found');
+  }
 
-    // Check permissions
-    const userRole = req.user.role;
-    const isManagement = ['admin', 'management'].includes(userRole);
-    
-    // Get primary collaborator
-    const primaryCollab = await TicketCollaborator.getPrimaryByTicketId(ticketId);
-    const isPrimary = primaryCollab && primaryCollab.user_id === addedBy;
-    
-    // Check if user is assigned to the ticket (they should also be primary, but check both)
-    const isAssigned = ticket.assigned_to === addedBy;
-    
-    // Check if user can add collaborators
-    // Allow: management, primary technician, or assigned technician
-    if (!isManagement && !isPrimary && !isAssigned) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'Only the assigned technician, primary technician, or management can add collaborators'
-      });
-    }
+  // Check permissions
+  const userRole = req.user.role;
+  const isManagement = ['admin', 'management'].includes(userRole);
+  
+  // Get primary collaborator
+  const primaryCollab = await TicketCollaborator.getPrimaryByTicketId(ticketId);
+  const isPrimary = primaryCollab && primaryCollab.user_id === addedBy;
+  
+  // Check if user is assigned to the ticket (they should also be primary, but check both)
+  const isAssigned = ticket.assigned_to === addedBy;
+  
+  // Check if user can add collaborators
+  // Allow: management, primary technician, or assigned technician
+  if (!isManagement && !isPrimary && !isAssigned) {
+    throw new ForbiddenError('Only the assigned technician, primary technician, or management can add collaborators');
+  }
 
-    // Prevent adding self as assisting if already primary
-    if (userId === addedBy && role === 'assisting' && isPrimary) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'You are already the primary technician on this ticket'
-      });
-    }
+  // Prevent adding self as assisting if already primary
+  if (userId === addedBy && role === 'assisting' && isPrimary) {
+    throw new BadRequestError('You are already the primary technician on this ticket');
+  }
 
-    // Check if tech has category access
-    const userToAdd = await User.getById(userId);
-    if (!userToAdd) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'User not found'
-      });
-    }
+  // Check if tech has category access
+  const userToAdd = await User.getById(userId);
+  if (!userToAdd) {
+    throw new NotFoundError('User not found');
+  }
 
-    // Verify user is a technician
-    const techRoles = ['technician', 'senior_technician', 'admin', 'management'];
-    if (!techRoles.includes(userToAdd.role)) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Only technicians can be added as collaborators'
-      });
-    }
+  // Verify user is a technician
+  const techRoles = ['technician', 'senior_technician', 'admin', 'management'];
+  if (!techRoles.includes(userToAdd.role)) {
+    throw new BadRequestError('Only technicians can be added as collaborators');
+  }
 
     // Add collaborator
     const collaborator = await TicketCollaborator.add(ticketId, userId, role, addedBy, note);
@@ -154,22 +133,14 @@ export const addCollaborator = async (req, res) => {
       });
     }
 
-    res.status(201).json({
-      status: 'success',
-      message: 'Collaborator added successfully',
-      data: {
-        collaborator,
-        ticket_id: ticketId
-      }
-    });
-
-  } catch (error) {
-    console.error('Add collaborator error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: error.message || 'Failed to add collaborator'
-    });
-  }
+  res.status(201).json({
+    status: 'success',
+    message: 'Collaborator added successfully',
+    data: {
+      collaborator,
+      ticket_id: ticketId
+    }
+  });
 };
 
 /**
@@ -177,55 +148,42 @@ export const addCollaborator = async (req, res) => {
  * DELETE /api/tickets/:id/collaborators/:userId
  */
 export const removeCollaborator = async (req, res) => {
-  try {
-    const ticketId = parseInt(req.params.id);
-    const userIdToRemove = parseInt(req.params.userId);
-    const removedBy = req.user.id;
+  const ticketId = parseInt(req.params.id);
+  const userIdToRemove = parseInt(req.params.userId);
+  const removedBy = req.user.id;
 
-    // Get ticket
-    const ticket = await Ticket.getById(ticketId);
-    if (!ticket) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Ticket not found'
-      });
-    }
+  // Get ticket
+  const ticket = await Ticket.getById(ticketId);
+  if (!ticket) {
+    throw new NotFoundError('Ticket not found');
+  }
 
-    // Check permissions
-    const userRole = req.user.role;
-    const isManagement = ['admin', 'management'].includes(userRole);
-    
-    // Get primary collaborator
-    const primaryCollab = await TicketCollaborator.getPrimaryByTicketId(ticketId);
-    const isPrimary = primaryCollab && primaryCollab.user_id === removedBy;
-    
-    // Check if user is assigned to the ticket
-    const isAssigned = ticket.assigned_to === removedBy;
-    
-    // Check if user can remove collaborators
-    // Allow: management, primary technician, or assigned technician
-    if (!isManagement && !isPrimary && !isAssigned) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'Only the assigned technician, primary technician, or management can remove collaborators'
-      });
-    }
+  // Check permissions
+  const userRole = req.user.role;
+  const isManagement = ['admin', 'management'].includes(userRole);
+  
+  // Get primary collaborator
+  const primaryCollab = await TicketCollaborator.getPrimaryByTicketId(ticketId);
+  const isPrimary = primaryCollab && primaryCollab.user_id === removedBy;
+  
+  // Check if user is assigned to the ticket
+  const isAssigned = ticket.assigned_to === removedBy;
+  
+  // Check if user can remove collaborators
+  // Allow: management, primary technician, or assigned technician
+  if (!isManagement && !isPrimary && !isAssigned) {
+    throw new ForbiddenError('Only the assigned technician, primary technician, or management can remove collaborators');
+  }
 
-    // Prevent removing primary tech (must transfer instead)
-    const collaboratorToRemove = await TicketCollaborator.isCollaborator(ticketId, userIdToRemove);
-    if (!collaboratorToRemove) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Collaborator not found'
-      });
-    }
+  // Prevent removing primary tech (must transfer instead)
+  const collaboratorToRemove = await TicketCollaborator.isCollaborator(ticketId, userIdToRemove);
+  if (!collaboratorToRemove) {
+    throw new NotFoundError('Collaborator not found');
+  }
 
-    if (collaboratorToRemove.role === 'primary') {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Cannot remove primary technician. Transfer primary role first.'
-      });
-    }
+  if (collaboratorToRemove.role === 'primary') {
+    throw new BadRequestError('Cannot remove primary technician. Transfer primary role first.');
+  }
 
     // Remove collaborator
     await TicketCollaborator.remove(ticketId, userIdToRemove);
@@ -267,18 +225,10 @@ export const removeCollaborator = async (req, res) => {
       });
     }
 
-    res.status(200).json({
-      status: 'success',
-      message: 'Collaborator removed successfully'
-    });
-
-  } catch (error) {
-    console.error('Remove collaborator error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: error.message || 'Failed to remove collaborator'
-    });
-  }
+  res.status(200).json({
+    status: 'success',
+    message: 'Collaborator removed successfully'
+  });
 };
 
 /**
@@ -286,65 +236,49 @@ export const removeCollaborator = async (req, res) => {
  * PATCH /api/tickets/:id/transfer
  */
 export const transferPrimary = async (req, res) => {
-  try {
-    const ticketId = parseInt(req.params.id);
-    const { newPrimaryUserId } = req.body;
-    const transferredBy = req.user.id;
+  const ticketId = parseInt(req.params.id);
+  const { newPrimaryUserId } = req.body;
+  const transferredBy = req.user.id;
 
-    // Validate input
-    if (!newPrimaryUserId) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'New primary user ID is required'
-      });
-    }
+  // Validate input
+  if (!newPrimaryUserId) {
+    throw new BadRequestError('New primary user ID is required');
+  }
 
-    // Get ticket
-    const ticket = await Ticket.getById(ticketId);
-    if (!ticket) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Ticket not found'
-      });
-    }
+  // Get ticket
+  const ticket = await Ticket.getById(ticketId);
+  if (!ticket) {
+    throw new NotFoundError('Ticket not found');
+  }
 
-    // Check permissions
-    const userRole = req.user.role;
-    const isManagement = ['admin', 'management'].includes(userRole);
-    
-    // Get current primary collaborator
-    const currentPrimary = await TicketCollaborator.getPrimaryByTicketId(ticketId);
-    const isCurrentPrimary = currentPrimary && currentPrimary.user_id === transferredBy;
-    
-    // Check if user is assigned to the ticket
-    const isAssigned = ticket.assigned_to === transferredBy;
-    
-    // Check if user can transfer
-    // Allow: management, current primary technician, or assigned technician
-    if (!isManagement && !isCurrentPrimary && !isAssigned) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'Only the assigned technician, current primary technician, or management can transfer primary assignment'
-      });
-    }
+  // Check permissions
+  const userRole = req.user.role;
+  const isManagement = ['admin', 'management'].includes(userRole);
+  
+  // Get current primary collaborator
+  const currentPrimary = await TicketCollaborator.getPrimaryByTicketId(ticketId);
+  const isCurrentPrimary = currentPrimary && currentPrimary.user_id === transferredBy;
+  
+  // Check if user is assigned to the ticket
+  const isAssigned = ticket.assigned_to === transferredBy;
+  
+  // Check if user can transfer
+  // Allow: management, current primary technician, or assigned technician
+  if (!isManagement && !isCurrentPrimary && !isAssigned) {
+    throw new ForbiddenError('Only the assigned technician, current primary technician, or management can transfer primary assignment');
+  }
 
-    // Get new primary user
-    const newPrimaryUser = await User.getById(newPrimaryUserId);
-    if (!newPrimaryUser) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'New primary user not found'
-      });
-    }
+  // Get new primary user
+  const newPrimaryUser = await User.getById(newPrimaryUserId);
+  if (!newPrimaryUser) {
+    throw new NotFoundError('New primary user not found');
+  }
 
-    // Verify user is a technician
-    const techRoles = ['technician', 'senior_technician', 'admin', 'management'];
-    if (!techRoles.includes(newPrimaryUser.role)) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Only technicians can be assigned as primary'
-      });
-    }
+  // Verify user is a technician
+  const techRoles = ['technician', 'senior_technician', 'admin', 'management'];
+  if (!techRoles.includes(newPrimaryUser.role)) {
+    throw new BadRequestError('Only technicians can be assigned as primary');
+  }
 
     // Transfer primary role
     const updatedCollaborators = await TicketCollaborator.transferPrimary(
@@ -424,22 +358,14 @@ export const transferPrimary = async (req, res) => {
       console.error('Failed to send transfer email:', emailError);
     }
 
-    res.status(200).json({
-      status: 'success',
-      message: 'Primary assignment transferred successfully',
-      data: {
-        collaborators: updatedCollaborators,
-        ticket_id: ticketId
-      }
-    });
-
-  } catch (error) {
-    console.error('Transfer primary error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: error.message || 'Failed to transfer primary assignment'
-    });
-  }
+  res.status(200).json({
+    status: 'success',
+    message: 'Primary assignment transferred successfully',
+    data: {
+      collaborators: updatedCollaborators,
+      ticket_id: ticketId
+    }
+  });
 };
 
 /**
@@ -447,36 +373,24 @@ export const transferPrimary = async (req, res) => {
  * GET /api/tickets/:id/collaborators
  */
 export const getCollaborators = async (req, res) => {
-  try {
-    const ticketId = parseInt(req.params.id);
+  const ticketId = parseInt(req.params.id);
 
-    // Get ticket to verify it exists
-    const ticket = await Ticket.getById(ticketId);
-    if (!ticket) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Ticket not found'
-      });
-    }
-
-    // Get collaborators
-    const collaborators = await TicketCollaborator.getByTicketId(ticketId);
-
-    res.status(200).json({
-      status: 'success',
-      data: {
-        collaborators,
-        count: collaborators.length
-      }
-    });
-
-  } catch (error) {
-    console.error('Get collaborators error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to get collaborators'
-    });
+  // Get ticket to verify it exists
+  const ticket = await Ticket.getById(ticketId);
+  if (!ticket) {
+    throw new NotFoundError('Ticket not found');
   }
+
+  // Get collaborators
+  const collaborators = await TicketCollaborator.getByTicketId(ticketId);
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      collaborators,
+      count: collaborators.length
+    }
+  });
 };
 
 /**
@@ -484,22 +398,13 @@ export const getCollaborators = async (req, res) => {
  * GET /api/users/:id/workload
  */
 export const getTechnicianWorkload = async (req, res) => {
-  try {
-    const userId = parseInt(req.params.id);
+  const userId = parseInt(req.params.id);
 
-    // Get workload
-    const workload = await TicketCollaborator.getUserWorkload(userId);
+  // Get workload
+  const workload = await TicketCollaborator.getUserWorkload(userId);
 
-    res.status(200).json({
-      status: 'success',
-      data: workload
-    });
-
-  } catch (error) {
-    console.error('Get workload error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to get technician workload'
-    });
-  }
+  res.status(200).json({
+    status: 'success',
+    data: workload
+  });
 };
