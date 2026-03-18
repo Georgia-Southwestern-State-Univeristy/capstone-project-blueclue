@@ -10,6 +10,7 @@ import { classifyTicketWithFallback } from '../services/aiService.js';
 import { calculateFinalPriority } from '../services/priorityService.js';
 import AIConfiguration from '../models/AIConfiguration.js';
 import AIClassification from '../models/AIClassification.js';
+import { BadRequestError, ForbiddenError, NotFoundError, ConflictError, AppError } from '../middleware/errorHandler.js';
 
 // ── Audit helper ─────────────────────────────────────────────────────────────
 async function auditLog(eventType, userId, conversationId, details, req) {
@@ -66,65 +67,47 @@ const TECH_ROLES = new Set(['technician', 'senior_technician', 'management', 'ad
  * POST /api/chat/message
  */
 export const sendMessage = async (req, res) => {
-  try {
-    const { message, conversationId } = req.body;
-    const userId = req.user.id;
+  const { message, conversationId } = req.body;
+  const userId = req.user.id;
 
-    // Validate input
-    if (!message || typeof message !== 'string' || message.trim().length === 0) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Message is required and must be a non-empty string'
-      });
-    }
-
-    if (message.length > 2000) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Message is too long (max 2000 characters)'
-      });
-    }
-
-    // Process the message
-    const result = await processChatMessage(userId, message.trim(), conversationId);
-
-    // During active handoff: forward customer message as socket event to the claiming tech
-    if (result.conversationId) {
-      try {
-        const convRow = await pool.query(
-          `SELECT handoff_claimed_by FROM chat_conversations WHERE id = $1 LIMIT 1`,
-          [result.conversationId]
-        );
-        const claimedBy = convRow.rows[0]?.handoff_claimed_by;
-        if (claimedBy) {
-          const io = req.app.get('io');
-          if (io) {
-            io.to(`user_${claimedBy}`).emit('customer_message', {
-              conversationId: result.conversationId,
-              message:        message.trim(),
-              timestamp:      new Date(),
-            });
-          }
-        }
-      } catch (emitErr) {
-        // Non-critical — don't fail the HTTP response
-        console.warn('customer_message emit error:', emitErr.message);
-      }
-    }
-
-    res.status(200).json({
-      status: 'success',
-      data: result
-    });
-
-  } catch (error) {
-    console.error('Send message error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to process message',
-      error: error.message
-    });
+  if (!message || typeof message !== 'string' || message.trim().length === 0) {
+    throw new BadRequestError('Message is required and must be a non-empty string');
   }
+
+  if (message.length > 2000) {
+    throw new BadRequestError('Message is too long (max 2000 characters)');
+  }
+
+  const result = await processChatMessage(userId, message.trim(), conversationId);
+
+  // During active handoff: forward customer message as socket event to the claiming tech
+  if (result.conversationId) {
+    try {
+      const convRow = await pool.query(
+        `SELECT handoff_claimed_by FROM chat_conversations WHERE id = $1 LIMIT 1`,
+        [result.conversationId]
+      );
+      const claimedBy = convRow.rows[0]?.handoff_claimed_by;
+      if (claimedBy) {
+        const io = req.app.get('io');
+        if (io) {
+          io.to(`user_${claimedBy}`).emit('customer_message', {
+            conversationId: result.conversationId,
+            message:        message.trim(),
+            timestamp:      new Date(),
+          });
+        }
+      }
+    } catch (emitErr) {
+      // Non-critical — don't fail the HTTP response
+      console.warn('customer_message emit error:', emitErr.message);
+    }
+  }
+
+  res.status(200).json({
+    status: 'success',
+    data: result
+  });
 };
 
 /**
@@ -132,50 +115,29 @@ export const sendMessage = async (req, res) => {
  * GET /api/chat/history?conversationId=X
  */
 export const getHistory = async (req, res) => {
-  try {
-    const { conversationId } = req.query;
-    const userId = req.user.id;
+  const { conversationId } = req.query;
+  const userId = req.user.id;
 
-    if (!conversationId) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'conversationId query parameter is required'
-      });
-    }
-
-    // Get conversation and verify ownership
-    const conversation = await ChatConversation.getById(parseInt(conversationId));
-    
-    if (!conversation) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Conversation not found'
-      });
-    }
-
-    if (conversation.user_id !== userId) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'Unauthorized to access this conversation'
-      });
-    }
-
-    // Get full conversation history
-    const history = await getConversationHistory(parseInt(conversationId));
-
-    res.status(200).json({
-      status: 'success',
-      data: history
-    });
-
-  } catch (error) {
-    console.error('Get history error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to retrieve chat history',
-      error: error.message
-    });
+  if (!conversationId) {
+    throw new BadRequestError('conversationId query parameter is required');
   }
+
+  const conversation = await ChatConversation.getById(parseInt(conversationId));
+
+  if (!conversation) {
+    throw new NotFoundError('Conversation not found');
+  }
+
+  if (conversation.user_id !== userId) {
+    throw new ForbiddenError('Unauthorized to access this conversation');
+  }
+
+  const history = await getConversationHistory(parseInt(conversationId));
+
+  res.status(200).json({
+    status: 'success',
+    data: history
+  });
 };
 
 /**
@@ -183,37 +145,26 @@ export const getHistory = async (req, res) => {
  * GET /api/chat/conversations
  */
 export const getConversations = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const limit = parseInt(req.query.limit) || 50;
+  const userId = req.user.id;
+  const limit = parseInt(req.query.limit) || 50;
 
-    const conversations = await ChatConversation.getByUserId(userId, limit);
+  const conversations = await ChatConversation.getByUserId(userId, limit);
 
-    // Get message count for each conversation
-    const conversationsWithCounts = await Promise.all(
-      conversations.map(async (conv) => {
-        const messageCount = await ChatMessage.getCount(conv.id);
-        return {
-          ...conv,
-          messageCount
-        };
-      })
-    );
+  const conversationsWithCounts = await Promise.all(
+    conversations.map(async (conv) => {
+      const messageCount = await ChatMessage.getCount(conv.id);
+      return {
+        ...conv,
+        messageCount
+      };
+    })
+  );
 
-    res.status(200).json({
-      status: 'success',
-      count: conversationsWithCounts.length,
-      data: conversationsWithCounts
-    });
-
-  } catch (error) {
-    console.error('Get conversations error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to retrieve conversations',
-      error: error.message
-    });
-  }
+  res.status(200).json({
+    status: 'success',
+    count: conversationsWithCounts.length,
+    data: conversationsWithCounts
+  });
 };
 
 /**
@@ -222,69 +173,57 @@ export const getConversations = async (req, res) => {
  * Body: { messageId, helpful, reason?, details? }
  */
 export const submitFeedback = async (req, res) => {
-  try {
-    const { messageId, helpful, reason, details } = req.body;
-    const userId = req.user.id;
+  const { messageId, helpful, reason, details } = req.body;
+  const userId = req.user.id;
 
-    // Validate input
-    if (!messageId) {
-      return res.status(400).json({ status: 'error', message: 'messageId is required' });
-    }
-    if (typeof helpful !== 'boolean') {
-      return res.status(400).json({ status: 'error', message: 'helpful must be a boolean value' });
-    }
+  if (!messageId) {
+    throw new BadRequestError('messageId is required');
+  }
+  if (typeof helpful !== 'boolean') {
+    throw new BadRequestError('helpful must be a boolean value');
+  }
 
-    // Validate negative-feedback reason if thumbs down
-    const VALID_REASONS = ['no_answer', 'wrong_info', 'unhelpful_tone', 'too_slow', 'other'];
-    if (!helpful && reason && !VALID_REASONS.includes(reason)) {
-      return res.status(400).json({ status: 'error', message: 'Invalid failure reason.' });
-    }
+  // Validate negative-feedback reason if thumbs down
+  const VALID_REASONS = ['no_answer', 'wrong_info', 'unhelpful_tone', 'too_slow', 'other'];
+  if (!helpful && reason && !VALID_REASONS.includes(reason)) {
+    throw new BadRequestError('Invalid failure reason.');
+  }
 
-    // Get message and verify ownership
-    const message = await ChatMessage.getById(parseInt(messageId));
-    if (!message) return res.status(404).json({ status: 'error', message: 'Message not found' });
+  const message = await ChatMessage.getById(parseInt(messageId));
+  if (!message) throw new NotFoundError('Message not found');
 
-    const conversation = await ChatConversation.getById(message.conversation_id);
-    if (!conversation || conversation.user_id !== userId) {
-      return res.status(403).json({ status: 'error', message: 'Unauthorized to rate this message' });
-    }
+  const conversation = await ChatConversation.getById(message.conversation_id);
+  if (!conversation || conversation.user_id !== userId) {
+    throw new ForbiddenError('Unauthorized to rate this message');
+  }
 
-    const rating = helpful ? 'positive' : 'negative';
-    const safeDetails = details ? redactPII(details.slice(0, 500)) : null;
+  const rating = helpful ? 'positive' : 'negative';
+  const safeDetails = details ? redactPII(details.slice(0, 500)) : null;
 
-    // Persist to chat_message_feedback (upsert — one rating per message per user)
-    await pool.query(
-      `INSERT INTO chat_message_feedback
+  await pool.query(
+    `INSERT INTO chat_message_feedback
          (message_id, conversation_id, user_id, rating, failure_reason, details)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (message_id, user_id) DO UPDATE SET
          rating         = EXCLUDED.rating,
          failure_reason = EXCLUDED.failure_reason,
          details        = EXCLUDED.details`,
-      [messageId, conversation.id, userId, rating, reason || null, safeDetails]
-    );
+    [messageId, conversation.id, userId, rating, reason || null, safeDetails]
+  );
 
-    // Also update the lightweight was_helpful flag on the conversation
-    await ChatConversation.updateHelpfulness(conversation.id, helpful);
+  await ChatConversation.updateHelpfulness(conversation.id, helpful);
 
-    // Track knowledge gap when thumbs down
-    if (!helpful && message.message) {
-      await trackKnowledgeGap(message.message, { thumbsDown: true });
-    }
-
-    // Audit
-    await auditLog('message_feedback', userId, conversation.id, { messageId, rating, reason }, req);
-
-    res.status(200).json({
-      status: 'success',
-      message: 'Feedback submitted successfully',
-      data: { conversationId: conversation.id, helpful },
-    });
-
-  } catch (error) {
-    console.error('Submit feedback error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to submit feedback', error: error.message });
+  if (!helpful && message.message) {
+    await trackKnowledgeGap(message.message, { thumbsDown: true });
   }
+
+  await auditLog('message_feedback', userId, conversation.id, { messageId, rating, reason }, req);
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Feedback submitted successfully',
+    data: { conversationId: conversation.id, helpful },
+  });
 };
 
 /**
@@ -292,26 +231,16 @@ export const submitFeedback = async (req, res) => {
  * POST /api/chat/clear
  */
 export const clearHistory = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { conversationId } = req.body;
+  const userId = req.user.id;
+  const { conversationId } = req.body;
 
-    const result = await clearChatHistory(userId, conversationId);
+  const result = await clearChatHistory(userId, conversationId);
 
-    res.status(200).json({
-      status: 'success',
-      message: 'Chat history cleared successfully',
-      data: result
-    });
-
-  } catch (error) {
-    console.error('Clear history error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to clear chat history',
-      error: error.message
-    });
-  }
+  res.status(200).json({
+    status: 'success',
+    message: 'Chat history cleared successfully',
+    data: result
+  });
 };
 
 /**
@@ -319,54 +248,33 @@ export const clearHistory = async (req, res) => {
  * POST /api/chat/end
  */
 export const endConversation = async (req, res) => {
-  try {
-    const { conversationId, wasHelpful } = req.body;
-    const userId = req.user.id;
+  const { conversationId, wasHelpful } = req.body;
+  const userId = req.user.id;
 
-    if (!conversationId) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'conversationId is required'
-      });
-    }
-
-    // Verify ownership
-    const conversation = await ChatConversation.getById(parseInt(conversationId));
-    
-    if (!conversation) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Conversation not found'
-      });
-    }
-
-    if (conversation.user_id !== userId) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'Unauthorized to end this conversation'
-      });
-    }
-
-    // End the conversation
-    const updatedConversation = await ChatConversation.end(
-      parseInt(conversationId),
-      wasHelpful !== undefined ? wasHelpful : null
-    );
-
-    res.status(200).json({
-      status: 'success',
-      message: 'Conversation ended successfully',
-      data: updatedConversation
-    });
-
-  } catch (error) {
-    console.error('End conversation error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to end conversation',
-      error: error.message
-    });
+  if (!conversationId) {
+    throw new BadRequestError('conversationId is required');
   }
+
+  const conversation = await ChatConversation.getById(parseInt(conversationId));
+
+  if (!conversation) {
+    throw new NotFoundError('Conversation not found');
+  }
+
+  if (conversation.user_id !== userId) {
+    throw new ForbiddenError('Unauthorized to end this conversation');
+  }
+
+  const updatedConversation = await ChatConversation.end(
+    parseInt(conversationId),
+    wasHelpful !== undefined ? wasHelpful : null
+  );
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Conversation ended successfully',
+    data: updatedConversation
+  });
 };
 
 /**
@@ -374,9 +282,8 @@ export const endConversation = async (req, res) => {
  * POST /api/chat/create-ticket
  */
 export const createTicketFromChat = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { conversationId, subject, description } = req.body;
+  const userId = req.user.id;
+  const { conversationId, subject, description } = req.body;
 
     // Build description from conversation history if not already supplied
     let ticketSubject = subject;
@@ -497,15 +404,6 @@ export const createTicketFromChat = async (req, res) => {
         message: `Ticket ${ticket.ticket_number} created. A technician will respond soon.`,
       },
     });
-
-  } catch (error) {
-    console.error('Create ticket from chat error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to create support ticket',
-      error: error.message,
-    });
-  }
 };
 
 /**
@@ -514,67 +412,56 @@ export const createTicketFromChat = async (req, res) => {
  * Used by TicketFromChatModal to pre-fill editable fields.
  */
 export const getConversationSummary = async (req, res) => {
-  try {
-    const { conversationId } = req.params;
-    const userId = req.user.id;
+  const { conversationId } = req.params;
+  const userId = req.user.id;
 
-    const conversation = await ChatConversation.getById(parseInt(conversationId));
-    if (!conversation) {
-      return res.status(404).json({ status: 'error', message: 'Conversation not found.' });
-    }
-
-    // Allow tech roles to summarize any conversation; customers only their own
-    const TECH_ROLES_SET = new Set(['technician', 'senior_technician', 'management', 'admin']);
-    if (!TECH_ROLES_SET.has(req.user.role) && conversation.user_id !== userId) {
-      return res.status(403).json({ status: 'error', message: 'Unauthorized.' });
-    }
-
-    const messages = await ChatMessage.getByConversationId(parseInt(conversationId), 30);
-
-    let title = 'Support Request';
-    let description = 'Submitted via chat assistant';
-
-    try {
-      const summary = await generateTicketSummary(messages);
-      title       = summary.title       || title;
-      description = summary.description || description;
-    } catch {
-      // fallback: use first real user message
-      const first = messages.find(m => m.sender === 'user');
-      if (first?.message) title = first.message.slice(0, 100);
-      description = messages
-        .filter(m => m.sender === 'user')
-        .map(m => m.message)
-        .join('\n');
-    }
-
-    // Build a readable transcript
-    const transcript = messages.map(m => {
-      const who = m.sender === 'user' ? 'Customer' : m.sender === 'tech' ? 'Technician' : 'Bot';
-      return `[${who}] ${m.message || ''}`;
-    }).join('\n');
-
-    return res.status(200).json({
-      status: 'success',
-      data: { title, description, transcript },
-    });
-  } catch (error) {
-    console.error('Get conversation summary error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to generate summary.', error: error.message });
+  const conversation = await ChatConversation.getById(parseInt(conversationId));
+  if (!conversation) {
+    throw new NotFoundError('Conversation not found.');
   }
+
+  const TECH_ROLES_SET = new Set(['technician', 'senior_technician', 'management', 'admin']);
+  if (!TECH_ROLES_SET.has(req.user.role) && conversation.user_id !== userId) {
+    throw new ForbiddenError('Unauthorized.');
+  }
+
+  const messages = await ChatMessage.getByConversationId(parseInt(conversationId), 30);
+
+  let title = 'Support Request';
+  let description = 'Submitted via chat assistant';
+
+  try {
+    const summary = await generateTicketSummary(messages);
+    title       = summary.title       || title;
+    description = summary.description || description;
+  } catch {
+    // fallback: use first real user message
+    const first = messages.find(m => m.sender === 'user');
+    if (first?.message) title = first.message.slice(0, 100);
+    description = messages
+      .filter(m => m.sender === 'user')
+      .map(m => m.message)
+      .join('\n');
+  }
+
+  const transcript = messages.map(m => {
+    const who = m.sender === 'user' ? 'Customer' : m.sender === 'tech' ? 'Technician' : 'Bot';
+    return `[${who}] ${m.message || ''}`;
+  }).join('\n');
+
+  return res.status(200).json({
+    status: 'success',
+    data: { title, description, transcript },
+  });
 };
 
 
 export const getLLMHealth = async (req, res) => {
-  try {
-    const health = await checkLLMHealth();
-    res.status(health.available ? 200 : 503).json({
-      status: health.available ? 'success' : 'degraded',
-      data: health,
-    });
-  } catch (error) {
-    res.status(500).json({ status: 'error', message: error.message });
-  }
+  const health = await checkLLMHealth();
+  res.status(health.available ? 200 : 503).json({
+    status: health.available ? 'success' : 'degraded',
+    data: health,
+  });
 };
 
 export default {
@@ -598,34 +485,26 @@ export default {
  * Restricted to technician / management / admin roles.
  */
 export const sendTechMessage = async (req, res) => {
-  try {
-    const user = req.user;
-    if (!TECH_ROLES.has(user.role)) {
-      return res.status(403).json({ status: 'error', message: 'Tech mode requires technician or management role.' });
-    }
-
-    const { message, conversationId } = req.body;
-    if (!message?.trim()) {
-      return res.status(400).json({ status: 'error', message: 'Message is required.' });
-    }
-    if (message.length > 2000) {
-      return res.status(400).json({ status: 'error', message: 'Message too long (max 2000 chars).' });
-    }
-
-    // Handle slash commands
-    if (message.trim().startsWith('/')) {
-      const result = await processTechCommand(user.id, message.trim(), conversationId);
-      return res.status(200).json({ status: 'success', data: result });
-    }
-
-    // Standard processing with tech context (private KB access)
-    const result = await processChatMessage(user.id, message.trim(), conversationId, { techMode: true });
-    return res.status(200).json({ status: 'success', data: result });
-
-  } catch (error) {
-    console.error('Tech message error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to process tech message.', error: error.message });
+  const user = req.user;
+  if (!TECH_ROLES.has(user.role)) {
+    throw new ForbiddenError('Tech mode requires technician or management role.');
   }
+
+  const { message, conversationId } = req.body;
+  if (!message?.trim()) {
+    throw new BadRequestError('Message is required.');
+  }
+  if (message.length > 2000) {
+    throw new BadRequestError('Message too long (max 2000 chars).');
+  }
+
+  if (message.trim().startsWith('/')) {
+    const result = await processTechCommand(user.id, message.trim(), conversationId);
+    return res.status(200).json({ status: 'success', data: result });
+  }
+
+  const result = await processChatMessage(user.id, message.trim(), conversationId, { techMode: true });
+  return res.status(200).json({ status: 'success', data: result });
 };
 
 // ============================================================================
@@ -638,32 +517,26 @@ export const sendTechMessage = async (req, res) => {
  * Returns top 3 KB articles relevant to the partial ticket description.
  */
 export const suggestArticlesEndpoint = async (req, res) => {
-  try {
-    const { description, abGroup = 'A' } = req.body;
-    const userId = req.user?.id || null;
+  const { description, abGroup = 'A' } = req.body;
+  const userId = req.user?.id || null;
 
-    if (!description || description.trim().length < 15) {
-      return res.status(200).json({ status: 'success', data: { articles: [] } });
-    }
-
-    const articles = await suggestArticlesForText(description.trim(), userId);
-
-    // Track "shown" event for A/B analytics
-    if (userId && articles.length > 0 && abGroup === 'A') {
-      for (const article of articles) {
-        await pool.query(
-          `INSERT INTO chat_article_suggestion_events (user_id, article_id, description_text, action, ab_group)
-           VALUES ($1, $2, $3, 'shown', $4)`,
-          [userId, article.id, description.trim().slice(0, 500), abGroup]
-        ).catch(() => {});
-      }
-    }
-
-    return res.status(200).json({ status: 'success', data: { articles } });
-  } catch (error) {
-    console.error('Suggest articles error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to fetch article suggestions.', error: error.message });
+  if (!description || description.trim().length < 15) {
+    return res.status(200).json({ status: 'success', data: { articles: [] } });
   }
+
+  const articles = await suggestArticlesForText(description.trim(), userId);
+
+  if (userId && articles.length > 0 && abGroup === 'A') {
+    for (const article of articles) {
+      await pool.query(
+        `INSERT INTO chat_article_suggestion_events (user_id, article_id, description_text, action, ab_group)
+           VALUES ($1, $2, $3, 'shown', $4)`,
+        [userId, article.id, description.trim().slice(0, 500), abGroup]
+      ).catch(() => {});
+    }
+  }
+
+  return res.status(200).json({ status: 'success', data: { articles } });
 };
 
 // ============================================================================
@@ -676,25 +549,20 @@ export const suggestArticlesEndpoint = async (req, res) => {
  * Body: { articleId, action: 'clicked'|'dismissed'|'ticket_cancelled', description? }
  */
 export const trackSuggestionEvent = async (req, res) => {
-  try {
-    const { articleId, action, description } = req.body;
-    const userId = req.user?.id || null;
+  const { articleId, action, description } = req.body;
+  const userId = req.user?.id || null;
 
-    if (!action || !['clicked', 'dismissed', 'ticket_cancelled'].includes(action)) {
-      return res.status(400).json({ status: 'error', message: 'Invalid action.' });
-    }
-
-    await pool.query(
-      `INSERT INTO chat_article_suggestion_events (user_id, article_id, description_text, action, ab_group)
-       VALUES ($1, $2, $3, $4, 'A')`,
-      [userId, articleId || null, (description || '').slice(0, 500), action]
-    );
-
-    return res.status(200).json({ status: 'success' });
-  } catch (error) {
-    console.error('Track suggestion event error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to track event.' });
+  if (!action || !['clicked', 'dismissed', 'ticket_cancelled'].includes(action)) {
+    throw new BadRequestError('Invalid action.');
   }
+
+  await pool.query(
+    `INSERT INTO chat_article_suggestion_events (user_id, article_id, description_text, action, ab_group)
+       VALUES ($1, $2, $3, $4, 'A')`,
+    [userId, articleId || null, (description || '').slice(0, 500), action]
+  );
+
+  return res.status(200).json({ status: 'success' });
 };
 
 // ============================================================================
@@ -707,62 +575,53 @@ export const trackSuggestionEvent = async (req, res) => {
  * Body: { filename, mimeType, dataBase64, conversationId? }
  */
 export const uploadChatFile = async (req, res) => {
-  try {
-    const { filename, mimeType, dataBase64, conversationId } = req.body;
-    const userId = req.user.id;
+  const { filename, mimeType, dataBase64, conversationId } = req.body;
+  const userId = req.user.id;
 
-    if (!dataBase64 || !filename || !mimeType) {
-      return res.status(400).json({ status: 'error', message: 'filename, mimeType, and dataBase64 are required.' });
-    }
+  if (!dataBase64 || !filename || !mimeType) {
+    throw new BadRequestError('filename, mimeType, and dataBase64 are required.');
+  }
 
-    // Validate size (base64 overhead ~1.33x, 5MB raw → ~6.7MB base64)
-    const MAX_B64_LEN = 6_800_000;
-    if (dataBase64.length > MAX_B64_LEN) {
-      return res.status(413).json({ status: 'error', message: 'File too large. Maximum 5 MB.' });
-    }
+  const MAX_B64_LEN = 6_800_000;
+  if (dataBase64.length > MAX_B64_LEN) {
+    throw new AppError('File too large. Maximum 5 MB.', 413);
+  }
 
-    // Validate mime type (images, PDFs, plain text, logs)
-    const ALLOWED_TYPES = [
-      'image/png', 'image/jpeg', 'image/gif', 'image/webp',
-      'application/pdf',
-      'text/plain', 'text/csv',
-    ];
-    if (!ALLOWED_TYPES.includes(mimeType)) {
-      return res.status(415).json({ status: 'error', message: 'Unsupported file type.' });
-    }
+  const ALLOWED_TYPES = [
+    'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+    'application/pdf',
+    'text/plain', 'text/csv',
+  ];
+  if (!ALLOWED_TYPES.includes(mimeType)) {
+    throw new AppError('Unsupported file type.', 415);
+  }
 
-    // Sanitize filename
-    const ext = path.extname(filename).replace(/[^.a-zA-Z0-9]/g, '').slice(0, 10) || 'bin';
-    const safeFilename = `chat_${userId}_${Date.now()}.${ext}`;
-    const uploadDir = path.resolve('uploads', 'chat');
-    fs.mkdirSync(uploadDir, { recursive: true });
+  const ext = path.extname(filename).replace(/[^.a-zA-Z0-9]/g, '').slice(0, 10) || 'bin';
+  const safeFilename = `chat_${userId}_${Date.now()}.${ext}`;
+  const uploadDir = path.resolve('uploads', 'chat');
+  fs.mkdirSync(uploadDir, { recursive: true });
 
-    const filePath = path.join(uploadDir, safeFilename);
-    const fileBuffer = Buffer.from(dataBase64, 'base64');
-    fs.writeFileSync(filePath, fileBuffer);
+  const filePath = path.join(uploadDir, safeFilename);
+  const fileBuffer = Buffer.from(dataBase64, 'base64');
+  fs.writeFileSync(filePath, fileBuffer);
 
-    const fileUrl = `/uploads/chat/${safeFilename}`;
-    const fileSizeBytes = fileBuffer.byteLength;
+  const fileUrl = `/uploads/chat/${safeFilename}`;
+  const fileSizeBytes = fileBuffer.byteLength;
 
-    // If conversationId provided, store attachment reference in latest message
-    if (conversationId) {
-      await pool.query(
-        `UPDATE chat_messages SET attachment_url = $1, attachment_type = $2,
+  if (conversationId) {
+    await pool.query(
+      `UPDATE chat_messages SET attachment_url = $1, attachment_type = $2,
                 attachment_filename = $3, attachment_size_bytes = $4
          WHERE conversation_id = $5 AND sender = 'user'
          ORDER BY created_at DESC LIMIT 1`,
-        [fileUrl, mimeType, filename, fileSizeBytes, conversationId]
-      ).catch(() => {});
-    }
-
-    return res.status(200).json({
-      status: 'success',
-      data: { url: fileUrl, filename: safeFilename, mimeType, sizeBytes: fileSizeBytes },
-    });
-  } catch (error) {
-    console.error('Upload chat file error:', error);
-    res.status(500).json({ status: 'error', message: 'File upload failed.', error: error.message });
+      [fileUrl, mimeType, filename, fileSizeBytes, conversationId]
+    ).catch(() => {});
   }
+
+  return res.status(200).json({
+    status: 'success',
+    data: { url: fileUrl, filename: safeFilename, mimeType, sizeBytes: fileSizeBytes },
+  });
 };
 
 // ============================================================================
@@ -775,66 +634,58 @@ export const uploadChatFile = async (req, res) => {
  * Creates a notification for available techs.
  */
 export const requestHandoff = async (req, res) => {
-  try {
-    const { conversationId } = req.body;
-    const userId = req.user.id;
+  const { conversationId } = req.body;
+  const userId = req.user.id;
 
-    if (!conversationId) {
-      return res.status(400).json({ status: 'error', message: 'conversationId is required.' });
-    }
+  if (!conversationId) {
+    throw new BadRequestError('conversationId is required.');
+  }
 
-    const conversation = await ChatConversation.getById(parseInt(conversationId));
-    if (!conversation || conversation.user_id !== userId) {
-      return res.status(403).json({ status: 'error', message: 'Unauthorized.' });
-    }
+  const conversation = await ChatConversation.getById(parseInt(conversationId));
+  if (!conversation || conversation.user_id !== userId) {
+    throw new ForbiddenError('Unauthorized.');
+  }
 
-    // Mark conversation as handoff-requested, resetting any stale claim/resolve from a previous session
-    await pool.query(
-      `UPDATE chat_conversations
+  await pool.query(
+    `UPDATE chat_conversations
          SET handoff_requested_at  = NOW(),
              handoff_claimed_by    = NULL,
              handoff_claimed_at    = NULL,
              handoff_resolved_at   = NULL,
              ended_at              = NULL
        WHERE id = $1`,
-      [conversationId]
-    );
+    [conversationId]
+  );
 
-    // Get user info for notification
-    const userRow = await pool.query(`SELECT first_name, last_name, email FROM users WHERE id = $1`, [userId]);
-    const user = userRow.rows[0] || {};
-    const displayName = [user.first_name, user.last_name].filter(Boolean).join(' ') || user.email || 'A customer';
+  const userRow = await pool.query(`SELECT first_name, last_name, email FROM users WHERE id = $1`, [userId]);
+  const user = userRow.rows[0] || {};
+  const displayName = [user.first_name, user.last_name].filter(Boolean).join(' ') || user.email || 'A customer';
 
-    // Notify all available technicians via existing notification system
-    const techRows = await pool.query(
-      `SELECT id FROM users WHERE role IN ('technician', 'senior_technician', 'admin') AND is_active = true`
-    );
+  const techRows = await pool.query(
+    `SELECT id FROM users WHERE role IN ('technician', 'senior_technician', 'admin') AND is_active = true`
+  );
 
-    const io = req.app.get('io');
-    for (const tech of techRows.rows) {
-      await pool.query(
-        `INSERT INTO notifications (user_id, type, message, metadata)
+  const io = req.app.get('io');
+  for (const tech of techRows.rows) {
+    await pool.query(
+      `INSERT INTO notifications (user_id, type, message, metadata)
          VALUES ($1, 'chat_handoff', $2, $3)`,
-        [
-          tech.id,
-          `${displayName} is requesting to speak with a technician.`,
-          JSON.stringify({ conversationId, customerId: userId }),
-        ]
-      ).catch(() => {});
-      if (io) io.to(`user_${tech.id}`).emit('notification', { type: 'chat_handoff', conversationId });
-    }
-
-    return res.status(200).json({
-      status: 'success',
-      data: {
-        conversationId,
-        message: "I'm connecting you with an available technician. They'll join this chat shortly. ⏳",
-      },
-    });
-  } catch (error) {
-    console.error('Handoff request error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to request handoff.', error: error.message });
+      [
+        tech.id,
+        `${displayName} is requesting to speak with a technician.`,
+        JSON.stringify({ conversationId, customerId: userId }),
+      ]
+    ).catch(() => {});
+    if (io) io.to(`user_${tech.id}`).emit('notification', { type: 'chat_handoff', conversationId });
   }
+
+  return res.status(200).json({
+    status: 'success',
+    data: {
+      conversationId,
+      message: "I'm connecting you with an available technician. They'll join this chat shortly. ⏳",
+    },
+  });
 };
 
 /**
@@ -842,43 +693,38 @@ export const requestHandoff = async (req, res) => {
  * Technician claims a handoff conversation.
  */
 export const claimHandoff = async (req, res) => {
-  try {
-    const techUser = req.user;
-    if (!TECH_ROLES.has(techUser.role)) {
-      return res.status(403).json({ status: 'error', message: 'Requires tech role.' });
-    }
+  const techUser = req.user;
+  if (!TECH_ROLES.has(techUser.role)) {
+    throw new ForbiddenError('Requires tech role.');
+  }
 
-    const { conversationId } = req.body;
-    if (!conversationId) return res.status(400).json({ status: 'error', message: 'conversationId is required.' });
+  const { conversationId } = req.body;
+  if (!conversationId) throw new BadRequestError('conversationId is required.');
 
-    const result = await pool.query(
-      `UPDATE chat_conversations
+  const result = await pool.query(
+    `UPDATE chat_conversations
          SET handoff_claimed_by = $1, handoff_claimed_at = NOW()
        WHERE id = $2
          AND handoff_requested_at IS NOT NULL
          AND handoff_claimed_by IS NULL
        RETURNING id, user_id`,
-      [techUser.id, conversationId]
-    );
+    [techUser.id, conversationId]
+  );
 
-    if (result.rowCount === 0) {
-      return res.status(409).json({ status: 'error', message: 'Conversation already claimed or not found.' });
-    }
-
-    const conv = result.rows[0];
-    const io = req.app.get('io');
-    if (io) {
-      io.to(`user_${conv.user_id}`).emit('chat_claimed', {
-        conversationId,
-        techName: [techUser.firstName, techUser.lastName].filter(Boolean).join(' ') || 'A technician',
-      });
-    }
-
-    return res.status(200).json({ status: 'success', data: { conversationId, claimed: true } });
-  } catch (error) {
-    console.error('Claim handoff error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to claim conversation.', error: error.message });
+  if (result.rowCount === 0) {
+    throw new ConflictError('Conversation already claimed or not found.');
   }
+
+  const conv = result.rows[0];
+  const io = req.app.get('io');
+  if (io) {
+    io.to(`user_${conv.user_id}`).emit('chat_claimed', {
+      conversationId,
+      techName: [techUser.firstName, techUser.lastName].filter(Boolean).join(' ') || 'A technician',
+    });
+  }
+
+  return res.status(200).json({ status: 'success', data: { conversationId, claimed: true } });
 };
 
 /**
@@ -886,60 +732,52 @@ export const claimHandoff = async (req, res) => {
  * Tech sends a reply message in a claimed handoff conversation.
  */
 export const sendHandoffReply = async (req, res) => {
-  try {
-    const techUser = req.user;
-    if (!TECH_ROLES.has(techUser.role)) {
-      return res.status(403).json({ status: 'error', message: 'Requires tech role.' });
-    }
+  const techUser = req.user;
+  if (!TECH_ROLES.has(techUser.role)) {
+    throw new ForbiddenError('Requires tech role.');
+  }
 
-    const { conversationId, message } = req.body;
-    if (!conversationId || !message?.trim()) {
-      return res.status(400).json({ status: 'error', message: 'conversationId and message are required.' });
-    }
+  const { conversationId, message } = req.body;
+  if (!conversationId || !message?.trim()) {
+    throw new BadRequestError('conversationId and message are required.');
+  }
 
-    // Verify this tech claimed this conversation
-    const convRow = await pool.query(
-      `SELECT id, user_id, handoff_claimed_by FROM chat_conversations WHERE id = $1 LIMIT 1`,
-      [conversationId]
-    );
-    if (!convRow.rows.length) {
-      return res.status(404).json({ status: 'error', message: 'Conversation not found.' });
-    }
-    const conv = convRow.rows[0];
-    if (conv.handoff_claimed_by !== techUser.id) {
-      return res.status(403).json({ status: 'error', message: 'You have not claimed this conversation.' });
-    }
+  const convRow = await pool.query(
+    `SELECT id, user_id, handoff_claimed_by FROM chat_conversations WHERE id = $1 LIMIT 1`,
+    [conversationId]
+  );
+  if (!convRow.rows.length) {
+    throw new NotFoundError('Conversation not found.');
+  }
+  const conv = convRow.rows[0];
+  if (conv.handoff_claimed_by !== techUser.id) {
+    throw new ForbiddenError('You have not claimed this conversation.');
+  }
 
-    // Store message as sender='tech'
-    const msgRow = await pool.query(
-      `INSERT INTO chat_messages (conversation_id, sender, message, intent, confidence)
+  const msgRow = await pool.query(
+    `INSERT INTO chat_messages (conversation_id, sender, message, intent, confidence)
        VALUES ($1, 'tech', $2, 'tech_reply', 1.0)
        RETURNING id, created_at`,
-      [conversationId, message.trim()]
-    );
-    const msg = msgRow.rows[0];
+    [conversationId, message.trim()]
+  );
+  const msg = msgRow.rows[0];
 
-    // Emit to customer's socket in real-time
-    const techName = [techUser.firstName, techUser.lastName].filter(Boolean).join(' ') || 'A technician';
-    const io = req.app.get('io');
-    if (io) {
-      io.to(`user_${conv.user_id}`).emit('tech_reply', {
-        conversationId,
-        message:   message.trim(),
-        techName,
-        messageId: msg.id,
-        timestamp: msg.created_at,
-      });
-    }
-
-    return res.status(200).json({
-      status: 'success',
-      data: { messageId: msg.id, timestamp: msg.created_at },
+  const techName = [techUser.firstName, techUser.lastName].filter(Boolean).join(' ') || 'A technician';
+  const io = req.app.get('io');
+  if (io) {
+    io.to(`user_${conv.user_id}`).emit('tech_reply', {
+      conversationId,
+      message:   message.trim(),
+      techName,
+      messageId: msg.id,
+      timestamp: msg.created_at,
     });
-  } catch (error) {
-    console.error('Handoff reply error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to send reply.', error: error.message });
   }
+
+  return res.status(200).json({
+    status: 'success',
+    data: { messageId: msg.id, timestamp: msg.created_at },
+  });
 };
 
 /**
@@ -947,17 +785,16 @@ export const sendHandoffReply = async (req, res) => {
  * Tech closes a claimed handoff conversation.
  */
 export const resolveHandoff = async (req, res) => {
-  try {
-    const techUser = req.user;
-    if (!TECH_ROLES.has(techUser.role)) {
-      return res.status(403).json({ status: 'error', message: 'Requires tech role.' });
-    }
+  const techUser = req.user;
+  if (!TECH_ROLES.has(techUser.role)) {
+    throw new ForbiddenError('Requires tech role.');
+  }
 
-    const { conversationId } = req.body;
-    if (!conversationId) return res.status(400).json({ status: 'error', message: 'conversationId is required.' });
+  const { conversationId } = req.body;
+  if (!conversationId) throw new BadRequestError('conversationId is required.');
 
-    const result = await pool.query(
-      `UPDATE chat_conversations
+  const result = await pool.query(
+    `UPDATE chat_conversations
          SET handoff_resolved_at  = NOW(),
              ended_at             = NOW(),
              handoff_claimed_by   = NULL,
@@ -965,24 +802,20 @@ export const resolveHandoff = async (req, res) => {
              handoff_requested_at = NULL
        WHERE id = $1 AND handoff_claimed_by = $2
        RETURNING id, user_id`,
-      [conversationId, techUser.id]
-    );
+    [conversationId, techUser.id]
+  );
 
-    if (result.rowCount === 0) {
-      return res.status(403).json({ status: 'error', message: 'Not your conversation or already resolved.' });
-    }
-
-    const conv = result.rows[0];
-    const io = req.app.get('io');
-    if (io) {
-      io.to(`user_${conv.user_id}`).emit('handoff_resolved', { conversationId });
-    }
-
-    return res.status(200).json({ status: 'success', data: { conversationId } });
-  } catch (error) {
-    console.error('Resolve handoff error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to resolve handoff.', error: error.message });
+  if (result.rowCount === 0) {
+    throw new ForbiddenError('Not your conversation or already resolved.');
   }
+
+  const conv = result.rows[0];
+  const io = req.app.get('io');
+  if (io) {
+    io.to(`user_${conv.user_id}`).emit('handoff_resolved', { conversationId });
+  }
+
+  return res.status(200).json({ status: 'success', data: { conversationId } });
 };
 
 /**
@@ -990,57 +823,50 @@ export const resolveHandoff = async (req, res) => {
  * Tech fetches full message history of a handoff conversation.
  */
 export const getHandoffHistory = async (req, res) => {
-  try {
-    const techUser = req.user;
-    if (!TECH_ROLES.has(techUser.role)) {
-      return res.status(403).json({ status: 'error', message: 'Requires tech role.' });
-    }
+  const techUser = req.user;
+  if (!TECH_ROLES.has(techUser.role)) {
+    throw new ForbiddenError('Requires tech role.');
+  }
 
-    const { conversationId } = req.params;
+  const { conversationId } = req.params;
 
-    const [convRow, msgRows, userRow] = await Promise.all([
-      pool.query(`SELECT cc.*, u.first_name, u.last_name, u.email, u.role AS customer_role
+  const [convRow, msgRows, userRow] = await Promise.all([
+    pool.query(`SELECT cc.*, u.first_name, u.last_name, u.email, u.role AS customer_role
                   FROM chat_conversations cc
                   JOIN users u ON u.id = cc.user_id
                   WHERE cc.id = $1 LIMIT 1`, [conversationId]),
-      pool.query(`SELECT id, sender, message, intent, attachment_url, attachment_type,
+    pool.query(`SELECT id, sender, message, intent, attachment_url, attachment_type,
                          attachment_filename, created_at
                   FROM chat_messages
                   WHERE conversation_id = $1
                   ORDER BY created_at ASC`, [conversationId]),
-      // Past tickets for this customer (context)
-      pool.query(`SELECT ticket_number, subject, status, created_at
+    pool.query(`SELECT ticket_number, subject, status, created_at
                   FROM tickets
                   WHERE customer_id = (SELECT user_id FROM chat_conversations WHERE id = $1 LIMIT 1)
                   ORDER BY created_at DESC LIMIT 5`, [conversationId]),
-    ]);
+  ]);
 
-    if (!convRow.rows.length) {
-      return res.status(404).json({ status: 'error', message: 'Conversation not found.' });
-    }
-
-    return res.status(200).json({
-      status: 'success',
-      data: {
-        conversation: convRow.rows[0],
-        messages:     msgRows.rows,
-        pastTickets:  userRow.rows,
-      },
-    });
-  } catch (error) {
-    console.error('Get handoff history error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to get history.', error: error.message });
+  if (!convRow.rows.length) {
+    throw new NotFoundError('Conversation not found.');
   }
+
+  return res.status(200).json({
+    status: 'success',
+    data: {
+      conversation: convRow.rows[0],
+      messages:     msgRows.rows,
+      pastTickets:  userRow.rows,
+    },
+  });
 };
 
 
 export const getPendingHandoffs = async (req, res) => {
-  try {
-    const user = req.user;
-    if (!TECH_ROLES.has(user.role)) return res.status(403).json({ status: 'error', message: 'Requires tech role.' });
+  const user = req.user;
+  if (!TECH_ROLES.has(user.role)) throw new ForbiddenError('Requires tech role.');
 
-    const rows = await pool.query(
-      `SELECT cc.id AS conversation_id, cc.created_at, cc.handoff_requested_at,
+  const rows = await pool.query(
+    `SELECT cc.id AS conversation_id, cc.created_at, cc.handoff_requested_at,
               u.first_name, u.last_name, u.email,
               COUNT(cm.id) AS message_count
        FROM   chat_conversations cc
@@ -1050,13 +876,9 @@ export const getPendingHandoffs = async (req, res) => {
          AND  cc.handoff_claimed_by IS NULL
        GROUP BY cc.id, u.first_name, u.last_name, u.email
        ORDER  BY cc.handoff_requested_at ASC`
-    );
+  );
 
-    return res.status(200).json({ status: 'success', data: rows.rows });
-  } catch (error) {
-    console.error('Get pending handoffs error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to get pending handoffs.' });
-  }
+  return res.status(200).json({ status: 'success', data: rows.rows });
 };
 
 // ============================================================================
@@ -1069,11 +891,10 @@ export const getPendingHandoffs = async (req, res) => {
  * Restricted to management / admin roles.
  */
 export const getChatAnalytics = async (req, res) => {
-  try {
-    const user = req.user;
-    if (!['management', 'admin'].includes(user.role)) {
-      return res.status(403).json({ status: 'error', message: 'Requires management or admin role.' });
-    }
+  const user = req.user;
+  if (!['management', 'admin'].includes(user.role)) {
+    throw new ForbiddenError('Requires management or admin role.');
+  }
 
     const { period = '30d' } = req.query;
     const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
@@ -1211,10 +1032,6 @@ export const getChatAnalytics = async (req, res) => {
         techModeUsage:      techUsageRows.rows,
       },
     });
-  } catch (error) {
-    console.error('Chat analytics error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to fetch analytics.', error: error.message });
-  }
 };
 // ============================================================================
 // CONVERSATION SURVEY  (end-of-conversation rating)
@@ -1226,69 +1043,56 @@ export const getChatAnalytics = async (req, res) => {
  * Body: { conversationId, rating (1-5), solved, wouldUseAgain, npsScore (0-10), feedbackText }
  */
 export const submitConversationSurvey = async (req, res) => {
-  try {
-    const {
-      conversationId,
-      rating,
-      solved,
-      wouldUseAgain,
-      npsScore,
-      feedbackText,
-    } = req.body;
-    const userId = req.user.id;
+  const {
+    conversationId,
+    rating,
+    solved,
+    wouldUseAgain,
+    npsScore,
+    feedbackText,
+  } = req.body;
+  const userId = req.user.id;
 
-    if (!conversationId) {
-      return res.status(400).json({ status: 'error', message: 'conversationId is required.' });
-    }
+  if (!conversationId) throw new BadRequestError('conversationId is required.');
 
-    // Verify ownership
-    const conversation = await ChatConversation.getById(parseInt(conversationId));
-    if (!conversation || conversation.user_id !== userId) {
-      return res.status(403).json({ status: 'error', message: 'Unauthorized.' });
-    }
-
-    // Validate ranges
-    if (rating !== undefined && rating !== null && (rating < 1 || rating > 5)) {
-      return res.status(400).json({ status: 'error', message: 'Rating must be between 1 and 5.' });
-    }
-    if (npsScore !== undefined && npsScore !== null && (npsScore < 0 || npsScore > 10)) {
-      return res.status(400).json({ status: 'error', message: 'NPS score must be between 0 and 10.' });
-    }
-
-    // Redact PII from free-text
-    const safeText = feedbackText ? redactPII(feedbackText.trim().slice(0, 1000)) : null;
-
-    // Upsert (one survey per conversation)
-    await pool.query(
-      `INSERT INTO conversation_feedback
-         (conversation_id, user_id, rating, solved, would_use_again, nps_score, feedback_text)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       ON CONFLICT (conversation_id) DO UPDATE SET
-         rating          = EXCLUDED.rating,
-         solved          = EXCLUDED.solved,
-         would_use_again = EXCLUDED.would_use_again,
-         nps_score       = EXCLUDED.nps_score,
-         feedback_text   = EXCLUDED.feedback_text`,
-      [
-        conversationId,
-        userId,
-        rating       ?? null,
-        solved       ?? null,
-        wouldUseAgain ?? null,
-        npsScore     ?? null,
-        safeText,
-      ]
-    );
-
-    // Audit
-    await auditLog('survey_submitted', userId, parseInt(conversationId), { rating, npsScore }, req);
-
-    return res.status(200).json({ status: 'success', message: 'Survey submitted. Thank you!' });
-
-  } catch (error) {
-    console.error('Submit survey error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to submit survey.', error: error.message });
+  const conversation = await ChatConversation.getById(parseInt(conversationId));
+  if (!conversation || conversation.user_id !== userId) {
+    throw new ForbiddenError('Unauthorized.');
   }
+
+  if (rating !== undefined && rating !== null && (rating < 1 || rating > 5)) {
+    throw new BadRequestError('Rating must be between 1 and 5.');
+  }
+  if (npsScore !== undefined && npsScore !== null && (npsScore < 0 || npsScore > 10)) {
+    throw new BadRequestError('NPS score must be between 0 and 10.');
+  }
+
+  const safeText = feedbackText ? redactPII(feedbackText.trim().slice(0, 1000)) : null;
+
+  await pool.query(
+    `INSERT INTO conversation_feedback
+       (conversation_id, user_id, rating, solved, would_use_again, nps_score, feedback_text)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (conversation_id) DO UPDATE SET
+       rating          = EXCLUDED.rating,
+       solved          = EXCLUDED.solved,
+       would_use_again = EXCLUDED.would_use_again,
+       nps_score       = EXCLUDED.nps_score,
+       feedback_text   = EXCLUDED.feedback_text`,
+    [
+      conversationId,
+      userId,
+      rating       ?? null,
+      solved       ?? null,
+      wouldUseAgain ?? null,
+      npsScore     ?? null,
+      safeText,
+    ]
+  );
+
+  await auditLog('survey_submitted', userId, parseInt(conversationId), { rating, npsScore }, req);
+
+  return res.status(200).json({ status: 'success', message: 'Survey submitted. Thank you!' });
 };
 
 // ============================================================================
@@ -1301,11 +1105,10 @@ export const submitConversationSurvey = async (req, res) => {
  * Query params: limit (default 20), resolved (default false)
  */
 export const getKnowledgeGaps = async (req, res) => {
-  try {
-    const user = req.user;
-    if (!['management', 'admin'].includes(user.role)) {
-      return res.status(403).json({ status: 'error', message: 'Requires management or admin role.' });
-    }
+  const user = req.user;
+  if (!['management', 'admin'].includes(user.role)) {
+    throw new ForbiddenError('Requires management or admin role.');
+  }
 
     const limit    = Math.min(parseInt(req.query.limit) || 20, 100);
     const resolved = req.query.resolved === 'true';
@@ -1368,11 +1171,6 @@ export const getKnowledgeGaps = async (req, res) => {
         },
       },
     });
-
-  } catch (error) {
-    console.error('Get knowledge gaps error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to fetch knowledge gaps.', error: error.message });
-  }
 };
 
 // ============================================================================
@@ -1384,8 +1182,7 @@ export const getKnowledgeGaps = async (req, res) => {
  * Export all conversations + messages for the requesting user (GDPR Art. 20).
  */
 export const exportMyData = async (req, res) => {
-  try {
-    const userId = req.user.id;
+  const userId = req.user.id;
 
     const [convsRows, msgsRows, feedbackRows] = await Promise.all([
       pool.query(
@@ -1422,9 +1219,4 @@ export const exportMyData = async (req, res) => {
         feedback:      feedbackRows.rows,
       },
     });
-
-  } catch (error) {
-    console.error('Export data error:', error);
-    res.status(500).json({ status: 'error', message: 'Failed to export data.', error: error.message });
-  }
 };
