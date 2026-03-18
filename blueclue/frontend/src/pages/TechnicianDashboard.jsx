@@ -10,10 +10,11 @@ import UpdateRequestAlert from '../components/UpdateRequestAlert'
 import UpdateResponseModal from '../components/UpdateResponseModal'
 import TechTicketQueueWidget from '../components/TechTicketQueueWidget'
 import TechChatPanel from '../components/TechChatPanel'
+import CreateTicketWidget from '../components/CreateTicketWidget'
 import DashboardGrid from '../components/DashboardGrid'
 import useDashboardLayout from '../hooks/useDashboardLayout'
 import { buildGalleryItems, buildWidgetConfig } from '../widgets'
-import { getAllTickets, updateTicketStatus, assignTicket } from '../services/ticketService'
+import { getAllTickets, updateTicketStatus, assignTicket, createTicket } from '../services/ticketService'
 import { getTechnicians } from '../services/userService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
 
@@ -51,7 +52,7 @@ const DEFAULT_LAYOUTS = {
 
 const TECHNICIAN_WIDGET_KEYS = [
   'timeline', 'statusDonut', 'priorityPie',
-  'ticketQueue', 'availableTickets', 'ringRequests', 'chatPanel',
+  'ticketQueue', 'availableTickets', 'ringRequests', 'chatPanel', 'createTicket',
 ]
 
 const WIDGET_GALLERY_ITEMS = buildGalleryItems({ keys: TECHNICIAN_WIDGET_KEYS })
@@ -65,6 +66,7 @@ function TechnicianWidgetGrid({
   handleStatusChange, handleAssignmentChange,
   updatingTicketId, assigningTicketId, ticketErrors,
   includeCancelled, stats, donutSegments, prioritySegments,
+  onSubmitTicket,
 }) {
   const {
     layouts, isEditMode, editModeToggledRef, onLayoutChange,
@@ -99,12 +101,13 @@ function TechnicianWidgetGrid({
       availableTickets: <AvailableTickets onTicketClick={handleTicketClick} />,
       ringRequests: <RingRequestWidget onViewTicket={handleTicketClick} />,
       chatPanel: <TechChatPanel />,
+      createTicket: <CreateTicketWidget onSubmit={onSubmitTicket} />,
     }
     return buildWidgetConfig(TECHNICIAN_WIDGET_KEYS, componentMap)
   }, [tickets, loading, technicians, handleTicketClick,
       handleStatusChange, handleAssignmentChange, updatingTicketId,
       assigningTicketId, ticketErrors, includeCancelled, stats,
-      donutSegments, prioritySegments])
+      donutSegments, prioritySegments, onSubmitTicket])
 
   return (
     <DashboardGrid
@@ -295,6 +298,22 @@ function TechnicianDashboard() {
     setIsDetailOpen(true)
   }
 
+  // Handle ticket creation from the CreateTicketWidget
+  const handleSubmitTicket = async (formData) => {
+    try {
+      const response = await createTicket(formData)
+      const ticketId = response.ticket?.id || response.ticket?.ticket_id || response.data?.id || response.data?.ticket_id
+      toast.success(ticketId
+        ? `Ticket #${ticketId} created successfully!`
+        : 'Ticket submitted successfully!')
+      await fetchTickets()
+    } catch (error) {
+      console.error('Failed to create ticket:', error)
+      toast.error(error.message || 'Failed to submit ticket. Please try again.')
+      throw error
+    }
+  }
+
   // Calculate ticket statistics
   const activeTickets = includeCancelled ? tickets : tickets.filter(t => t.status !== 'cancelled')
   const cancelledCount = tickets.filter(t => t.status === 'cancelled').length
@@ -387,6 +406,7 @@ function TechnicianDashboard() {
         stats={stats}
         donutSegments={donutSegments}
         prioritySegments={prioritySegments}
+        onSubmitTicket={handleSubmitTicket}
       />
 
       {/* Ticket Detail View Modal */}

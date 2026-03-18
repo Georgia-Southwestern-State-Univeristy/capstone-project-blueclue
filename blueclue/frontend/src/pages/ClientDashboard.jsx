@@ -3,6 +3,8 @@ import TicketSubmissionModal from '../components/TicketSubmissionModal'
 import TicketDetailView from '../components/TicketDetailView'
 import TicketTimeline from '../components/TicketTimeline'
 import ClientTicketListWidget from '../components/ClientTicketListWidget'
+import CreateTicketWidget from '../components/CreateTicketWidget'
+import WelcomeBanner from '../components/WelcomeBanner'
 import DashboardGrid from '../components/DashboardGrid'
 import useDashboardLayout from '../hooks/useDashboardLayout'
 import { buildGalleryItems, buildWidgetConfig } from '../widgets'
@@ -12,23 +14,26 @@ import { useNotificationSocket } from '../hooks/useNotificationSocket'
 import { useToast } from '../hooks/useToast'
 
 // ── Default grid layouts ─────────────────────────────────────────────────────
-const LAYOUT_VERSION = 1
+const LAYOUT_VERSION = 2
 const DEFAULT_LAYOUTS = {
   lg: [
-    { i: 'timeline',      x: 0, y: 0,  w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
-    { i: 'clientTickets',  x: 0, y: 8,  w: 12, h: 12, minW: 6,  minH: 6, maxW: 12, maxH: 20 },
+    { i: 'createTicket',   x: 0, y: 0,  w: 12, h: 10, minW: 6,  minH: 6, maxW: 12, maxH: 18 },
+    { i: 'timeline',       x: 0, y: 10, w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
+    { i: 'clientTickets',  x: 0, y: 18, w: 12, h: 12, minW: 6,  minH: 6, maxW: 12, maxH: 20 },
   ],
   md: [
-    { i: 'timeline',      x: 0, y: 0,  w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
-    { i: 'clientTickets',  x: 0, y: 8,  w: 12, h: 12, minW: 6,  minH: 6, maxW: 12, maxH: 20 },
+    { i: 'createTicket',   x: 0, y: 0,  w: 12, h: 10, minW: 6,  minH: 6, maxW: 12, maxH: 18 },
+    { i: 'timeline',       x: 0, y: 10, w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
+    { i: 'clientTickets',  x: 0, y: 18, w: 12, h: 12, minW: 6,  minH: 6, maxW: 12, maxH: 20 },
   ],
   sm: [
-    { i: 'timeline',      x: 0, y: 0,  w: 6, h: 8,  minW: 3, minH: 6, maxW: 6, maxH: 16 },
-    { i: 'clientTickets',  x: 0, y: 8,  w: 6, h: 12, minW: 3, minH: 6, maxW: 6, maxH: 20 },
+    { i: 'createTicket',   x: 0, y: 0,  w: 6, h: 10, minW: 3, minH: 6, maxW: 6, maxH: 18 },
+    { i: 'timeline',       x: 0, y: 10, w: 6, h: 8,  minW: 3, minH: 6, maxW: 6, maxH: 16 },
+    { i: 'clientTickets',  x: 0, y: 18, w: 6, h: 12, minW: 3, minH: 6, maxW: 6, maxH: 20 },
   ],
 }
 
-const CLIENT_WIDGET_KEYS = ['timeline', 'clientTickets']
+const CLIENT_WIDGET_KEYS = ['createTicket', 'timeline', 'clientTickets']
 const WIDGET_GALLERY_ITEMS = buildGalleryItems({ keys: CLIENT_WIDGET_KEYS })
 
 /**
@@ -37,7 +42,7 @@ const WIDGET_GALLERY_ITEMS = buildGalleryItems({ keys: CLIENT_WIDGET_KEYS })
 function ClientWidgetGrid({
   tickets, timelineTickets, isLoading, isTimelineLoading,
   fetchTickets, fetchTimelineTickets,
-  handleTicketClick, handleSubmitClick,
+  handleTicketClick, handleSubmitClick, onSubmitTicket,
 }) {
   const {
     layouts, isEditMode, editModeToggledRef, onLayoutChange,
@@ -47,6 +52,9 @@ function ClientWidgetGrid({
 
   const widgetConfig = useMemo(() => {
     const componentMap = {
+      createTicket: (
+        <CreateTicketWidget onSubmit={onSubmitTicket} />
+      ),
       timeline: (
         <TicketTimeline
           tickets={timelineTickets}
@@ -66,7 +74,7 @@ function ClientWidgetGrid({
     }
     return buildWidgetConfig(CLIENT_WIDGET_KEYS, componentMap)
   }, [tickets, timelineTickets, isLoading, isTimelineLoading,
-      fetchTickets, fetchTimelineTickets, handleTicketClick, handleSubmitClick])
+      fetchTickets, fetchTimelineTickets, handleTicketClick, handleSubmitClick, onSubmitTicket])
 
   return (
     <DashboardGrid
@@ -184,12 +192,55 @@ function ClientDashboard() {
     setIsDetailOpen(true)
   }
 
+  // Quick stats for visual hierarchy
+  const openCount = tickets.filter(t => t.status?.toLowerCase() === 'open').length
+  const inProgressCount = tickets.filter(t => t.status?.toLowerCase().replace(/_/g, ' ') === 'in progress').length
+
+  // Scroll to the Create Ticket widget
+  const createWidgetRef = useRef(null)
+  const scrollToCreate = useCallback(() => {
+    createWidgetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
   return (
     <div className="p-8 bg-gray-950 min-h-screen">
-      <h1 className="text-3xl font-bold text-white mb-2">Client Dashboard</h1>
-      <p className="text-gray-400 mb-6">
-        Submit support tickets and track their status
-      </p>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-white mb-1">Client Dashboard</h1>
+          <p className="text-gray-400">
+            Submit support tickets and track their status
+          </p>
+        </div>
+
+        {/* At-a-glance stats — only shown when user has tickets */}
+        {!isLoading && tickets.length > 0 && (
+          <div className="flex items-center gap-4 text-sm">
+            <div className="flex items-center gap-1.5 text-yellow-400">
+              <span className="w-2 h-2 rounded-full bg-yellow-400" />
+              <span className="font-medium">{openCount}</span>
+              <span className="text-gray-500">Open</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-blue-400">
+              <span className="w-2 h-2 rounded-full bg-blue-400" />
+              <span className="font-medium">{inProgressCount}</span>
+              <span className="text-gray-500">In Progress</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-gray-400">
+              <span className="font-medium">{tickets.length}</span>
+              <span className="text-gray-500">Total</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Guided onboarding banner */}
+      <WelcomeBanner
+        ticketCount={tickets.length}
+        onScrollToCreate={scrollToCreate}
+      />
+
+      {/* Anchor for scroll-to-create */}
+      <div ref={createWidgetRef} />
 
       {/* Widget Grid */}
       <ClientWidgetGrid
@@ -201,6 +252,7 @@ function ClientDashboard() {
         fetchTimelineTickets={fetchTimelineTickets}
         handleTicketClick={handleTicketClick}
         handleSubmitClick={() => setIsModalOpen(true)}
+        onSubmitTicket={handleSubmit}
       />
 
       {/* Ticket Submission Modal */}

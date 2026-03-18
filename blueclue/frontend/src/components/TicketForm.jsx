@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import LoadingSpinner from './LoadingSpinner'
-import TemplateSelector from './TemplateSelector'
+import TemplateBrowser from './TemplateBrowser'
 import { recordTemplateUsage } from '../services/templateService'
 import { suggestArticles } from '../services/chatService'
 import ArticleSuggestionCard from './ArticleSuggestionCard'
@@ -21,7 +22,7 @@ const DESCRIPTION_MAX = 2000
 const MAX_IMAGES = 5
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024 // 5 MB
 
-function TicketForm({ onSubmit }) {
+function TicketForm({ onSubmit, formId }) {
   // Form data state
   const [formData, setFormData] = useState({
     title: '',
@@ -34,6 +35,10 @@ function TicketForm({ onSubmit }) {
 
   // Loading state
   const [isLoading, setIsLoading] = useState(false)
+
+  // Confirmation modal state
+  const [showConfirm, setShowConfirm] = useState(false)
+  const pendingSubmit = useRef(null)
 
   // Toast notifications
   const toast = useToast()
@@ -64,6 +69,9 @@ function TicketForm({ onSubmit }) {
   const [suggestionDismissed, setSuggestionDismissed] = useState(false)
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false)
   const suggestionTimerRef = useRef(null)
+
+  // Template browser modal open state
+  const [isTemplateBrowserOpen, setIsTemplateBrowserOpen] = useState(false)
 
   // Description display mode: 'edit' | 'preview'
   const [descriptionMode, setDescriptionMode] = useState('edit')
@@ -312,6 +320,13 @@ function TicketForm({ onSubmit }) {
       return // Don't submit if validation fails
     }
 
+    // Show confirmation modal
+    setShowConfirm(true)
+  }
+
+  // Actually submit after confirmation
+  const confirmSubmit = async () => {
+    setShowConfirm(false)
     setIsLoading(true)
 
     try {
@@ -350,13 +365,26 @@ function TicketForm({ onSubmit }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Template Selector */}
+    <form id={formId} onSubmit={handleSubmit} className="space-y-6">
+      {/* Template Browser */}
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-1">
           Quick Start
         </label>
-        <TemplateSelector
+        <button
+          type="button"
+          onClick={() => setIsTemplateBrowserOpen(true)}
+          disabled={isLoading}
+          className="w-full px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-left text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-colors"
+        >
+          <svg className="w-5 h-5 text-blue-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <span className="text-gray-300">Browse Templates</span>
+        </button>
+        <TemplateBrowser
+          isOpen={isTemplateBrowserOpen}
+          onClose={() => setIsTemplateBrowserOpen(false)}
           onTemplateSelect={handleTemplateSelect}
           disabled={isLoading}
         />
@@ -630,7 +658,8 @@ function TicketForm({ onSubmit }) {
           htmlFor="priority"
           className="block text-sm font-medium text-gray-300 mb-1"
         >
-          Priority <span className="text-gray-500 text-xs">(optional - AI will suggest if not selected)</span>
+          Priority <span className="text-gray-500 text-xs">(please select priority below)</span>
+          <span className="block text-gray-500 text-xs mt-0.5">Optional, if not selected AI will determine for you</span>
         </label>
         <select
           id="priority"
@@ -687,6 +716,36 @@ function TicketForm({ onSubmit }) {
           'Submit Ticket'
         )}
       </button>
+
+      {/* Confirmation modal */}
+      {showConfirm && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4 text-center">
+            <svg className="w-12 h-12 text-blue-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h3 className="text-lg font-semibold text-white mb-2">Submit this ticket?</h3>
+            <p className="text-sm text-gray-400 mb-6">Are you sure you want to submit this ticket? This action cannot be undone.</p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowConfirm(false)}
+                className="px-5 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmSubmit}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
+              >
+                Yes, Submit
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </form>
   )
 }

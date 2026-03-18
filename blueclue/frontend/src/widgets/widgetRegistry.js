@@ -338,6 +338,21 @@ const WIDGET_REGISTRY = [
   },
   // ── Client-specific widgets ──────────────────────────────────────────────
   {
+    key: 'createTicket',
+    name: 'Create a Ticket',
+    description: 'Submit a new support ticket directly from the dashboard',
+    icon: '✏️',
+    category: CATEGORIES.TICKETS,
+    permissions: ROLE_GROUPS.ALL,
+    size: {
+      defaultW: 12, defaultH: 10,
+      minW: 6, minH: 6,
+      maxW: 12, maxH: 18,
+    },
+    component: () => import('../components/CreateTicketWidget'),
+    previewPattern: 'card-grid',
+  },
+  {
     key: 'clientTickets',
     name: 'My Tickets',
     description: 'Your submitted tickets with status tracking',
