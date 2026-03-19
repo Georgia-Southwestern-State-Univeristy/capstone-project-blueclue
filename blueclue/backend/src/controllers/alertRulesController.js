@@ -5,6 +5,11 @@
 // Admin-only access
 
 import pool from '../config/database.js';
+import {
+    BadRequestError,
+    NotFoundError,
+    InternalServerError
+} from '../middleware/errorHandler.js';
 
 /**
  * GET /api/admin/alert-rules
@@ -34,11 +39,9 @@ export const getAllAlertRules = async (req, res) => {
             rules: result.rows
         });
     } catch (error) {
+        if (error.statusCode) throw error;
         console.error('Error fetching alert rules:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch alert rules'
-        });
+        throw new InternalServerError('Failed to fetch alert rules');
     }
 };
 
@@ -56,10 +59,7 @@ export const getAlertRuleById = async (req, res) => {
         );
 
         if (result.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Alert rule not found'
-            });
+            throw new NotFoundError('Alert rule not found');
         }
 
         res.json({
@@ -67,11 +67,9 @@ export const getAlertRuleById = async (req, res) => {
             rule: result.rows[0]
         });
     } catch (error) {
+        if (error.statusCode) throw error;
         console.error('Error fetching alert rule:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch alert rule'
-        });
+        throw new InternalServerError('Failed to fetch alert rule');
     }
 };
 
@@ -86,18 +84,12 @@ export const createAlertRule = async (req, res) => {
 
         // Validation
         if (!rule_name || !rule_type || !severity || !parameters) {
-            return res.status(400).json({
-                success: false,
-                message: 'Missing required fields: rule_name, rule_type, severity, parameters'
-            });
+            throw new BadRequestError('Missing required fields: rule_name, rule_type, severity, parameters');
         }
 
         const validSeverities = ['low', 'medium', 'high', 'critical'];
         if (!validSeverities.includes(severity)) {
-            return res.status(400).json({
-                success: false,
-                message: `Invalid severity. Must be one of: ${validSeverities.join(', ')}`
-            });
+            throw new BadRequestError(`Invalid severity. Must be one of: ${validSeverities.join(', ')}`);
         }
 
         // Insert the new rule
@@ -115,11 +107,9 @@ export const createAlertRule = async (req, res) => {
             rule: result.rows[0]
         });
     } catch (error) {
+        if (error.statusCode) throw error;
         console.error('Error creating alert rule:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to create alert rule'
-        });
+        throw new InternalServerError('Failed to create alert rule');
     }
 };
 
@@ -140,20 +130,14 @@ export const updateAlertRule = async (req, res) => {
         );
 
         if (existing.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Alert rule not found'
-            });
+            throw new NotFoundError('Alert rule not found');
         }
 
         // Validate severity if provided
         if (severity) {
             const validSeverities = ['low', 'medium', 'high', 'critical'];
             if (!validSeverities.includes(severity)) {
-                return res.status(400).json({
-                    success: false,
-                    message: `Invalid severity. Must be one of: ${validSeverities.join(', ')}`
-                });
+                throw new BadRequestError(`Invalid severity. Must be one of: ${validSeverities.join(', ')}`);
             }
         }
 
@@ -208,11 +192,9 @@ export const updateAlertRule = async (req, res) => {
             rule: result.rows[0]
         });
     } catch (error) {
+        if (error.statusCode) throw error;
         console.error('Error updating alert rule:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to update alert rule'
-        });
+        throw new InternalServerError('Failed to update alert rule');
     }
 };
 
@@ -231,10 +213,7 @@ export const deleteAlertRule = async (req, res) => {
         );
 
         if (existing.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Alert rule not found'
-            });
+            throw new NotFoundError('Alert rule not found');
         }
 
         // Delete the rule
@@ -248,11 +227,9 @@ export const deleteAlertRule = async (req, res) => {
             message: `Alert rule "${existing.rows[0].rule_name}" deleted successfully`
         });
     } catch (error) {
+        if (error.statusCode) throw error;
         console.error('Error deleting alert rule:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to delete alert rule'
-        });
+        throw new InternalServerError('Failed to delete alert rule');
     }
 };
 
@@ -275,10 +252,7 @@ export const toggleAlertRule = async (req, res) => {
         );
 
         if (result.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Alert rule not found'
-            });
+            throw new NotFoundError('Alert rule not found');
         }
 
         const rule = result.rows[0];
@@ -288,11 +262,9 @@ export const toggleAlertRule = async (req, res) => {
             rule
         });
     } catch (error) {
+        if (error.statusCode) throw error;
         console.error('Error toggling alert rule:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to toggle alert rule'
-        });
+        throw new InternalServerError('Failed to toggle alert rule');
     }
 };
 
