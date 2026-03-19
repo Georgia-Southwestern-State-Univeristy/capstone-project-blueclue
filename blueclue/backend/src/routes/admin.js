@@ -26,6 +26,23 @@ router.use(authenticateToken);
  */
 router.get('/audit-health', checkRole('management', 'admin'), adminController.getAuditLogHealth);
 
+// ==================== Technician Management (Management + Admin) ====================
+
+/**
+ * POST /api/admin/technicians
+ * Create a new technician account
+ * Body: { firstName, lastName, email, role }
+ * Accessible to: management, admin
+ */
+router.post('/technicians', checkRole('management', 'admin'), adminController.createTechnician);
+
+/**
+ * GET /api/admin/technicians
+ * Get list of all technicians/staff
+ * Accessible to: management, admin
+ */
+router.get('/technicians', checkRole('management', 'admin'), adminController.getTechnicians);
+
 // All remaining /api/admin routes require admin
 router.use(checkRole('admin'));
 
