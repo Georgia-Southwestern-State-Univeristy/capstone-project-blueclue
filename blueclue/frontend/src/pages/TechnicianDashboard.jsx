@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useToast } from '../hooks/useToast'
+import { useAvailableWidgets } from '../hooks/useAvailableWidgets'
 import DonutChart from '../components/DonutChart'
 import TicketTimeline from '../components/TicketTimeline'
 import PieChart from '../components/PieChart'
@@ -55,8 +56,6 @@ const TECHNICIAN_WIDGET_KEYS = [
   'ticketQueue', 'availableTickets', 'ringRequests', 'chatPanel', 'createTicket',
 ]
 
-const WIDGET_GALLERY_ITEMS = buildGalleryItems({ keys: TECHNICIAN_WIDGET_KEYS })
-
 /**
  * TechnicianWidgetGrid — drag-and-drop widget grid for the technician dashboard
  */
@@ -68,6 +67,15 @@ function TechnicianWidgetGrid({
   includeCancelled, stats, donutSegments, prioritySegments,
   onSubmitTicket,
 }) {
+  // Fetch widgets available to the current user based on their role
+  const { widgets: availableWidgets } = useAvailableWidgets(TECHNICIAN_WIDGET_KEYS);
+  
+  // Build gallery items from available widgets
+  const galleryItems = useMemo(() => {
+    const availableKeys = availableWidgets.map(w => w.key);
+    return buildGalleryItems({ keys: availableKeys });
+  }, [availableWidgets]);
+
   const {
     layouts, isEditMode, editModeToggledRef, onLayoutChange,
     resetLayout, toggleEditMode, hiddenWidgets, addWidget, removeWidget,
@@ -119,7 +127,7 @@ function TechnicianWidgetGrid({
       resetLayout={resetLayout}
       widgetConfig={widgetConfig}
       rowHeight={60}
-      galleryItems={WIDGET_GALLERY_ITEMS}
+      galleryItems={galleryItems}
       hiddenWidgets={hiddenWidgets}
       onAddWidget={addWidget}
       onRemoveWidget={removeWidget}
