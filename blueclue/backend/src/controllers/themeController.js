@@ -1,12 +1,13 @@
 ﻿// src/controllers/themeController.js
 import UserThemePreference from '../models/UserThemePreference.js';
-import { BadRequestError, NotFoundError } from '../middleware/errorHandler.js';
+import { BadRequestError, NotFoundError, InternalServerError } from '../middleware/errorHandler.js';
 
 /**
  * Get the authenticated user's theme preferences
  * GET /api/themes
  */
 export const getThemePreferences = async (req, res) => {
+  try {
     const userId = req.user.id;
     const pref = await UserThemePreference.getByUserId(userId);
 
@@ -20,6 +21,10 @@ export const getThemePreferences = async (req, res) => {
         savedThemes: pref.saved_themes || [],
       },
     });
+  } catch (error) {
+    if (error.statusCode) throw error;
+    throw new InternalServerError('Failed to fetch theme preferences');
+  }
 };
 
 /**
@@ -27,6 +32,7 @@ export const getThemePreferences = async (req, res) => {
  * PUT /api/themes
  */
 export const updateThemePreferences = async (req, res) => {
+  try {
     const userId = req.user.id;
     const { theme, accent, customOverride, customSlots } = req.body;
 
@@ -58,6 +64,10 @@ export const updateThemePreferences = async (req, res) => {
         savedThemes: pref.saved_themes || [],
       },
     });
+  } catch (error) {
+    if (error.statusCode) throw error;
+    throw new InternalServerError('Failed to update theme preferences');
+  }
 };
 
 /**
@@ -65,6 +75,7 @@ export const updateThemePreferences = async (req, res) => {
  * POST /api/themes/saved
  */
 export const saveTheme = async (req, res) => {
+  try {
     const userId = req.user.id;
     const { name, theme, accent, customOverride, customSlots } = req.body;
 
@@ -84,6 +95,10 @@ export const saveTheme = async (req, res) => {
       message: 'Theme saved',
       data: { savedThemes: pref.saved_themes || [] },
     });
+  } catch (error) {
+    if (error.statusCode) throw error;
+    throw new InternalServerError('Failed to save theme');
+  }
 };
 
 /**
@@ -91,6 +106,7 @@ export const saveTheme = async (req, res) => {
  * DELETE /api/themes/saved/:id
  */
 export const deleteSavedTheme = async (req, res) => {
+  try {
     const userId = req.user.id;
     const themeId = parseInt(req.params.id);
 
@@ -108,6 +124,10 @@ export const deleteSavedTheme = async (req, res) => {
       message: 'Saved theme deleted',
       data: { savedThemes: pref.saved_themes || [] },
     });
+  } catch (error) {
+    if (error.statusCode) throw error;
+    throw new InternalServerError('Failed to delete saved theme');
+  }
 };
 
 /**
@@ -115,6 +135,7 @@ export const deleteSavedTheme = async (req, res) => {
  * PATCH /api/themes/saved/:id
  */
 export const renameSavedTheme = async (req, res) => {
+  try {
     const userId = req.user.id;
     const themeId = parseInt(req.params.id);
     const { name } = req.body;
@@ -133,4 +154,8 @@ export const renameSavedTheme = async (req, res) => {
       message: 'Saved theme renamed',
       data: { savedThemes: pref.saved_themes || [] },
     });
+  } catch (error) {
+    if (error.statusCode) throw error;
+    throw new InternalServerError('Failed to rename saved theme');
+  }
 };
