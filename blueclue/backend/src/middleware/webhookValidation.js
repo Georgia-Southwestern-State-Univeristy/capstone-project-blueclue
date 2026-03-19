@@ -7,7 +7,7 @@ import crypto from 'crypto';
 import {
     AppError,
     BadRequestError,
-    UnauthorizedError,
+    ForbiddenError,
     InternalServerError
 } from './errorHandler.js';
 
@@ -22,12 +22,6 @@ import {
  * @see https://documentation.mailgun.com/en/latest/user_manual.html#securing-webhooks
  */
 export const validateMailgunSignature = (req, res, next) => {
-    // Skip validation in development if signing key not configured
-    if (process.env.NODE_ENV === 'development' && !process.env.MAILGUN_WEBHOOK_SIGNING_KEY) {
-        console.warn('⚠️  Mailgun signature validation SKIPPED (development mode, no signing key configured)');
-        return next();
-    }
-
     const signingKey = process.env.MAILGUN_WEBHOOK_SIGNING_KEY;
 
     if (!signingKey) {
@@ -55,7 +49,7 @@ export const validateMailgunSignature = (req, res, next) => {
         if (!timestamp || !token || !signature) {
             console.error('❌ Missing signature fields in webhook');
             console.error('   Body structure:', JSON.stringify(req.body, null, 2).substring(0, 500));
-            return next(new UnauthorizedError('Invalid webhook signature format'));
+            return next(new ForbiddenError('Invalid webhook signature format'));
         }
 
         // Verify signature using HMAC-SHA256
@@ -69,16 +63,22 @@ export const validateMailgunSignature = (req, res, next) => {
             console.error('❌ Invalid webhook signature');
             console.error(`   Expected: ${calculatedSignature}`);
             console.error(`   Received: ${signature}`);
-            return next(new UnauthorizedError('Invalid webhook signature'));
+            return next(new ForbiddenError('Invalid webhook signature'));
         }
 
         // Check timestamp to prevent replay attacks (allow 5 minute window)
+        const parsedTimestamp = parseInt(timestamp);
+        if (isNaN(parsedTimestamp)) {
+            console.error('❌ Invalid timestamp format');
+            return next(new ForbiddenError('Invalid webhook timestamp format'));
+        }
+
         const currentTimestamp = Math.floor(Date.now() / 1000);
-        const timestampAge = currentTimestamp - parseInt(timestamp);
+        const timestampAge = currentTimestamp - parsedTimestamp;
         
         if (timestampAge > 300) { // 5 minutes
             console.error(`❌ Webhook timestamp too old: ${timestampAge}s`);
-            return next(new UnauthorizedError('Webhook timestamp expired'));
+            return next(new ForbiddenError('Webhook timestamp expired'));
         }
 
         console.log('✅ Mailgun webhook signature validated');
