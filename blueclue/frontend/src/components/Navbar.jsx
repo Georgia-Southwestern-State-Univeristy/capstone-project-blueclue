@@ -538,6 +538,13 @@ function Navbar() {
                             Templates
                           </Link>
                           <Link
+                            to="/technician-management"
+                            onClick={() => setToolsDropdownOpen(false)}
+                            className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
+                          >
+                            Technician Management
+                          </Link>
+                          <Link
                             to="/ml-admin"
                             onClick={() => setToolsDropdownOpen(false)}
                             className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors"
