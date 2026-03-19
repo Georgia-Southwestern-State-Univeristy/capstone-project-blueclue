@@ -1,0 +1,428 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BlueClue — Backend Architecture</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a1f2e 100%);
+      color: #e2e8f0;
+      padding: 30px 20px 50px;
+      min-height: 100vh;
+    }
+
+    .title-area { text-align: center; margin-bottom: 32px; }
+    .title-area h1 {
+      font-size: 1.6rem; font-weight: 800; margin-bottom: 8px;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa, #f472b6);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      letter-spacing: -0.5px;
+    }
+    .title-area p { font-size: 0.78rem; color: #64748b; letter-spacing: 0.3px; }
+
+    .diagram { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+
+    /* Flow arrow */
+    .fa { display: flex; justify-content: center; align-items: center; height: 28px; position: relative; }
+    .fa::before {
+      content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 2px; height: 100%; background: linear-gradient(to bottom, #1e293b, #334155);
+    }
+    .fa::after {
+      content: '▼'; font-size: 0.6rem; color: #475569;
+      background: #0f1117; padding: 0 4px; position: relative; z-index: 1;
+    }
+
+    /* Entry */
+    .entry {
+      align-self: center;
+      background: linear-gradient(135deg, #1e3a5f 0%, #1e3a8a 100%);
+      border: 1px solid #3b82f6;
+      border-radius: 50px;
+      padding: 14px 44px;
+      text-align: center;
+      box-shadow: 0 0 28px rgba(59,130,246,0.3);
+    }
+    .entry .elabel { font-size: 1rem; font-weight: 700; color: #fff; }
+    .entry .emethods { font-size: 0.7rem; color: #93c5fd; margin-top: 4px; letter-spacing: 1.5px; }
+
+    /* Generic layer */
+    .layer { border-radius: 12px; overflow: hidden; border: 1px solid transparent; }
+    .lhd {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 16px; font-size: 0.67rem; font-weight: 700;
+      letter-spacing: 1.2px; text-transform: uppercase;
+    }
+    .lbd { padding: 14px 16px; }
+
+    /* Middleware */
+    .mw { background: #110e00; border-color: #78350f; box-shadow: 0 2px 16px rgba(245,158,11,0.1); }
+    .mw .lhd { background: linear-gradient(90deg, #78350f, #92400e); color: #fef3c7; }
+    .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #1c1500; border: 1px solid #78350f;
+      border-radius: 6px; padding: 5px 10px;
+    }
+    .chip .dot { width: 6px; height: 6px; border-radius: 50%; background: #f59e0b; flex-shrink: 0; }
+    .chip .cn { font-size: 0.72rem; color: #fde68a; font-weight: 600; }
+    .chip .cd { font-size: 0.63rem; color: #92400e; }
+
+    /* Routes */
+    .rt { background: #130710; border-color: #9d174d; box-shadow: 0 2px 16px rgba(219,39,119,0.1); }
+    .rt .lhd { background: linear-gradient(90deg, #831843, #9d174d); color: #fce7f3; }
+    .rtg { display: grid; grid-template-columns: repeat(4,1fr); gap: 7px; }
+    .rb {
+      background: #1e0717; border: 1px solid #9d174d;
+      border-radius: 8px; padding: 8px 6px; text-align: center;
+    }
+    .rb .rp { font-size: 0.67rem; font-weight: 700; color: #f9a8d4; line-height: 1.4; }
+    .rb .rf { font-size: 0.58rem; color: #6b2050; margin-top: 3px; }
+
+    /* Controllers */
+    .ct { background: #060f09; border-color: #166534; box-shadow: 0 2px 16px rgba(22,163,74,0.08); }
+    .ct .lhd { background: linear-gradient(90deg, #14532d, #166534); color: #dcfce7; }
+    .ctg { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; }
+    .cc {
+      background: #091510; border: 1px solid #166534;
+      border-radius: 8px; padding: 10px 8px;
+    }
+    .cc .cn { font-size: 0.66rem; font-weight: 700; color: #4ade80; margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid #14532d; }
+    .cc .cm span { display: block; font-size: 0.59rem; color: #86efac; line-height: 1.65; }
+    .cc .cm span::before { content: '· '; color: #166534; }
+
+    /* Processing zone */
+    .pzone { border: 1px solid #1e293b; border-radius: 14px; background: #0d1420; overflow: hidden; }
+    .pz-hd {
+      background: linear-gradient(90deg, #0f172a, #1e293b);
+      padding: 9px 16px; border-bottom: 1px solid #1e293b;
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 1.2px;
+      text-transform: uppercase; color: #64748b;
+    }
+    .pz-body { display: grid; grid-template-columns: 1fr 1fr 0.72fr; }
+    .pz-col { padding: 14px 12px; }
+    .pz-col + .pz-col { border-left: 1px solid #1e293b; }
+    .pz-col-hd { font-size: 0.63rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #1e293b; }
+
+    /* Services */
+    .col-svc .pz-col-hd { color: #a78bfa; border-bottom-color: #2e1065; }
+    .si {
+      background: #140d2e; border: 1px solid #3b1f7a;
+      border-left: 3px solid #7c3aed; border-radius: 6px;
+      padding: 7px 9px; margin-bottom: 6px;
+    }
+    .si:last-child { margin-bottom: 0; }
+    .si .sn { font-size: 0.67rem; font-weight: 700; color: #c4b5fd; }
+    .si .sm { font-size: 0.59rem; color: #6d5da8; margin-top: 3px; line-height: 1.5; }
+
+    /* Models */
+    .col-mdl .pz-col-hd { color: #f87171; border-bottom-color: #4c1516; }
+    .mg { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+    .mi {
+      background: #170808; border: 1px solid #7f1d1d;
+      border-top: 2px solid #dc2626; border-radius: 6px; padding: 6px 8px;
+    }
+    .mi .mn { font-size: 0.63rem; font-weight: 700; color: #fca5a5; }
+    .mi .mm { font-size: 0.56rem; color: #7f3c3c; margin-top: 2px; line-height: 1.5; }
+
+    /* External */
+    .col-ext .pz-col-hd { color: #64748b; }
+    .ei {
+      border-radius: 8px; padding: 9px 10px; margin-bottom: 6px;
+      border: 1.5px dashed #334155;
+    }
+    .ei:last-child { margin-bottom: 0; }
+    .ei .en { font-size: 0.68rem; font-weight: 700; }
+    .ei .es { font-size: 0.58rem; margin-top: 3px; line-height: 1.55; }
+    .ext-ai { background: #0d0620; border-color: #5b21b6; }
+    .ext-ai .en { color: #c4b5fd; }
+    .ext-ai .es { color: #5b21b6; }
+    .ext-mail { background: #021218; border-color: #164e63; }
+    .ext-mail .en { color: #22d3ee; }
+    .ext-mail .es { color: #155e75; }
+    .ext-sock { background: #04071a; border-color: #1e3a8a; }
+    .ext-sock .en { color: #93c5fd; }
+    .ext-sock .es { color: #1e3a8a; }
+
+    /* Jobs */
+    .jobs {
+      background: #110900; border: 1px solid #92400e;
+      border-radius: 10px; padding: 11px 16px;
+      display: flex; align-items: center; gap: 14px;
+    }
+    .jlbl { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #f97316; white-space: nowrap; }
+    .jdiv { width: 1px; height: 28px; background: #78350f; }
+    .jname { font-size: 0.67rem; font-weight: 700; color: #fdba74; margin-bottom: 5px; }
+    .jtags { display: flex; gap: 5px; flex-wrap: wrap; }
+    .jtag {
+      background: #1c0e00; border: 1px solid #92400e;
+      border-radius: 4px; padding: 2px 7px; font-size: 0.6rem; color: #fb923c;
+    }
+
+    /* DB Config */
+    .dbcfg {
+      background: #060e1c; border: 1px solid #1e3a8a;
+      border-radius: 10px; padding: 12px 16px;
+      display: flex; align-items: center; gap: 20px;
+    }
+    .dc { flex: 1; }
+    .dc .dt { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #3b82f6; margin-bottom: 4px; }
+    .dc .dv { font-size: 0.68rem; color: #60a5fa; line-height: 1.6; }
+    .ddiv { width: 1px; align-self: stretch; background: #1e3a8a; }
+
+    /* Database */
+    .db {
+      background: #100c00; border: 2px solid #b45309;
+      border-radius: 12px; overflow: hidden;
+      box-shadow: 0 0 24px rgba(202,138,4,0.14);
+    }
+    .db-hd {
+      background: linear-gradient(90deg, #78350f, #92400e);
+      padding: 10px 16px; font-size: 0.72rem; font-weight: 700; color: #fef9c3;
+    }
+    .db-bd { padding: 14px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .dg-t { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #d97706; margin-bottom: 5px; }
+    .tpills { display: flex; flex-wrap: wrap; gap: 4px; }
+    .tp {
+      background: #1c1100; border: 1px solid #78350f;
+      border-radius: 4px; padding: 2px 7px; font-size: 0.59rem; color: #fde68a;
+      font-family: 'Consolas', monospace;
+    }
+
+    /* Bottom */
+    .bot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .resp {
+      background: #060f09; border: 1px solid #166534;
+      border-radius: 10px; padding: 12px 16px; text-align: center;
+    }
+    .resp .rl { font-size: 0.75rem; font-weight: 700; color: #4ade80; margin-bottom: 8px; }
+    .codes { display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; }
+    .code { font-size: 0.62rem; font-weight: 700; padding: 3px 7px; border-radius: 4px; font-family: 'Consolas', monospace; }
+    .c2 { background: #14532d; color: #4ade80; }
+    .c4 { background: #7c2d12; color: #fca5a5; }
+    .c5 { background: #3b0764; color: #d8b4fe; }
+    .cli {
+      background: #04071a; border: 1px solid #1d4ed8;
+      border-radius: 10px; padding: 12px 16px; text-align: center;
+    }
+    .cli .cl { font-size: 0.75rem; font-weight: 700; color: #60a5fa; margin-bottom: 4px; }
+    .cli .cs { font-size: 0.68rem; color: #3b82f6; }
+    .cli .cws { font-size: 0.62rem; color: #1d4ed8; margin-top: 6px; border-top: 1px solid #1e3a8a; padding-top: 6px; }
+  </style>
+</head>
+<body>
+
+<div class="title-area">
+  <h1>BlueClue — Backend Architecture</h1>
+  <p>Node.js / Express &nbsp;·&nbsp; PostgreSQL &nbsp;·&nbsp; Socket.IO &nbsp;·&nbsp; Python AI Service &nbsp;·&nbsp; Mailgun</p>
+</div>
+
+<div class="diagram">
+
+  <div class="entry">
+    <div class="elabel">Incoming HTTP Request</div>
+    <div class="emethods">GET &nbsp;&nbsp;POST &nbsp;&nbsp;PUT &nbsp;&nbsp;PATCH &nbsp;&nbsp;DELETE</div>
+  </div>
+
+  <div class="fa"></div>
+
+  <div class="layer mw">
+    <div class="lhd">🛡 Middleware Stack</div>
+    <div class="lbd">
+      <div class="chips">
+        <div class="chip"><span class="dot"></span><span class="cn">helmet</span><span class="cd">Security Headers</span></div>
+        <div class="chip"><span class="dot"></span><span class="cn">cors</span><span class="cd">Cross-Origin Control</span></div>
+        <div class="chip"><span class="dot"></span><span class="cn">morgan</span><span class="cd">Request Logging</span></div>
+        <div class="chip"><span class="dot"></span><span class="cn">express.json</span><span class="cd">Body Parser · 50 MB</span></div>
+        <div class="chip"><span class="dot"></span><span class="cn">cookieParser</span><span class="cd">Session Cookies</span></div>
+        <div class="chip"><span class="dot"></span><span class="cn">authenticateToken</span><span class="cd">JWT Validation</span></div>
+        <div class="chip"><span class="dot"></span><span class="cn">requireRole</span><span class="cd">Role Enforcement</span></div>
+        <div class="chip"><span class="dot"></span><span class="cn">checkPrivilege</span><span class="cd">RBAC</span></div>
+        <div class="chip"><span class="dot"></span><span class="cn">rateLimiter</span><span class="cd">Rate Limiting</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fa"></div>
+
+  <div class="layer rt">
+    <div class="lhd">🔀 Routes Layer &nbsp;·&nbsp; src/routes/</div>
+    <div class="lbd">
+      <div class="rtg">
+        <div class="rb"><div class="rp">/api/auth/*</div><div class="rf">auth.js</div></div>
+        <div class="rb"><div class="rp">/api/tickets/*</div><div class="rf">tickets.js</div></div>
+        <div class="rb"><div class="rp">/api/chat/*</div><div class="rf">chat.js</div></div>
+        <div class="rb"><div class="rp">/api/analytics/*</div><div class="rf">analytics.js</div></div>
+        <div class="rb"><div class="rp">/api/notifications/*</div><div class="rf">notifications.js</div></div>
+        <div class="rb"><div class="rp">/api/knowledge-base/*</div><div class="rf">knowledgeBase.js</div></div>
+        <div class="rb"><div class="rp">/api/webhooks/*</div><div class="rf">webhooks.js</div></div>
+        <div class="rb"><div class="rp">/api/admin/*</div><div class="rf">admin.js</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fa"></div>
+
+  <div class="layer ct">
+    <div class="lhd">⚙️ Controllers Layer &nbsp;·&nbsp; src/controllers/</div>
+    <div class="lbd">
+      <div class="ctg">
+        <div class="cc">
+          <div class="cn">authController</div>
+          <div class="cm">
+            <span>login, register</span><span>logout, refreshToken</span>
+            <span>verifyEmail</span><span>changePassword</span>
+          </div>
+        </div>
+        <div class="cc">
+          <div class="cn">ticketController</div>
+          <div class="cm">
+            <span>create, getAll, getById</span><span>update, delete</span>
+            <span>assign, bulkAssign</span><span>cancel, reopen</span>
+          </div>
+        </div>
+        <div class="cc">
+          <div class="cn">chatController</div>
+          <div class="cm">
+            <span>sendMessage</span><span>getHistory</span>
+            <span>getConversations</span><span>submitFeedback</span>
+          </div>
+        </div>
+        <div class="cc">
+          <div class="cn">collaboratorCtrl</div>
+          <div class="cm">
+            <span>addCollaborator</span><span>removeCollaborator</span>
+            <span>transferPrimary</span><span>getWorkload</span>
+          </div>
+        </div>
+        <div class="cc">
+          <div class="cn">analyticsCtrl</div>
+          <div class="cm">
+            <span>ticketStats</span><span>userMetrics</span>
+            <span>categoryBreakdown</span><span>adhocQuery</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fa"></div>
+
+  <div class="pzone">
+    <div class="pz-hd">⚡ Business Logic Processing</div>
+    <div class="pz-body">
+      <div class="pz-col col-svc">
+        <div class="pz-col-hd">Services · src/services/</div>
+        <div class="si"><div class="sn">aiService.js</div><div class="sm">classifyTicket · checkHealth · 5s timeout</div></div>
+        <div class="si"><div class="sn">chatService.js</div><div class="sm">recognizeIntent · generateResponse · processChatMessage</div></div>
+        <div class="si"><div class="sn">emailService.js</div><div class="sm">sendVerification · sendConfirmation · sendStatusUpdate</div></div>
+        <div class="si"><div class="sn">socketService.js</div><div class="sm">initHandlers · broadcastUpdate · notifyAssignment</div></div>
+      </div>
+      <div class="pz-col col-mdl">
+        <div class="pz-col-hd">Models · src/models/</div>
+        <div class="mg">
+          <div class="mi"><div class="mn">Ticket.js</div><div class="mm">create · getAll · update · delete</div></div>
+          <div class="mi"><div class="mn">User.js</div><div class="mm">create · getByEmail · authenticate</div></div>
+          <div class="mi"><div class="mn">ChatConversation</div><div class="mm">create · getById · end · linkTicket</div></div>
+          <div class="mi"><div class="mn">ChatMessage</div><div class="mm">create · getByConvo · getIntentStats</div></div>
+          <div class="mi"><div class="mn">Notification</div><div class="mm">create · getByUser · markRead</div></div>
+          <div class="mi"><div class="mn">TicketHistory</div><div class="mm">logChange · getRecentActivity</div></div>
+        </div>
+      </div>
+      <div class="pz-col col-ext">
+        <div class="pz-col-hd">External Integrations</div>
+        <div class="ei ext-ai"><div class="en">🤖 AI Classifier</div><div class="es">Python / Flask · Port 5000<br>HTTP · 5s timeout · classify endpoint</div></div>
+        <div class="ei ext-mail"><div class="en">📧 Mailgun API</div><div class="es">Transactional Email<br>SMTP · REST · Webhook ingest</div></div>
+        <div class="ei ext-sock"><div class="en">⚡ Socket.IO Server</div><div class="es">Real-time WebSocket<br>Bidirectional · ws://localhost:3000</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fa"></div>
+
+  <div class="jobs">
+    <div class="jlbl">⏱ CRON Jobs</div>
+    <div class="jdiv"></div>
+    <div style="flex:1">
+      <div class="jname">src/jobs/updateRequestReminders.js</div>
+      <div class="jtags">
+        <span class="jtag">Scheduled CRON</span>
+        <span class="jtag">Auto Reminders</span>
+        <span class="jtag">Socket.IO Notify</span>
+        <span class="jtag">Mailgun Emails</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="fa"></div>
+
+  <div class="dbcfg">
+    <div class="dc">
+      <div class="dt">🔌 Connection Config · src/config/database.js</div>
+      <div class="dv">HOST · PORT 5432 · DB_NAME · USER · PASSWORD</div>
+    </div>
+    <div class="ddiv"></div>
+    <div class="dc">
+      <div class="dt">PostgreSQL Connection Pool (pg)</div>
+      <div class="dv">max 20 clients · 30s idle timeout · Parameterized Queries · Transactions</div>
+    </div>
+  </div>
+
+  <div class="fa"></div>
+
+  <div class="db">
+    <div class="db-hd">🗄️ &nbsp;PostgreSQL Database &nbsp;·&nbsp; Port 5432 &nbsp;·&nbsp; 21+ Tables</div>
+    <div class="db-bd">
+      <div>
+        <div class="dg-t">Auth</div>
+        <div class="tpills">
+          <span class="tp">users</span><span class="tp">refresh_tokens</span><span class="tp">email_verification</span>
+        </div>
+      </div>
+      <div>
+        <div class="dg-t">Tickets</div>
+        <div class="tpills">
+          <span class="tp">tickets</span><span class="tp">ticket_history</span><span class="tp">ticket_collaborators</span><span class="tp">ai_classifications</span>
+        </div>
+      </div>
+      <div>
+        <div class="dg-t">Chat</div>
+        <div class="tpills">
+          <span class="tp">chat_conversations</span><span class="tp">chat_messages</span>
+        </div>
+      </div>
+      <div>
+        <div class="dg-t">Support</div>
+        <div class="tpills">
+          <span class="tp">notifications</span><span class="tp">categories</span><span class="tp">knowledge_base_articles</span><span class="tp">audit_logs</span><span class="tp">templates</span><span class="tp">themes</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fa"></div>
+
+  <div class="bot">
+    <div class="resp">
+      <div class="rl">Response Formatting</div>
+      <div class="codes">
+        <span class="code c2">200</span><span class="code c2">201</span>
+        <span class="code c4">400</span><span class="code c4">401</span>
+        <span class="code c4">403</span><span class="code c4">404</span>
+        <span class="code c5">500</span>
+      </div>
+    </div>
+    <div class="cli">
+      <div class="cl">Client Frontend</div>
+      <div class="cs">React + Vite &nbsp;·&nbsp; Port 5173</div>
+      <div class="cws">↕ Real-time events via Socket.IO</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
