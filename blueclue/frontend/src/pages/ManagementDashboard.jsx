@@ -22,6 +22,7 @@ import AuditHealthWidget from '../components/AuditHealthWidget'
 import CreateTicketWidget from '../components/CreateTicketWidget'
 import { getAllTickets, createTicket } from '../services/ticketService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
+import { useAvailableWidgets } from '../hooks/useAvailableWidgets'
 import { buildGalleryItems, buildWidgetConfig } from '../widgets'
 
 // Default grid layouts for management dashboard widgets
@@ -84,9 +85,6 @@ const MANAGEMENT_WIDGET_KEYS = [
   'auditHealth', 'createTicket',
 ]
 
-// Widget metadata for the gallery sidebar — derived from the widget registry
-const WIDGET_GALLERY_ITEMS = buildGalleryItems({ keys: MANAGEMENT_WIDGET_KEYS })
-
 /**
  * ManagementWidgetGrid
  * Renders all dashboard widgets inside a drag-and-drop grid.
@@ -99,6 +97,15 @@ function ManagementWidgetGrid({
   handleTicketClick, pendingRequestsRef,
   onSubmitTicket,
 }) {
+  // Fetch widgets available to the current user based on their role
+  const { widgets: availableWidgets } = useAvailableWidgets(MANAGEMENT_WIDGET_KEYS);
+  
+  // Build gallery items from available widgets
+  const galleryItems = useMemo(() => {
+    const availableKeys = availableWidgets.map(w => w.key);
+    return buildGalleryItems({ keys: availableKeys });
+  }, [availableWidgets]);
+
   const {
     layouts,
     isEditMode,
@@ -236,7 +243,7 @@ function ManagementWidgetGrid({
         resetLayout={resetLayout}
         widgetConfig={widgetConfig}
         rowHeight={60}
-        galleryItems={WIDGET_GALLERY_ITEMS}
+        galleryItems={galleryItems}
         hiddenWidgets={hiddenWidgets}
         onAddWidget={addWidget}
         onRemoveWidget={removeWidget}
