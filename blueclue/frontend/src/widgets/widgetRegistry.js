@@ -56,7 +56,7 @@ const WIDGET_REGISTRY = [
     description: 'Visual timeline of ticket activity and trends over time',
     icon: '',
     category: CATEGORIES.ANALYTICS,
-    permissions: ROLE_GROUPS.ALL,
+    permissions: ROLE_GROUPS.STAFF,
     size: {
       defaultW: 12, defaultH: 8,
       minW: 6, minH: 6,
@@ -173,10 +173,10 @@ const WIDGET_REGISTRY = [
   {
     key: 'techPerformance',
     name: 'Tech Performance',
-    description: 'Technician resolution times and workload metrics',
+    description: 'Technician resolution times and workload metrics (technicians see only their own)',
     icon: '',
     category: CATEGORIES.PERFORMANCE,
-    permissions: ROLE_GROUPS.MANAGERS,
+    permissions: ROLE_GROUPS.STAFF,
     size: {
       defaultW: 12, defaultH: 8,
       minW: 5, minH: 5,
