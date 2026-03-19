@@ -1,49 +1,54 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import TicketSubmissionModal from '../components/TicketSubmissionModal'
 import TicketDetailView from '../components/TicketDetailView'
-import TicketTimeline from '../components/TicketTimeline'
 import ClientTicketListWidget from '../components/ClientTicketListWidget'
 import CreateTicketWidget from '../components/CreateTicketWidget'
 import WelcomeBanner from '../components/WelcomeBanner'
 import DashboardGrid from '../components/DashboardGrid'
 import useDashboardLayout from '../hooks/useDashboardLayout'
+import { useAvailableWidgets } from '../hooks/useAvailableWidgets'
 import { buildGalleryItems, buildWidgetConfig } from '../widgets'
-import { createTicket, getAllTickets, getAllTicketsForTimeline } from '../services/ticketService'
+import { createTicket, getAllTickets } from '../services/ticketService'
 import { getCurrentUser } from '../services/authService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
 import { useToast } from '../hooks/useToast'
 
 // ── Default grid layouts ─────────────────────────────────────────────────────
-const LAYOUT_VERSION = 2
+const LAYOUT_VERSION = 3
 const DEFAULT_LAYOUTS = {
   lg: [
     { i: 'createTicket',   x: 0, y: 0,  w: 12, h: 10, minW: 6,  minH: 6, maxW: 12, maxH: 18 },
-    { i: 'timeline',       x: 0, y: 10, w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
-    { i: 'clientTickets',  x: 0, y: 18, w: 12, h: 12, minW: 6,  minH: 6, maxW: 12, maxH: 20 },
+    { i: 'clientTickets',  x: 0, y: 10, w: 12, h: 12, minW: 6,  minH: 6, maxW: 12, maxH: 20 },
   ],
   md: [
     { i: 'createTicket',   x: 0, y: 0,  w: 12, h: 10, minW: 6,  minH: 6, maxW: 12, maxH: 18 },
-    { i: 'timeline',       x: 0, y: 10, w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
-    { i: 'clientTickets',  x: 0, y: 18, w: 12, h: 12, minW: 6,  minH: 6, maxW: 12, maxH: 20 },
+    { i: 'clientTickets',  x: 0, y: 10, w: 12, h: 12, minW: 6,  minH: 6, maxW: 12, maxH: 20 },
   ],
   sm: [
     { i: 'createTicket',   x: 0, y: 0,  w: 6, h: 10, minW: 3, minH: 6, maxW: 6, maxH: 18 },
-    { i: 'timeline',       x: 0, y: 10, w: 6, h: 8,  minW: 3, minH: 6, maxW: 6, maxH: 16 },
-    { i: 'clientTickets',  x: 0, y: 18, w: 6, h: 12, minW: 3, minH: 6, maxW: 6, maxH: 20 },
+    { i: 'clientTickets',  x: 0, y: 10, w: 6, h: 12, minW: 3, minH: 6, maxW: 6, maxH: 20 },
   ],
 }
 
-const CLIENT_WIDGET_KEYS = ['createTicket', 'timeline', 'clientTickets']
-const WIDGET_GALLERY_ITEMS = buildGalleryItems({ keys: CLIENT_WIDGET_KEYS })
+const CLIENT_WIDGET_KEYS = ['createTicket', 'clientTickets']
 
 /**
  * ClientWidgetGrid — drag-and-drop widget grid for the client dashboard
  */
 function ClientWidgetGrid({
-  tickets, timelineTickets, isLoading, isTimelineLoading,
-  fetchTickets, fetchTimelineTickets,
+  tickets, isLoading,
+  fetchTickets,
   handleTicketClick, handleSubmitClick, onSubmitTicket,
 }) {
+  // Fetch widgets available to the current user based on their role
+  const { widgets: availableWidgets } = useAvailableWidgets(CLIENT_WIDGET_KEYS);
+  
+  // Build gallery items from available widgets
+  const galleryItems = useMemo(() => {
+    const availableKeys = availableWidgets.map(w => w.key);
+    return buildGalleryItems({ keys: availableKeys });
+  }, [availableWidgets]);
+
   const {
     layouts, isEditMode, editModeToggledRef, onLayoutChange,
     resetLayout, toggleEditMode, hiddenWidgets, addWidget, removeWidget,
@@ -55,14 +60,6 @@ function ClientWidgetGrid({
       createTicket: (
         <CreateTicketWidget onSubmit={onSubmitTicket} />
       ),
-      timeline: (
-        <TicketTimeline
-          tickets={timelineTickets}
-          onRefresh={fetchTimelineTickets}
-          isRefreshing={isTimelineLoading}
-          onTicketClick={handleTicketClick}
-        />
-      ),
       clientTickets: (
         <ClientTicketListWidget
           tickets={tickets}
@@ -73,8 +70,7 @@ function ClientWidgetGrid({
       ),
     }
     return buildWidgetConfig(CLIENT_WIDGET_KEYS, componentMap)
-  }, [tickets, timelineTickets, isLoading, isTimelineLoading,
-      fetchTickets, fetchTimelineTickets, handleTicketClick, handleSubmitClick, onSubmitTicket])
+  }, [tickets, isLoading, handleTicketClick, handleSubmitClick, onSubmitTicket])
 
   return (
     <DashboardGrid
@@ -86,7 +82,7 @@ function ClientWidgetGrid({
       resetLayout={resetLayout}
       widgetConfig={widgetConfig}
       rowHeight={60}
-      galleryItems={WIDGET_GALLERY_ITEMS}
+      galleryItems={galleryItems}
       hiddenWidgets={hiddenWidgets}
       onAddWidget={addWidget}
       onRemoveWidget={removeWidget}
@@ -103,9 +99,7 @@ function ClientDashboard() {
   // State management
   const toast = useToast()
   const [tickets, setTickets] = useState([])
-  const [timelineTickets, setTimelineTickets] = useState([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isTimelineLoading, setIsTimelineLoading] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
   const [selectedTicketId, setSelectedTicketId] = useState(null)
@@ -118,7 +112,6 @@ function ClientDashboard() {
     setCurrentUser(user)
 
     fetchTickets()
-    fetchTimelineTickets()
   }, [])
 
   // Fetch all tickets from API
@@ -137,30 +130,11 @@ function ClientDashboard() {
     }
   }
 
-  // Fetch all tickets for timeline (no filtering)
-  const fetchTimelineTickets = async () => {
-    try {
-      setIsTimelineLoading(true)
-      const data = await getAllTicketsForTimeline()
-      const allTickets = Array.isArray(data) ? data : (data.data || data.tickets || [])
-      setTimelineTickets(allTickets)
-    } catch (error) {
-      console.error('Failed to fetch timeline tickets:', error)
-      // Don't show error alert for timeline - just use empty array
-      setTimelineTickets([])
-    } finally {
-      setIsTimelineLoading(false)
-    }
-  }
-
-  // Real-time auto-refresh: stable refs so the socket never reconnects on re-render
+  // Real-time auto-refresh: stable ref so the socket never reconnects on re-render
   const _ticketFetchRef = useRef(null)
-  const _timelineFetchRef = useRef(null)
   _ticketFetchRef.current = fetchTickets
-  _timelineFetchRef.current = fetchTimelineTickets
   const handleTicketChange = useCallback(() => {
     _ticketFetchRef.current?.()
-    _timelineFetchRef.current?.()
   }, [])
   useNotificationSocket(null, null, handleTicketChange)
 
@@ -245,11 +219,8 @@ function ClientDashboard() {
       {/* Widget Grid */}
       <ClientWidgetGrid
         tickets={tickets}
-        timelineTickets={timelineTickets}
         isLoading={isLoading}
-        isTimelineLoading={isTimelineLoading}
         fetchTickets={fetchTickets}
-        fetchTimelineTickets={fetchTimelineTickets}
         handleTicketClick={handleTicketClick}
         handleSubmitClick={() => setIsModalOpen(true)}
         onSubmitTicket={handleSubmit}
