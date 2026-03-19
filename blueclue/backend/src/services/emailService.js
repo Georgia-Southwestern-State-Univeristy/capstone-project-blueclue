@@ -597,6 +597,39 @@ export const isEmailServiceReady = () => {
 };
 
 /**
+ * Send technician invitation email with set-password link
+ * @param {string} email - Technician email
+ * @param {string} firstName - Technician first name
+ * @param {string} tempPassword - Temporary password for first login
+ * @param {string} role - Assigned role (technician, senior_technician, management)
+ * @param {number|null} userId - User ID for logging
+ */
+export const sendTechnicianInvitation = async (email, firstName, tempPassword, role, username, userId = null) => {
+    const loginUrl = `${FRONTEND_URL}/login`;
+    
+    // Format role for display
+    const roleDisplay = role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    
+    return sendTemplateEmail(
+        email,
+        'technician-invitation',
+        {
+            subject: 'Welcome to BlueClue - Set Your Password',
+            firstName,
+            email,
+            username,
+            tempPassword,
+            role: roleDisplay,
+            loginUrl,
+            frontendUrl: FRONTEND_URL
+        },
+        'technician-invitation',
+        userId,
+        { role }
+    );
+};
+
+/**
  * Get email service status
  * @returns {Object} Status information
  */
@@ -631,6 +664,7 @@ export default {
     sendPasswordResetEmail,
     sendCommentNotificationToTech,
     sendCommentNotificationToClient,
+    sendTechnicianInvitation,
     isEmailServiceReady,
     getEmailServiceStatus,
     reinitializeEmailService

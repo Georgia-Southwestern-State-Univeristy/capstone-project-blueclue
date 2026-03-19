@@ -6,10 +6,14 @@
 
 import * as adminService from '../services/adminService.js';
 import pool from '../config/database.js';
+import bcrypt from 'bcrypt';
+import crypto from 'crypto';
+import { sendTechnicianInvitation } from '../services/emailService.js';
 import { 
     BadRequestError, 
   NotFoundError,
-  InternalServerError
+  InternalServerError,
+  ConflictError
 } from '../middleware/errorHandler.js';
 
 /**
@@ -287,6 +291,111 @@ export const getAuditLogHealth = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/admin/technicians
+ * Create a new technician account
+ * Body: { firstName, lastName, email, role }
+ */
+export const createTechnician = async (req, res) => {
+  const { firstName, lastName, email, role } = req.body;
+
+  // Validate required fields
+  if (!firstName || !lastName || !email || !role) {
+    throw new BadRequestError('All fields are required: firstName, lastName, email, role');
+  }
+
+  // Validate role
+  const validRoles = ['technician', 'senior_technician', 'management'];
+  if (!validRoles.includes(role)) {
+    throw new BadRequestError(`Invalid role. Must be one of: ${validRoles.join(', ')}`);
+  }
+
+  // Validate email format
+  const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+  if (!emailRegex.test(email)) {
+    throw new BadRequestError('Invalid email format');
+  }
+
+  // Check if email already exists
+  const existingUser = await pool.query(
+    'SELECT id FROM users WHERE email = $1',
+    [email]
+  );
+
+  if (existingUser.rows.length > 0) {
+    throw new ConflictError('An account with this email already exists');
+  }
+
+  // Generate temporary password (12 characters, alphanumeric)
+  const tempPassword = crypto.randomBytes(8).toString('base64').slice(0, 12).replace(/[+/=]/g, 'x');
+
+  // Hash the temporary password
+  const SALT_ROUNDS = 10;
+  const passwordHash = await bcrypt.hash(tempPassword, SALT_ROUNDS);
+
+  // Generate username from name and random suffix
+  const baseUsername = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`;
+  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+  const username = `${baseUsername}${randomSuffix}`;
+
+  // Create the technician account
+  const result = await pool.query(
+    `INSERT INTO users (
+      email, password_hash, first_name, last_name, username, role,
+      is_active, force_password_change, email_verified
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    RETURNING id, email, first_name, last_name, username, role, created_at`,
+    [email, passwordHash, firstName, lastName, username, role, true, true, true]
+  );
+
+  const newUser = result.rows[0];
+
+  // Send invitation email with temporary password
+  try {
+    await sendTechnicianInvitation(email, firstName, tempPassword, role, username, newUser.id);
+    console.log(`✅ Technician invitation email sent to ${email}`);
+  } catch (emailError) {
+    console.error('❌ Failed to send technician invitation email:', emailError);
+    // Don't fail the request if email fails - account is still created
+  }
+
+  res.status(201).json({
+    status: 'success',
+    message: `Technician account created successfully for ${firstName} ${lastName}`,
+    data: {
+      id: newUser.id,
+      email: newUser.email,
+      firstName: newUser.first_name,
+      lastName: newUser.last_name,
+      username: newUser.username,
+      role: newUser.role,
+      createdAt: newUser.created_at,
+      emailSent: true
+    }
+  });
+};
+
+/**
+ * GET /api/admin/technicians
+ * Get list of all technicians/staff
+ */
+export const getTechnicians = async (req, res) => {
+  const result = await pool.query(
+    `SELECT 
+      id, email, first_name, last_name, username, role, 
+      is_active, created_at, last_login
+     FROM users
+     WHERE role IN ('technician', 'senior_technician', 'management', 'admin')
+     ORDER BY created_at DESC`
+  );
+
+  res.json({
+    status: 'success',
+    data: result.rows,
+    count: result.rows.length
+  });
+};
+
 export default {
   getEmailLogs,
   getEmailLogDetails,
@@ -299,5 +408,7 @@ export default {
   updateSystemSetting,
   getSecurityAlerts,
   resolveSecurityAlert,
-  getAuditLogHealth
+  getAuditLogHealth,
+  createTechnician,
+  getTechnicians
 };

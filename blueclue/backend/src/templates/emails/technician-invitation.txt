@@ -1,0 +1,29 @@
+Welcome to the BlueClue Team!
+
+Hello {{firstName}},
+
+You've been invited to join the BlueClue Support team as a {{role}}.
+
+An account has been created for you. Please use the credentials below to log in and set your permanent password:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LOGIN CREDENTIALS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Username (for login): {{username}}
+Temporary Password: {{tempPassword}}
+
+Email Address: {{email}}
+Role: {{role}}
+
+⚠️ IMPORTANT: For security reasons, you will be required to change your password on first login. Please keep this temporary password secure and do not share it with anyone.
+
+Log in here: {{loginUrl}}
+
+If you have any questions or need assistance, please contact your system administrator.
+
+---
+This is an automated message from BlueClue Support Portal.
+Visit BlueClue: {{frontendUrl}}
+
+© 2026 BlueClue. All rights reserved.

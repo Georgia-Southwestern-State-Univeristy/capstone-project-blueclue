@@ -17,6 +17,7 @@ import FAQSearch from './pages/FAQSearch'
 import TemplateManager from './pages/TemplateManager'
 import MLAdminDashboard from './pages/MLAdminDashboard'
 import ChatAnalyticsDashboard from './pages/ChatAnalyticsDashboard'
+import TechnicianManagement from './pages/TechnicianManagement'
 import Navbar from './components/Navbar'
 import ProtectedRoute from './components/ProtectedRoute'
 import usePageTitle from './hooks/usePageTitle'
@@ -74,6 +75,11 @@ function AppRoutes() {
         <Route path="/template-manager" element={
           <ProtectedRoute allowedRoles={['management', 'admin']}>
             <TemplateManager />
+          </ProtectedRoute>
+        } />
+        <Route path="/technician-management" element={
+          <ProtectedRoute allowedRoles={['management', 'admin']}>
+            <TechnicianManagement />
           </ProtectedRoute>
         } />
         <Route path="/ml-admin" element={
