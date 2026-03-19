@@ -37,7 +37,7 @@ import mlAdminRoutes from './routes/mlAdmin.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 import { startUpdateRequestReminderJob } from './jobs/updateRequestReminders.js';
 import { startChatQualityJob } from './jobs/chatQualityJob.js';
-import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { errorHandler, notFoundHandler, InternalServerError } from './middleware/errorHandler.js';
 import { startAlertDetectionJob } from './jobs/alertDetectionJob.js';
 
 dotenv.config();
@@ -155,11 +155,7 @@ app.get('/api/test-db', async (req, res) => {
         });
     } catch (err) {
         console.error('Database test error:', err);
-        res.status(500).json({
-            status: 'error',
-            message: 'Database connection failed',
-            error: err.message
-        });
+        throw new InternalServerError('Database connection failed');
     }
 });
 

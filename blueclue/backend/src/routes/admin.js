@@ -14,16 +14,20 @@ import * as adminController from '../controllers/adminController.js';
 
 const router = express.Router();
 
-// All routes require authentication and admin role (except where overridden below)
+// All routes require authentication
 router.use(authenticateToken);
-router.use((req, res, next) => {
-  // Skip role check for audit-health - it has its own middleware
-  if (req.path === '/audit-health') {
-    return next();
-  }
-  // All other routes require admin
-  return checkRole('admin')(req, res, next);
-});
+
+// ==================== Audit Health (Management + Admin) ====================
+/**
+ * GET /api/admin/audit-health
+ * Get audit logging health status (login attempts, privilege audit, ticket history)
+ * Returns: { health: [...], overall_healthy: true/false }
+ * Accessible to: management, admin
+ */
+router.get('/audit-health', checkRole('management', 'admin'), adminController.getAuditLogHealth);
+
+// All remaining /api/admin routes require admin
+router.use(checkRole('admin'));
 
 // ==================== OUTBOUND Email Logs (Existing) ====================
 // Email logs routes for confirmation/verification emails
@@ -120,15 +124,7 @@ router.get('/security-alerts', adminController.getSecurityAlerts);
  */
 router.post('/security-alerts/:id/resolve', adminController.resolveSecurityAlert);
 
-// ==================== Audit Health & Alert Rules ====================
-
-/**
- * GET /api/admin/audit-health
- * Get audit logging health status (login attempts, privilege audit, ticket history)
- * Returns: { health: [...], overall_healthy: true/false }
- * Accessible to: management, admin
- */
-router.get('/audit-health', checkRole('management', 'admin'), adminController.getAuditLogHealth);
+// ==================== Alert Rules ====================
 
 /**
  * Alert Rules Management

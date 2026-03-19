@@ -33,10 +33,18 @@ function AuditHealthWidget() {
       })
 
       if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          throw new Error('Unauthorized: Admin access required')
+        let backendMessage = ''
+        try {
+          const errorData = await response.json()
+          backendMessage = errorData?.message || ''
+        } catch {
+          backendMessage = ''
         }
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(backendMessage || 'Unauthorized: management/admin access required')
+        }
+        throw new Error(backendMessage || `HTTP ${response.status}: ${response.statusText}`)
       }
 
       const data = await response.json()

@@ -8,7 +8,8 @@ import * as adminService from '../services/adminService.js';
 import pool from '../config/database.js';
 import { 
     BadRequestError, 
-    NotFoundError 
+  NotFoundError,
+  InternalServerError
 } from '../middleware/errorHandler.js';
 
 /**
@@ -282,11 +283,7 @@ export const getAuditLogHealth = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching audit log health:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch audit log health',
-      error: error.message
-    });
+    throw new InternalServerError('Failed to fetch audit log health');
   }
 };
 
