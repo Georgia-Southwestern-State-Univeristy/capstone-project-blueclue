@@ -858,8 +858,25 @@ export const getCancellationStats = async (req, res) => {
  * GET /api/analytics/tech-performance
  * Returns per-technician performance metrics:
  *  - avg resolution time, first response time, tickets resolved (30d), satisfaction placeholder
+ * Technicians can only view their own performance; managers can view all.
  */
 export const getTechPerformance = async (req, res) => {
+        // Determine if we should filter by technician ID based on user role
+        const isTechnician = req.user.role === 'technician' || req.user.role === 'senior_technician';
+        const techIdFilter = isTechnician ? req.user.id : null;
+
+        // Build the WHERE clause dynamically
+        const whereConditions = [
+            "u.role IN ('technician', 'senior_technician')",
+            "u.is_active = true"
+        ];
+        
+        if (techIdFilter) {
+            whereConditions.push(`u.id = ${techIdFilter}`);
+        }
+        
+        const whereClause = whereConditions.join(' AND ');
+
         const result = await pool.query(`
             SELECT
                 u.id AS tech_id,
@@ -907,8 +924,7 @@ export const getTechPerformance = async (req, res) => {
 
             FROM users u
             LEFT JOIN tickets t ON t.assigned_to = u.id
-            WHERE u.role IN ('technician', 'senior_technician')
-              AND u.is_active = true
+            WHERE ${whereClause}
             GROUP BY u.id, u.first_name, u.last_name, u.email
             ORDER BY resolved_30d DESC, u.last_name
         `);
