@@ -1,8 +1,8 @@
 {
-  "total_samples": 1921,
-  "train_samples": 1340,
-  "val_samples": 285,
-  "test_samples": 296,
+  "total_samples": 2381,
+  "train_samples": 1663,
+  "val_samples": 354,
+  "test_samples": 364,
   "stratify_by": "category",
   "random_seed": 42,
   "ratios": {
@@ -11,38 +11,38 @@
     "test": 0.15
   },
   "actual_ratios": {
-    "train": 0.6975533576262364,
-    "validation": 0.14836022904737117,
-    "test": 0.1540864133263925
+    "train": 0.6984460310793784,
+    "validation": 0.1486770264594708,
+    "test": 0.15287694246115077
   },
   "train_distribution": {
-    "network": 241,
-    "feature_request": 84,
-    "login": 194,
-    "other": 135,
-    "software": 274,
-    "hardware": 203,
-    "billing": 107,
-    "account": 102
+    "billing": 135,
+    "hardware": 254,
+    "network": 292,
+    "software": 336,
+    "other": 161,
+    "feature_request": 104,
+    "account": 134,
+    "login": 247
   },
   "val_distribution": {
-    "network": 51,
-    "hardware": 43,
-    "software": 58,
-    "other": 29,
-    "billing": 23,
-    "account": 22,
-    "login": 41,
-    "feature_request": 18
+    "software": 72,
+    "hardware": 54,
+    "network": 62,
+    "login": 53,
+    "other": 34,
+    "account": 28,
+    "billing": 29,
+    "feature_request": 22
   },
   "test_distribution": {
-    "login": 43,
-    "hardware": 45,
-    "network": 53,
-    "account": 23,
-    "software": 60,
-    "billing": 24,
-    "other": 30,
-    "feature_request": 18
+    "other": 36,
+    "account": 30,
+    "software": 72,
+    "hardware": 55,
+    "login": 54,
+    "network": 64,
+    "billing": 30,
+    "feature_request": 23
   }
 }
