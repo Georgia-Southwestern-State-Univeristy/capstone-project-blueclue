@@ -34,15 +34,31 @@ class FeatureExtractor:
     """
     
     # Technical/urgency keywords that indicate priority
+    # Expanded in v2_20260320: added account-lockout, MFA, expired credentials,
+    # repeated failures, and deadline-driven urgency patterns.
     URGENCY_KEYWORDS = {
-        'critical': ['urgent', 'asap', 'emergency', 'critical', 'immediately', 
-                     'down', 'outage', 'crashed', 'broken', 'not working',
-                     'production', 'all users', 'company-wide', 'blocking'],
-        'high': ['important', 'soon', 'quickly', 'help needed', 'stuck',
-                 'error', 'problem', 'failed', 'cannot access', 'deadline'],
-        'technical': ['error code', 'stack trace', 'log', 'debug', 'exception',
-                      'crash', 'blue screen', 'bsod', 'memory', 'cpu', 'disk',
-                      'server', 'database', 'api', 'authentication']
+        'critical': [
+            'urgent', 'asap', 'emergency', 'critical', 'immediately',
+            'down', 'outage', 'crashed', 'broken', 'not working',
+            'production', 'all users', 'company-wide', 'blocking',
+            'locked out', 'account locked', 'password expired',
+            'mfa not working', '2fa not working', 'no one can work',
+            'blocking my work', 'blocked from working',
+        ],
+        'high': [
+            'important', 'soon', 'quickly', 'help needed', 'stuck',
+            'error', 'problem', 'failed', 'cannot access', 'deadline',
+            'not responding', 'keeps crashing', 'keeps restarting',
+            'update failed', 'remote access not working',
+            'authentication stopped working', 'presentation in',
+            'meeting in', 'in 30 minutes', 'in an hour',
+        ],
+        'technical': [
+            'error code', 'stack trace', 'log', 'debug', 'exception',
+            'crash', 'blue screen', 'bsod', 'memory', 'cpu', 'disk',
+            'server', 'database', 'api', 'authentication',
+            'driver', 'firmware', 'registry', 'event log',
+        ],
     }
     
     # Common IT terms for feature extraction
@@ -251,9 +267,11 @@ class FeatureExtractor:
             raise ImportError("scikit-learn is required. Install with: pip install scikit-learn")
         
         # Prepare text data
+        # Subject is prepended twice to give it 2x weight vs description body
         texts = []
         for ticket in tickets:
-            combined_text = f"{ticket.get('subject', '')} {ticket.get('description', '')}"
+            subj = ticket.get('subject', '')
+            combined_text = f"{subj} {subj} {ticket.get('description', '')}" if subj else ticket.get('description', '')
             texts.append(self._preprocess_text(combined_text))
         
         # Fit TF-IDF vectorizer
@@ -311,7 +329,9 @@ class FeatureExtractor:
         
         for ticket in tickets:
             # Combined text for TF-IDF
-            combined_text = f"{ticket.get('subject', '')} {ticket.get('description', '')}"
+            # Subject is prepended twice to give it 2x weight vs description body
+            subj = ticket.get('subject', '')
+            combined_text = f"{subj} {subj} {ticket.get('description', '')}" if subj else ticket.get('description', '')
             processed_text = self._preprocess_text(combined_text)
             
             # TF-IDF features
