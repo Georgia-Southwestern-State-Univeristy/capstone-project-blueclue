@@ -1,6 +1,7 @@
 ﻿// src/controllers/dashboardLayoutController.js
 import DashboardLayout from '../models/DashboardLayout.js';
-import { BadRequestError, NotFoundError } from '../middleware/errorHandler.js';
+import { BadRequestError, NotFoundError, ForbiddenError } from '../middleware/errorHandler.js';
+import { validateLayoutWidgets } from './widgetController.js';
 
 // ─── Active Layout ───────────────────────────────────────────────
 
@@ -35,10 +36,19 @@ export const getActiveLayout = async (req, res) => {
  */
 export const saveActiveLayout = async (req, res) => {
     const userId = req.user.id;
+    const userRole = req.user.role;
     const { type = 'management', layoutData, hiddenWidgets = [], layoutVersion = 1 } = req.body;
 
     if (!layoutData) {
       throw new BadRequestError('layoutData is required');
+    }
+
+    // Validate that user has access to all widgets in the layout
+    const { valid, deniedWidgets } = validateLayoutWidgets(layoutData, userRole);
+    if (!valid) {
+      throw new ForbiddenError(
+        `Your role (${userRole}) does not have access to these widgets: ${deniedWidgets.join(', ')}`
+      );
     }
 
     const saved = await DashboardLayout.upsertActiveLayout(
@@ -90,7 +100,7 @@ export const getSavedLayouts = async (req, res) => {
       updatedAt: r.updated_at
     }));
 
-    res.json({ layouts });
+    res.json(layouts);
 };
 
 /**
@@ -99,10 +109,19 @@ export const getSavedLayouts = async (req, res) => {
  */
 export const createSavedLayout = async (req, res) => {
     const userId = req.user.id;
+    const userRole = req.user.role;
     const { type = 'management', name, layoutData, hiddenWidgets = [] } = req.body;
 
     if (!name || !layoutData) {
       throw new BadRequestError('name and layoutData are required');
+    }
+
+    // Validate that user has access to all widgets in the layout
+    const { valid, deniedWidgets } = validateLayoutWidgets(layoutData, userRole);
+    if (!valid) {
+      throw new ForbiddenError(
+        `Your role (${userRole}) does not have access to these widgets: ${deniedWidgets.join(', ')}`
+      );
     }
 
     const saved = await DashboardLayout.createSavedLayout(
