@@ -569,6 +569,16 @@ class PriorityModelTrainer:
             'predictions': y_pred.tolist()
         }
         
+        # False-high-priority rate: LOW/MEDIUM tickets predicted as HIGH or CRITICAL.
+        # This tracks the specific behavioral issue documented in the milestone feedback.
+        low_medium_mask = np.isin(y, ['low', 'medium'])
+        false_high_count = int(np.sum(np.isin(y_pred[low_medium_mask], ['high', 'critical'])))
+        false_high_denominator = int(np.sum(low_medium_mask))
+        false_high_rate = false_high_count / false_high_denominator if false_high_denominator > 0 else 0.0
+        result['false_high_rate'] = round(false_high_rate, 4)
+        result['false_high_count'] = false_high_count
+        result['false_high_denominator'] = false_high_denominator
+        
         print(f"  Accuracy: {accuracy:.4f}")
         print(f"  F1 (macro): {f1_macro:.4f}")
         print(f"  F1 (weighted): {f1_weighted:.4f}")
@@ -576,6 +586,7 @@ class PriorityModelTrainer:
         print(f"  Recall (macro): {recall_macro:.4f}")
         if roc_auc:
             print(f"  ROC-AUC (macro): {roc_auc:.4f}")
+        print(f"  False-high rate: {false_high_rate:.2%}  ({false_high_count}/{false_high_denominator} low/medium predicted as high/critical)")
         
         return result
     
@@ -703,7 +714,9 @@ class PriorityModelTrainer:
             (f"Accuracy > 80%", acc > 0.80, f"{acc:.2%}"),
             (f"All priorities F1 > 0.70", len(low_f1_priorities) == 0,
              "PASS" if len(low_f1_priorities) == 0 else f"FAIL: {low_f1_priorities}"),
-            (f"Beats baseline significantly", improvement >= 0.10, f"+{improvement:.2%}")
+            (f"Beats baseline significantly", improvement >= 0.10, f"+{improvement:.2%}"),
+            (f"False-high rate < 15%", test_results.get('false_high_rate', 1.0) < 0.15,
+             f"{test_results.get('false_high_rate', 0):.2%} ({test_results.get('false_high_count', 0)}/{test_results.get('false_high_denominator', 0)})"),
         ]
         
         for criterion, passed, value in criteria:
@@ -848,7 +861,10 @@ class PriorityModelTrainer:
                 'f1_macro': test_results.get('f1_macro', 0),
                 'f1_weighted': test_results.get('f1_weighted', 0),
                 'precision_macro': test_results.get('precision_macro', 0),
-                'recall_macro': test_results.get('recall_macro', 0)
+                'recall_macro': test_results.get('recall_macro', 0),
+                'false_high_rate': test_results.get('false_high_rate', None),
+                'false_high_count': test_results.get('false_high_count', None),
+                'false_high_denominator': test_results.get('false_high_denominator', None),
             },
             'inference_time_ms': result.get('inference_time_ms', 0),
             'hyperparameters': result.get('best_params', {}),

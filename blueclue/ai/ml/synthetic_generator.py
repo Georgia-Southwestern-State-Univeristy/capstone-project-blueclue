@@ -106,6 +106,11 @@ class SyntheticDataGenerator:
                 ("Antivirus blocking application", "My antivirus is blocking {app} from running. I've tried adding an exception but it still blocks it.", ["security"], "medium"),
                 ("Suspicious popup messages", "I keep getting popup messages even when no browser is open. They ask me to call a number for support.", ["security"], "critical"),
                 ("Computer infected with virus", "I think my computer has a virus. It's running slow, showing popups, and my homepage changed without my doing.", ["security"], "critical"),
+                # False-urgency prevention — equipment requests worded urgently
+                ("Need new mouse ASAP", "Can I get a new mouse as soon as possible? Mine is a bit old and I'd like an upgrade.", ["peripheral"], "low"),
+                ("Urgent: need replacement keyboard", "Urgent request: my keyboard is a bit worn but functional. When can I get a replacement?", ["peripheral"], "low"),
+                ("ASAP monitor upgrade request", "I need a new monitor ASAP to improve my ergonomics. Not blocking work, just a request for an upgrade.", ["peripheral"], "low"),
+                ("Important: laptop choice help", "Important question when you have time — I'm trying to choose between two laptop models for my next upgrade.", ["peripheral"], "low"),
             ],
             "os_list": ["Windows 11", "Windows 10", "macOS", "Windows"],
             "office_apps": ["Excel", "Word", "Outlook", "PowerPoint", "Teams", "Office"],
@@ -225,6 +230,9 @@ class SyntheticDataGenerator:
                 ("Mobile app feature request", "Could you add {feature} to the mobile app? It's available on desktop but not mobile.", ["enhancement"], "low"),
                 ("Bulk action needed", "Please add the ability to {action} multiple items at once in the {system}.", ["enhancement"], "low"),
                 ("Dashboard customization", "I'd like to be able to customize my dashboard to show {feature}.", ["new_feature"], "low"),
+                # False-urgency prevention — feature requests worded urgently
+                ("Urgent feature request", "Urgently requesting that the {system} gets the ability to {feature}. Would be great to have.", ["new_feature"], "low"),
+                ("ASAP: need better reports", "I need better reporting ASAP. The current dashboard is missing {feature}. Not blocking, just a strong request.", ["enhancement"], "low"),
             ],
             "systems": ["project management tool", "reporting system", "dashboard", "mobile app", "portal"],
             "features": ["export to Excel", "batch delete", "custom notifications", "dark mode", "keyboard shortcuts", "auto-save"],
@@ -243,6 +251,10 @@ class SyntheticDataGenerator:
                 ("Conference room booking issue", "I'm having trouble booking conference room {room} for my meeting tomorrow.", ["general"], "medium"),
                 ("Equipment request", "I need to request a {equipment} for my work. What's the process?", ["inquiry"], "low"),
                 ("Office supplies needed", "My team needs {supplies}. How do I order them?", ["inquiry"], "low"),
+                # False-urgency prevention — informational / scheduling
+                ("Urgent: when is IT training?", "Urgent request: when is the next IT training session? I want to sign up before it fills up.", ["inquiry"], "low"),
+                ("ASAP: IT training schedule", "Can someone tell me ASAP when the next IT orientation is? I'm a new hire and want to attend.", ["inquiry"], "low"),
+                ("Important: training materials request", "This is important to me personally — can I get a link to the onboarding IT training materials?", ["inquiry"], "low"),
             ],
             "topics": ["pricing plans", "service levels", "maintenance windows", "company policies"],
             "tasks": ["export data", "change settings", "add team members", "generate reports"],
@@ -255,7 +267,11 @@ class SyntheticDataGenerator:
     }
     
     PRIORITIES = ["low", "medium", "high", "critical"]
-    PRIORITY_WEIGHTS = {"low": 0.40, "medium": 0.35, "high": 0.20, "critical": 0.05}  # Target distribution
+    # More balanced distribution reduces class imbalance for the ML priority model.
+    # Raised HIGH from 0.20 → 0.27 and CRITICAL from 0.05 → 0.08 to give the
+    # model sufficient training signal for urgent tickets.
+    # Reduced LOW from 0.40 → 0.30 to lower the baseline bias toward low.
+    PRIORITY_WEIGHTS = {"low": 0.30, "medium": 0.35, "high": 0.27, "critical": 0.08}  # Target distribution
     
     # User companies for metadata
     COMPANIES = [

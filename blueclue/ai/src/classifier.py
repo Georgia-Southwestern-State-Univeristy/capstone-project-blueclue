@@ -468,6 +468,14 @@ class TicketClassifier:
                 "meeting in": (4.0, "deadline"),
                 "in 30 minutes": (5.0, "deadline"),
                 "in an hour": (4.5, "deadline"),
+                "deadline today": (5.0, "deadline"),
+                "deadline this": (4.5, "deadline"),
+                "have a deadline": (4.0, "deadline"),
+                "has a deadline": (4.0, "deadline"),
+                "won't turn on at all": (5.0, "power"),
+                "doesn't turn on": (4.5, "power"),
+                "computer won't turn on": (5.0, "power"),
+                "won't start at all": (5.0, "power"),
             },
             
             "medium": {
@@ -552,6 +560,23 @@ class TicketClassifier:
                 "optimization": (2.0, "performance"),
                 "performance issue": (3.0, "performance"),
                 "running slowly": (3.0, "performance"),
+
+                # False-urgency prevention — requests that use urgent words but
+                # describe trivially non-blocking asks (equipment, inquiries, schedules).
+                # Weighted >= 5.5 so they neutralise a single "urgent"/"asap" signal.
+                "can i get a new": (5.5, "false_urgency"),  # "ASAP: can I get a new mouse"
+                "can we get a new": (5.5, "false_urgency"),
+                "get a new mouse": (5.5, "false_urgency"),
+                "get a new keyboard": (5.5, "false_urgency"),
+                "get a new monitor": (5.5, "false_urgency"),
+                "a bit old": (5.0, "false_urgency"),         # "mine is a bit old"
+                "mine is old": (5.0, "false_urgency"),
+                "choosing between": (5.5, "false_urgency"),  # purchasing inquiry
+                "which model": (4.5, "false_urgency"),
+                "when is the next": (5.5, "false_urgency"),  # scheduling inquiry
+                "training session": (4.5, "training"),
+                "it training": (4.5, "training"),
+                "next training": (5.0, "training"),
             }
         }
         
