@@ -249,4 +249,26 @@ router.get('/ticket-status-breakdown', getTicketStatusBreakdown);
  */
 router.get('/template-usage', getTemplateAnalytics);
 
+/**
+ * @route   GET /api/analytics/recent-activity
+ * @desc    Get all recent ticket activity (all change types) for the activity widget
+ * @access  Management, Admin only
+ * @query   limit (default: 50)
+ */
+router.get('/recent-activity', async (req, res) => {
+  try {
+    const userRole = req.user.role;
+    if (userRole !== 'admin' && userRole !== 'management') {
+      return res.status(403).json({ status: 'error', message: 'Access denied' });
+    }
+    const TicketHistory = (await import('../models/TicketHistory.js')).default;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const activity = await TicketHistory.getAllRecentActivity(limit);
+    res.json({ status: 'success', count: activity.length, data: activity });
+  } catch (error) {
+    console.error('Get recent activity error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to retrieve recent activity' });
+  }
+});
+
 export default router;

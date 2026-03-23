@@ -109,6 +109,7 @@ const PREVIEW_PATTERNS = {
   techResponseTime:'clock-bars',       // Clock icon + horizontal bars (response times)
   knowledgeBase:'kb-search',            // Book icon + search bar + article list
   chatBot:'chat-bubbles',                // Chat bubble icon + message bubbles + input
+  recentActivity:'activity-feed',          // Clock icon + activity log rows
 }
 
 /** Tiny SVG preview matching the widget type */
@@ -583,6 +584,36 @@ function WidgetPreview({ pattern }) {
             {/* Input bar */}
             <rect x="4" y="59" width="110" height="6" rx="3" fill="#374151" opacity="0.4" />
             <rect x="8" y="61" width="20" height="2" rx="1" fill="#6b7280" opacity="0.3" />
+          </>
+        )}
+        {p === 'activity-feed' && (
+          /* Clock icon + activity log rows — recent ticket activity */
+          <>
+            {/* Clock icon */}
+            <circle cx="12" cy="10" r="7" stroke="#60a5fa" strokeWidth="1" fill="none" opacity="0.6" />
+            <line x1="12" y1="6" x2="12" y2="10" stroke="#60a5fa" strokeWidth="1" opacity="0.5" />
+            <line x1="12" y1="10" x2="15" y2="12" stroke="#60a5fa" strokeWidth="1" opacity="0.5" />
+            {/* Activity rows */}
+            <rect x="4" y="22" width="110" height="7" rx="2" fill="#1f2937" opacity="0.5" />
+            <circle cx="9" cy="25.5" r="2" fill="#facc15" opacity="0.5" />
+            <rect x="14" y="23.5" width="16" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="33" y="23.5" width="30" height="2" rx="1" fill="#6b7280" opacity="0.3" />
+            <rect x="90" y="23.5" width="18" height="2" rx="1" fill="#6b7280" opacity="0.2" />
+            <rect x="4" y="32" width="110" height="7" rx="2" fill="#1f2937" opacity="0.5" />
+            <circle cx="9" cy="35.5" r="2" fill="#22c55e" opacity="0.5" />
+            <rect x="14" y="33.5" width="18" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="35" y="33.5" width="25" height="2" rx="1" fill="#6b7280" opacity="0.3" />
+            <rect x="90" y="33.5" width="14" height="2" rx="1" fill="#6b7280" opacity="0.2" />
+            <rect x="4" y="42" width="110" height="7" rx="2" fill="#1f2937" opacity="0.5" />
+            <circle cx="9" cy="45.5" r="2" fill="#f97316" opacity="0.5" />
+            <rect x="14" y="43.5" width="14" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="31" y="43.5" width="35" height="2" rx="1" fill="#6b7280" opacity="0.3" />
+            <rect x="90" y="43.5" width="16" height="2" rx="1" fill="#6b7280" opacity="0.2" />
+            <rect x="4" y="52" width="110" height="7" rx="2" fill="#1f2937" opacity="0.5" />
+            <circle cx="9" cy="55.5" r="2" fill="#ef4444" opacity="0.5" />
+            <rect x="14" y="53.5" width="20" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="37" y="53.5" width="28" height="2" rx="1" fill="#6b7280" opacity="0.3" />
+            <rect x="90" y="53.5" width="12" height="2" rx="1" fill="#6b7280" opacity="0.2" />
           </>
         )}
         {p === 'kb-search' && (

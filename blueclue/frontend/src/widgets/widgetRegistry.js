@@ -463,6 +463,21 @@ const WIDGET_REGISTRY = [
     component: () => import('../components/ChatBotWidget'),
     previewPattern: 'chat-bubbles',
   },
+  {
+    key: 'recentActivity',
+    name: 'Recent Activity',
+    description: 'Live feed of all ticket activity with ticket IDs and change details',
+    icon: '🕐',
+    category: CATEGORIES.MANAGEMENT,
+    permissions: ROLE_GROUPS.MANAGERS,
+    size: {
+      defaultW: 6, defaultH: 8,
+      minW: 4, minH: 6,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/RecentActivityWidget'),
+    previewPattern: 'activity-feed',
+  },
 ]
 
 export default WIDGET_REGISTRY
