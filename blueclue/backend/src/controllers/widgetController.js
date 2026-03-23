@@ -62,6 +62,12 @@ const WIDGET_PERMISSIONS = {
   responseTime: ROLE_GROUPS.MANAGERS,
   quickActions: ROLE_GROUPS.MANAGERS,
   auditHealth: ROLE_GROUPS.MANAGERS,
+  ticketTrend: ROLE_GROUPS.STAFF,
+  ticketStatus: ROLE_GROUPS.STAFF,
+  techResponseTime: ROLE_GROUPS.MANAGERS,
+  knowledgeBase: ROLE_GROUPS.ALL,
+  chatBot: ROLE_GROUPS.ALL,
+  recentActivity: ROLE_GROUPS.MANAGERS,
 };
 
 // Widget metadata for the gallery
@@ -88,6 +94,12 @@ const WIDGET_METADATA = {
   createTicket: { name: 'Create a Ticket', description: 'Submit a new support ticket directly from the dashboard', category: CATEGORIES.TICKETS },
   clientTickets: { name: 'My Tickets', description: 'Your submitted tickets with status tracking', category: CATEGORIES.TICKETS },
   auditHealth: { name: 'Audit Health', description: 'Real-time audit logging system health status and monitoring', category: CATEGORIES.MANAGEMENT },
+  ticketTrend: { name: 'Ticket Trend', description: 'Opened vs resolved tickets over time', category: CATEGORIES.ANALYTICS },
+  ticketStatus: { name: 'Ticket Status', description: 'Open ticket count with status breakdown', category: CATEGORIES.ANALYTICS },
+  techResponseTime: { name: 'Tech Response Times', description: 'Average first-response time per technician with search', category: CATEGORIES.PERFORMANCE },
+  knowledgeBase: { name: 'Knowledge Base', description: 'Quick access to search and browse support articles', category: CATEGORIES.TICKETS },
+  chatBot: { name: 'Chat Assistant', description: 'Inline AI chat assistant for quick support conversations', category: CATEGORIES.TICKETS },
+  recentActivity: { name: 'Recent Activity', description: 'Live feed of all ticket activity with ticket IDs and change details', category: CATEGORIES.MANAGEMENT },
 };
 
 // ── Helper Functions ────────────────────────────────────────────────────────

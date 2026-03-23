@@ -12,25 +12,33 @@ import { createTicket, getAllTickets } from '../services/ticketService'
 import { getCurrentUser } from '../services/authService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
 import { useToast } from '../hooks/useToast'
+import KnowledgeBaseWidget from '../components/KnowledgeBaseWidget'
+import ChatBotWidget from '../components/ChatBotWidget'
 
 // ── Default grid layouts ─────────────────────────────────────────────────────
-const LAYOUT_VERSION = 3
+const LAYOUT_VERSION = 5
 const DEFAULT_LAYOUTS = {
   lg: [
-    { i: 'createTicket',   x: 0, y: 0,  w: 12, h: 10, minW: 6,  minH: 6, maxW: 12, maxH: 18 },
-    { i: 'clientTickets',  x: 0, y: 10, w: 12, h: 12, minW: 6,  minH: 6, maxW: 12, maxH: 20 },
+    { i: 'createTicket',    x: 0, y: 0,  w: 12, h: 10, minW: 6,  minH: 6, maxW: 12, maxH: 18 },
+    { i: 'knowledgeBase',   x: 0, y: 10, w: 6,  h: 8,  minW: 4,  minH: 6, maxW: 12, maxH: 16 },
+    { i: 'chatBot',         x: 6, y: 10, w: 6,  h: 8,  minW: 4,  minH: 6, maxW: 12, maxH: 16 },
+    { i: 'clientTickets',   x: 0, y: 18, w: 12, h: 12, minW: 6,  minH: 6, maxW: 12, maxH: 20 },
   ],
   md: [
-    { i: 'createTicket',   x: 0, y: 0,  w: 12, h: 10, minW: 6,  minH: 6, maxW: 12, maxH: 18 },
-    { i: 'clientTickets',  x: 0, y: 10, w: 12, h: 12, minW: 6,  minH: 6, maxW: 12, maxH: 20 },
+    { i: 'createTicket',    x: 0, y: 0,  w: 12, h: 10, minW: 6,  minH: 6, maxW: 12, maxH: 18 },
+    { i: 'knowledgeBase',   x: 0, y: 10, w: 6,  h: 8,  minW: 4,  minH: 6, maxW: 12, maxH: 16 },
+    { i: 'chatBot',         x: 6, y: 10, w: 6,  h: 8,  minW: 4,  minH: 6, maxW: 12, maxH: 16 },
+    { i: 'clientTickets',   x: 0, y: 18, w: 12, h: 12, minW: 6,  minH: 6, maxW: 12, maxH: 20 },
   ],
   sm: [
-    { i: 'createTicket',   x: 0, y: 0,  w: 6, h: 10, minW: 3, minH: 6, maxW: 6, maxH: 18 },
-    { i: 'clientTickets',  x: 0, y: 10, w: 6, h: 12, minW: 3, minH: 6, maxW: 6, maxH: 20 },
+    { i: 'createTicket',    x: 0, y: 0,  w: 6, h: 10, minW: 3, minH: 6, maxW: 6, maxH: 18 },
+    { i: 'knowledgeBase',   x: 0, y: 10, w: 6, h: 8,  minW: 3, minH: 6, maxW: 6, maxH: 16 },
+    { i: 'chatBot',         x: 0, y: 18, w: 6, h: 8,  minW: 3, minH: 6, maxW: 6, maxH: 16 },
+    { i: 'clientTickets',   x: 0, y: 26, w: 6, h: 12, minW: 3, minH: 6, maxW: 6, maxH: 20 },
   ],
 }
 
-const CLIENT_WIDGET_KEYS = ['createTicket', 'clientTickets']
+const CLIENT_WIDGET_KEYS = ['createTicket', 'knowledgeBase', 'chatBot', 'clientTickets']
 
 /**
  * ClientWidgetGrid — drag-and-drop widget grid for the client dashboard
@@ -60,6 +68,8 @@ function ClientWidgetGrid({
       createTicket: (
         <CreateTicketWidget onSubmit={onSubmitTicket} />
       ),
+      knowledgeBase: <KnowledgeBaseWidget />,
+      chatBot: <ChatBotWidget />,
       clientTickets: (
         <ClientTicketListWidget
           tickets={tickets}
@@ -152,7 +162,6 @@ function ClientDashboard() {
 
       // Refresh ticket list
       await fetchTickets()
-      await fetchTimelineTickets()
     } catch (error) {
       console.error('Failed to create ticket:', error)
       toast.error(error.message || 'Failed to submit ticket. Please try again.')
@@ -238,7 +247,7 @@ function ClientDashboard() {
         ticketId={selectedTicketId}
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
-        onTicketUpdated={() => { fetchTickets(); fetchTimelineTickets() }}
+        onTicketUpdated={() => { fetchTickets() }}
       />
     </div>
   )

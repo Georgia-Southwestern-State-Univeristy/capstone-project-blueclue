@@ -1514,3 +1514,81 @@ export const getTicketsByFilter = async (req, res) => {
             filters: { startDate: start, endDate: end, category, priority, status, techId: effectiveTechId, slaBreach }
         });
 };
+
+/**
+ * Get ticket trend data — opened vs resolved over time
+ * GET /api/analytics/ticket-trend
+ * @query {string} range - '7d' | '30d' | '90d' | '6m' | '1y' (default: '30d')
+ */
+export const getTicketTrend = async (req, res) => {
+  const range = req.query.range || '30d';
+
+  const intervalMap = {
+    '7d':  { interval: "7 days",  bucket: 'day' },
+    '30d': { interval: "30 days", bucket: 'day' },
+    '90d': { interval: "90 days", bucket: 'week' },
+    '6m':  { interval: "180 days", bucket: 'week' },
+    '1y':  { interval: "365 days", bucket: 'month' },
+  };
+
+  const { interval, bucket } = intervalMap[range] || intervalMap['30d'];
+
+  const query = `
+    SELECT
+      date_trunc($1, d.day)::date AS period,
+      COALESCE(SUM(o.opened), 0)::int  AS opened,
+      COALESCE(SUM(r.resolved), 0)::int AS resolved
+    FROM generate_series(
+           (CURRENT_DATE - $2::interval)::date,
+           CURRENT_DATE,
+           '1 day'::interval
+         ) AS d(day)
+    LEFT JOIN (
+      SELECT DATE(created_at) AS day, COUNT(*) AS opened
+      FROM tickets
+      WHERE created_at >= CURRENT_DATE - $2::interval
+        AND deleted_at IS NULL
+      GROUP BY DATE(created_at)
+    ) o ON o.day = d.day::date
+    LEFT JOIN (
+      SELECT DATE(resolved_at) AS day, COUNT(*) AS resolved
+      FROM tickets
+      WHERE resolved_at >= CURRENT_DATE - $2::interval
+        AND deleted_at IS NULL
+        AND status IN ('resolved', 'closed')
+      GROUP BY DATE(resolved_at)
+    ) r ON r.day = d.day::date
+    GROUP BY period
+    ORDER BY period
+  `;
+
+  const result = await pool.query(query, [bucket, interval]);
+
+  res.json({
+    status: 'success',
+    data: result.rows,
+    range,
+    bucket,
+  });
+};
+
+/**
+ * Ticket status breakdown — count of non-deleted tickets grouped by status.
+ * GET /api/analytics/ticket-status-breakdown
+ */
+export const getTicketStatusBreakdown = async (_req, res) => {
+  const query = `
+    SELECT status, COUNT(*)::int AS count
+    FROM tickets
+    WHERE deleted_at IS NULL
+    GROUP BY status
+    ORDER BY count DESC
+  `;
+  const result = await pool.query(query);
+  const total = result.rows.reduce((sum, r) => sum + r.count, 0);
+
+  res.json({
+    status: 'success',
+    data: { total, statuses: result.rows },
+  });
+};

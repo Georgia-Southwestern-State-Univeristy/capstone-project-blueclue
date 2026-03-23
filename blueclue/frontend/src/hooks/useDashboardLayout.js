@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { getUserId } from '../services/authService'
+import { getWidget } from '../widgets'
 import {
   fetchActiveLayout,
   saveActiveLayout as saveActiveLayoutApi,
@@ -260,15 +261,28 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
         const exists = bpItems.some(item => item.i === key)
         if (!exists) {
           const defaultItem = defaultLayouts[bp]?.find(item => item.i === key)
+          const maxY = bpItems.length > 0
+            ? Math.max(...bpItems.map(item => item.y + item.h))
+            : 0
           if (defaultItem) {
-            const maxY = bpItems.length > 0
-              ? Math.max(...bpItems.map(item => item.y + item.h))
-              : 0
             bpItems.push({
               ...defaultItem,
               x: dropPosition?.x ?? defaultItem.x,
               y: dropPosition?.y ?? maxY,
             })
+          } else {
+            // Widget not in default layouts — build from registry sizes
+            const reg = getWidget(key)
+            if (reg) {
+              const { defaultW, defaultH, minW, minH, maxW, maxH } = reg.size
+              bpItems.push({
+                i: key,
+                x: dropPosition?.x ?? 0,
+                y: dropPosition?.y ?? maxY,
+                w: defaultW, h: defaultH,
+                minW, minH, maxW, maxH,
+              })
+            }
           }
         }
         next[bp] = bpItems

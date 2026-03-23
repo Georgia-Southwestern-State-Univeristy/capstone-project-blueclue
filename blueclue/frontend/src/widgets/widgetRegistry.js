@@ -383,6 +383,101 @@ const WIDGET_REGISTRY = [
     component: () => import('../components/AuditHealthWidget'),
     previewPattern: 'list-pending',
   },
+  // ── Analytics: Ticket Trend ──────────────────────────────────────────────
+  {
+    key: 'ticketTrend',
+    name: 'Ticket Trend',
+    description: 'Opened vs resolved tickets over time',
+    icon: '📈',
+    category: CATEGORIES.ANALYTICS,
+    permissions: ROLE_GROUPS.STAFF,
+    size: {
+      defaultW: 12, defaultH: 8,
+      minW: 6, minH: 6,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/TicketTrendWidget'),
+    previewPattern: 'chart-trend',
+  },
+  // ── Analytics: Ticket Status Breakdown ───────────────────────────────────
+  {
+    key: 'ticketStatus',
+    name: 'Ticket Status',
+    description: 'Open ticket count with status breakdown',
+    icon: '📊',
+    category: CATEGORIES.ANALYTICS,
+    permissions: ROLE_GROUPS.STAFF,
+    size: {
+      defaultW: 6, defaultH: 7,
+      minW: 4, minH: 5,
+      maxW: 12, maxH: 14,
+    },
+    component: () => import('../components/TicketStatusWidget'),
+    previewPattern: 'chart-hbar',
+  },
+  // ── Performance: Tech Response Times ──────────────────────────────────────
+  {
+    key: 'techResponseTime',
+    name: 'Tech Response Times',
+    description: 'Average first-response time per technician with search',
+    icon: '⏱️',
+    category: CATEGORIES.PERFORMANCE,
+    permissions: ROLE_GROUPS.MANAGERS,
+    size: {
+      defaultW: 6, defaultH: 8,
+      minW: 4, minH: 6,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/TechResponseTimeWidget'),
+    previewPattern: 'clock-bars',
+  },
+  // ── Quick Access: Knowledge Base ──────────────────────────────────────────
+  {
+    key: 'knowledgeBase',
+    name: 'Knowledge Base',
+    description: 'Quick access to search and browse support articles',
+    icon: '📖',
+    category: CATEGORIES.TICKETS,
+    permissions: ROLE_GROUPS.ALL,
+    size: {
+      defaultW: 6, defaultH: 8,
+      minW: 4, minH: 6,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/KnowledgeBaseWidget'),
+    previewPattern: 'kb-search',
+  },
+  // ── Quick Access: Chat Assistant ──────────────────────────────────────────
+  {
+    key: 'chatBot',
+    name: 'Chat Assistant',
+    description: 'Inline AI chat assistant for quick support conversations',
+    icon: '💬',
+    category: CATEGORIES.TICKETS,
+    permissions: ROLE_GROUPS.ALL,
+    size: {
+      defaultW: 6, defaultH: 8,
+      minW: 4, minH: 6,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/ChatBotWidget'),
+    previewPattern: 'chat-bubbles',
+  },
+  {
+    key: 'recentActivity',
+    name: 'Recent Activity',
+    description: 'Live feed of all ticket activity with ticket IDs and change details',
+    icon: '🕐',
+    category: CATEGORIES.MANAGEMENT,
+    permissions: ROLE_GROUPS.MANAGERS,
+    size: {
+      defaultW: 6, defaultH: 8,
+      minW: 4, minH: 6,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/RecentActivityWidget'),
+    previewPattern: 'activity-feed',
+  },
 ]
 
 export default WIDGET_REGISTRY
