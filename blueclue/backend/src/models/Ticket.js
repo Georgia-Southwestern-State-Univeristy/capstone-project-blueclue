@@ -24,14 +24,14 @@ class Ticket {
         ai_fallback_used = false,
         ai_keywords_matched = null,
         email_message_id = null,
-        attachments = []
+        ticketSubmissionImage = []
     }) {
         const query = `
             INSERT INTO tickets (
                 subject, description, customer_id, priority, user_priority, ai_priority, 
                 ai_recommended_priority, priority_overridden, priority_override_reason,
                 priority_calculation_method, category, ai_classified, ai_confidence, 
-                ai_fallback_used, ai_keywords_matched, email_message_id, attachments
+                ai_fallback_used, ai_keywords_matched, email_message_id, "ticketSubmissionImage"
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             RETURNING *
@@ -54,7 +54,7 @@ class Ticket {
             ai_fallback_used,
             ai_keywords_matched ? JSON.stringify(ai_keywords_matched) : null,
             email_message_id,
-            JSON.stringify(attachments || [])
+            JSON.stringify(ticketSubmissionImage || [])
         ];
         const result = await pool.query(query, values);
         return result.rows[0];
