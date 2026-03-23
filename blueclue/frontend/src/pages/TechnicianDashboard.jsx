@@ -12,6 +12,7 @@ import UpdateResponseModal from '../components/UpdateResponseModal'
 import TechTicketQueueWidget from '../components/TechTicketQueueWidget'
 import TechChatPanel from '../components/TechChatPanel'
 import CreateTicketWidget from '../components/CreateTicketWidget'
+import TicketTrendWidget from '../components/TicketTrendWidget'
 import DashboardGrid from '../components/DashboardGrid'
 import useDashboardLayout from '../hooks/useDashboardLayout'
 import { buildGalleryItems, buildWidgetConfig } from '../widgets'
@@ -53,7 +54,7 @@ const DEFAULT_LAYOUTS = {
 
 const TECHNICIAN_WIDGET_KEYS = [
   'timeline', 'statusDonut', 'priorityPie',
-  'ticketQueue', 'availableTickets', 'ringRequests', 'chatPanel',
+  'ticketQueue', 'availableTickets', 'ringRequests', 'chatPanel', 'ticketTrend',
 ]
 
 /**
@@ -109,6 +110,7 @@ function TechnicianWidgetGrid({
       availableTickets: <AvailableTickets onTicketClick={handleTicketClick} />,
       ringRequests: <RingRequestWidget onViewTicket={handleTicketClick} />,
       chatPanel: <TechChatPanel />,
+      ticketTrend: <TicketTrendWidget />,
       createTicket: <CreateTicketWidget onSubmit={onSubmitTicket} />,
     }
     return buildWidgetConfig(TECHNICIAN_WIDGET_KEYS, componentMap)

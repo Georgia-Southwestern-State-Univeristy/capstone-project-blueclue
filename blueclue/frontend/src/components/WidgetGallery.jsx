@@ -104,6 +104,7 @@ const PREVIEW_PATTERNS = {
   pendingRequests:'list-pending',     // Action cards with approve/deny buttons
   responseTime:   'stat-cards',       // Stat cards with KPI metrics
   createTicket:   'form-create',      // Ticket creation form with input fields
+  ticketTrend:    'chart-trend',      // Dual-line trend chart (opened vs resolved)
 }
 
 /** Tiny SVG preview matching the widget type */
@@ -461,6 +462,47 @@ function WidgetPreview({ pattern }) {
             {/* Submit button */}
             <rect x="78" y="54" width="34" height="6" rx="2" fill="#22c55e" opacity="0.5" />
             <rect x="86" y="55.5" width="18" height="3" rx="1" fill="#ffffff" opacity="0.3" />
+          </>
+        )}
+        {p === 'chart-trend' && (
+          /* Dual-line chart — opened (orange) vs resolved (green) trend lines */
+          <>
+            {/* Grid lines */}
+            <line x1="8" y1="12" x2="112" y2="12" stroke="#374151" strokeWidth="0.3" />
+            <line x1="8" y1="24" x2="112" y2="24" stroke="#374151" strokeWidth="0.3" />
+            <line x1="8" y1="36" x2="112" y2="36" stroke="#374151" strokeWidth="0.3" />
+            <line x1="8" y1="48" x2="112" y2="48" stroke="#374151" strokeWidth="0.3" />
+            {/* Opened area fill */}
+            <path d="M8,38 L22,30 L36,34 L50,22 L64,26 L78,18 L92,24 L106,14 L112,16 L112,48 L8,48 Z"
+              fill="#f97316" fillOpacity="0.12" />
+            {/* Resolved area fill */}
+            <path d="M8,44 L22,40 L36,38 L50,32 L64,28 L78,24 L92,20 L106,18 L112,16 L112,48 L8,48 Z"
+              fill="#22c55e" fillOpacity="0.12" />
+            {/* Opened line */}
+            <polyline points="8,38 22,30 36,34 50,22 64,26 78,18 92,24 106,14"
+              fill="none" stroke="#f97316" strokeWidth="1.2" strokeLinejoin="round" />
+            {/* Resolved line */}
+            <polyline points="8,44 22,40 36,38 50,32 64,28 78,24 92,20 106,18"
+              fill="none" stroke="#22c55e" strokeWidth="1.2" strokeLinejoin="round" />
+            {/* Dots on opened line */}
+            <circle cx="8" cy="38" r="1.5" fill="#f97316" />
+            <circle cx="36" cy="34" r="1.5" fill="#f97316" />
+            <circle cx="64" cy="26" r="1.5" fill="#f97316" />
+            <circle cx="92" cy="24" r="1.5" fill="#f97316" />
+            {/* Dots on resolved line */}
+            <circle cx="8" cy="44" r="1.5" fill="#22c55e" />
+            <circle cx="36" cy="38" r="1.5" fill="#22c55e" />
+            <circle cx="64" cy="28" r="1.5" fill="#22c55e" />
+            <circle cx="92" cy="20" r="1.5" fill="#22c55e" />
+            {/* Legend */}
+            <rect x="8" y="3" width="6" height="3" rx="1" fill="#f97316" opacity="0.7" />
+            <rect x="16" y="3.5" width="14" height="2" rx="0.5" fill="#374151" opacity="0.4" />
+            <rect x="36" y="3" width="6" height="3" rx="1" fill="#22c55e" opacity="0.7" />
+            <rect x="44" y="3.5" width="16" height="2" rx="0.5" fill="#374151" opacity="0.4" />
+            {/* X-axis labels */}
+            <rect x="8" y="52" width="10" height="2.5" rx="0.5" fill="#374151" opacity="0.3" />
+            <rect x="50" y="52" width="10" height="2.5" rx="0.5" fill="#374151" opacity="0.3" />
+            <rect x="98" y="52" width="10" height="2.5" rx="0.5" fill="#374151" opacity="0.3" />
           </>
         )}
       </svg>

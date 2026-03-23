@@ -213,11 +213,12 @@ export default function DashboardGrid({
     return cols.xs || 1
   }, [width, cols])
 
-  // Filter widgetConfig to only show non-hidden widgets
-  const activeWidgets = useMemo(() =>
-    widgetConfig.filter(w => !hiddenWidgets.has(w.key)),
-    [widgetConfig, hiddenWidgets]
-  )
+  // Filter widgetConfig to only show non-hidden widgets that have a layout entry
+  const activeWidgets = useMemo(() => {
+    const currentBp = Object.keys(layouts)[0] || 'lg'
+    const layoutKeys = new Set((layouts[currentBp] || []).map(item => item.i))
+    return widgetConfig.filter(w => !hiddenWidgets.has(w.key) && layoutKeys.has(w.key))
+  }, [widgetConfig, hiddenWidgets, layouts])
 
   // Set of active widget keys (for gallery display)
   const activeKeys = useMemo(() =>

@@ -383,6 +383,22 @@ const WIDGET_REGISTRY = [
     component: () => import('../components/AuditHealthWidget'),
     previewPattern: 'list-pending',
   },
+  // ── Analytics: Ticket Trend ──────────────────────────────────────────────
+  {
+    key: 'ticketTrend',
+    name: 'Ticket Trend',
+    description: 'Opened vs resolved tickets over time',
+    icon: '📈',
+    category: CATEGORIES.ANALYTICS,
+    permissions: ROLE_GROUPS.STAFF,
+    size: {
+      defaultW: 12, defaultH: 8,
+      minW: 6, minH: 6,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/TicketTrendWidget'),
+    previewPattern: 'chart-trend',
+  },
 ]
 
 export default WIDGET_REGISTRY

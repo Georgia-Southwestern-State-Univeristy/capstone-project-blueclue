@@ -62,6 +62,7 @@ const WIDGET_PERMISSIONS = {
   responseTime: ROLE_GROUPS.MANAGERS,
   quickActions: ROLE_GROUPS.MANAGERS,
   auditHealth: ROLE_GROUPS.MANAGERS,
+  ticketTrend: ROLE_GROUPS.STAFF,
 };
 
 // Widget metadata for the gallery
@@ -88,6 +89,7 @@ const WIDGET_METADATA = {
   createTicket: { name: 'Create a Ticket', description: 'Submit a new support ticket directly from the dashboard', category: CATEGORIES.TICKETS },
   clientTickets: { name: 'My Tickets', description: 'Your submitted tickets with status tracking', category: CATEGORIES.TICKETS },
   auditHealth: { name: 'Audit Health', description: 'Real-time audit logging system health status and monitoring', category: CATEGORIES.MANAGEMENT },
+  ticketTrend: { name: 'Ticket Trend', description: 'Opened vs resolved tickets over time', category: CATEGORIES.ANALYTICS },
 };
 
 // ── Helper Functions ────────────────────────────────────────────────────────

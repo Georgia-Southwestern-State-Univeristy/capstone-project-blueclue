@@ -25,7 +25,8 @@ import {
     getDashboardSummary,
     exportAnalytics,
     clearCache,
-    getTicketsByFilter
+    getTicketsByFilter,
+    getTicketTrend
 } from '../controllers/analyticsController.js';
 import { getTemplateAnalytics } from '../controllers/templateController.js';
 import { authenticateToken } from '../middleware/auth.js';
@@ -224,6 +225,14 @@ router.post('/cache/clear', clearCache);
  * @query   startDate, endDate, preset, category, priority, status, techId, slaBreach, page, limit
  */
 router.get('/tickets-by-filter', getTicketsByFilter);
+
+/**
+ * @route   GET /api/analytics/ticket-trend
+ * @desc    Opened vs resolved tickets over time for trend chart
+ * @access  Staff (technicians, management, admin)
+ * @query   range (7d | 30d | 90d | 6m | 1y)
+ */
+router.get('/ticket-trend', getTicketTrend);
 
 /**
  * @route   GET /api/analytics/template-usage
