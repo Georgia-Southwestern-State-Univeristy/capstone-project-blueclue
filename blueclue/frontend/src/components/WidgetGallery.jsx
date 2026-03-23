@@ -607,13 +607,13 @@ export default function WidgetGallery({
         )}
       </div>
 
-      {/* ── Widgets Tab (horizontal scroll) ─────────────────── */}
+      {/* ── Widgets Tab (vertical scroll grid) ─────────────── */}
       {activeTab === 'widgets' && (
-      <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden overscroll-contain px-3 py-2"
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-2"
            style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 transparent' }}>
-        <div className="flex gap-3 h-full items-start">
-          {/* Available widgets */}
-          {available.length > 0 && available.map((widget) => (
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+          {/* Available (unplaced) widgets first */}
+          {available.map((widget) => (
             <div
               key={widget.key}
               draggable={isEditMode}
@@ -625,14 +625,11 @@ export default function WidgetGallery({
                 onDragStartWidget?.(widget.key)
               }}
               className={`group relative bg-gray-800/80 hover:bg-gray-750/90 border border-gray-700
-                         hover:border-blue-500/50 rounded-lg overflow-hidden shrink-0
+                         hover:border-blue-500/50 rounded-lg overflow-hidden
                          transition-all duration-150 hover:shadow-lg hover:shadow-blue-500/5
                          ${isEditMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-default opacity-60'}`}
-              style={{ width: '200px' }}
             >
-              {/* Visual preview */}
               <WidgetPreview pattern={PREVIEW_PATTERNS[widget.key]} />
-              {/* Info bar */}
               <div className="p-2">
                 <h4 className="text-[11px] font-semibold text-white truncate leading-tight">
                   {widget.label}
@@ -641,47 +638,35 @@ export default function WidgetGallery({
                   {widget.description}
                 </p>
               </div>
-              {/* Drag hint border */}
               <div className="absolute inset-0 rounded-lg border-2 border-dashed border-blue-400/0
                              group-hover:border-blue-400/20 transition-colors pointer-events-none" />
             </div>
           ))}
 
-          {/* Already placed widgets (compact chips) */}
-          {placed.length > 0 && (
-            <div className="shrink-0 flex flex-col gap-1.5 min-w-[140px] pt-1">
-              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-1">
-                On Dashboard ({placed.length})
-              </p>
-              {placed.map((widget) => (
-                <div
-                  key={widget.key}
-                  className="bg-gray-800/30 border border-gray-700/40 rounded-md px-2 py-1 opacity-50"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-gray-400 truncate flex-1">{widget.label}</span>
-                    <svg className="w-2.5 h-2.5 text-green-500/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* All placed message */}
-          {available.length === 0 && (
-            <div className="flex items-center gap-3 py-2 px-4">
-              <svg className="w-8 h-8 text-green-500/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <p className="text-xs text-gray-400 font-medium">All widgets placed!</p>
-                <p className="text-[10px] text-gray-500 mt-0.5">Remove widgets from the dashboard to see them here</p>
+          {/* Already placed widgets — grayed out with overlay */}
+          {placed.map((widget) => (
+            <div
+              key={widget.key}
+              className="relative bg-gray-800/40 border border-gray-700/30 rounded-lg overflow-hidden
+                         opacity-40 pointer-events-none select-none"
+            >
+              <WidgetPreview pattern={PREVIEW_PATTERNS[widget.key]} />
+              <div className="p-2">
+                <h4 className="text-[11px] font-semibold text-gray-500 truncate leading-tight">
+                  {widget.label}
+                </h4>
+                <p className="text-[10px] text-gray-600 mt-0.5 leading-relaxed line-clamp-2">
+                  {widget.description}
+                </p>
+              </div>
+              {/* "Widget already placed" overlay */}
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-900/60 rounded-lg">
+                <span className="text-[10px] font-semibold text-gray-400 bg-gray-800/80 px-2 py-1 rounded-md border border-gray-700/50">
+                  Widget already placed
+                </span>
               </div>
             </div>
-          )}
+          ))}
         </div>
       </div>
       )}
