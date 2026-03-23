@@ -59,11 +59,14 @@ logger = logging.getLogger("blueclue.rag")
 # ---------------------------------------------------------------------------
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
-RAG_TOP_K = int(os.getenv("RAG_TOP_K", "5"))
-RAG_MIN_SIMILARITY = float(os.getenv("RAG_MIN_SIMILARITY", "0.35"))
+RAG_TOP_K = int(os.getenv("RAG_TOP_K", "3"))          # reduced 5→3: fewer but more precise hits
+RAG_MIN_SIMILARITY = float(os.getenv("RAG_MIN_SIMILARITY", "0.40"))  # raised 0.35→0.40
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002")
-EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1536"))   # 1536=OpenAI, 384=MiniLM
+EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1536"))   # 1536=OpenAI/3-small, 384=MiniLM
 CACHE_TTL_SECONDS = int(os.getenv("RAG_CACHE_TTL", "3600"))
+# CHUNK_MODE: "full" = whole-article embedding (legacy)
+#             "section" = chunk-level retrieval (higher precision for large articles)
+CHUNK_MODE = os.getenv("RAG_CHUNK_MODE", "full")
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -169,16 +172,39 @@ def upsert_embedding(conn, article_id: int, embedding: List[float],
     conn.commit()
 
 
+def _preprocess_query(query: str) -> str:
+    """
+    Normalise a user query before embedding:
+      - Strip excess whitespace
+      - Remove repeated punctuation (e.g. "??????")
+      - Lowercase (MiniLM is not cased; ada-002/3-small handle mixed case fine,
+        but consistent lowercase improves cache key matching)
+    Keeps the original semantic meaning intact.
+    """
+    import re
+    q = query.strip()
+    # Collapse multiple spaces/newlines
+    q = re.sub(r"[\r\n\t]+", " ", q)
+    q = re.sub(r" {2,}", " ", q)
+    # Remove runs of identical non-alphanumeric chars (e.g. "!!!", "???")
+    q = re.sub(r"([^\w\s])\1{2,}", r"\1", q)
+    return q
+
+
 def semantic_search(
     conn,
     query_embedding: List[float],
     top_k: int = RAG_TOP_K,
     min_similarity: float = RAG_MIN_SIMILARITY,
-) -> List[RetrievedArticle]:
+) -> List["RetrievedArticle"]:
     """
     Cosine similarity search over article_embeddings.
     Embeddings are stored as FLOAT[] — similarity is computed in Python.
     Returns up to top_k articles above min_similarity threshold.
+
+    Tuning notes (2026-03-23):
+      - min_similarity raised to 0.40 (was 0.35) to cut irrelevant results
+      - top_k reduced to 3 (was 5) — fewer, better-ranked articles improve answer quality
     """
     dim = len(query_embedding)
     col = "embedding" if dim == 1536 else "embedding_384"
@@ -229,6 +255,109 @@ def semantic_search(
         )
         for sim, r in scored
     ]
+
+
+def semantic_search_chunks(
+    conn,
+    query_embedding: List[float],
+    top_k: int = RAG_TOP_K,
+    min_similarity: float = RAG_MIN_SIMILARITY,
+) -> List["RetrievedArticle"]:
+    """
+    Chunk-level cosine similarity search over article_chunks.
+    Returns one RetrievedArticle per *article* (deduped by best chunk score).
+    Falls back to full-article semantic_search if the article_chunks table
+    does not exist or is empty.
+    """
+    dim = len(query_embedding)
+    col = "embedding" if dim == 1536 else "embedding_384"
+
+    # Check whether the article_chunks table exists
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT EXISTS (
+              SELECT 1 FROM information_schema.tables
+              WHERE table_name = 'article_chunks'
+            )
+            """
+        )
+        row = cur.fetchone()
+        table_exists = row["exists"] if row else False
+
+    if not table_exists:
+        logger.info("article_chunks table not found — falling back to full-article search")
+        return semantic_search(conn, query_embedding, top_k=top_k, min_similarity=min_similarity)
+
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+              ac.id          AS chunk_id,
+              ac.article_id,
+              ac.chunk_index,
+              ac.section_heading,
+              ac.chunk_text,
+              ac.{col}      AS embedding,
+              ka.title,
+              ka.slug,
+              ka.category,
+              ka.content,
+              COALESCE(ka.excerpt, LEFT(ka.content, 300)) AS excerpt
+            FROM   article_chunks ac
+            JOIN   knowledge_articles ka ON ka.id = ac.article_id
+            WHERE  ka.deleted_at  IS NULL
+              AND  ka.is_published = TRUE
+              AND  ka.is_public    = TRUE
+              AND  ac.{col} IS NOT NULL
+            """,
+        )
+        rows = cur.fetchall()
+
+    if not rows:
+        logger.info("article_chunks is empty — falling back to full-article search")
+        return semantic_search(conn, query_embedding, top_k=top_k, min_similarity=min_similarity)
+
+    # Score every chunk
+    scored: List[Tuple[float, Any]] = []
+    for r in rows:
+        emb = r["embedding"]
+        if emb and len(emb) == dim:
+            sim = _cosine_similarity(query_embedding, emb)
+            if sim >= min_similarity:
+                scored.append((sim, r))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    # Deduplicate: keep only the highest-scoring chunk per article
+    seen_articles: Dict[int, bool] = {}
+    deduped: List[Tuple[float, Any]] = []
+    for sim, r in scored:
+        aid = r["article_id"]
+        if aid not in seen_articles:
+            seen_articles[aid] = True
+            deduped.append((sim, r))
+        if len(deduped) >= top_k:
+            break
+
+    results = []
+    for sim, r in deduped:
+        # Use the matching chunk text as the content snippet surfaced to the prompt
+        chunk_text = r.get("chunk_text") or r["content"] or ""
+        heading = r.get("section_heading") or ""
+        content_for_prompt = (f"[{heading}]\n{chunk_text}" if heading else chunk_text)
+        results.append(
+            RetrievedArticle(
+                id=r["article_id"],
+                title=r["title"],
+                slug=r["slug"],
+                category=r["category"],
+                content=content_for_prompt,
+                excerpt=r["excerpt"] or "",
+                similarity=round(sim, 4),
+            )
+        )
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -418,12 +547,13 @@ def build_prompt(
     if articles:
         kb_block_lines = ["Knowledge Base Articles (use ONLY this information):"]
         for i, art in enumerate(articles, 1):
-            # Trim content to ~400 chars per article to stay within token budget
-            body = art.content[:400].rstrip()
-            if len(art.content) > 400:
+            # Increased from 400 → 800 chars: preserves step-by-step detail
+            body = art.content[:800].rstrip()
+            if len(art.content) > 800:
                 body += "…"
             kb_block_lines.append(
-                f"\n[Article {i}] Title: {art.title}\nCategory: {art.category}\n{body}"
+                f"\n[Article {i}] Title: {art.title}\nCategory: {art.category}\n"
+                f"Relevance: {art.similarity:.0%}\n{body}"
             )
         kb_context = "\n".join(kb_block_lines)
     else:
@@ -493,8 +623,9 @@ def run_rag_pipeline(
     try:
         conn = _get_conn()
 
-        # 1. Cache check (skip if conversation history changes context)
-        cache_key = _cache_key(query, llm_service.get_model_name(), top_k)
+        # 1. Preprocess query early so the cache key is consistent
+        clean_query = _preprocess_query(query)
+        cache_key = _cache_key(clean_query, llm_service.get_model_name(), top_k)
         if use_cache and not conversation_history:
             cached = get_cached_response(conn, cache_key)
             if cached:
@@ -512,12 +643,20 @@ def run_rag_pipeline(
                     escalate=should_escalate(cached["response_text"]),
                 )
 
-        # 2. Embed query
-        query_embedding = llm_service.embed_text(query)
+        # 2. Embed the preprocessed query
+        query_embedding = llm_service.embed_text(clean_query)
 
-        # 3. Vector search
-        articles = semantic_search(conn, query_embedding, top_k=top_k,
-                                   min_similarity=RAG_MIN_SIMILARITY)
+        # 3. Vector search (chunk-level if CHUNK_MODE="section", else full-article)
+        if CHUNK_MODE == "section":
+            articles = semantic_search_chunks(
+                conn, query_embedding, top_k=top_k,
+                min_similarity=RAG_MIN_SIMILARITY,
+            )
+        else:
+            articles = semantic_search(
+                conn, query_embedding, top_k=top_k,
+                min_similarity=RAG_MIN_SIMILARITY,
+            )
         logger.info("RAG retrieved %d articles for query (first 60 chars): %.60s",
                     len(articles), query)
 
@@ -544,7 +683,7 @@ def run_rag_pipeline(
         # 6a. Save to cache (only for top-level queries without history)
         if use_cache and not conversation_history:
             save_cached_response(
-                conn, cache_key, query, answer,
+                conn, cache_key, clean_query, answer,
                 [a.id for a in articles],
                 model_used, prompt_tokens, completion_tokens,
             )

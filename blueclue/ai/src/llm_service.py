@@ -39,12 +39,27 @@ EMBEDDING_DIM    = int(os.getenv("EMBEDDING_DIM", "1536"))
 
 # Cost per 1K tokens (USD) — used for spend tracking
 _COST_TABLE: Dict[str, Dict[str, float]] = {
-    "gpt-3.5-turbo":          {"input": 0.001,  "output": 0.002},
-    "gpt-3.5-turbo-0125":     {"input": 0.0005, "output": 0.0015},
-    "gpt-4-turbo":            {"input": 0.01,   "output": 0.03},
-    "gpt-4o":                 {"input": 0.005,  "output": 0.015},
-    "gpt-4o-mini":            {"input": 0.00015,"output": 0.0006},
-    "text-embedding-ada-002": {"input": 0.0001, "output": 0.0},
+    "gpt-3.5-turbo":             {"input": 0.001,   "output": 0.002},
+    "gpt-3.5-turbo-0125":        {"input": 0.0005,  "output": 0.0015},
+    "gpt-4-turbo":               {"input": 0.01,    "output": 0.03},
+    "gpt-4o":                    {"input": 0.005,   "output": 0.015},
+    "gpt-4o-mini":               {"input": 0.00015, "output": 0.0006},
+    # Embedding models
+    "text-embedding-ada-002":    {"input": 0.0001,  "output": 0.0},
+    # text-embedding-3-small: ~5× cheaper than ada-002, MTEB score 62.3 vs 61.0
+    "text-embedding-3-small":    {"input": 0.00002, "output": 0.0},
+    # text-embedding-3-large: highest quality, 3072-dim (truncated to 1536 here)
+    "text-embedding-3-large":    {"input": 0.00013, "output": 0.0},
+}
+
+# Dimension produced by each embedding model
+# text-embedding-3-small and ada-002 both output 1536-dim by default
+_EMBEDDING_DIMS: Dict[str, int] = {
+    "text-embedding-ada-002":  1536,
+    "text-embedding-3-small":  1536,   # default; can request lower via 'dimensions'
+    "text-embedding-3-large":  1536,   # capped at 1536 to match existing DB columns
+    "all-MiniLM-L6-v2":        384,
+    "minilm-local":            384,
 }
 
 
@@ -157,26 +172,39 @@ class LLMService:
 
     def get_embedding_dim(self) -> int:
         if self._use_openai:
-            return 1536
+            return _EMBEDDING_DIMS.get(self._embedding_model, 1536)
         return 384
 
     # ------------------------------------------------------------------
     # Embedding
     # ------------------------------------------------------------------
 
+    def get_embedding_model_name(self) -> str:
+        """Return the name of the active embedding model."""
+        if self._use_openai:
+            return self._embedding_model
+        return "all-MiniLM-L6-v2"
+
     def embed_text(self, text: str) -> List[float]:
         """
         Generate an embedding vector for `text`.
-        OpenAI ada-002 (1536-dim) if API key is set, else MiniLM (384-dim).
+        - OpenAI ada-002 (1536-dim): legacy default
+        - OpenAI text-embedding-3-small (1536-dim): recommended upgrade
+        - OpenAI text-embedding-3-large (truncated to 1536-dim)
+        - MiniLM (384-dim): free local fallback
         """
         if not self._use_openai or self._openai_client is None:
             return _MiniLMEmbedder.embed(text)
 
         try:
-            resp = self._openai_client.embeddings.create(
-                model=self._embedding_model,
-                input=text[:8000],      # ada-002 limit
-            )
+            kwargs: Dict[str, Any] = {
+                "model": self._embedding_model,
+                "input": text[:8191],   # token limit for all OpenAI embedding models
+            }
+            # text-embedding-3-large defaults to 3072 dims; cap at 1536 to match DB
+            if self._embedding_model == "text-embedding-3-large":
+                kwargs["dimensions"] = 1536
+            resp = self._openai_client.embeddings.create(**kwargs)
             return resp.data[0].embedding
         except Exception as exc:
             logger.warning("OpenAI embed_text failed (%s) — using MiniLM fallback", exc)
@@ -192,10 +220,13 @@ class LLMService:
             chunk = texts[i: i + batch_size]
             if self._use_openai and self._openai_client:
                 try:
-                    resp = self._openai_client.embeddings.create(
-                        model=self._embedding_model,
-                        input=[t[:8000] for t in chunk],
-                    )
+                    kwargs: Dict[str, Any] = {
+                        "model": self._embedding_model,
+                        "input": [t[:8191] for t in chunk],
+                    }
+                    if self._embedding_model == "text-embedding-3-large":
+                        kwargs["dimensions"] = 1536
+                    resp = self._openai_client.embeddings.create(**kwargs)
                     results.extend([d.embedding for d in resp.data])
                     continue
                 except Exception as exc:
