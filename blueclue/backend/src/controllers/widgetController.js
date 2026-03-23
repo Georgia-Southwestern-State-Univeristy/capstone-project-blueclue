@@ -64,6 +64,7 @@ const WIDGET_PERMISSIONS = {
   auditHealth: ROLE_GROUPS.MANAGERS,
   ticketTrend: ROLE_GROUPS.STAFF,
   ticketStatus: ROLE_GROUPS.STAFF,
+  techResponseTime: ROLE_GROUPS.MANAGERS,
 };
 
 // Widget metadata for the gallery
@@ -92,6 +93,7 @@ const WIDGET_METADATA = {
   auditHealth: { name: 'Audit Health', description: 'Real-time audit logging system health status and monitoring', category: CATEGORIES.MANAGEMENT },
   ticketTrend: { name: 'Ticket Trend', description: 'Opened vs resolved tickets over time', category: CATEGORIES.ANALYTICS },
   ticketStatus: { name: 'Ticket Status', description: 'Open ticket count with status breakdown', category: CATEGORIES.ANALYTICS },
+  techResponseTime: { name: 'Tech Response Times', description: 'Average first-response time per technician with search', category: CATEGORIES.PERFORMANCE },
 };
 
 // ── Helper Functions ────────────────────────────────────────────────────────

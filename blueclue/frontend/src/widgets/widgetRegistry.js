@@ -415,6 +415,22 @@ const WIDGET_REGISTRY = [
     component: () => import('../components/TicketStatusWidget'),
     previewPattern: 'chart-hbar',
   },
+  // ── Performance: Tech Response Times ──────────────────────────────────────
+  {
+    key: 'techResponseTime',
+    name: 'Tech Response Times',
+    description: 'Average first-response time per technician with search',
+    icon: '⏱️',
+    category: CATEGORIES.PERFORMANCE,
+    permissions: ROLE_GROUPS.MANAGERS,
+    size: {
+      defaultW: 6, defaultH: 8,
+      minW: 4, minH: 6,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/TechResponseTimeWidget'),
+    previewPattern: 'clock-bars',
+  },
 ]
 
 export default WIDGET_REGISTRY

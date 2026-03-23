@@ -21,6 +21,7 @@ import UpdateRequestResponseTimeAnalytics from '../components/UpdateRequestRespo
 import AuditHealthWidget from '../components/AuditHealthWidget'
 import TicketTrendWidget from '../components/TicketTrendWidget'
 import TicketStatusWidget from '../components/TicketStatusWidget'
+import TechResponseTimeWidget from '../components/TechResponseTimeWidget'
 import CreateTicketWidget from '../components/CreateTicketWidget'
 import { getAllTickets, createTicket } from '../services/ticketService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
@@ -84,7 +85,7 @@ const MANAGEMENT_WIDGET_KEYS = [
   'timeline', 'ticketControl', 'assignedChart', 'categoriesChart',
   'overdue', 'escalations', 'todaysActions', 'topRequesters',
   'techPerformance', 'deletedTickets', 'pendingRequests', 'responseTime',
-  'auditHealth', 'ticketTrend', 'ticketStatus',
+  'auditHealth', 'ticketTrend', 'ticketStatus', 'techResponseTime',
 ]
 
 /**
@@ -164,6 +165,7 @@ function ManagementWidgetGrid({
       auditHealth: <AuditHealthWidget />,
       ticketTrend: <TicketTrendWidget />,
       ticketStatus: <TicketStatusWidget />,
+      techResponseTime: <TechResponseTimeWidget />,
       createTicket: <CreateTicketWidget onSubmit={onSubmitTicket} />,
     }
     return buildWidgetConfig(MANAGEMENT_WIDGET_KEYS, componentMap)

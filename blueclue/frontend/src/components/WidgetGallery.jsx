@@ -106,6 +106,7 @@ const PREVIEW_PATTERNS = {
   createTicket:   'form-create',      // Ticket creation form with input fields
   ticketTrend:    'chart-trend',      // Dual-line trend chart (opened vs resolved)
   ticketStatus:   'chart-hbar',       // Horizontal bar chart with status breakdown
+  techResponseTime:'clock-bars',       // Clock icon + horizontal bars (response times)
 }
 
 /** Tiny SVG preview matching the widget type */
@@ -528,6 +529,34 @@ function WidgetPreview({ pattern }) {
             <rect x="34" y="27" width="30" height="5" rx="2" fill="#22c55e" opacity="0.7" />
             <rect x="34" y="37" width="18" height="5" rx="2" fill="#6b7280" opacity="0.7" />
             <rect x="34" y="47" width="10" height="5" rx="2" fill="#ef4444" opacity="0.7" />
+          </>
+        )}
+
+        {p === 'clock-bars' && (
+          /* Clock icon + horizontal bars — per-tech response times */
+          <>
+            {/* Small clock icon */}
+            <circle cx="12" cy="12" r="7" stroke="#60a5fa" strokeWidth="1" fill="none" opacity="0.6" />
+            <line x1="12" y1="12" x2="12" y2="8" stroke="#60a5fa" strokeWidth="1" opacity="0.7" />
+            <line x1="12" y1="12" x2="15" y2="12" stroke="#60a5fa" strokeWidth="1" opacity="0.7" />
+            {/* Search bar placeholder */}
+            <rect x="24" y="6" width="40" height="5" rx="2" fill="#374151" opacity="0.3" />
+            <rect x="25" y="7.5" width="4" height="2" rx="0.5" fill="#6b7280" opacity="0.4" />
+            {/* Name labels */}
+            <rect x="4" y="24" width="20" height="3" rx="1" fill="#374151" opacity="0.4" />
+            <rect x="4" y="33" width="16" height="3" rx="1" fill="#374151" opacity="0.4" />
+            <rect x="4" y="42" width="22" height="3" rx="1" fill="#374151" opacity="0.4" />
+            <rect x="4" y="51" width="18" height="3" rx="1" fill="#374151" opacity="0.4" />
+            {/* Background tracks */}
+            <rect x="30" y="23" width="82" height="5" rx="2" fill="#1f2937" />
+            <rect x="30" y="32" width="82" height="5" rx="2" fill="#1f2937" />
+            <rect x="30" y="41" width="82" height="5" rx="2" fill="#1f2937" />
+            <rect x="30" y="50" width="82" height="5" rx="2" fill="#1f2937" />
+            {/* Filled bars — green (fast) to red (slow) */}
+            <rect x="30" y="23" width="20" height="5" rx="2" fill="#22c55e" opacity="0.7" />
+            <rect x="30" y="32" width="40" height="5" rx="2" fill="#eab308" opacity="0.7" />
+            <rect x="30" y="41" width="55" height="5" rx="2" fill="#eab308" opacity="0.7" />
+            <rect x="30" y="50" width="72" height="5" rx="2" fill="#ef4444" opacity="0.7" />
           </>
         )}
       </svg>
