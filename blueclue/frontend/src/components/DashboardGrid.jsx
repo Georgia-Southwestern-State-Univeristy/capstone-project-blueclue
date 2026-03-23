@@ -175,7 +175,7 @@ export default function DashboardGrid({
 }) {
   // v2: useContainerWidth replaces WidthProvider HOC
   const { width, containerRef, mounted } = useContainerWidth({ initialWidth: 1200 })
-  const [showGallery, setShowGallery] = useState(true)
+  const [showGallery, setShowGallery] = useState(false)
 
   // Track which gallery widget is currently being dragged
   const draggingKeyRef = useRef(null)
@@ -488,62 +488,10 @@ export default function DashboardGrid({
   }, [isDragging, isDraggingWidget])
 
   const hasGallery = galleryItems.length > 0 && !isMobile
-  const galleryVisible = isEditMode && showGallery && hasGallery
+  const galleryVisible = showGallery && hasGallery
 
   return (
     <div>
-      {/* Edit Mode Controls */}
-      <div className="flex items-center justify-end gap-3 mb-4">
-        {isEditMode && (
-          <>
-            <span className="hidden sm:flex items-center gap-2 text-[10px] text-gray-500 mr-1 select-none">
-              <kbd className="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-400 font-mono">Esc</kbd> exit
-              <kbd className="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-400 font-mono">Del</kbd> remove
-            </span>
-            <SaveLayoutButton onSave={onSaveLayout} />
-            <button
-              onClick={resetLayout}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg
-                         bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white
-                         border border-gray-600 transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Reset Layout
-            </button>
-          </>
-        )}
-        <button
-          onClick={toggleEditMode}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg
-                     border transition-colors ${
-                       isEditMode
-                         ? 'bg-blue-600 hover:bg-blue-700 border-blue-500 text-white'
-                         : 'bg-gray-700 hover:bg-gray-600 border-gray-600 text-gray-300 hover:text-white'
-                     }`}
-        >
-          {isEditMode ? (
-            <>
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-              Lock Layout
-            </>
-          ) : (
-            <>
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-              Edit Layout
-            </>
-          )}
-        </button>
-      </div>
-
       {/* Grid area – always full width, never affected by gallery */}
       <div
         ref={containerRef}
@@ -630,7 +578,7 @@ export default function DashboardGrid({
       </div>
 
       {/* ── Bottom overlay gallery panel ── */}
-      {hasGallery && isEditMode && (
+      {hasGallery && (
         <div
           className={`fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 ease-in-out
                       ${galleryVisible ? 'translate-y-0' : 'translate-y-full'}`}
@@ -653,13 +601,17 @@ export default function DashboardGrid({
               onLoadLayout={onLoadLayout}
               onDeleteLayout={onDeleteLayout}
               onRenameLayout={onRenameLayout}
+              isEditMode={isEditMode}
+              toggleEditMode={toggleEditMode}
+              onSaveLayout={onSaveLayout}
+              resetLayout={resetLayout}
             />
           </div>
         </div>
       )}
 
-      {/* Pull-up button when gallery is hidden during edit mode */}
-      {hasGallery && isEditMode && !showGallery && (
+      {/* Pull-up button when gallery is hidden */}
+      {hasGallery && !showGallery && (
         <div className="fixed bottom-0 left-1/2 -translate-x-1/2 z-50">
           <button
             onClick={() => setShowGallery(true)}
@@ -668,12 +620,12 @@ export default function DashboardGrid({
                        border border-b-0 border-gray-600/50 hover:border-blue-500/50
                        text-gray-400 hover:text-blue-400 transition-all shadow-lg
                        group"
-            title="Show Widget Gallery"
+            title="Show Manage Layout"
           >
             <svg className="w-4 h-4 transition-transform group-hover:-translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
             </svg>
-            <span className="text-[11px] font-semibold tracking-wide">WIDGETS</span>
+            <span className="text-[11px] font-semibold tracking-wide">MANAGE LAYOUT</span>
           </button>
         </div>
       )}
