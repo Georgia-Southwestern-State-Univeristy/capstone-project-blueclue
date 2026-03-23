@@ -331,6 +331,35 @@ export const getTemplateVersions = async (req, res) => {
 };
 
 /**
+ * Restore template to a previous version
+ * POST /api/templates/:id/restore/:version
+ * Management only
+ */
+export const restoreTemplateVersion = async (req, res) => {
+    if (!req.user || !['management', 'admin'].includes(req.user.role)) {
+        throw new ForbiddenError('Only management and admin users can restore template versions');
+    }
+
+    const { id, version } = req.params;
+    const { reason } = req.body;
+
+    const template = await Template.getById(parseInt(id));
+    if (!template) throw new NotFoundError('Template not found');
+
+    const restoredTemplate = await Template.restoreVersion(
+        parseInt(id), 
+        parseInt(version),
+        req.user.id
+    );
+
+    res.status(200).json({
+        status: 'success',
+        message: `Template restored to version ${version}`,
+        data: restoredTemplate
+    });
+};
+
+/**
  * Export template as JSON
  * GET /api/templates/:id/export
  * Management only

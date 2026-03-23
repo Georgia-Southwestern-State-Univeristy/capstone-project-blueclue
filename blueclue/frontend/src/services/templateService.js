@@ -282,7 +282,7 @@ export const recordTemplateUsage = async (templateId, ticketId, modificationsMad
 /**
  * Get template version history (management only)
  * @param {number} id - Template ID
- * @returns {Promise<Object>} Version history
+ * @returns {Promise<Array>} Version history array
  */
 export const getTemplateVersions = async (id) => {
     try {
@@ -291,9 +291,32 @@ export const getTemplateVersions = async (id) => {
         });
         
         const result = await handleResponse(response, 'Failed to fetch template versions');
-        return result.data;
+        return result.data.history || [];
     } catch (error) {
         console.error('Get template versions error:', error);
+        throw error;
+    }
+};
+
+/**
+ * Restore template to a previous version (management only)
+ * @param {number} id - Template ID
+ * @param {number} version - Version number to restore
+ * @param {string} reason - Optional reason for restoration
+ * @returns {Promise<Object>} Restored template
+ */
+export const restoreTemplateVersion = async (id, version, reason = '') => {
+    try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/templates/${id}/restore/${version}`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ reason }),
+        });
+        
+        const result = await handleResponse(response, 'Failed to restore template version');
+        return result.data;
+    } catch (error) {
+        console.error('Restore template version error:', error);
         throw error;
     }
 };

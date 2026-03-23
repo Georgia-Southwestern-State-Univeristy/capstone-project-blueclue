@@ -11,6 +11,7 @@ import {
     applyTemplate,
     recordTemplateUsage,
     getTemplateVersions,
+    restoreTemplateVersion,
     exportTemplate,
     importTemplate,
     toggleTemplateStatus
@@ -102,6 +103,13 @@ router.post('/:id/usage', authenticateToken, recordTemplateUsage);
  * @access  Management, Admin
  */
 router.get('/:id/versions', authenticateToken, getTemplateVersions);
+
+/**
+ * @route   POST /api/templates/:id/restore/:version
+ * @desc    Restore template to a previous version
+ * @access  Management, Admin
+ */
+router.post('/:id/restore/:version', authenticateToken, restoreTemplateVersion);
 
 /**
  * @route   GET /api/templates/:id/export
