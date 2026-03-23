@@ -24,6 +24,7 @@ import TicketStatusWidget from '../components/TicketStatusWidget'
 import TechResponseTimeWidget from '../components/TechResponseTimeWidget'
 import CreateTicketWidget from '../components/CreateTicketWidget'
 import KnowledgeBaseWidget from '../components/KnowledgeBaseWidget'
+import ChatBotWidget from '../components/ChatBotWidget'
 import { getAllTickets, createTicket } from '../services/ticketService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
 import { useAvailableWidgets } from '../hooks/useAvailableWidgets'
@@ -86,7 +87,7 @@ const MANAGEMENT_WIDGET_KEYS = [
   'timeline', 'ticketControl', 'assignedChart', 'categoriesChart',
   'overdue', 'escalations', 'todaysActions', 'topRequesters',
   'techPerformance', 'deletedTickets', 'pendingRequests', 'responseTime',
-  'auditHealth', 'ticketTrend', 'ticketStatus', 'techResponseTime', 'knowledgeBase',
+  'auditHealth', 'ticketTrend', 'ticketStatus', 'techResponseTime', 'knowledgeBase', 'chatBot',
 ]
 
 /**
@@ -168,6 +169,7 @@ function ManagementWidgetGrid({
       ticketStatus: <TicketStatusWidget />,
       techResponseTime: <TechResponseTimeWidget />,
       knowledgeBase: <KnowledgeBaseWidget />,
+      chatBot: <ChatBotWidget />,
       createTicket: <CreateTicketWidget onSubmit={onSubmitTicket} />,
     }
     return buildWidgetConfig(MANAGEMENT_WIDGET_KEYS, componentMap)

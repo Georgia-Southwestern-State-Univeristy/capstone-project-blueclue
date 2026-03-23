@@ -447,6 +447,22 @@ const WIDGET_REGISTRY = [
     component: () => import('../components/KnowledgeBaseWidget'),
     previewPattern: 'kb-search',
   },
+  // ── Quick Access: Chat Assistant ──────────────────────────────────────────
+  {
+    key: 'chatBot',
+    name: 'Chat Assistant',
+    description: 'Inline AI chat assistant for quick support conversations',
+    icon: '💬',
+    category: CATEGORIES.TICKETS,
+    permissions: ROLE_GROUPS.ALL,
+    size: {
+      defaultW: 6, defaultH: 8,
+      minW: 4, minH: 6,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/ChatBotWidget'),
+    previewPattern: 'chat-bubbles',
+  },
 ]
 
 export default WIDGET_REGISTRY

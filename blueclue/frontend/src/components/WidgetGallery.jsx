@@ -108,6 +108,7 @@ const PREVIEW_PATTERNS = {
   ticketStatus:   'chart-hbar',       // Horizontal bar chart with status breakdown
   techResponseTime:'clock-bars',       // Clock icon + horizontal bars (response times)
   knowledgeBase:'kb-search',            // Book icon + search bar + article list
+  chatBot:'chat-bubbles',                // Chat bubble icon + message bubbles + input
 }
 
 /** Tiny SVG preview matching the widget type */
@@ -558,6 +559,30 @@ function WidgetPreview({ pattern }) {
             <rect x="30" y="32" width="40" height="5" rx="2" fill="#eab308" opacity="0.7" />
             <rect x="30" y="41" width="55" height="5" rx="2" fill="#eab308" opacity="0.7" />
             <rect x="30" y="50" width="72" height="5" rx="2" fill="#ef4444" opacity="0.7" />
+          </>
+        )}
+        {p === 'chat-bubbles' && (
+          /* Chat bubble icon + message bubbles + input — chat assistant */
+          <>
+            {/* Chat bubble icon */}
+            <path d="M8 4 C4 4 2 7 2 10 C2 13 4 16 8 16 L8 18 L11 16 L16 16 C20 16 22 13 22 10 C22 7 20 4 16 4 Z" stroke="#60a5fa" strokeWidth="1" fill="none" opacity="0.6" />
+            <circle cx="9" cy="10" r="1" fill="#60a5fa" opacity="0.5" />
+            <circle cx="13" cy="10" r="1" fill="#60a5fa" opacity="0.5" />
+            <circle cx="17" cy="10" r="1" fill="#60a5fa" opacity="0.5" />
+            {/* Bot message bubble */}
+            <rect x="4" y="24" width="55" height="8" rx="4" fill="#1f2937" opacity="0.6" />
+            <rect x="8" y="26.5" width="32" height="2" rx="1" fill="#6b7280" opacity="0.4" />
+            <rect x="8" y="29.5" width="20" height="2" rx="1" fill="#6b7280" opacity="0.3" />
+            {/* User message bubble */}
+            <rect x="50" y="36" width="62" height="7" rx="3.5" fill="#2563eb" opacity="0.5" />
+            <rect x="55" y="38.5" width="28" height="2" rx="1" fill="#93c5fd" opacity="0.4" />
+            {/* Bot reply bubble */}
+            <rect x="4" y="47" width="65" height="8" rx="4" fill="#1f2937" opacity="0.6" />
+            <rect x="8" y="49.5" width="38" height="2" rx="1" fill="#6b7280" opacity="0.4" />
+            <rect x="8" y="52.5" width="25" height="2" rx="1" fill="#6b7280" opacity="0.3" />
+            {/* Input bar */}
+            <rect x="4" y="59" width="110" height="6" rx="3" fill="#374151" opacity="0.4" />
+            <rect x="8" y="61" width="20" height="2" rx="1" fill="#6b7280" opacity="0.3" />
           </>
         )}
         {p === 'kb-search' && (
