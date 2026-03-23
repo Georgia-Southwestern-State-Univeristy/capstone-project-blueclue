@@ -399,6 +399,22 @@ const WIDGET_REGISTRY = [
     component: () => import('../components/TicketTrendWidget'),
     previewPattern: 'chart-trend',
   },
+  // ── Analytics: Ticket Status Breakdown ───────────────────────────────────
+  {
+    key: 'ticketStatus',
+    name: 'Ticket Status',
+    description: 'Open ticket count with status breakdown',
+    icon: '📊',
+    category: CATEGORIES.ANALYTICS,
+    permissions: ROLE_GROUPS.STAFF,
+    size: {
+      defaultW: 6, defaultH: 7,
+      minW: 4, minH: 5,
+      maxW: 12, maxH: 14,
+    },
+    component: () => import('../components/TicketStatusWidget'),
+    previewPattern: 'chart-hbar',
+  },
 ]
 
 export default WIDGET_REGISTRY

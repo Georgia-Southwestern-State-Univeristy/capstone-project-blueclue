@@ -63,6 +63,7 @@ const WIDGET_PERMISSIONS = {
   quickActions: ROLE_GROUPS.MANAGERS,
   auditHealth: ROLE_GROUPS.MANAGERS,
   ticketTrend: ROLE_GROUPS.STAFF,
+  ticketStatus: ROLE_GROUPS.STAFF,
 };
 
 // Widget metadata for the gallery
@@ -90,6 +91,7 @@ const WIDGET_METADATA = {
   clientTickets: { name: 'My Tickets', description: 'Your submitted tickets with status tracking', category: CATEGORIES.TICKETS },
   auditHealth: { name: 'Audit Health', description: 'Real-time audit logging system health status and monitoring', category: CATEGORIES.MANAGEMENT },
   ticketTrend: { name: 'Ticket Trend', description: 'Opened vs resolved tickets over time', category: CATEGORIES.ANALYTICS },
+  ticketStatus: { name: 'Ticket Status', description: 'Open ticket count with status breakdown', category: CATEGORIES.ANALYTICS },
 };
 
 // ── Helper Functions ────────────────────────────────────────────────────────

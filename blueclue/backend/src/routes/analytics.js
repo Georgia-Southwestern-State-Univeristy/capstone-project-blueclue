@@ -26,7 +26,8 @@ import {
     exportAnalytics,
     clearCache,
     getTicketsByFilter,
-    getTicketTrend
+    getTicketTrend,
+    getTicketStatusBreakdown
 } from '../controllers/analyticsController.js';
 import { getTemplateAnalytics } from '../controllers/templateController.js';
 import { authenticateToken } from '../middleware/auth.js';
@@ -233,6 +234,13 @@ router.get('/tickets-by-filter', getTicketsByFilter);
  * @query   range (7d | 30d | 90d | 6m | 1y)
  */
 router.get('/ticket-trend', getTicketTrend);
+
+/**
+ * @route   GET /api/analytics/ticket-status-breakdown
+ * @desc    Count of tickets grouped by status (excluding deleted)
+ * @access  Staff (technicians, management, admin)
+ */
+router.get('/ticket-status-breakdown', getTicketStatusBreakdown);
 
 /**
  * @route   GET /api/analytics/template-usage

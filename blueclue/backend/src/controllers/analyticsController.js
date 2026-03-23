@@ -1571,3 +1571,24 @@ export const getTicketTrend = async (req, res) => {
     bucket,
   });
 };
+
+/**
+ * Ticket status breakdown — count of non-deleted tickets grouped by status.
+ * GET /api/analytics/ticket-status-breakdown
+ */
+export const getTicketStatusBreakdown = async (_req, res) => {
+  const query = `
+    SELECT status, COUNT(*)::int AS count
+    FROM tickets
+    WHERE deleted_at IS NULL
+    GROUP BY status
+    ORDER BY count DESC
+  `;
+  const result = await pool.query(query);
+  const total = result.rows.reduce((sum, r) => sum + r.count, 0);
+
+  res.json({
+    status: 'success',
+    data: { total, statuses: result.rows },
+  });
+};

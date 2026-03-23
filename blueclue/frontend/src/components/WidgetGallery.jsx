@@ -105,6 +105,7 @@ const PREVIEW_PATTERNS = {
   responseTime:   'stat-cards',       // Stat cards with KPI metrics
   createTicket:   'form-create',      // Ticket creation form with input fields
   ticketTrend:    'chart-trend',      // Dual-line trend chart (opened vs resolved)
+  ticketStatus:   'chart-hbar',       // Horizontal bar chart with status breakdown
 }
 
 /** Tiny SVG preview matching the widget type */
@@ -503,6 +504,30 @@ function WidgetPreview({ pattern }) {
             <rect x="8" y="52" width="10" height="2.5" rx="0.5" fill="#374151" opacity="0.3" />
             <rect x="50" y="52" width="10" height="2.5" rx="0.5" fill="#374151" opacity="0.3" />
             <rect x="98" y="52" width="10" height="2.5" rx="0.5" fill="#374151" opacity="0.3" />
+          </>
+        )}
+
+        {p === 'chart-hbar' && (
+          /* Horizontal bar chart — status breakdown */
+          <>
+            {/* Labels */}
+            <rect x="4" y="8"  width="22" height="3" rx="1" fill="#374151" opacity="0.4" />
+            <rect x="4" y="18" width="18" height="3" rx="1" fill="#374151" opacity="0.4" />
+            <rect x="4" y="28" width="26" height="3" rx="1" fill="#374151" opacity="0.4" />
+            <rect x="4" y="38" width="20" height="3" rx="1" fill="#374151" opacity="0.4" />
+            <rect x="4" y="48" width="16" height="3" rx="1" fill="#374151" opacity="0.4" />
+            {/* Background tracks */}
+            <rect x="34" y="7"  width="80" height="5" rx="2" fill="#1f2937" />
+            <rect x="34" y="17" width="80" height="5" rx="2" fill="#1f2937" />
+            <rect x="34" y="27" width="80" height="5" rx="2" fill="#1f2937" />
+            <rect x="34" y="37" width="80" height="5" rx="2" fill="#1f2937" />
+            <rect x="34" y="47" width="80" height="5" rx="2" fill="#1f2937" />
+            {/* Filled bars */}
+            <rect x="34" y="7"  width="60" height="5" rx="2" fill="#3b82f6" opacity="0.7" />
+            <rect x="34" y="17" width="45" height="5" rx="2" fill="#f97316" opacity="0.7" />
+            <rect x="34" y="27" width="30" height="5" rx="2" fill="#22c55e" opacity="0.7" />
+            <rect x="34" y="37" width="18" height="5" rx="2" fill="#6b7280" opacity="0.7" />
+            <rect x="34" y="47" width="10" height="5" rx="2" fill="#ef4444" opacity="0.7" />
           </>
         )}
       </svg>
