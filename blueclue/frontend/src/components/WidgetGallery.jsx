@@ -103,6 +103,7 @@ const PREVIEW_PATTERNS = {
   deletedTickets: 'list-restore',     // Searchable list with restore buttons
   pendingRequests:'list-pending',     // Action cards with approve/deny buttons
   responseTime:   'stat-cards',       // Stat cards with KPI metrics
+  createTicket:   'form-create',      // Ticket creation form with input fields
 }
 
 /** Tiny SVG preview matching the widget type */
@@ -438,6 +439,28 @@ function WidgetPreview({ pattern }) {
             <circle cx="70" cy="51" r="3" fill="#6366f1" opacity="0.2" />
             <rect x="76" y="49" width="18" height="2.5" rx="1" fill="#374151" opacity="0.25" />
             <rect x="96" y="48" width="14" height="6" rx="1" fill="#f59e0b" opacity="0.15" />
+          </>
+        )}
+        {p === 'form-create' && (
+          /* Ticket creation form — labels, input fields, and submit button */
+          <>
+            {/* Title / Subject field */}
+            <rect x="8" y="5" width="18" height="3" rx="1" fill="#374151" opacity="0.5" />
+            <rect x="8" y="10" width="104" height="7" rx="2" stroke="#374151" strokeWidth="0.6" fill="#374151" fillOpacity="0.1" />
+            <rect x="11" y="12" width="40" height="3" rx="1" fill="#374151" opacity="0.25" />
+            {/* Description textarea */}
+            <rect x="8" y="21" width="24" height="3" rx="1" fill="#374151" opacity="0.5" />
+            <rect x="8" y="26" width="104" height="14" rx="2" stroke="#374151" strokeWidth="0.6" fill="#374151" fillOpacity="0.1" />
+            <rect x="11" y="29" width="60" height="2.5" rx="1" fill="#374151" opacity="0.2" />
+            <rect x="11" y="33" width="45" height="2.5" rx="1" fill="#374151" opacity="0.15" />
+            {/* Priority & Category dropdowns */}
+            <rect x="8" y="44" width="48" height="7" rx="2" stroke="#374151" strokeWidth="0.6" fill="#374151" fillOpacity="0.1" />
+            <rect x="12" y="46" width="20" height="3" rx="1" fill="#f59e0b" opacity="0.35" />
+            <rect x="64" y="44" width="48" height="7" rx="2" stroke="#374151" strokeWidth="0.6" fill="#374151" fillOpacity="0.1" />
+            <rect x="68" y="46" width="22" height="3" rx="1" fill="#3b82f6" opacity="0.35" />
+            {/* Submit button */}
+            <rect x="78" y="54" width="34" height="6" rx="2" fill="#22c55e" opacity="0.5" />
+            <rect x="86" y="55.5" width="18" height="3" rx="1" fill="#ffffff" opacity="0.3" />
           </>
         )}
       </svg>

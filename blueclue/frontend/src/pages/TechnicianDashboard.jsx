@@ -53,7 +53,7 @@ const DEFAULT_LAYOUTS = {
 
 const TECHNICIAN_WIDGET_KEYS = [
   'timeline', 'statusDonut', 'priorityPie',
-  'ticketQueue', 'availableTickets', 'ringRequests', 'chatPanel', 'createTicket',
+  'ticketQueue', 'availableTickets', 'ringRequests', 'chatPanel',
 ]
 
 /**

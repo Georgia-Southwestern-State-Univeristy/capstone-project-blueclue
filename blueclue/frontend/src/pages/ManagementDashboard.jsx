@@ -82,7 +82,7 @@ const MANAGEMENT_WIDGET_KEYS = [
   'timeline', 'ticketControl', 'assignedChart', 'categoriesChart',
   'overdue', 'escalations', 'todaysActions', 'topRequesters',
   'techPerformance', 'deletedTickets', 'pendingRequests', 'responseTime',
-  'auditHealth', 'createTicket',
+  'auditHealth',
 ]
 
 /**
