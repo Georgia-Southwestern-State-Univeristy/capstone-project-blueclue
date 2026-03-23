@@ -107,6 +107,7 @@ const PREVIEW_PATTERNS = {
   ticketTrend:    'chart-trend',      // Dual-line trend chart (opened vs resolved)
   ticketStatus:   'chart-hbar',       // Horizontal bar chart with status breakdown
   techResponseTime:'clock-bars',       // Clock icon + horizontal bars (response times)
+  knowledgeBase:'kb-search',            // Book icon + search bar + article list
 }
 
 /** Tiny SVG preview matching the widget type */
@@ -557,6 +558,29 @@ function WidgetPreview({ pattern }) {
             <rect x="30" y="32" width="40" height="5" rx="2" fill="#eab308" opacity="0.7" />
             <rect x="30" y="41" width="55" height="5" rx="2" fill="#eab308" opacity="0.7" />
             <rect x="30" y="50" width="72" height="5" rx="2" fill="#ef4444" opacity="0.7" />
+          </>
+        )}
+        {p === 'kb-search' && (
+          /* Book icon + search bar + article list — knowledge base quick access */
+          <>
+            {/* Book icon */}
+            <path d="M8 4 L8 18 Q14 16 20 18 L20 4 Q14 6 8 4 Z" stroke="#60a5fa" strokeWidth="1" fill="none" opacity="0.6" />
+            <line x1="14" y1="5" x2="14" y2="17" stroke="#60a5fa" strokeWidth="0.8" opacity="0.5" />
+            {/* Search bar */}
+            <rect x="4" y="22" width="110" height="7" rx="3" fill="#374151" opacity="0.4" />
+            <circle cx="11" cy="25.5" r="2.5" stroke="#6b7280" strokeWidth="0.8" fill="none" opacity="0.5" />
+            <line x1="13" y1="27.5" x2="15" y2="29" stroke="#6b7280" strokeWidth="0.8" opacity="0.5" />
+            <rect x="18" y="24" width="24" height="2.5" rx="1" fill="#6b7280" opacity="0.3" />
+            {/* Article list items */}
+            <rect x="4" y="34" width="110" height="8" rx="2" fill="#1f2937" opacity="0.5" />
+            <rect x="8" y="36" width="40" height="2.5" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="8" y="39.5" width="60" height="1.5" rx="0.5" fill="#6b7280" opacity="0.3" />
+            <rect x="4" y="45" width="110" height="8" rx="2" fill="#1f2937" opacity="0.5" />
+            <rect x="8" y="47" width="50" height="2.5" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="8" y="50.5" width="55" height="1.5" rx="0.5" fill="#6b7280" opacity="0.3" />
+            <rect x="4" y="56" width="110" height="8" rx="2" fill="#1f2937" opacity="0.5" />
+            <rect x="8" y="58" width="35" height="2.5" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="8" y="61.5" width="48" height="1.5" rx="0.5" fill="#6b7280" opacity="0.3" />
           </>
         )}
       </svg>

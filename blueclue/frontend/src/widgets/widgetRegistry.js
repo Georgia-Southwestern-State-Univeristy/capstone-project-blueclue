@@ -431,6 +431,22 @@ const WIDGET_REGISTRY = [
     component: () => import('../components/TechResponseTimeWidget'),
     previewPattern: 'clock-bars',
   },
+  // ── Quick Access: Knowledge Base ──────────────────────────────────────────
+  {
+    key: 'knowledgeBase',
+    name: 'Knowledge Base',
+    description: 'Quick access to search and browse support articles',
+    icon: '📖',
+    category: CATEGORIES.TICKETS,
+    permissions: ROLE_GROUPS.ALL,
+    size: {
+      defaultW: 6, defaultH: 8,
+      minW: 4, minH: 6,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/KnowledgeBaseWidget'),
+    previewPattern: 'kb-search',
+  },
 ]
 
 export default WIDGET_REGISTRY

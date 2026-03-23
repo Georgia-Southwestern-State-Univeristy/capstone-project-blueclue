@@ -65,6 +65,7 @@ const WIDGET_PERMISSIONS = {
   ticketTrend: ROLE_GROUPS.STAFF,
   ticketStatus: ROLE_GROUPS.STAFF,
   techResponseTime: ROLE_GROUPS.MANAGERS,
+  knowledgeBase: ROLE_GROUPS.ALL,
 };
 
 // Widget metadata for the gallery
@@ -94,6 +95,7 @@ const WIDGET_METADATA = {
   ticketTrend: { name: 'Ticket Trend', description: 'Opened vs resolved tickets over time', category: CATEGORIES.ANALYTICS },
   ticketStatus: { name: 'Ticket Status', description: 'Open ticket count with status breakdown', category: CATEGORIES.ANALYTICS },
   techResponseTime: { name: 'Tech Response Times', description: 'Average first-response time per technician with search', category: CATEGORIES.PERFORMANCE },
+  knowledgeBase: { name: 'Knowledge Base', description: 'Quick access to search and browse support articles', category: CATEGORIES.TICKETS },
 };
 
 // ── Helper Functions ────────────────────────────────────────────────────────
