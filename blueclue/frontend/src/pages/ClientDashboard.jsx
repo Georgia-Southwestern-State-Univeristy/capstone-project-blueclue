@@ -152,7 +152,6 @@ function ClientDashboard() {
 
       // Refresh ticket list
       await fetchTickets()
-      await fetchTimelineTickets()
     } catch (error) {
       console.error('Failed to create ticket:', error)
       toast.error(error.message || 'Failed to submit ticket. Please try again.')
@@ -238,7 +237,7 @@ function ClientDashboard() {
         ticketId={selectedTicketId}
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
-        onTicketUpdated={() => { fetchTickets(); fetchTimelineTickets() }}
+        onTicketUpdated={() => { fetchTickets() }}
       />
     </div>
   )
