@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import NotificationPreferences from './NotificationPreferences';
-import { getUser, updateProfile, updateEmail } from '../services/authService';
+import { getUser, updateProfile, updateEmail, changePassword } from '../services/authService';
 import { useNavigate } from 'react-router-dom';
 import useTheme from '../hooks/useTheme';
 
@@ -95,7 +95,108 @@ function EmailChangeSection() {
   );
 }
 
-function AccountPanelContent({ onNavigate, onLogout }) {
+function PasswordChangeSection() {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const getStrength = (pw) => {
+    if (!pw) return '';
+    if (pw.length < 8) return 'weak';
+    if (pw.length >= 12 && /[A-Z]/.test(pw) && /[0-9]/.test(pw)) return 'strong';
+    return 'medium';
+  };
+  const strength = getStrength(newPassword);
+
+  const handleSubmit = async () => {
+    setErrorMsg('');
+    setSuccessMsg('');
+    if (!currentPassword) { setErrorMsg('Current password is required'); return; }
+    if (newPassword.length < 8) { setErrorMsg('New password must be at least 8 characters'); return; }
+    if (newPassword !== confirmPassword) { setErrorMsg('Passwords do not match'); return; }
+
+    setSaving(true);
+    try {
+      await changePassword(currentPassword, newPassword);
+      setSuccessMsg('Password changed. You will be redirected to login.');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      // Backend revokes tokens — redirect to login after brief delay
+      setTimeout(() => { window.location.href = '/login'; }, 2000);
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to change password');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-gray-800/60 rounded-lg p-4 space-y-3">
+      <h3 className="text-sm font-semibold text-gray-300">Change Password</h3>
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">Current Password</label>
+        <input
+          type="password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+        />
+      </div>
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">New Password</label>
+        <input
+          type="password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+        />
+        {strength && (
+          <div className="mt-1.5 flex items-center gap-2">
+            <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+              <div className={`h-full transition-all duration-300 ${
+                strength === 'strong' ? 'w-full bg-green-500' :
+                strength === 'medium' ? 'w-2/3 bg-yellow-500' :
+                'w-1/3 bg-red-500'
+              }`} />
+            </div>
+            <span className={`text-xs ${
+              strength === 'strong' ? 'text-green-400' :
+              strength === 'medium' ? 'text-yellow-400' :
+              'text-red-400'
+            }`}>{strength.charAt(0).toUpperCase() + strength.slice(1)}</span>
+          </div>
+        )}
+      </div>
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">Confirm New Password</label>
+        <input
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+        />
+        {confirmPassword && newPassword !== confirmPassword && (
+          <p className="text-red-400 text-xs mt-1">Passwords do not match</p>
+        )}
+      </div>
+      {errorMsg && <p className="text-red-400 text-xs">{errorMsg}</p>}
+      {successMsg && <p className="text-green-400 text-xs">{successMsg}</p>}
+      <button
+        onClick={handleSubmit}
+        disabled={saving || !currentPassword || !newPassword || !confirmPassword}
+        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+      >
+        {saving ? 'Changing...' : 'Change Password'}
+      </button>
+    </div>
+  );
+}
+
+function AccountPanelContent({ onLogout }) {
   const user = getUser();
   const [firstName, setFirstName] = useState(user?.firstName || '');
   const [lastName, setLastName] = useState(user?.lastName || '');
@@ -184,20 +285,11 @@ function AccountPanelContent({ onNavigate, onLogout }) {
       {/* Edit Email */}
       <EmailChangeSection />
 
+      {/* Change Password */}
+      <PasswordChangeSection />
+
       {/* Actions */}
       <div className="space-y-1">
-        <button
-          onClick={onNavigate}
-          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
-          Change Password
-        </button>
-
-        <hr className="border-gray-700 my-2" />
-
         <button
           onClick={onLogout}
           className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:text-red-300 hover:bg-red-950 rounded-lg transition-colors"
@@ -873,7 +965,6 @@ function SettingsSidebar({ isOpen, onClose, onLogout }) {
       case 'account':
         return (
           <AccountPanelContent
-            onNavigate={() => { navigate('/change-password'); handleClose(); }}
             onLogout={onLogout}
           />
         );
