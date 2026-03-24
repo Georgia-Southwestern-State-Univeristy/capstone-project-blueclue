@@ -1,4 +1,5 @@
 // Browser Notification API utilities
+import { isInQuietHours } from '../services/preferencesService';
 
 /**
  * Request permission for browser notifications
@@ -44,6 +45,10 @@ export const canShowBrowserNotification = () => {
 export const showBrowserNotification = (title, options = {}) => {
   if (!canShowBrowserNotification()) {
     console.log('Cannot show browser notification - permission not granted');
+    return null;
+  }
+
+  if (isInQuietHours()) {
     return null;
   }
 

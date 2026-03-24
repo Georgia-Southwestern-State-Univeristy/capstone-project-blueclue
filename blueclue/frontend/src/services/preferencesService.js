@@ -11,6 +11,9 @@ const PREFERENCES_KEY = 'blueclue_notification_preferences';
 const DEFAULT_PREFERENCES = {
   browserNotifications: true,
   emailNotifications: true,
+  quietHoursEnabled: false,
+  quietHoursStart: '22:00',
+  quietHoursEnd: '07:00',
   types: {
     assignment: true,
     overdue: true,
@@ -178,6 +181,33 @@ export const toggleEmailNotifications = async () => {
 };
 
 /**
+ * Check if current time falls within quiet hours
+ * @returns {boolean} True if notifications should be suppressed
+ */
+export const isInQuietHours = () => {
+  const preferences = getPreferences();
+  if (!preferences.quietHoursEnabled) return false;
+
+  const start = preferences.quietHoursStart || '22:00';
+  const end = preferences.quietHoursEnd || '07:00';
+
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const [startH, startM] = start.split(':').map(Number);
+  const [endH, endM] = end.split(':').map(Number);
+  const startMinutes = startH * 60 + startM;
+  const endMinutes = endH * 60 + endM;
+
+  if (startMinutes <= endMinutes) {
+    // Same-day range (e.g., 09:00–17:00)
+    return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+  }
+  // Overnight range (e.g., 22:00–07:00)
+  return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+};
+
+/**
  * Reset preferences to default
  */
 export const resetPreferences = () => {
@@ -195,5 +225,6 @@ export default {
   toggleNotificationType,
   toggleBrowserNotifications,
   toggleEmailNotifications,
+  isInQuietHours,
   resetPreferences,
 };

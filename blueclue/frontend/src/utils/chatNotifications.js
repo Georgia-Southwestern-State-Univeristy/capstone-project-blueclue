@@ -54,6 +54,7 @@ export function playMessageSound() {
 }
 
 // ── Browser Notifications ────────────────────────────────────────────
+import { isInQuietHours } from '../services/preferencesService';
 export async function requestNotificationPermission() {
   if (!('Notification' in window)) return 'unsupported';
   if (Notification.permission === 'granted') return 'granted';
@@ -66,6 +67,7 @@ export function sendBrowserNotification(title, body) {
   if (!('Notification' in window)) return;
   if (Notification.permission !== 'granted') return;
   if (document.hasFocus()) return; // don't notify if tab is active
+  if (isInQuietHours()) return;
 
   try {
     const notification = new Notification(title, {

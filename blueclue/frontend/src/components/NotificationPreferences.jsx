@@ -34,6 +34,22 @@ function NotificationPreferences() {
     setPreferences(updated);
   };
 
+  const handleQuietHoursToggle = () => {
+    const updated = {
+      ...preferences,
+      quietHoursEnabled: !preferences.quietHoursEnabled,
+    };
+    setPreferences(updated);
+  };
+
+  const handleQuietHoursTimeChange = (field, value) => {
+    const updated = {
+      ...preferences,
+      [field]: value,
+    };
+    setPreferences(updated);
+  };
+
   const handleTypeToggle = (type) => {
     const updated = {
       ...preferences,
@@ -172,6 +188,66 @@ function NotificationPreferences() {
           {preferences.emailNotifications ? 'Enabled' : 'Disabled'}
         </span>
         </div>
+      </div>
+
+      {/* Quiet Hours / Do Not Disturb Section */}
+      <div className="mb-8">
+        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+            />
+          </svg>
+          Quiet Hours
+        </h3>
+        <p className="text-gray-400 text-sm mb-4">
+          Suppress browser notifications during specific hours (e.g., overnight)
+        </p>
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={preferences.quietHoursEnabled ?? false}
+            onClick={handleQuietHoursToggle}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              preferences.quietHoursEnabled ? 'bg-blue-600' : 'bg-gray-600'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                preferences.quietHoursEnabled ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+          <span className="text-gray-200">
+            {preferences.quietHoursEnabled ? 'Enabled' : 'Disabled'}
+          </span>
+        </div>
+        {preferences.quietHoursEnabled && (
+          <div className="grid grid-cols-2 gap-3 max-w-xs pl-1">
+            <div>
+              <label className="block text-gray-300 text-sm mb-1">From</label>
+              <input
+                type="time"
+                value={preferences.quietHoursStart || '22:00'}
+                onChange={(e) => handleQuietHoursTimeChange('quietHoursStart', e.target.value)}
+                className="bg-gray-700 border border-gray-600 text-gray-200 text-sm rounded-lg px-2 py-1.5 w-full focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-300 text-sm mb-1">To</label>
+              <input
+                type="time"
+                value={preferences.quietHoursEnd || '07:00'}
+                onChange={(e) => handleQuietHoursTimeChange('quietHoursEnd', e.target.value)}
+                className="bg-gray-700 border border-gray-600 text-gray-200 text-sm rounded-lg px-2 py-1.5 w-full focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Notification Types Section */}
