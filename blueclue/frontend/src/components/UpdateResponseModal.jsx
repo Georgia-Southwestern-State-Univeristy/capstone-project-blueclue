@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { fulfillUpdateRequest, requestExtension, formatTimeRemaining } from '../services/updateRequestService';
+import { formatDateTime as _fmtDateTime } from '../utils/dateFormatter';
 
 /**
  * UpdateResponseModal
@@ -398,7 +399,7 @@ function UpdateResponseModal({ isOpen, onClose, updateRequest }) {
               </p>
               {updateRequest.extension_approved && updateRequest.extension_deadline && (
                 <p className="text-xs text-gray-400 mt-1">
-                  New deadline: {new Date(updateRequest.extension_deadline).toLocaleString()}
+                  New deadline: {_fmtDateTime(updateRequest.extension_deadline)}
                 </p>
               )}
             </div>

@@ -8,6 +8,7 @@ import {
   createTicketFromChat,
 } from '../services/chatService'
 import { getSocket } from '../services/socketService'
+import { formatTime as _fmtTime } from '../utils/dateFormatter'
 
 const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3001'
 
@@ -265,7 +266,7 @@ export default function TechChatPanel() {
                       {[p.first_name, p.last_name].filter(Boolean).join(' ') || p.email}
                     </p>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {p.message_count} messages · Requested {new Date(p.handoff_requested_at).toLocaleTimeString()}
+                      {p.message_count} messages · Requested {_fmtTime(p.handoff_requested_at)}
                     </p>
                   </div>
                   <button
@@ -333,7 +334,7 @@ export default function TechChatPanel() {
                         )}
                       </div>
                       <span className="text-[9px] text-gray-600 mt-0.5">
-                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {_fmtTime(msg.created_at, { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
                   )

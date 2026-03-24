@@ -29,8 +29,8 @@ const getPriorityColor = (priority) => {
 const formatStatus = (status) =>
   status.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
 
-const formatDate = (dateString) =>
-  new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+import { formatDate as _fmtDate } from '../utils/dateFormatter'
+const formatDate = (dateString) => _fmtDate(dateString)
 
 // ── Ticket Card ──────────────────────────────────────────────────────────────
 

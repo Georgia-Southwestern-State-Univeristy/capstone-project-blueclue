@@ -202,15 +202,36 @@ function AccountPanelContent({ onLogout }) {
   const [lastName, setLastName] = useState(user?.lastName || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [company, setCompany] = useState(user?.company || '');
+  const [timezone, setTimezone] = useState(user?.timezone || '');
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Build timezone list from Intl API
+  const timezoneOptions = (() => {
+    try {
+      return Intl.supportedValuesOf('timeZone');
+    } catch {
+      // Fallback for older browsers
+      return [
+        'America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
+        'America/Anchorage','Pacific/Honolulu','America/Phoenix',
+        'America/Toronto','America/Vancouver','America/Sao_Paulo',
+        'Europe/London','Europe/Paris','Europe/Berlin','Europe/Moscow',
+        'Asia/Tokyo','Asia/Shanghai','Asia/Kolkata','Asia/Dubai',
+        'Australia/Sydney','Pacific/Auckland','UTC'
+      ];
+    }
+  })();
+
+  const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const hasChanges =
     firstName.trim() !== (user?.firstName || '') ||
     lastName.trim() !== (user?.lastName || '') ||
     (phone.trim() || '') !== (user?.phone || '') ||
-    (company.trim() || '') !== (user?.company || '');
+    (company.trim() || '') !== (user?.company || '') ||
+    (timezone || '') !== (user?.timezone || '');
 
   const handleSaveProfile = async () => {
     if (!firstName.trim() || !lastName.trim()) {
@@ -226,6 +247,7 @@ function AccountPanelContent({ onLogout }) {
         lastName: lastName.trim(),
         phone: phone.trim() || null,
         company: company.trim() || null,
+        timezone: timezone || null,
       });
       setSuccessMsg('Profile updated successfully');
       setTimeout(() => setSuccessMsg(''), 3000);
@@ -301,6 +323,21 @@ function AccountPanelContent({ onLogout }) {
             maxLength={255}
             className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
           />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Timezone</label>
+          <select
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 appearance-none"
+          >
+            <option value="">Browser default ({browserTimezone})</option>
+            {timezoneOptions.map((tz) => (
+              <option key={tz} value={tz}>
+                {tz.replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
         </div>
         {errorMsg && <p className="text-red-400 text-xs">{errorMsg}</p>}
         {successMsg && <p className="text-green-400 text-xs">{successMsg}</p>}

@@ -1136,10 +1136,10 @@ function DrillDownModal({ filter, tickets, loading, pagination, onClose, onLoadM
 }
 
 // Helper function for date formatting
+import { formatDate as _fmtDate } from '../utils/dateFormatter'
 function formatDate(dateStr) {
   if (!dateStr) return ''
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return _fmtDate(dateStr, { month: 'short', day: 'numeric' })
 }
 
 export default AnalyticsDashboard

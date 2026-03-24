@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { formatDate as _fmtDate } from '../utils/dateFormatter'
 
 /**
  * SaveLayoutButton – inline button with popover input for naming and saving layouts.
@@ -904,7 +905,7 @@ export default function WidgetGallery({
                           {entry.name}
                         </h4>
                         <p className="text-[9px] text-gray-500 mt-0.5 pl-[18px]">
-                          {new Date(entry.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {_fmtDate(entry.createdAt)}
                           {entry.hidden?.length > 0 && ` · ${allWidgets.length - entry.hidden.length} widgets`}
                         </p>
                       </div>

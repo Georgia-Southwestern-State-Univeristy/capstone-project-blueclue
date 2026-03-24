@@ -3,6 +3,7 @@ import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import { formatDateTime as _fmtDateTime } from '../../utils/dateFormatter';
 
 const getAuthHeaders = () => {
     const token = localStorage.getItem('blueclue_token');
@@ -69,14 +70,7 @@ const VersionHistory = ({ articleId, onClose, onRestore }) => {
     };
 
     const formatDate = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
+        return _fmtDateTime(dateString, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
     return (

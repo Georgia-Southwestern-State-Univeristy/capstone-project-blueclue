@@ -24,7 +24,9 @@ const getPriorityColor = (p) => {
 }
 
 const formatStatus = (s) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-const formatDate = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+
+import { formatDate as _fmtDate } from '../utils/dateFormatter'
+const formatDate = (d) => _fmtDate(d)
 
 /** Returns workload tier with color classes and label */
 const getWorkloadTier = (count) => {

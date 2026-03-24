@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import BaseWidget from './BaseWidget'
 import { getDeletedTickets, restoreTicket } from '../services/ticketService'
 import { useTicketSocket } from '../hooks/useTicketSocket'
+import { formatTimeAgo as _fmtTimeAgo } from '../utils/dateFormatter'
 
 const PRIORITY_COLORS = {
   critical: 'text-red-400',
@@ -139,18 +140,7 @@ function DeletedTicketsWidget({ onTicketClick = null }) {
 
   const formatDeletedDate = (dateStr) => {
     if (!dateStr) return 'Unknown'
-    const date = new Date(dateStr)
-    const now = new Date()
-    const diffMs = now - date
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-    if (diffDays === 0) {
-      const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-      if (diffHours === 0) return 'Just now'
-      return `${diffHours}h ago`
-    }
-    if (diffDays === 1) return 'Yesterday'
-    if (diffDays < 7) return `${diffDays}d ago`
-    return date.toLocaleDateString()
+    return _fmtTimeAgo(dateStr) || 'Just now'
   }
 
   return (

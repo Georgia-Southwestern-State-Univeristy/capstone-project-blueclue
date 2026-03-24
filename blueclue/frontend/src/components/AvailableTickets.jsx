@@ -4,6 +4,7 @@ import RequestAssignmentModal from './RequestAssignmentModal'
 import RefreshButton from './RefreshButton'
 import { getAvailableTickets, requestAssignment } from '../services/ticketService'
 import { useToast } from '../hooks/useToast'
+import { formatDateTime } from '../utils/dateFormatter'
 
 /**
  * Priority badge styling
@@ -23,13 +24,7 @@ const getPriorityColor = (priority) => {
  */
 const formatDate = (dateStr) => {
   if (!dateStr) return 'N/A'
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatDateTime(dateStr)
 }
 
 /**

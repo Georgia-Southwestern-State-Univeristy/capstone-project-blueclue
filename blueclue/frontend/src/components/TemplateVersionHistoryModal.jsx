@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useToast } from '../hooks/useToast'
 import TemplatePreviewModal from './TemplatePreviewModal'
 import { TEMPLATE_CATEGORIES, PRIORITY_OPTIONS } from '../services/templateService'
+import { formatTime as _fmtTime, formatDate as _fmtDate, formatDateTime as _fmtDateTime } from '../utils/dateFormatter'
 
 function TemplateVersionHistoryModal({ isOpen, onClose, template, versions, onRestore }) {
     const modalRef = useRef(null)
@@ -63,7 +64,7 @@ function TemplateVersionHistoryModal({ isOpen, onClose, template, versions, onRe
     const handleRestore = async (version) => {
         const confirmed = confirm(
             `Are you sure you want to restore this template to version ${version.version}?\n\n` +
-            `This will replace the current template content with the content from ${new Date(version.changed_at).toLocaleString()}.\n\n` +
+            `This will replace the current template content with the content from ${_fmtDateTime(version.changed_at)}.\n\n` +
             `A new version will be created with the restored content.`
         )
         
@@ -88,13 +89,13 @@ function TemplateVersionHistoryModal({ isOpen, onClose, template, versions, onRe
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
         
         if (diffDays === 0) {
-            return `Today at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+            return `Today at ${_fmtTime(dateString, { hour: '2-digit', minute: '2-digit' })}`
         } else if (diffDays === 1) {
-            return `Yesterday at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+            return `Yesterday at ${_fmtTime(dateString, { hour: '2-digit', minute: '2-digit' })}`
         } else if (diffDays < 7) {
             return `${diffDays} days ago`
         } else {
-            return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+            return _fmtDate(dateString)
         }
     }
     

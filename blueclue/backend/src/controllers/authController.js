@@ -73,7 +73,7 @@ export const login = async (req, res) => {
 
         const result = await pool.query(
             `SELECT id, email, username, password_hash, first_name, last_name, role,
-                    force_password_change, is_active, phone, company
+                    force_password_change, is_active, phone, company, timezone
              FROM users
              WHERE username = $1 AND role IN ('technician', 'senior_technician', 'management')`,
             [username]
@@ -173,6 +173,7 @@ export const login = async (req, res) => {
                 role: user.role,
                 phone: user.phone,
                 company: user.company,
+                timezone: user.timezone,
                 forcePasswordChange: user.force_password_change
             }
         });
@@ -186,7 +187,7 @@ export const login = async (req, res) => {
         }
 
         const result = await pool.query(
-            `SELECT id, email, password_hash, first_name, last_name, role, is_active, email_verified, phone, company
+            `SELECT id, email, password_hash, first_name, last_name, role, is_active, email_verified, phone, company, timezone
              FROM users
              WHERE LOWER(email) = LOWER($1) AND role IN ('customer', 'admin', 'management')`,
             [email]
@@ -297,6 +298,7 @@ export const login = async (req, res) => {
                 role: user.role,
                 phone: user.phone,
                 company: user.company,
+                timezone: user.timezone,
             }
         });
     }
@@ -554,7 +556,7 @@ export const getCurrentUser = async (req, res) => {
     const userId = req.user.id;
 
     const result = await pool.query(
-        `SELECT id, email, username, first_name, last_name, role, phone, company, 
+        `SELECT id, email, username, first_name, last_name, role, phone, company, timezone,
                 is_active, created_at, last_login, force_password_change
          FROM users 
          WHERE id = $1`,
@@ -578,6 +580,7 @@ export const getCurrentUser = async (req, res) => {
             role: user.role,
             phone: user.phone,
             company: user.company,
+            timezone: user.timezone,
             isActive: user.is_active,
             createdAt: user.created_at,
             lastLogin: user.last_login,
@@ -732,7 +735,7 @@ export const resendVerification = async (req, res) => {
  */
 export const updateProfile = async (req, res) => {
     const userId = req.user.id;
-    const { firstName, lastName, phone, company } = req.body;
+    const { firstName, lastName, phone, company, timezone } = req.body;
 
     if (!firstName || !lastName) {
         throw new BadRequestError('First name and last name are required');
@@ -749,13 +752,16 @@ export const updateProfile = async (req, res) => {
     if (company && company.length > 255) {
         throw new BadRequestError('Company must be 255 characters or less');
     }
+    if (timezone && timezone.length > 50) {
+        throw new BadRequestError('Invalid timezone');
+    }
 
     const updated = await pool.query(
         `UPDATE users
-         SET first_name = $2, last_name = $3, phone = $4, company = $5, updated_at = NOW()
+         SET first_name = $2, last_name = $3, phone = $4, company = $5, timezone = $6, updated_at = NOW()
          WHERE id = $1
-         RETURNING id, email, first_name, last_name, username, role, phone, company`,
-        [userId, firstName.trim(), lastName.trim(), phone?.trim() || null, company?.trim() || null]
+         RETURNING id, email, first_name, last_name, username, role, phone, company, timezone`,
+        [userId, firstName.trim(), lastName.trim(), phone?.trim() || null, company?.trim() || null, timezone?.trim() || null]
     );
 
     if (updated.rows.length === 0) {
@@ -787,6 +793,7 @@ export const updateProfile = async (req, res) => {
             role: user.role,
             phone: user.phone,
             company: user.company,
+            timezone: user.timezone,
         },
     });
 };

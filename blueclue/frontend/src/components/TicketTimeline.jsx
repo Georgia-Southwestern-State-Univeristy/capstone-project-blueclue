@@ -1,6 +1,7 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react'
 import { getRecentAssignmentActivity } from '../services/ticketService'
 import RefreshButton from './RefreshButton'
+import { formatDate as _fmtDate, formatTime as _fmtTime, formatTimeAgo as _fmtTimeAgo } from '../utils/dateFormatter'
 
 /**
  * Hourly timeline bar chart showing ticket submissions over the last 3 days,
@@ -108,7 +109,7 @@ function TicketTimeline({ tickets = [], onTicketClick = null }) {
     const labels = []
     let lastDay = null
     buckets.forEach((b, i) => {
-      const day = b.hourStart.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+      const day = _fmtDate(b.hourStart, { weekday: 'short', month: 'short', day: 'numeric' })
       if (day !== lastDay) {
         labels.push({ index: i, label: day })
         lastDay = day
@@ -126,7 +127,7 @@ function TicketTimeline({ tickets = [], onTicketClick = null }) {
   }, [buckets])
 
   const formatHour = (date) => {
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true })
+    return _fmtTime(date, { hour: 'numeric', hour12: true })
   }
 
   return (
@@ -253,7 +254,7 @@ function TicketTimeline({ tickets = [], onTicketClick = null }) {
                   >
                     <p className="font-medium">{formatHour(bucket.hourStart)}</p>
                     <p className="text-gray-400">
-                      {bucket.hourStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {_fmtDate(bucket.hourStart, { month: 'short', day: 'numeric' })}
                     </p>
                     <p className="text-blue-400">{bucket.count} {bucket.count === 1 ? 'submission' : 'submissions'}</p>
                     <p className="text-emerald-400">{bucket.assignCount} {bucket.assignCount === 1 ? 'assignment' : 'assignments'}</p>
@@ -520,7 +521,7 @@ function formatRelativeTime(dateStr) {
   if (diffMin < 60) return `${diffMin}m ago`
   if (diffHr < 24) return `${diffHr}h ago`
   if (diffDay < 7) return `${diffDay}d ago`
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return _fmtDate(d, { month: 'short', day: 'numeric' })
 }
 
 export default TicketTimeline

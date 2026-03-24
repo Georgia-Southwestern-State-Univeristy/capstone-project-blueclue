@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { formatDate as _fmtDate } from '../../utils/dateFormatter';
 
 const getAuthHeaders = () => {
     const token = localStorage.getItem('blueclue_token');
@@ -255,7 +256,7 @@ const KBAnalytics = () => {
                                             {article.views}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                                            {new Date(article.published_at).toLocaleDateString()}
+                                            {_fmtDate(article.published_at)}
                                         </td>
                                     </tr>
                                 ))}
