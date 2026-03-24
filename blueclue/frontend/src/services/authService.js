@@ -431,6 +431,33 @@ export const updateProfile = async ({ firstName, lastName }) => {
     return data;
 };
 
+/**
+ * Update email address (requires current password)
+ * @param {Object} fields - { newEmail, password }
+ * @returns {Promise<Object>} Updated user + fresh token
+ */
+export const updateEmail = async ({ newEmail, password }) => {
+    const response = await fetch(`${API_URL}/auth/email`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ newEmail, password }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to update email');
+    }
+
+    if (data.token) setToken(data.token);
+    if (data.user) setUser(data.user);
+
+    return data;
+};
+
 export default {
     login,
     register,
@@ -439,6 +466,7 @@ export default {
     refreshAccessToken,
     getCurrentUser,
     updateProfile,
+    updateEmail,
     isAuthenticated,
     needsPasswordChange,
     getUserRole,

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import NotificationPreferences from './NotificationPreferences';
-import { getUser, updateProfile } from '../services/authService';
+import { getUser, updateProfile, updateEmail } from '../services/authService';
 import { useNavigate } from 'react-router-dom';
 import useTheme from '../hooks/useTheme';
 
@@ -24,6 +24,76 @@ function SectionChevron({ expanded }) {
 }
 
 /* ── Sub-panel content per section ───────────────────────────────────── */
+
+function EmailChangeSection() {
+  const user = getUser();
+  const [newEmail, setNewEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const handleSaveEmail = async () => {
+    if (!newEmail.trim()) {
+      setErrorMsg('Email is required');
+      return;
+    }
+    if (!password) {
+      setErrorMsg('Current password is required to change email');
+      return;
+    }
+    setSaving(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      await updateEmail({ newEmail: newEmail.trim(), password });
+      setSuccessMsg('Email updated successfully');
+      setNewEmail('');
+      setPassword('');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to update email');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-gray-800/60 rounded-lg p-4 space-y-3">
+      <h3 className="text-sm font-semibold text-gray-300">Email Address</h3>
+      <p className="text-xs text-gray-500">Current: {user?.email || '—'}</p>
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">New Email</label>
+        <input
+          type="email"
+          value={newEmail}
+          onChange={(e) => setNewEmail(e.target.value)}
+          placeholder="new@example.com"
+          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+        />
+      </div>
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">Current Password</label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Confirm your password"
+          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+        />
+      </div>
+      {errorMsg && <p className="text-red-400 text-xs">{errorMsg}</p>}
+      {successMsg && <p className="text-green-400 text-xs">{successMsg}</p>}
+      <button
+        onClick={handleSaveEmail}
+        disabled={!newEmail.trim() || !password || saving}
+        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+      >
+        {saving ? 'Saving...' : 'Update Email'}
+      </button>
+    </div>
+  );
+}
 
 function AccountPanelContent({ onNavigate, onLogout }) {
   const user = getUser();
@@ -110,6 +180,9 @@ function AccountPanelContent({ onNavigate, onLogout }) {
           {saving ? 'Saving...' : 'Save Name'}
         </button>
       </div>
+
+      {/* Edit Email */}
+      <EmailChangeSection />
 
       {/* Actions */}
       <div className="space-y-1">

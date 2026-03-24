@@ -776,6 +776,83 @@ export const updateProfile = async (req, res) => {
     });
 };
 
+/**
+ * Update email address (requires current password for security)
+ * PUT /api/auth/email
+ *
+ * Body:
+ *   { newEmail: "new@example.com", password: "current_password" }
+ */
+export const updateEmail = async (req, res) => {
+    const userId = req.user.id;
+    const { newEmail, password } = req.body;
+
+    if (!newEmail || !password) {
+        throw new BadRequestError('New email and current password are required');
+    }
+
+    const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+    if (!emailRegex.test(newEmail)) {
+        throw new BadRequestError('Invalid email format');
+    }
+
+    // Verify current password
+    const userResult = await pool.query(
+        'SELECT id, password_hash, email, first_name, last_name, username, role FROM users WHERE id = $1',
+        [userId]
+    );
+    if (userResult.rows.length === 0) {
+        throw new NotFoundError('User not found');
+    }
+    const user = userResult.rows[0];
+
+    const passwordValid = await bcrypt.compare(password, user.password_hash);
+    if (!passwordValid) {
+        throw new UnauthorizedError('Incorrect password');
+    }
+
+    // Check if new email is already taken
+    const existing = await pool.query(
+        'SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND id != $2',
+        [newEmail, userId]
+    );
+    if (existing.rows.length > 0) {
+        throw new ConflictError('Email is already in use');
+    }
+
+    // Update email
+    const updated = await pool.query(
+        `UPDATE users SET email = $2, updated_at = NOW() WHERE id = $1
+         RETURNING id, email, first_name, last_name, username, role`,
+        [userId, newEmail.trim().toLowerCase()]
+    );
+    const updatedUser = updated.rows[0];
+
+    // Issue a fresh token with the new email
+    const token = generateToken({
+        id: updatedUser.id,
+        email: updatedUser.email,
+        username: updatedUser.username,
+        role: updatedUser.role,
+        firstName: updatedUser.first_name,
+        lastName: updatedUser.last_name,
+    });
+
+    return res.json({
+        success: true,
+        message: 'Email updated successfully',
+        token,
+        user: {
+            id: updatedUser.id,
+            email: updatedUser.email,
+            firstName: updatedUser.first_name,
+            lastName: updatedUser.last_name,
+            username: updatedUser.username,
+            role: updatedUser.role,
+        },
+    });
+};
+
 export default {
     login,
     register,
