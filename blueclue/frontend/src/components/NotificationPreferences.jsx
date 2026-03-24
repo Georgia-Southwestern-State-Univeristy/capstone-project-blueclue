@@ -1,13 +1,22 @@
-import { useState } from 'react';
-import { getPreferences, savePreferences } from '../services/preferencesService';
+import { useState, useEffect } from 'react';
+import { fetchPreferences, savePreferences } from '../services/preferencesService';
 
 /**
  * NotificationPreferences Component
- * Allows users to customize notification settings
+ * Allows users to customize notification settings (persisted to database)
  */
 function NotificationPreferences() {
-  const [preferences, setPreferences] = useState(getPreferences());
+  const [preferences, setPreferences] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetchPreferences()
+      .then((prefs) => setPreferences(prefs))
+      .finally(() => setLoading(false));
+  }, []);
 
   const handleBrowserNotificationToggle = (e) => {
     const updated = {
@@ -36,10 +45,17 @@ function NotificationPreferences() {
     setPreferences(updated);
   };
 
-  const handleSave = () => {
-    savePreferences(preferences);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+  const handleSave = async () => {
+    setIsSaving(true);
+    setError('');
+    const ok = await savePreferences(preferences);
+    setIsSaving(false);
+    if (ok) {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } else {
+      setError('Failed to save preferences. Please try again.');
+    }
   };
 
   const notificationTypeLabels = {
@@ -55,6 +71,14 @@ function NotificationPreferences() {
     update_request: 'When someone requests an update on your ticket',
     mention: 'When someone mentions you in a comment',
   };
+
+  if (loading || !preferences) {
+    return (
+      <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-gray-400">
+        Loading preferences...
+      </div>
+    );
+  }
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
@@ -155,9 +179,10 @@ function NotificationPreferences() {
       <div className="flex gap-3">
         <button
           onClick={handleSave}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+          disabled={isSaving}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors font-medium"
         >
-          Save Preferences
+          {isSaving ? 'Saving...' : 'Save Preferences'}
         </button>
         {isSaved && (
           <div className="flex items-center gap-2 text-green-400 text-sm">
@@ -167,13 +192,14 @@ function NotificationPreferences() {
             Saved successfully!
           </div>
         )}
+        {error && <p className="flex items-center text-red-400 text-sm">{error}</p>}
       </div>
 
       {/* Info Section */}
       <div className="mt-8 p-4 bg-gray-700/30 border border-gray-700 rounded-lg">
         <p className="text-gray-400 text-sm">
-          <strong>Note:</strong> Your notification preferences are saved locally. Browser notifications require permission
-          from your browser.
+          <strong>Note:</strong> Your notification preferences are saved to your account and will persist across sessions.
+          Browser notifications require permission from your browser.
         </p>
       </div>
     </div>

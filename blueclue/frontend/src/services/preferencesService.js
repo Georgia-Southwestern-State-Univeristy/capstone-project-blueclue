@@ -1,8 +1,11 @@
 /**
  * Notification Preferences Service
- * Manages user notification preferences stored in localStorage
+ * Manages user notification preferences via backend API with localStorage cache
  */
 
+import { getToken } from './authService';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 const PREFERENCES_KEY = 'blueclue_notification_preferences';
 
 const DEFAULT_PREFERENCES = {
@@ -16,16 +19,41 @@ const DEFAULT_PREFERENCES = {
   },
 };
 
+/** Helper: auth headers */
+const authHeaders = () => ({
+  'Content-Type': 'application/json',
+  Authorization: `Bearer ${getToken()}`,
+});
+
 /**
- * Get all notification preferences
- * @returns {Object} User preferences object
+ * Fetch preferences from API (updates localStorage cache)
+ * @returns {Promise<Object>} User preferences object
  */
-export const getPreferences = () => {
+export const fetchPreferences = async () => {
+  try {
+    const res = await fetch(`${API_URL}/notifications/preferences`, {
+      headers: authHeaders(),
+    });
+    if (res.ok) {
+      const { data } = await res.json();
+      localStorage.setItem(PREFERENCES_KEY, JSON.stringify(data));
+      return data;
+    }
+  } catch (err) {
+    console.error('Failed to fetch notification preferences:', err);
+  }
+  // Fallback to cached / defaults
+  return getPreferencesLocal();
+};
+
+/**
+ * Get preferences from localStorage cache (synchronous)
+ * @returns {Object} Cached preferences or defaults
+ */
+const getPreferencesLocal = () => {
   try {
     const stored = localStorage.getItem(PREFERENCES_KEY);
-    if (stored) {
-      return JSON.parse(stored);
-    }
+    if (stored) return JSON.parse(stored);
   } catch (err) {
     console.error('Failed to parse notification preferences:', err);
   }
@@ -33,13 +61,32 @@ export const getPreferences = () => {
 };
 
 /**
- * Save notification preferences
- * @param {Object} preferences - Preferences object
+ * Get all notification preferences (sync, from cache)
+ * @returns {Object} User preferences object
  */
-export const savePreferences = (preferences) => {
+export const getPreferences = () => getPreferencesLocal();
+
+/**
+ * Save notification preferences to API and localStorage
+ * @param {Object} preferences - Preferences object
+ * @returns {Promise<boolean>} Whether save succeeded
+ */
+export const savePreferences = async (preferences) => {
+  // Update local cache immediately
+  localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
+
   try {
-    localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
-    return true;
+    const res = await fetch(`${API_URL}/notifications/preferences`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify(preferences),
+    });
+    if (res.ok) {
+      const { data } = await res.json();
+      localStorage.setItem(PREFERENCES_KEY, JSON.stringify(data));
+      return true;
+    }
+    return false;
   } catch (err) {
     console.error('Failed to save notification preferences:', err);
     return false;
@@ -79,26 +126,26 @@ export const getEnabledNotificationTypes = () => {
 /**
  * Toggle a notification type
  * @param {string} type - Notification type
- * @returns {boolean} New enabled state
+ * @returns {Promise<boolean>} New enabled state
  */
-export const toggleNotificationType = (type) => {
+export const toggleNotificationType = async (type) => {
   const preferences = getPreferences();
   const newState = !preferences.types?.[type];
   preferences.types = preferences.types || {};
   preferences.types[type] = newState;
-  savePreferences(preferences);
+  await savePreferences(preferences);
   return newState;
 };
 
 /**
  * Toggle browser notifications
- * @returns {boolean} New enabled state
+ * @returns {Promise<boolean>} New enabled state
  */
-export const toggleBrowserNotifications = () => {
+export const toggleBrowserNotifications = async () => {
   const preferences = getPreferences();
   const newState = !preferences.browserNotifications;
   preferences.browserNotifications = newState;
-  savePreferences(preferences);
+  await savePreferences(preferences);
   return newState;
 };
 
@@ -113,13 +160,13 @@ export const areEmailNotificationsEnabled = () => {
 
 /**
  * Toggle email notifications
- * @returns {boolean} New enabled state
+ * @returns {Promise<boolean>} New enabled state
  */
-export const toggleEmailNotifications = () => {
+export const toggleEmailNotifications = async () => {
   const preferences = getPreferences();
   const newState = !preferences.emailNotifications;
   preferences.emailNotifications = newState;
-  savePreferences(preferences);
+  await savePreferences(preferences);
   return newState;
 };
 
@@ -131,6 +178,7 @@ export const resetPreferences = () => {
 };
 
 export default {
+  fetchPreferences,
   getPreferences,
   savePreferences,
   isNotificationTypeEnabled,
