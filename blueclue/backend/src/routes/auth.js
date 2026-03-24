@@ -12,7 +12,8 @@ import {
     refreshAccessToken,
     getCurrentUser,
     verifyEmail,
-    resendVerification
+    resendVerification,
+    updateProfile
 } from '../controllers/authController.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { resendVerificationLimiter } from '../middleware/rateLimiter.js';
@@ -109,6 +110,16 @@ router.post('/change-password', authenticateToken, changePassword);
  * Requires: Bearer token in Authorization header
  */
 router.post('/logout', authenticateToken, logout);
+
+/**
+ * PUT /api/auth/profile
+ * Update display name (first name / last name)
+ * Requires: Bearer token in Authorization header
+ *
+ * Body:
+ *   { firstName: "John", lastName: "Doe" }
+ */
+router.put('/profile', authenticateToken, updateProfile);
 
 // ============================================================================
 // HEALTH CHECK

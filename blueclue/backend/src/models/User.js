@@ -78,6 +78,25 @@ class User {
         const result = await pool.query(query, [email]);
         return result.rows[0] || null;
     }
+
+    /**
+     * Update user profile (first name, last name)
+     * @param {number} userId - User ID
+     * @param {Object} fields - Fields to update
+     * @param {string} fields.firstName - First name
+     * @param {string} fields.lastName - Last name
+     * @returns {Promise<Object>} Updated user object
+     */
+    static async updateProfile(userId, { firstName, lastName }) {
+        const result = await pool.query(
+            `UPDATE users
+             SET first_name = $2, last_name = $3, updated_at = NOW()
+             WHERE id = $1
+             RETURNING id, email, first_name, last_name, username, role`,
+            [userId, firstName, lastName]
+        );
+        return result.rows[0] || null;
+    }
 }
 
 export default User;

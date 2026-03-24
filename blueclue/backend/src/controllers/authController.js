@@ -719,6 +719,63 @@ export const resendVerification = async (req, res) => {
     });
 };
 
+/**
+ * Update profile (display name)
+ * PUT /api/auth/profile
+ *
+ * Body:
+ *   { firstName: "John", lastName: "Doe" }
+ */
+export const updateProfile = async (req, res) => {
+    const userId = req.user.id;
+    const { firstName, lastName } = req.body;
+
+    if (!firstName || !lastName) {
+        throw new BadRequestError('First name and last name are required');
+    }
+    if (firstName.length > 100 || lastName.length > 100) {
+        throw new BadRequestError('Name must be 100 characters or less');
+    }
+
+    const updated = await pool.query(
+        `UPDATE users
+         SET first_name = $2, last_name = $3, updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, email, first_name, last_name, username, role`,
+        [userId, firstName.trim(), lastName.trim()]
+    );
+
+    if (updated.rows.length === 0) {
+        throw new NotFoundError('User not found');
+    }
+
+    const user = updated.rows[0];
+
+    // Issue a fresh token so the JWT payload stays in sync
+    const token = generateToken({
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        role: user.role,
+        firstName: user.first_name,
+        lastName: user.last_name,
+    });
+
+    return res.json({
+        success: true,
+        message: 'Profile updated successfully',
+        token,
+        user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.first_name,
+            lastName: user.last_name,
+            username: user.username,
+            role: user.role,
+        },
+    });
+};
+
 export default {
     login,
     register,

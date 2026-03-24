@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import NotificationPreferences from './NotificationPreferences';
-import { getUser } from '../services/authService';
+import { getUser, updateProfile } from '../services/authService';
 import { useNavigate } from 'react-router-dom';
 import useTheme from '../hooks/useTheme';
 
@@ -27,6 +27,35 @@ function SectionChevron({ expanded }) {
 
 function AccountPanelContent({ onNavigate, onLogout }) {
   const user = getUser();
+  const [firstName, setFirstName] = useState(user?.firstName || '');
+  const [lastName, setLastName] = useState(user?.lastName || '');
+  const [saving, setSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const hasChanges =
+    firstName.trim() !== (user?.firstName || '') ||
+    lastName.trim() !== (user?.lastName || '');
+
+  const handleSaveName = async () => {
+    if (!firstName.trim() || !lastName.trim()) {
+      setErrorMsg('First and last name are required');
+      return;
+    }
+    setSaving(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      await updateProfile({ firstName: firstName.trim(), lastName: lastName.trim() });
+      setSuccessMsg('Name updated successfully');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to update name');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* User info card */}
@@ -44,6 +73,42 @@ function AccountPanelContent({ onNavigate, onLogout }) {
             <p className="text-gray-500 text-sm capitalize">{user?.role || 'User'}</p>
           </div>
         </div>
+      </div>
+
+      {/* Edit Display Name */}
+      <div className="bg-gray-800/60 rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-gray-300">Display Name</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">First Name</label>
+            <input
+              type="text"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              maxLength={100}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Last Name</label>
+            <input
+              type="text"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              maxLength={100}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+            />
+          </div>
+        </div>
+        {errorMsg && <p className="text-red-400 text-xs">{errorMsg}</p>}
+        {successMsg && <p className="text-green-400 text-xs">{successMsg}</p>}
+        <button
+          onClick={handleSaveName}
+          disabled={!hasChanges || saving}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+        >
+          {saving ? 'Saving...' : 'Save Name'}
+        </button>
       </div>
 
       {/* Actions */}

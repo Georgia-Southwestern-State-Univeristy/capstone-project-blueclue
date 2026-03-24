@@ -403,6 +403,34 @@ export const getUserId = () => {
     return user?.id || null;
 };
 
+/**
+ * Update user profile (display name)
+ * @param {Object} fields - { firstName, lastName }
+ * @returns {Promise<Object>} Updated user + fresh token
+ */
+export const updateProfile = async ({ firstName, lastName }) => {
+    const response = await fetch(`${API_URL}/auth/profile`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ firstName, lastName }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to update profile');
+    }
+
+    // Persist the refreshed token + user data
+    if (data.token) setToken(data.token);
+    if (data.user) setUser(data.user);
+
+    return data;
+};
+
 export default {
     login,
     register,
@@ -410,6 +438,7 @@ export default {
     logout,
     refreshAccessToken,
     getCurrentUser,
+    updateProfile,
     isAuthenticated,
     needsPasswordChange,
     getUserRole,
