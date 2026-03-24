@@ -15,7 +15,7 @@ const setToken = (token) => {
 /**
  * Get authentication token from localStorage
  */
-const getToken = () => {
+export const getToken = () => {
     return localStorage.getItem('blueclue_token');
 };
 
