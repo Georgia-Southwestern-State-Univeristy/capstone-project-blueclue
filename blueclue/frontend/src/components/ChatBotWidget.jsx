@@ -19,10 +19,15 @@ export default function ChatBotWidget() {
   const [isTyping, setIsTyping] = useState(false)
   const [conversationId, setConversationId] = useState(null)
   const messagesEndRef = useRef(null)
+  const hasMounted = useRef(false)
 
-  // Auto-scroll on new message
+  // Auto-scroll on new message (skip initial render)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (!hasMounted.current) {
+      hasMounted.current = true
+      return
+    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [messages, isTyping])
 
   const handleSend = useCallback(async () => {
