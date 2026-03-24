@@ -8,6 +8,13 @@ const DEFAULTS = {
   type_overdue: true,
   type_update_request: true,
   type_mention: true,
+  type_ticket_cancelled: true,
+  type_ring_request: true,
+  type_ring_response: true,
+  type_update_fulfilled: true,
+  type_update_overdue: true,
+  type_chat_handoff: true,
+  type_update_request_reminder: true,
 };
 
 class NotificationPreference {
@@ -36,16 +43,26 @@ class NotificationPreference {
     const result = await pool.query(
       `INSERT INTO notification_preferences
          (user_id, browser_notifications, email_notifications,
-          type_assignment, type_overdue, type_update_request, type_mention, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+          type_assignment, type_overdue, type_update_request, type_mention,
+          type_ticket_cancelled, type_ring_request, type_ring_response,
+          type_update_fulfilled, type_update_overdue, type_chat_handoff,
+          type_update_request_reminder, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
        ON CONFLICT (user_id) DO UPDATE SET
-         browser_notifications = EXCLUDED.browser_notifications,
-         email_notifications   = EXCLUDED.email_notifications,
-         type_assignment       = EXCLUDED.type_assignment,
-         type_overdue          = EXCLUDED.type_overdue,
-         type_update_request   = EXCLUDED.type_update_request,
-         type_mention          = EXCLUDED.type_mention,
-         updated_at            = NOW()
+         browser_notifications       = EXCLUDED.browser_notifications,
+         email_notifications         = EXCLUDED.email_notifications,
+         type_assignment             = EXCLUDED.type_assignment,
+         type_overdue                = EXCLUDED.type_overdue,
+         type_update_request         = EXCLUDED.type_update_request,
+         type_mention                = EXCLUDED.type_mention,
+         type_ticket_cancelled       = EXCLUDED.type_ticket_cancelled,
+         type_ring_request           = EXCLUDED.type_ring_request,
+         type_ring_response          = EXCLUDED.type_ring_response,
+         type_update_fulfilled       = EXCLUDED.type_update_fulfilled,
+         type_update_overdue         = EXCLUDED.type_update_overdue,
+         type_chat_handoff           = EXCLUDED.type_chat_handoff,
+         type_update_request_reminder = EXCLUDED.type_update_request_reminder,
+         updated_at                  = NOW()
        RETURNING *`,
       [
         userId,
@@ -55,6 +72,13 @@ class NotificationPreference {
         prefs.types?.overdue ?? DEFAULTS.type_overdue,
         prefs.types?.update_request ?? DEFAULTS.type_update_request,
         prefs.types?.mention ?? DEFAULTS.type_mention,
+        prefs.types?.ticket_cancelled ?? DEFAULTS.type_ticket_cancelled,
+        prefs.types?.ring_request ?? DEFAULTS.type_ring_request,
+        prefs.types?.ring_response ?? DEFAULTS.type_ring_response,
+        prefs.types?.update_fulfilled ?? DEFAULTS.type_update_fulfilled,
+        prefs.types?.update_overdue ?? DEFAULTS.type_update_overdue,
+        prefs.types?.chat_handoff ?? DEFAULTS.type_chat_handoff,
+        prefs.types?.update_request_reminder ?? DEFAULTS.type_update_request_reminder,
       ]
     );
     return this.#toApiFormat(result.rows[0]);
@@ -70,6 +94,13 @@ class NotificationPreference {
         overdue: row.type_overdue,
         update_request: row.type_update_request,
         mention: row.type_mention,
+        ticket_cancelled: row.type_ticket_cancelled,
+        ring_request: row.type_ring_request,
+        ring_response: row.type_ring_response,
+        update_fulfilled: row.type_update_fulfilled,
+        update_overdue: row.type_update_overdue,
+        chat_handoff: row.type_chat_handoff,
+        update_request_reminder: row.type_update_request_reminder,
       },
     };
   }

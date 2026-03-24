@@ -18,18 +18,18 @@ function NotificationPreferences() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleBrowserNotificationToggle = (e) => {
+  const handleBrowserNotificationToggle = () => {
     const updated = {
       ...preferences,
-      browserNotifications: e.target.checked,
+      browserNotifications: !preferences.browserNotifications,
     };
     setPreferences(updated);
   };
 
-  const handleEmailNotificationToggle = (e) => {
+  const handleEmailNotificationToggle = () => {
     const updated = {
       ...preferences,
-      emailNotifications: e.target.checked,
+      emailNotifications: !preferences.emailNotifications,
     };
     setPreferences(updated);
   };
@@ -63,6 +63,13 @@ function NotificationPreferences() {
     overdue: 'Overdue Alerts',
     update_request: 'Update Requests',
     mention: 'Mentions',
+    ticket_cancelled: 'Ticket Cancelled',
+    ring_request: 'Ring Requests',
+    ring_response: 'Ring Responses',
+    update_fulfilled: 'Update Fulfilled',
+    update_overdue: 'Update Overdue',
+    chat_handoff: 'Chat Handoff',
+    update_request_reminder: 'Update Reminders',
   };
 
   const notificationTypeDescriptions = {
@@ -70,6 +77,13 @@ function NotificationPreferences() {
     overdue: 'When a ticket becomes overdue',
     update_request: 'When someone requests an update on your ticket',
     mention: 'When someone mentions you in a comment',
+    ticket_cancelled: 'When a ticket you are involved with is cancelled',
+    ring_request: 'When a technician ring is requested for a ticket',
+    ring_response: 'When someone responds to a ring request',
+    update_fulfilled: 'When a requested update has been provided',
+    update_overdue: 'When a requested update is overdue',
+    chat_handoff: 'When a chat conversation is handed off to you',
+    update_request_reminder: 'Reminders for pending update requests',
   };
 
   if (loading || !preferences) {
@@ -100,17 +114,26 @@ function NotificationPreferences() {
         <p className="text-gray-400 text-sm mb-4">
           Receive desktop notifications for important events
         </p>
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={preferences.browserNotifications}
-            onChange={handleBrowserNotificationToggle}
-            className="w-4 h-4 rounded bg-gray-700 border-gray-600 checked:bg-blue-600 cursor-pointer"
+        <div className="flex items-center gap-3">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={preferences.browserNotifications}
+          onClick={handleBrowserNotificationToggle}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+            preferences.browserNotifications ? 'bg-blue-600' : 'bg-gray-600'
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              preferences.browserNotifications ? 'translate-x-6' : 'translate-x-1'
+            }`}
           />
-          <span className="text-gray-200">
-            {preferences.browserNotifications ? 'Enabled' : 'Disabled'}
-          </span>
-        </label>
+        </button>
+        <span className="text-gray-200">
+          {preferences.browserNotifications ? 'Enabled' : 'Disabled'}
+        </span>
+        </div>
       </div>
 
       {/* Email Notifications Section */}
@@ -129,17 +152,26 @@ function NotificationPreferences() {
         <p className="text-gray-400 text-sm mb-4">
           Receive email notifications for important updates
         </p>
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={preferences.emailNotifications}
-            onChange={handleEmailNotificationToggle}
-            className="w-4 h-4 rounded bg-gray-700 border-gray-600 checked:bg-blue-600 cursor-pointer"
+        <div className="flex items-center gap-3">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={preferences.emailNotifications}
+          onClick={handleEmailNotificationToggle}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+            preferences.emailNotifications ? 'bg-blue-600' : 'bg-gray-600'
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              preferences.emailNotifications ? 'translate-x-6' : 'translate-x-1'
+            }`}
           />
-          <span className="text-gray-200">
-            {preferences.emailNotifications ? 'Enabled' : 'Disabled'}
-          </span>
-        </label>
+        </button>
+        <span className="text-gray-200">
+          {preferences.emailNotifications ? 'Enabled' : 'Disabled'}
+        </span>
+        </div>
       </div>
 
       {/* Notification Types Section */}
@@ -159,18 +191,27 @@ function NotificationPreferences() {
 
         <div className="space-y-3">
           {Object.entries(preferences.types).map(([type, enabled]) => (
-            <label key={type} className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-700/30 transition-colors cursor-pointer">
-              <input
-                type="checkbox"
-                checked={enabled}
-                onChange={() => handleTypeToggle(type)}
-                className="w-4 h-4 rounded bg-gray-700 border-gray-600 checked:bg-blue-600 cursor-pointer mt-1"
-              />
-              <div className="flex-1">
+            <div key={type} className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-700/30 transition-colors">
+              <div className="flex-1 mr-3">
                 <div className="text-gray-200 font-medium">{notificationTypeLabels[type]}</div>
                 <div className="text-gray-500 text-sm">{notificationTypeDescriptions[type]}</div>
               </div>
-            </label>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={enabled}
+                onClick={() => handleTypeToggle(type)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                  enabled ? 'bg-blue-600' : 'bg-gray-600'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    enabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
           ))}
         </div>
       </div>

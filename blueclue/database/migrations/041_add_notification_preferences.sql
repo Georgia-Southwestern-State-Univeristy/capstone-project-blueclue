@@ -12,6 +12,13 @@ CREATE TABLE IF NOT EXISTS notification_preferences (
     type_overdue BOOLEAN NOT NULL DEFAULT true,
     type_update_request BOOLEAN NOT NULL DEFAULT true,
     type_mention BOOLEAN NOT NULL DEFAULT true,
+    type_ticket_cancelled BOOLEAN NOT NULL DEFAULT true,
+    type_ring_request BOOLEAN NOT NULL DEFAULT true,
+    type_ring_response BOOLEAN NOT NULL DEFAULT true,
+    type_update_fulfilled BOOLEAN NOT NULL DEFAULT true,
+    type_update_overdue BOOLEAN NOT NULL DEFAULT true,
+    type_chat_handoff BOOLEAN NOT NULL DEFAULT true,
+    type_update_request_reminder BOOLEAN NOT NULL DEFAULT true,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

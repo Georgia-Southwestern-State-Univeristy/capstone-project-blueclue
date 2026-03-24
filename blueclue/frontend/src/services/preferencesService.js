@@ -16,6 +16,13 @@ const DEFAULT_PREFERENCES = {
     overdue: true,
     update_request: true,
     mention: true,
+    ticket_cancelled: true,
+    ring_request: true,
+    ring_response: true,
+    update_fulfilled: true,
+    update_overdue: true,
+    chat_handoff: true,
+    update_request_reminder: true,
   },
 };
 
