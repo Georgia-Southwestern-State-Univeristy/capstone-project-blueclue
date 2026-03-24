@@ -73,7 +73,7 @@ export const login = async (req, res) => {
 
         const result = await pool.query(
             `SELECT id, email, username, password_hash, first_name, last_name, role,
-                    force_password_change, is_active
+                    force_password_change, is_active, phone, company
              FROM users
              WHERE username = $1 AND role IN ('technician', 'senior_technician', 'management')`,
             [username]
@@ -171,6 +171,8 @@ export const login = async (req, res) => {
                 firstName: user.first_name,
                 lastName: user.last_name,
                 role: user.role,
+                phone: user.phone,
+                company: user.company,
                 forcePasswordChange: user.force_password_change
             }
         });
@@ -184,7 +186,7 @@ export const login = async (req, res) => {
         }
 
         const result = await pool.query(
-            `SELECT id, email, password_hash, first_name, last_name, role, is_active, email_verified
+            `SELECT id, email, password_hash, first_name, last_name, role, is_active, email_verified, phone, company
              FROM users
              WHERE LOWER(email) = LOWER($1) AND role IN ('customer', 'admin', 'management')`,
             [email]
@@ -292,7 +294,9 @@ export const login = async (req, res) => {
                 email: user.email,
                 firstName: user.first_name,
                 lastName: user.last_name,
-                role: user.role
+                role: user.role,
+                phone: user.phone,
+                company: user.company,
             }
         });
     }
@@ -728,7 +732,7 @@ export const resendVerification = async (req, res) => {
  */
 export const updateProfile = async (req, res) => {
     const userId = req.user.id;
-    const { firstName, lastName } = req.body;
+    const { firstName, lastName, phone, company } = req.body;
 
     if (!firstName || !lastName) {
         throw new BadRequestError('First name and last name are required');
@@ -736,13 +740,22 @@ export const updateProfile = async (req, res) => {
     if (firstName.length > 100 || lastName.length > 100) {
         throw new BadRequestError('Name must be 100 characters or less');
     }
+    if (phone && !/^\+?[0-9\s\-\(\)]+$/.test(phone)) {
+        throw new BadRequestError('Invalid phone number format');
+    }
+    if (phone && phone.length > 20) {
+        throw new BadRequestError('Phone number must be 20 characters or less');
+    }
+    if (company && company.length > 255) {
+        throw new BadRequestError('Company must be 255 characters or less');
+    }
 
     const updated = await pool.query(
         `UPDATE users
-         SET first_name = $2, last_name = $3, updated_at = NOW()
+         SET first_name = $2, last_name = $3, phone = $4, company = $5, updated_at = NOW()
          WHERE id = $1
-         RETURNING id, email, first_name, last_name, username, role`,
-        [userId, firstName.trim(), lastName.trim()]
+         RETURNING id, email, first_name, last_name, username, role, phone, company`,
+        [userId, firstName.trim(), lastName.trim(), phone?.trim() || null, company?.trim() || null]
     );
 
     if (updated.rows.length === 0) {
@@ -772,6 +785,8 @@ export const updateProfile = async (req, res) => {
             lastName: user.last_name,
             username: user.username,
             role: user.role,
+            phone: user.phone,
+            company: user.company,
         },
     });
 };

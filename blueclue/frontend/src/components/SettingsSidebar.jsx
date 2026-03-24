@@ -200,15 +200,19 @@ function AccountPanelContent({ onLogout }) {
   const user = getUser();
   const [firstName, setFirstName] = useState(user?.firstName || '');
   const [lastName, setLastName] = useState(user?.lastName || '');
+  const [phone, setPhone] = useState(user?.phone || '');
+  const [company, setCompany] = useState(user?.company || '');
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
   const hasChanges =
     firstName.trim() !== (user?.firstName || '') ||
-    lastName.trim() !== (user?.lastName || '');
+    lastName.trim() !== (user?.lastName || '') ||
+    (phone.trim() || '') !== (user?.phone || '') ||
+    (company.trim() || '') !== (user?.company || '');
 
-  const handleSaveName = async () => {
+  const handleSaveProfile = async () => {
     if (!firstName.trim() || !lastName.trim()) {
       setErrorMsg('First and last name are required');
       return;
@@ -217,11 +221,16 @@ function AccountPanelContent({ onLogout }) {
     setErrorMsg('');
     setSuccessMsg('');
     try {
-      await updateProfile({ firstName: firstName.trim(), lastName: lastName.trim() });
-      setSuccessMsg('Name updated successfully');
+      await updateProfile({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phone: phone.trim() || null,
+        company: company.trim() || null,
+      });
+      setSuccessMsg('Profile updated successfully');
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch (err) {
-      setErrorMsg(err.message || 'Failed to update name');
+      setErrorMsg(err.message || 'Failed to update profile');
     } finally {
       setSaving(false);
     }
@@ -246,9 +255,9 @@ function AccountPanelContent({ onLogout }) {
         </div>
       </div>
 
-      {/* Edit Display Name */}
+      {/* Edit Profile */}
       <div className="bg-gray-800/60 rounded-lg p-4 space-y-3">
-        <h3 className="text-sm font-semibold text-gray-300">Display Name</h3>
+        <h3 className="text-sm font-semibold text-gray-300">Profile</h3>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">First Name</label>
@@ -271,14 +280,36 @@ function AccountPanelContent({ onLogout }) {
             />
           </div>
         </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Phone</label>
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+1 (555) 123-4567"
+            maxLength={20}
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Company / Organization</label>
+          <input
+            type="text"
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+            placeholder="Acme Corp"
+            maxLength={255}
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+          />
+        </div>
         {errorMsg && <p className="text-red-400 text-xs">{errorMsg}</p>}
         {successMsg && <p className="text-green-400 text-xs">{successMsg}</p>}
         <button
-          onClick={handleSaveName}
+          onClick={handleSaveProfile}
           disabled={!hasChanges || saving}
           className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
         >
-          {saving ? 'Saving...' : 'Save Name'}
+          {saving ? 'Saving...' : 'Save Profile'}
         </button>
       </div>
 

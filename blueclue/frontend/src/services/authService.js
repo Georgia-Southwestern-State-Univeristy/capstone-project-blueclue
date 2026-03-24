@@ -408,14 +408,14 @@ export const getUserId = () => {
  * @param {Object} fields - { firstName, lastName }
  * @returns {Promise<Object>} Updated user + fresh token
  */
-export const updateProfile = async ({ firstName, lastName }) => {
+export const updateProfile = async ({ firstName, lastName, phone, company }) => {
     const response = await fetch(`${API_URL}/auth/profile`, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${getToken()}`,
         },
-        body: JSON.stringify({ firstName, lastName }),
+        body: JSON.stringify({ firstName, lastName, phone, company }),
     });
 
     const data = await response.json();
