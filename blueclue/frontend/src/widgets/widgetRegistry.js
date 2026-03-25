@@ -447,6 +447,22 @@ const WIDGET_REGISTRY = [
     component: () => import('../components/KnowledgeBaseWidget'),
     previewPattern: 'kb-search',
   },
+  // ── Client: Ticket Update Log ─────────────────────────────────────────────
+  {
+    key: 'ticketUpdates',
+    name: 'Ticket Update Log',
+    description: 'Chronological log of all updates to your tickets',
+    icon: '📋',
+    category: CATEGORIES.TICKETS,
+    permissions: [ROLES.CUSTOMER],
+    size: {
+      defaultW: 12, defaultH: 10,
+      minW: 6, minH: 6,
+      maxW: 12, maxH: 20,
+    },
+    component: () => import('../components/ClientTicketUpdatesWidget'),
+    previewPattern: 'activity-list',
+  },
 
   {
     key: 'recentActivity',
