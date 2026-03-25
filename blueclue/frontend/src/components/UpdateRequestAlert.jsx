@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getUpdateRequests, formatTimeRemaining } from '../services/updateRequestService';
+import { formatDateTime as _fmtDateTime } from '../utils/dateFormatter';
 
 /**
  * UpdateRequestAlert
@@ -151,7 +152,7 @@ function UpdateRequestAlert({ onRespond }) {
 
             <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
               <span>
-                Deadline: {new Date(currentRequest.deadline).toLocaleString()}
+                Deadline: {_fmtDateTime(currentRequest.deadline)}
               </span>
             </div>
           </div>

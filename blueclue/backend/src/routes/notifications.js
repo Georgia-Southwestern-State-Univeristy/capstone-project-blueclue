@@ -6,7 +6,9 @@ import {
     markNotificationAsRead,
     deleteNotification,
     markAllNotificationsAsRead,
-    deleteAllReadNotifications
+    deleteAllReadNotifications,
+    getNotificationPreferences,
+    updateNotificationPreferences
 } from '../controllers/notificationController.js';
 import { authenticateToken } from '../middleware/auth.js';
 
@@ -25,6 +27,20 @@ router.post('/', authenticateToken, createNotification);
  * @access  Private (requires authentication)
  */
 router.get('/', authenticateToken, getUserNotifications);
+
+/**
+ * @route   GET /api/notifications/preferences
+ * @desc    Get notification preferences for the authenticated user
+ * @access  Private (requires authentication)
+ */
+router.get('/preferences', authenticateToken, getNotificationPreferences);
+
+/**
+ * @route   PUT /api/notifications/preferences
+ * @desc    Update notification preferences for the authenticated user
+ * @access  Private (requires authentication)
+ */
+router.put('/preferences', authenticateToken, updateNotificationPreferences);
 
 /**
  * @route   PATCH /api/notifications/read-all

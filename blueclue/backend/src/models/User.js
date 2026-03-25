@@ -43,6 +43,7 @@ class User {
                 role,
                 phone,
                 company,
+                timezone,
                 is_active
             FROM users
             WHERE id = $1
@@ -69,6 +70,7 @@ class User {
                 role,
                 phone,
                 company,
+                timezone,
                 is_active,
                 force_password_change
             FROM users
@@ -76,6 +78,25 @@ class User {
         `;
         
         const result = await pool.query(query, [email]);
+        return result.rows[0] || null;
+    }
+
+    /**
+     * Update user profile (first name, last name)
+     * @param {number} userId - User ID
+     * @param {Object} fields - Fields to update
+     * @param {string} fields.firstName - First name
+     * @param {string} fields.lastName - Last name
+     * @returns {Promise<Object>} Updated user object
+     */
+    static async updateProfile(userId, { firstName, lastName, phone, company, timezone }) {
+        const result = await pool.query(
+            `UPDATE users
+             SET first_name = $2, last_name = $3, phone = $4, company = $5, timezone = $6, updated_at = NOW()
+             WHERE id = $1
+             RETURNING id, email, first_name, last_name, username, role, phone, company, timezone`,
+            [userId, firstName, lastName, phone || null, company || null, timezone || null]
+        );
         return result.rows[0] || null;
     }
 }

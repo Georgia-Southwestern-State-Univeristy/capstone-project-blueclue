@@ -4,6 +4,7 @@ import {
     PRIORITY_OPTIONS,
     TICKET_CATEGORIES
 } from '../services/templateService'
+import { formatDate as _fmtDate } from '../utils/dateFormatter'
 
 function TemplatePreviewModal({ isOpen, onClose, template }) {
     const modalRef = useRef(null)
@@ -218,7 +219,7 @@ function TemplatePreviewModal({ isOpen, onClose, template }) {
                                 <div>
                                     <span>Last used:</span>
                                     <span className="ml-1 text-gray-400">
-                                        {new Date(template.last_used_at).toLocaleDateString()}
+                                        {_fmtDate(template.last_used_at)}
                                     </span>
                                 </div>
                             )}

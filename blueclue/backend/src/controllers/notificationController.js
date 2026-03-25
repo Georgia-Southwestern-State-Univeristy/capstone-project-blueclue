@@ -1,5 +1,6 @@
 // src/controllers/notificationController.js
 import Notification from '../models/Notification.js';
+import NotificationPreference from '../models/NotificationPreference.js';
 import { emitNotificationToUser, emitUnreadCountToUser } from '../services/socketService.js';
 import { BadRequestError, NotFoundError } from '../middleware/errorHandler.js';
 
@@ -210,4 +211,27 @@ export const deleteAllReadNotifications = async (req, res) => {
         message: `${count} notification(s) deleted`,
         data: { count }
     });
+};
+
+/**
+ * Get notification preferences for the authenticated user
+ * GET /api/notifications/preferences
+ */
+export const getNotificationPreferences = async (req, res) => {
+    const prefs = await NotificationPreference.getByUserId(req.user.id);
+    res.json({ status: 'success', data: prefs });
+};
+
+/**
+ * Update notification preferences for the authenticated user
+ * PUT /api/notifications/preferences
+ */
+export const updateNotificationPreferences = async (req, res) => {
+    const { browserNotifications, emailNotifications, types } = req.body;
+    const prefs = await NotificationPreference.upsert(req.user.id, {
+        browserNotifications,
+        emailNotifications,
+        types,
+    });
+    res.json({ status: 'success', data: prefs });
 };

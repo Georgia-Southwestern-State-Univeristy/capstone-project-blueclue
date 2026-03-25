@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
+import { formatDate as _fmtDate } from '../utils/dateFormatter'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
@@ -101,9 +102,9 @@ export default function TicketTrendWidget() {
   // Format period labels
   const formatLabel = raw => {
     const d = new Date(raw)
-    if (range === '1y') return d.toLocaleDateString(undefined, { month: 'short' })
-    if (range === '90d' || range === '6m') return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    if (range === '1y') return _fmtDate(d, { month: 'short' })
+    if (range === '90d' || range === '6m') return _fmtDate(d, { month: 'short', day: 'numeric' })
+    return _fmtDate(d, { month: 'short', day: 'numeric' })
   }
 
   // Summary stats

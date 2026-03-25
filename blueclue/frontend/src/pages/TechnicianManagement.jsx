@@ -3,6 +3,7 @@ import { useToast } from '../hooks/useToast'
 import InviteTechnicianForm from '../components/InviteTechnicianForm'
 import LoadingSpinner from '../components/LoadingSpinner'
 import axios from 'axios'
+import { formatDateTime } from '../utils/dateFormatter'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
 
@@ -49,14 +50,7 @@ function TechnicianManagement() {
 
   const formatDate = (dateString) => {
     if (!dateString) return 'Never'
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+    return formatDateTime(dateString)
   }
 
   const getRoleBadgeColor = (role) => {

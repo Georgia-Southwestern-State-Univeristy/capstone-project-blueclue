@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getUserRole, getCurrentUser } from '../services/authService';
 import { getSocket } from '../services/socketService';
+import { formatTimeAgo as _fmtTimeAgo } from '../utils/dateFormatter';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -347,15 +348,7 @@ function TicketComments({ ticketId }) {
 
   // Format date
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
-    return date.toLocaleDateString();
+    return _fmtTimeAgo(dateString) || 'Just now';
   };
 
   // Render single comment
