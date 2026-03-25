@@ -368,6 +368,10 @@ function AnalyticsDashboard() {
             <SLATab 
               data={dashboardData.sla}
               onDrillDown={handleDrillDown}
+              onTicketClick={(ticket) => {
+                setSelectedTicketId(ticket.id);
+                setIsDetailOpen(true);
+              }}
             />
           )}
         </>
@@ -892,7 +896,7 @@ function CategoriesTab({ data, onDrillDown }) {
   )
 }
 
-function SLATab({ data, onDrillDown }) {
+function SLATab({ data, onDrillDown, onTicketClick }) {
   if (!data) return null
 
   return (
@@ -996,7 +1000,7 @@ function SLATab({ data, onDrillDown }) {
               </thead>
               <tbody className="divide-y divide-gray-800">
                 {data.current_breaches.slice(0, 10).map((ticket, index) => (
-                  <tr key={index} className="hover:bg-gray-800/50">
+                  <tr key={index} className="hover:bg-gray-800/50 cursor-pointer" onClick={() => onTicketClick?.(ticket)}>
                     <td className="px-4 py-3 text-sm text-blue-400 font-mono">{ticket.ticket_number}</td>
                     <td className="px-4 py-3 text-sm text-white truncate max-w-xs">{ticket.subject}</td>
                     <td className="px-4 py-3 text-center">
