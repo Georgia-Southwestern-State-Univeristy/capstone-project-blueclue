@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import BaseWidget from './BaseWidget'
 import { useToast } from '../hooks/useToast'
 
@@ -14,6 +14,7 @@ function AuditHealthWidget() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const toast = useToast()
+  const consecutiveFailuresRef = useRef(0)
 
   const fetchHealth = useCallback(async () => {
     setLoading(true)
@@ -24,7 +25,7 @@ function AuditHealthWidget() {
         throw new Error('Authentication token not found')
       }
 
-      const response = await fetch('http://localhost:3000/api/admin/audit-health', {
+      const response = await fetch('/api/admin/audit-health', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -53,11 +54,18 @@ function AuditHealthWidget() {
         throw new Error(data.message || 'Failed to fetch audit health')
       }
 
+      consecutiveFailuresRef.current = 0
       setHealthData(data)
     } catch (err) {
-      console.error('Audit health fetch error:', err)
-      setError(err.message)
-      toast.error(err.message)
+      consecutiveFailuresRef.current += 1
+      // Only log/toast on first failure to avoid console spam when backend is unavailable
+      if (consecutiveFailuresRef.current === 1) {
+        console.error('Audit health fetch error:', err)
+        setError(err.message)
+        toast.error(err.message)
+      } else {
+        setError(err.message)
+      }
     } finally {
       setLoading(false)
     }
@@ -66,13 +74,18 @@ function AuditHealthWidget() {
   useEffect(() => {
     fetchHealth()
     
-    // Auto-refresh every 60 seconds
-    const intervalId = setInterval(fetchHealth, 60000)
+    // Auto-refresh every 60 seconds; stop after 5 consecutive failures to avoid console spam
+    const intervalId = setInterval(() => {
+      if (consecutiveFailuresRef.current < 5) {
+        fetchHealth()
+      }
+    }, 60000)
     
     return () => clearInterval(intervalId)
   }, [fetchHealth])
 
   const handleRefresh = useCallback(async () => {
+    consecutiveFailuresRef.current = 0  // reset so polling resumes and errors are logged again
     await fetchHealth()
   }, [fetchHealth])
 
