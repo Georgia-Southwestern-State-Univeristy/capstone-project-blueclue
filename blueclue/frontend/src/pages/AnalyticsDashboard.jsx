@@ -625,30 +625,29 @@ function TicketVolumeTab({ data, onDrillDown }) {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Volume Trend */}
-        <LineChart
-          data={data.trend || []}
-          xKey="date"
-          yKey="created"
-          yKey2="resolved_same_day"
-          title="Daily Volume Trend"
-          color="#3b82f6"
-          color2="#10b981"
-          formatX={formatDate}
-          yLabel="Created"
-          y2Label="Same-day Resolved"
-        />
+      {/* Daily Volume Trend - Full Width */}
+      <LineChart
+        data={data.trend || []}
+        xKey="date"
+        yKey="created"
+        yKey2="resolved_same_day"
+        title="Daily Volume Trend"
+        color="#3b82f6"
+        color2="#10b981"
+        height={280}
+        formatX={formatDate}
+        yLabel="Created"
+        y2Label="Same-day Resolved"
+      />
 
-        {/* Month over Month */}
-        <BarChart
-          data={data.month_over_month || []}
-          xKey="month"
-          yKey="count"
-          title="Month over Month"
-          formatValue={(v) => v}
-        />
-      </div>
+      {/* Month over Month */}
+      <BarChart
+        data={data.month_over_month || []}
+        xKey="month"
+        yKey="count"
+        title="Month over Month"
+        formatValue={(v) => v}
+      />
 
       {/* Heatmap */}
       <Heatmap

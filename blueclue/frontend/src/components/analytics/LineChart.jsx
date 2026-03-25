@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 /**
  * Line Chart Component for Analytics Dashboard
@@ -12,7 +12,7 @@ function LineChart({
   title = 'Trend',
   color = '#3b82f6',
   color2 = '#10b981',
-  height = 200,
+  height = 250,
   showGrid = true,
   formatX = (val) => val,
   formatY = (val) => val,
@@ -21,6 +21,19 @@ function LineChart({
   y2Label = ''
 }) {
   const [hoveredPoint, setHoveredPoint] = useState(null)
+  const containerRef = useRef(null)
+  const [containerWidth, setContainerWidth] = useState(500)
+
+  useEffect(() => {
+    if (!containerRef.current) return
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setContainerWidth(Math.round(entry.contentRect.width))
+      }
+    })
+    observer.observe(containerRef.current)
+    return () => observer.disconnect()
+  }, [])
 
   if (!data || data.length === 0) {
     return (
@@ -43,8 +56,8 @@ function LineChart({
   const range = maxY - minY || 1
 
   // Chart dimensions
-  const padding = { top: 20, right: 20, bottom: 30, left: 50 }
-  const chartWidth = 100
+  const padding = { top: 25, right: 20, bottom: 40, left: 55 }
+  const chartWidth = containerWidth
   const chartHeight = height
 
   // Calculate points
@@ -105,12 +118,12 @@ function LineChart({
         )}
       </div>
       
-      <div className="relative">
+      <div className="relative" ref={containerRef}>
         <svg 
           viewBox={`0 0 ${chartWidth} ${chartHeight}`} 
           className="w-full" 
           style={{ height: `${height}px` }}
-          preserveAspectRatio="none"
+          preserveAspectRatio="xMidYMid meet"
         >
           {/* Grid lines */}
           {showGrid && yTickValues.map((tick, i) => (
@@ -121,8 +134,8 @@ function LineChart({
               x2={chartWidth - padding.right}
               y2={getY(tick)}
               stroke="#374151"
-              strokeWidth="0.2"
-              strokeDasharray="2,2"
+              strokeWidth="0.5"
+              strokeDasharray="4,3"
             />
           ))}
 
@@ -130,10 +143,10 @@ function LineChart({
           {yTickValues.map((tick, i) => (
             <text
               key={i}
-              x={padding.left - 5}
+              x={padding.left - 4}
               y={getY(tick)}
               fill="#9ca3af"
-              fontSize="3"
+              fontSize="11"
               textAnchor="end"
               dominantBaseline="middle"
             >
@@ -158,7 +171,7 @@ function LineChart({
             d={createPath(yKey)}
             fill="none"
             stroke={color}
-            strokeWidth="0.5"
+            strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -169,10 +182,10 @@ function LineChart({
               d={createPath(yKey2)}
               fill="none"
               stroke={color2}
-              strokeWidth="0.5"
+              strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              strokeDasharray="1,0.5"
+              strokeDasharray="6,3"
             />
           )}
 
@@ -182,7 +195,7 @@ function LineChart({
               <circle
                 cx={getX(i)}
                 cy={getY(d[yKey] ?? 0)}
-                r={hoveredPoint === i ? '1.5' : '0.8'}
+                r={hoveredPoint === i ? '5' : '3'}
                 fill={color}
                 className="cursor-pointer transition-all duration-200"
                 onMouseEnter={() => setHoveredPoint(i)}
@@ -192,7 +205,7 @@ function LineChart({
                 <circle
                   cx={getX(i)}
                   cy={getY(d[yKey2] ?? 0)}
-                  r={hoveredPoint === i ? '1.5' : '0.8'}
+                  r={hoveredPoint === i ? '5' : '3'}
                   fill={color2}
                   className="cursor-pointer transition-all duration-200"
                   onMouseEnter={() => setHoveredPoint(i)}
@@ -209,9 +222,9 @@ function LineChart({
               <text
                 key={actualIndex}
                 x={getX(actualIndex)}
-                y={chartHeight - padding.bottom + 10}
+                y={chartHeight - padding.bottom + 16}
                 fill="#9ca3af"
-                fontSize="3"
+                fontSize="11"
                 textAnchor="middle"
               >
                 {formatX(d[xKey])}

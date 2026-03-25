@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 /**
  * Bar Chart Component for Analytics Dashboard
@@ -19,6 +19,19 @@ function BarChart({
   colorMap = null
 }) {
   const [hoveredIndex, setHoveredIndex] = useState(null)
+  const containerRef = useRef(null)
+  const [containerWidth, setContainerWidth] = useState(500)
+
+  useEffect(() => {
+    if (!containerRef.current) return
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setContainerWidth(Math.round(entry.contentRect.width))
+      }
+    })
+    observer.observe(containerRef.current)
+    return () => observer.disconnect()
+  }, [])
 
   if (!data || data.length === 0) {
     return (
@@ -95,10 +108,10 @@ function BarChart({
   }
 
   // Vertical bar chart
-  const barSpacing = 4
-  const chartWidth = 100
+  const barSpacing = 8
+  const chartWidth = containerWidth
   const chartHeight = height
-  const padding = { top: 20, right: 10, bottom: 40, left: 40 }
+  const padding = { top: 25, right: 20, bottom: 45, left: 55 }
   const availableWidth = chartWidth - padding.left - padding.right
   const barWidth = (availableWidth - barSpacing * (displayData.length - 1)) / displayData.length
 
@@ -113,7 +126,7 @@ function BarChart({
   return (
     <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-6">
       <h3 className="text-lg font-semibold text-white mb-4">{title}</h3>
-      <div className="relative">
+      <div className="relative" ref={containerRef}>
         <svg 
           viewBox={`0 0 ${chartWidth} ${chartHeight}`} 
           className="w-full"
@@ -129,14 +142,14 @@ function BarChart({
                 x2={chartWidth - padding.right}
                 y2={getY(tick)}
                 stroke="#374151"
-                strokeWidth="0.2"
-                strokeDasharray="2,2"
+                strokeWidth="0.5"
+                strokeDasharray="4,3"
               />
               <text
-                x={padding.left - 3}
+                x={padding.left - 4}
                 y={getY(tick)}
                 fill="#9ca3af"
-                fontSize="3"
+                fontSize="11"
                 textAnchor="end"
                 dominantBaseline="middle"
               >
@@ -165,7 +178,7 @@ function BarChart({
                   width={barWidth}
                   height={barHeight}
                   fill={barColor}
-                  rx="1"
+                  rx="2"
                   className="transition-all duration-200"
                   style={{
                     opacity: hoveredIndex !== null && !isHovered ? 0.4 : 1,
@@ -176,9 +189,9 @@ function BarChart({
                 {showValues && barHeight > 10 && (
                   <text
                     x={getX(index) + barWidth / 2}
-                    y={getY(item[yKey]) + 4}
+                    y={getY(item[yKey]) + 12}
                     fill="white"
-                    fontSize="2.5"
+                    fontSize="10"
                     textAnchor="middle"
                     dominantBaseline="hanging"
                   >
@@ -194,9 +207,9 @@ function BarChart({
             <text
               key={index}
               x={getX(index) + barWidth / 2}
-              y={chartHeight - padding.bottom + 8}
+              y={chartHeight - padding.bottom + 16}
               fill="#9ca3af"
-              fontSize="2.5"
+              fontSize="11"
               textAnchor="middle"
               className="truncate"
             >
