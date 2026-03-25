@@ -344,6 +344,7 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
       try {
         const dbSaved = await fetchSavedLayouts(dashboardKey)
         if (cancelled) return
+        if (!Array.isArray(dbSaved)) throw new Error('Invalid saved layouts response')
         // Map API response to the shape used by the UI
         const mapped = dbSaved.map(s => ({
           id: s.id,
