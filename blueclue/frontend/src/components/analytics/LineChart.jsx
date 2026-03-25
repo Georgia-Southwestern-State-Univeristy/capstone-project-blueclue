@@ -189,17 +189,50 @@ function LineChart({
             />
           )}
 
+          {/* Invisible hover zones — one per data point, spanning full chart height */}
+          {data.map((_d, i) => {
+            const x = getX(i)
+            const halfGap = data.length > 1
+              ? (chartWidth - padding.left - padding.right) / (data.length - 1) / 2
+              : (chartWidth - padding.left - padding.right) / 2
+            return (
+              <rect
+                key={`hz-${i}`}
+                x={x - halfGap}
+                y={padding.top}
+                width={halfGap * 2}
+                height={chartHeight - padding.top - padding.bottom}
+                fill="transparent"
+                className="cursor-pointer"
+                onMouseEnter={() => setHoveredPoint(i)}
+                onMouseLeave={() => setHoveredPoint(null)}
+              />
+            )
+          })}
+
+          {/* Vertical crosshair line on hover */}
+          {hoveredPoint !== null && (
+            <line
+              x1={getX(hoveredPoint)}
+              y1={padding.top}
+              x2={getX(hoveredPoint)}
+              y2={chartHeight - padding.bottom}
+              stroke="#6b7280"
+              strokeWidth="1"
+              strokeDasharray="4,3"
+              pointerEvents="none"
+            />
+          )}
+
           {/* Data points */}
           {data.map((d, i) => (
-            <g key={i}>
+            <g key={i} pointerEvents="none">
               <circle
                 cx={getX(i)}
                 cy={getY(d[yKey] ?? 0)}
                 r={hoveredPoint === i ? '5' : '3'}
                 fill={color}
-                className="cursor-pointer transition-all duration-200"
-                onMouseEnter={() => setHoveredPoint(i)}
-                onMouseLeave={() => setHoveredPoint(null)}
+                className="transition-all duration-200"
               />
               {yKey2 && d[yKey2] !== undefined && (
                 <circle
@@ -207,9 +240,7 @@ function LineChart({
                   cy={getY(d[yKey2] ?? 0)}
                   r={hoveredPoint === i ? '5' : '3'}
                   fill={color2}
-                  className="cursor-pointer transition-all duration-200"
-                  onMouseEnter={() => setHoveredPoint(i)}
-                  onMouseLeave={() => setHoveredPoint(null)}
+                  className="transition-all duration-200"
                 />
               )}
             </g>
