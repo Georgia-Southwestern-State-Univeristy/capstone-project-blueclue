@@ -15,7 +15,6 @@ import TicketControlWidget from '../components/TicketControlWidget'
 import TicketTimeline from '../components/TicketTimeline'
 import PendingRequestsWidget from '../components/PendingRequestsWidget'
 import DeletedTicketsWidget from '../components/DeletedTicketsWidget'
-import QuickActionsPanel from '../components/QuickActionsPanel'
 import TicketDetailView from '../components/TicketDetailView'
 import UpdateRequestResponseTimeAnalytics from '../components/UpdateRequestResponseTimeAnalytics'
 import AuditHealthWidget from '../components/AuditHealthWidget'
@@ -24,7 +23,6 @@ import TicketStatusWidget from '../components/TicketStatusWidget'
 import TechResponseTimeWidget from '../components/TechResponseTimeWidget'
 import CreateTicketWidget from '../components/CreateTicketWidget'
 import KnowledgeBaseWidget from '../components/KnowledgeBaseWidget'
-import ChatBotWidget from '../components/ChatBotWidget'
 import RecentActivityWidget from '../components/RecentActivityWidget'
 import { getAllTickets, createTicket } from '../services/ticketService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
@@ -88,7 +86,7 @@ const MANAGEMENT_WIDGET_KEYS = [
   'timeline', 'ticketControl', 'assignedChart', 'categoriesChart',
   'overdue', 'escalations', 'todaysActions', 'topRequesters',
   'techPerformance', 'deletedTickets', 'pendingRequests', 'responseTime',
-  'auditHealth', 'ticketTrend', 'ticketStatus', 'techResponseTime', 'knowledgeBase', 'chatBot',
+  'auditHealth', 'ticketTrend', 'ticketStatus', 'techResponseTime', 'knowledgeBase',
   'recentActivity',
 ]
 
@@ -171,7 +169,6 @@ function ManagementWidgetGrid({
       ticketStatus: <TicketStatusWidget />,
       techResponseTime: <TechResponseTimeWidget />,
       knowledgeBase: <KnowledgeBaseWidget />,
-      chatBot: <ChatBotWidget />,
       recentActivity: <RecentActivityWidget />,
       createTicket: <CreateTicketWidget onSubmit={onSubmitTicket} />,
     }
@@ -510,9 +507,6 @@ function ManagementDashboard() {
       </div>
 
       {/* Main Content - Charts and Widgets */}
-      {/* Quick Actions - Floating right-side panel */}
-      <QuickActionsPanel />
-
       {/* Draggable Widget Grid */}
       <ManagementWidgetGrid
         tickets={tickets}

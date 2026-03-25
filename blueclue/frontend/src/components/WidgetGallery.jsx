@@ -111,6 +111,7 @@ const PREVIEW_PATTERNS = {
   knowledgeBase:'kb-search',            // Book icon + search bar + article list
   chatBot:'chat-bubbles',                // Chat bubble icon + message bubbles + input
   recentActivity:'activity-feed',          // Clock icon + activity log rows
+  ticketUpdates:'activity-list',            // Filter tabs + update entries with change-type icons
 }
 
 /** Tiny SVG preview matching the widget type */
@@ -615,6 +616,43 @@ function WidgetPreview({ pattern }) {
             <rect x="14" y="53.5" width="20" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
             <rect x="37" y="53.5" width="28" height="2" rx="1" fill="#6b7280" opacity="0.3" />
             <rect x="90" y="53.5" width="12" height="2" rx="1" fill="#6b7280" opacity="0.2" />
+          </>
+        )}
+        {p === 'activity-list' && (
+          /* Filter tabs + update log entries — client ticket update log */
+          <>
+            {/* Filter tab bar */}
+            <rect x="4" y="3" width="16" height="5" rx="2" fill="#3b82f6" opacity="0.6" />
+            <rect x="23" y="3" width="20" height="5" rx="2" fill="#374151" opacity="0.4" />
+            <rect x="46" y="3" width="22" height="5" rx="2" fill="#374151" opacity="0.4" />
+            {/* Row 1 — status change (green) */}
+            <rect x="4" y="12" width="112" height="9" rx="2" fill="#1f2937" opacity="0.5" />
+            <rect x="8" y="14" width="5" height="5" rx="1" fill="#22c55e" opacity="0.5" />
+            <rect x="16" y="14" width="14" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="33" y="14" width="12" height="2" rx="1" fill="#22c55e" opacity="0.4" />
+            <rect x="16" y="17.5" width="40" height="1.5" rx="0.5" fill="#6b7280" opacity="0.3" />
+            <rect x="96" y="14.5" width="16" height="2" rx="1" fill="#6b7280" opacity="0.2" />
+            {/* Row 2 — priority change (yellow) */}
+            <rect x="4" y="24" width="112" height="9" rx="2" fill="#1f2937" opacity="0.5" />
+            <rect x="8" y="26" width="5" height="5" rx="1" fill="#facc15" opacity="0.5" />
+            <rect x="16" y="26" width="16" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="35" y="26" width="16" height="2" rx="1" fill="#facc15" opacity="0.4" />
+            <rect x="16" y="29.5" width="35" height="1.5" rx="0.5" fill="#6b7280" opacity="0.3" />
+            <rect x="96" y="26.5" width="12" height="2" rx="1" fill="#6b7280" opacity="0.2" />
+            {/* Row 3 — assignment (blue) */}
+            <rect x="4" y="36" width="112" height="9" rx="2" fill="#1f2937" opacity="0.5" />
+            <rect x="8" y="38" width="5" height="5" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="16" y="38" width="12" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="31" y="38" width="18" height="2" rx="1" fill="#60a5fa" opacity="0.4" />
+            <rect x="16" y="41.5" width="45" height="1.5" rx="0.5" fill="#6b7280" opacity="0.3" />
+            <rect x="96" y="38.5" width="14" height="2" rx="1" fill="#6b7280" opacity="0.2" />
+            {/* Row 4 — comment (purple) */}
+            <rect x="4" y="48" width="112" height="9" rx="2" fill="#1f2937" opacity="0.5" />
+            <rect x="8" y="50" width="5" height="5" rx="1" fill="#a78bfa" opacity="0.5" />
+            <rect x="16" y="50" width="18" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="37" y="50" width="14" height="2" rx="1" fill="#a78bfa" opacity="0.4" />
+            <rect x="16" y="53.5" width="38" height="1.5" rx="0.5" fill="#6b7280" opacity="0.3" />
+            <rect x="96" y="50.5" width="16" height="2" rx="1" fill="#6b7280" opacity="0.2" />
           </>
         )}
         {p === 'kb-search' && (

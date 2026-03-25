@@ -447,22 +447,23 @@ const WIDGET_REGISTRY = [
     component: () => import('../components/KnowledgeBaseWidget'),
     previewPattern: 'kb-search',
   },
-  // ── Quick Access: Chat Assistant ──────────────────────────────────────────
+  // ── Client: Ticket Update Log ─────────────────────────────────────────────
   {
-    key: 'chatBot',
-    name: 'Chat Assistant',
-    description: 'Inline AI chat assistant for quick support conversations',
-    icon: '💬',
+    key: 'ticketUpdates',
+    name: 'Ticket Update Log',
+    description: 'Chronological log of all updates to your tickets',
+    icon: '📋',
     category: CATEGORIES.TICKETS,
-    permissions: ROLE_GROUPS.ALL,
+    permissions: [ROLES.CUSTOMER],
     size: {
-      defaultW: 6, defaultH: 8,
-      minW: 4, minH: 6,
-      maxW: 12, maxH: 16,
+      defaultW: 12, defaultH: 10,
+      minW: 6, minH: 6,
+      maxW: 12, maxH: 20,
     },
-    component: () => import('../components/ChatBotWidget'),
-    previewPattern: 'chat-bubbles',
+    component: () => import('../components/ClientTicketUpdatesWidget'),
+    previewPattern: 'activity-list',
   },
+
   {
     key: 'recentActivity',
     name: 'Recent Activity',

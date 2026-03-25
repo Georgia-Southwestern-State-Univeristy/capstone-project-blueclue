@@ -90,17 +90,19 @@ function Heatmap({
         </div>
       </div>
 
-      {/* Tooltip */}
-      {hoveredCell && (
-        <div className="mt-4 text-center">
-          <span className="text-sm text-gray-400">
-            {dayNames[hoveredCell.day]} at {hoveredCell.hour}:00 - {hoveredCell.hour + 1}:00
-          </span>
-          <span className="ml-2 text-sm font-semibold text-white">
-            {hoveredCell.count} tickets
-          </span>
-        </div>
-      )}
+      {/* Tooltip - fixed height to prevent layout shift */}
+      <div className="mt-4 text-center h-6">
+        {hoveredCell && (
+          <>
+            <span className="text-sm text-gray-400">
+              {dayNames[hoveredCell.day]} at {hoveredCell.hour}:00 - {hoveredCell.hour + 1}:00
+            </span>
+            <span className="ml-2 text-sm font-semibold text-white">
+              {hoveredCell.count} tickets
+            </span>
+          </>
+        )}
+      </div>
 
       {/* Legend */}
       <div className="flex items-center justify-center gap-4 mt-4">

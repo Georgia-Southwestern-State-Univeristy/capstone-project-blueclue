@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 /**
  * Stacked Bar Chart Component for Status Distribution
@@ -14,6 +14,19 @@ function StackedBarChart({
   showLegend = true
 }) {
   const [hoveredBar, setHoveredBar] = useState(null)
+  const containerRef = useRef(null)
+  const [containerWidth, setContainerWidth] = useState(500)
+
+  useEffect(() => {
+    if (!containerRef.current) return
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setContainerWidth(Math.round(entry.contentRect.width))
+      }
+    })
+    observer.observe(containerRef.current)
+    return () => observer.disconnect()
+  }, [])
 
   const defaultColors = {
     open: '#60a5fa',
@@ -43,10 +56,10 @@ function StackedBarChart({
   const maxTotal = Math.max(...totals, 1)
 
   // Chart dimensions
-  const padding = { top: 20, right: 10, bottom: 40, left: 40 }
-  const chartWidth = 100
+  const padding = { top: 25, right: 20, bottom: 45, left: 55 }
+  const chartWidth = containerWidth
   const chartHeight = height
-  const barSpacing = 2
+  const barSpacing = 6
   const availableWidth = chartWidth - padding.left - padding.right
   const barWidth = (availableWidth - barSpacing * (data.length - 1)) / data.length
 
@@ -80,7 +93,7 @@ function StackedBarChart({
         </div>
       )}
 
-      <div className="relative">
+      <div className="relative" ref={containerRef}>
         <svg 
           viewBox={`0 0 ${chartWidth} ${chartHeight}`} 
           className="w-full"
@@ -100,10 +113,10 @@ function StackedBarChart({
                 strokeDasharray="2,2"
               />
               <text
-                x={padding.left - 3}
+                x={padding.left - 4}
                 y={getY(tick)}
                 fill="#9ca3af"
-                fontSize="3"
+                fontSize="11"
                 textAnchor="end"
                 dominantBaseline="middle"
               >
@@ -148,14 +161,14 @@ function StackedBarChart({
                 {/* Hover highlight border */}
                 {isHovered && (
                   <rect
-                    x={getX(barIndex) - 0.5}
-                    y={getY(totals[barIndex]) - 0.5}
-                    width={barWidth + 1}
-                    height={getBarHeight(totals[barIndex]) + 1}
+                    x={getX(barIndex) - 1}
+                    y={getY(totals[barIndex]) - 1}
+                    width={barWidth + 2}
+                    height={getBarHeight(totals[barIndex]) + 2}
                     fill="none"
                     stroke="white"
-                    strokeWidth="0.3"
-                    rx="1"
+                    strokeWidth="1"
+                    rx="2"
                   />
                 )}
               </g>
@@ -172,9 +185,9 @@ function StackedBarChart({
               <text
                 key={index}
                 x={getX(index) + barWidth / 2}
-                y={chartHeight - padding.bottom + 8}
+                y={chartHeight - padding.bottom + 16}
                 fill="#9ca3af"
-                fontSize="2.5"
+                fontSize="11"
                 textAnchor="middle"
               >
                 {formatX(item[xKey])}

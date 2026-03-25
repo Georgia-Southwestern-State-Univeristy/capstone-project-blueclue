@@ -368,6 +368,10 @@ function AnalyticsDashboard() {
             <SLATab 
               data={dashboardData.sla}
               onDrillDown={handleDrillDown}
+              onTicketClick={(ticket) => {
+                setSelectedTicketId(ticket.id);
+                setIsDetailOpen(true);
+              }}
             />
           )}
         </>
@@ -625,30 +629,29 @@ function TicketVolumeTab({ data, onDrillDown }) {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Volume Trend */}
-        <LineChart
-          data={data.trend || []}
-          xKey="date"
-          yKey="created"
-          yKey2="resolved_same_day"
-          title="Daily Volume Trend"
-          color="#3b82f6"
-          color2="#10b981"
-          formatX={formatDate}
-          yLabel="Created"
-          y2Label="Same-day Resolved"
-        />
+      {/* Daily Volume Trend - Full Width */}
+      <LineChart
+        data={data.trend || []}
+        xKey="date"
+        yKey="created"
+        yKey2="resolved_same_day"
+        title="Daily Volume Trend"
+        color="#3b82f6"
+        color2="#10b981"
+        height={280}
+        formatX={formatDate}
+        yLabel="Created"
+        y2Label="Same-day Resolved"
+      />
 
-        {/* Month over Month */}
-        <BarChart
-          data={data.month_over_month || []}
-          xKey="month"
-          yKey="count"
-          title="Month over Month"
-          formatValue={(v) => v}
-        />
-      </div>
+      {/* Month over Month */}
+      <BarChart
+        data={data.month_over_month || []}
+        xKey="month"
+        yKey="count"
+        title="Month over Month"
+        formatValue={(v) => v}
+      />
 
       {/* Heatmap */}
       <Heatmap
@@ -893,7 +896,7 @@ function CategoriesTab({ data, onDrillDown }) {
   )
 }
 
-function SLATab({ data, onDrillDown }) {
+function SLATab({ data, onDrillDown, onTicketClick }) {
   if (!data) return null
 
   return (
@@ -997,7 +1000,7 @@ function SLATab({ data, onDrillDown }) {
               </thead>
               <tbody className="divide-y divide-gray-800">
                 {data.current_breaches.slice(0, 10).map((ticket, index) => (
-                  <tr key={index} className="hover:bg-gray-800/50">
+                  <tr key={index} className="hover:bg-gray-800/50 cursor-pointer" onClick={() => onTicketClick?.(ticket)}>
                     <td className="px-4 py-3 text-sm text-blue-400 font-mono">{ticket.ticket_number}</td>
                     <td className="px-4 py-3 text-sm text-white truncate max-w-xs">{ticket.subject}</td>
                     <td className="px-4 py-3 text-center">

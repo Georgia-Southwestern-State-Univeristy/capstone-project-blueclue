@@ -124,7 +124,8 @@ export const getResolutionTimeMetrics = async (startDate, endDate, category = nu
           ${techFilter}
     `;
     
-    // Resolution time by category
+    // Resolution time by category — build a dedicated tech filter at $3 since categoryFilter is omitted
+    const byCategoryTechFilter = techId ? `AND t.assigned_to = $3::integer` : '';
     const byCategoryQuery = `
         SELECT 
             t.category,
@@ -136,7 +137,7 @@ export const getResolutionTimeMetrics = async (startDate, endDate, category = nu
           AND t.resolved_at IS NOT NULL
           AND t.resolved_at BETWEEN $1::timestamp AND $2::timestamp
           AND t.deleted_at IS NULL
-          ${techFilter}
+          ${byCategoryTechFilter}
         GROUP BY t.category
         ORDER BY avg_hours DESC
     `;

@@ -398,6 +398,24 @@ export const bulkAssignTickets = async (ticketIds, technicianId, note = '') => {
 };
 
 /**
+ * Get recent update history for the current user's tickets
+ * @param {number} limit - Max entries to return (default 50)
+ * @returns {Promise<Object>} Object with data array of update entries
+ */
+export const getMyTicketUpdates = async (limit = 50) => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/my-updates?limit=${limit}`, {
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch ticket updates');
+  } catch (error) {
+    console.error('Get ticket updates error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to load ticket updates. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
  * Get recent assignment activity across all tickets
  * @param {number} limit - Max entries to return (default 50)
  * @returns {Promise<Object>} Object with data array of assignment events

@@ -584,12 +584,7 @@ function Navbar() {
                 <span className="text-gray-400 capitalize">{user?.role || 'User'}</span>
               </div>
 
-              {/* Chat Widget Button */}
-              <ChatWidgetButton
-                onClick={chat.toggleChat}
-                unreadCount={chat.unreadCount}
-                hasNewMessage={chat.hasNewMessage}
-              />
+
 
             {/* Notification Bell & Dropdown */}
               <div className="relative" ref={notificationDropdownRef}>
@@ -795,6 +790,15 @@ function Navbar() {
         onClose={() => setSettingsOpen(false)}
         onLogout={handleLogout}
       />
+
+      {/* Floating Chat Button — fixed bottom-right */}
+      {authenticated && (
+        <ChatWidgetButton
+          onClick={chat.toggleChat}
+          unreadCount={chat.unreadCount}
+          hasNewMessage={chat.hasNewMessage}
+        />
+      )}
 
       {/* Chat Window */}
       <ChatWindow
