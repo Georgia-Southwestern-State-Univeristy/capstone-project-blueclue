@@ -35,6 +35,7 @@ const WIDGET_PERMISSIONS = {
   
   // Customer/Guest only
   clientTickets: [ROLES.CUSTOMER, ROLES.GUEST],
+  ticketUpdates: [ROLES.CUSTOMER],
   
   // All staff
   timeline: ROLE_GROUPS.STAFF,
@@ -93,6 +94,7 @@ const WIDGET_METADATA = {
   chatPanel: { name: 'Chat Handoff', description: 'Live customer chat handoff requests and active conversations', category: CATEGORIES.MANAGEMENT },
   createTicket: { name: 'Create a Ticket', description: 'Submit a new support ticket directly from the dashboard', category: CATEGORIES.TICKETS },
   clientTickets: { name: 'My Tickets', description: 'Your submitted tickets with status tracking', category: CATEGORIES.TICKETS },
+  ticketUpdates: { name: 'Ticket Update Log', description: 'Chronological log of all updates to your tickets', category: CATEGORIES.TICKETS },
   auditHealth: { name: 'Audit Health', description: 'Real-time audit logging system health status and monitoring', category: CATEGORIES.MANAGEMENT },
   ticketTrend: { name: 'Ticket Trend', description: 'Opened vs resolved tickets over time', category: CATEGORIES.ANALYTICS },
   ticketStatus: { name: 'Ticket Status', description: 'Open ticket count with status breakdown', category: CATEGORIES.ANALYTICS },
