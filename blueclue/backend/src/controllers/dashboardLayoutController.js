@@ -100,7 +100,7 @@ export const getSavedLayouts = async (req, res) => {
       updatedAt: r.updated_at
     }));
 
-    res.json(layouts);
+    res.json({ layouts });
 };
 
 /**
