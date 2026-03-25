@@ -43,6 +43,7 @@ import { errorHandler, notFoundHandler, InternalServerError } from './middleware
 import { startAlertDetectionJob } from './jobs/alertDetectionJob.js';
 import { startEmailQueueJob } from './jobs/emailQueueJob.js';
 import { requestLogger } from './middleware/requestLogger.js';
+import { runHealthChecks } from './services/healthCheckService.js';
 
 dotenv.config();
 
@@ -131,12 +132,49 @@ app.get('/', (req, res) => {
     res.send('Welcome to BlueClue Backend!');
 });
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-    res.status(200).json({
-        status: "OK",
-        message: "BlueClue API is running"
-    });
+/**
+ * Comprehensive Health Check Endpoint
+ * ====================================
+ * Checks all critical dependencies:
+ * - PostgreSQL database
+ * - AI/ML service
+ * - Email service (Mailgun/SMTP)
+ * - In-memory cache
+ * 
+ * Returns structured health status with latency metrics.
+ * Responds within 2 seconds even if dependencies are slow.
+ * 
+ * Response format:
+ * {
+ *   status: "ok" | "degraded" | "down",
+ *   timestamp: ISO 8601 timestamp,
+ *   total_latency_ms: number,
+ *   checks: {
+ *     database: { status: "ok", latency_ms: number },
+ *     ai_service: { status: "ok", latency_ms: number },
+ *     email: { status: "ok", latency_ms: number },
+ *     cache: { status: "ok", latency_ms: number }
+ *   }
+ * }
+ */
+app.get('/api/health', async (req, res) => {
+    try {
+        const healthStatus = await runHealthChecks();
+        
+        // Return appropriate HTTP status code based on overall health
+        const statusCode = healthStatus.status === 'ok' ? 200 : 
+                          healthStatus.status === 'degraded' ? 200 : 503;
+        
+        res.status(statusCode).json(healthStatus);
+    } catch (error) {
+        // Unexpected error in health check
+        res.status(503).json({
+            status: 'down',
+            timestamp: new Date().toISOString(),
+            error: 'Health check failed',
+            message: error.message
+        });
+    }
 });
 
 // Database test endpoint
