@@ -1,12 +1,9 @@
 import LoadingSpinner from './LoadingSpinner'
+import { formatDateTime } from '../utils/dateFormatter'
 
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A'
-  try {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-    })
-  } catch { return dateString }
+  return formatDateTime(dateString)
 }
 
 const formatStatus = (status) => {

@@ -34,5 +34,6 @@ export default function usePageTitle() {
       || 'BlueClue'
 
     document.title = `BlueClue | ${title}`
+    window.scrollTo(0, 0)
   }, [location.pathname])
 }

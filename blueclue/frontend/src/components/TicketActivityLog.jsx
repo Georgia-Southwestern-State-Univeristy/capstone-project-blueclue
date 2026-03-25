@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getTicketHistory } from '../services/ticketService'
+import { formatDateTime } from '../utils/dateFormatter'
 
 /**
  * TicketActivityLog
@@ -35,11 +36,7 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
 
   // Format timestamp to display
   const formatTime = (dateStr) => {
-    const d = new Date(dateStr)
-    return d.toLocaleDateString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric',
-      hour: 'numeric', minute: '2-digit', hour12: true
-    })
+    return formatDateTime(dateStr)
   }
 
   // Get icon + color for each change type
@@ -303,7 +300,7 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
         const reqDetails = entry.change_details || {}
         const requestedBy = reqDetails.requested_by_name || entry.changed_by_name || 'Manager'
         const assignedName = reqDetails.assigned_to_name || 'Technician'
-        const deadline = reqDetails.deadline ? new Date(reqDetails.deadline).toLocaleString('en-US', {
+        const deadline = reqDetails.deadline ? formatDateTime(reqDetails.deadline, {
           month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
         }) : 'N/A'
         const message = reqDetails.message
@@ -359,7 +356,7 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
               <>
                 <br />
                 <span className="text-gray-400">Est. Completion: </span>
-                <span className="text-gray-200">{new Date(estimatedCompletion).toLocaleString('en-US', {
+                <span className="text-gray-200">{formatDateTime(estimatedCompletion, {
                   month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
                 })}</span>
               </>

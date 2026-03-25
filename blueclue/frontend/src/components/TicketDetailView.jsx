@@ -12,6 +12,7 @@ import RingForHelpModal from './RingForHelpModal'
 import RequestUpdateModal from './RequestUpdateModal'
 import { getCollaborators, addCollaborator, removeCollaborator } from '../services/collaboratorService'
 import { getUpdateRequests, handleExtensionRequest } from '../services/updateRequestService'
+import { formatDateTime as _fmtDateTime, formatTimeAgo as _fmtTimeAgo } from '../utils/dateFormatter'
 
 /**
  * TicketDetailView
@@ -597,7 +598,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
       <h2>Description</h2>
       <div class="description">${(ticket.description || 'No description').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
       ${ticket.resolution ? `<h2>Resolution</h2><div class="description">${ticket.resolution.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>` : ''}
-      <div class="footer">Printed on ${new Date().toLocaleString()} &middot; BlueClue Ticketing System</div>
+      <div class="footer">Printed on ${_fmtDateTime(new Date())} &middot; BlueClue Ticketing System</div>
       </body></html>
     `
     printWindow.document.write(html)
@@ -634,28 +635,12 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '—'
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    })
+    return _fmtDateTime(dateStr, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
   }
 
   const formatTimeAgo = (dateStr) => {
     if (!dateStr) return ''
-    const now = new Date()
-    const d = new Date(dateStr)
-    const diffMs = now - d
-    const mins = Math.floor(diffMs / 60000)
-    if (mins < 1) return 'just now'
-    if (mins < 60) return `${mins}m ago`
-    const hrs = Math.floor(mins / 60)
-    if (hrs < 24) return `${hrs}h ago`
-    const days = Math.floor(hrs / 24)
-    return `${days}d ago`
+    return _fmtTimeAgo(dateStr)
   }
 
   const statusColorMap = {
@@ -1607,12 +1592,12 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                                     </p>
                                     <p>
                                       <span className="text-gray-500">Current Deadline:</span>{' '}
-                                      {new Date(request.deadline).toLocaleString()}
+                                      {_fmtDateTime(request.deadline)}
                                     </p>
                                     <p>
                                       <span className="text-gray-500">Requested Deadline:</span>{' '}
                                       <span className="text-amber-400 font-medium">
-                                        {new Date(request.extension_deadline).toLocaleString()}
+                                        {_fmtDateTime(request.extension_deadline)}
                                       </span>
                                     </p>
                                     {request.reason && (

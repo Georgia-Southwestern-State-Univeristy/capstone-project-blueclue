@@ -8,6 +8,7 @@ import TicketDetailView from '../components/TicketDetailView'
 import UpdateRequestAlert from '../components/UpdateRequestAlert'
 import UpdateResponseModal from '../components/UpdateResponseModal'
 import { getMyAssignedTickets, updateTicketStatus } from '../services/ticketService'
+import { formatDate as _fmtDate } from '../utils/dateFormatter'
 
 /**
  * Status badge styling map
@@ -48,11 +49,7 @@ const formatStatus = (status) => {
  * Format date for display
  */
 const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  })
+  return _fmtDate(dateString)
 }
 
 function MyAssignedTickets() {

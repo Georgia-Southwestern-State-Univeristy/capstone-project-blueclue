@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import FeedbackButtons from './FeedbackButtons';
+import { formatTime as _fmtTime } from '../utils/dateFormatter';
 
 /**
  * MessageBubble — Renders a single chat message with alignment,
@@ -19,10 +20,7 @@ function MessageBubble({ id, sender, text, timestamp, onFeedback, articleLinks, 
   const isUser = sender === 'user';
 
   const formatTimestamp = (date) =>
-    new Date(date).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    _fmtTime(date, { hour: '2-digit', minute: '2-digit' });
 
   const hasArticles = !isUser && articleLinks && articleLinks.length > 0;
   const hasActions  = !isUser && actionButtons && actionButtons.length > 0;

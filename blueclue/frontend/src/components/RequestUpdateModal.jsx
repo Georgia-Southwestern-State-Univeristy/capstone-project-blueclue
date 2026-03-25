@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { requestUpdate, calculateDeadline } from '../services/updateRequestService';
+import { formatDateTime as _fmtDateTime } from '../utils/dateFormatter';
 
 /**
  * RequestUpdateModal
@@ -253,8 +254,8 @@ function RequestUpdateModal({ isOpen, onClose, ticketId, ticketSubject, collabor
                 and email requesting an update by{' '}
                 <strong className="text-white">
                   {deadlineOption === 'custom' && customDeadline
-                    ? new Date(customDeadline).toLocaleString()
-                    : calculateDeadline(deadlineOption).toLocaleString()
+                    ? _fmtDateTime(customDeadline)
+                    : _fmtDateTime(calculateDeadline(deadlineOption))
                   }
                 </strong>
               </p>

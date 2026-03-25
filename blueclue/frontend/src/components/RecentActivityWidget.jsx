@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import BaseWidget from './BaseWidget'
 import { getRecentTicketActivity } from '../services/analyticsService'
+import { formatTimeAgo as _fmtTimeAgo } from '../utils/dateFormatter'
 
 const CHANGE_TYPE_CONFIG = {
   status_change:      { label: 'Status Changed',   color: 'text-yellow-400', icon: '🔄' },
@@ -23,17 +24,7 @@ function getConfig(changeType) {
 }
 
 function formatTime(dateStr) {
-  const d = new Date(dateStr)
-  const now = new Date()
-  const diffMs = now - d
-  const diffMin = Math.floor(diffMs / 60000)
-  if (diffMin < 1) return 'just now'
-  if (diffMin < 60) return `${diffMin}m ago`
-  const diffHr = Math.floor(diffMin / 60)
-  if (diffHr < 24) return `${diffHr}h ago`
-  const diffDay = Math.floor(diffHr / 24)
-  if (diffDay < 7) return `${diffDay}d ago`
-  return d.toLocaleDateString()
+  return _fmtTimeAgo(dateStr) || 'just now'
 }
 
 function buildDescription(entry) {

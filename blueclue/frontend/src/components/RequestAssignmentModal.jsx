@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { formatDateTime } from '../utils/dateFormatter'
 
 /**
  * RequestAssignmentModal
@@ -31,13 +32,7 @@ function RequestAssignmentModal({ isOpen, onClose, ticket, onConfirm, isSubmitti
 
   const formatDate = (dateStr) => {
     if (!dateStr) return 'N/A'
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
+    return formatDateTime(dateStr)
   }
 
   const ageDays = ticket.age_days ? Math.floor(ticket.age_days) : 0

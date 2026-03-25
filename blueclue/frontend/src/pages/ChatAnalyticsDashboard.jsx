@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getChatAnalytics, getChatKnowledgeGaps } from '../services/chatService'
 import { useToast } from '../hooks/useToast'
+import { formatDate as _fmtDate } from '../utils/dateFormatter'
 // ─── Tiny SVG bar chart ─────────────────────────────────────────────────────
 function BarChart({ data = [], valueKey = 'count', labelKey = 'label', color = '#3b82f6', height = 120 }) {
   if (!data.length) return <p className="text-gray-500 text-sm text-center py-6">No data</p>
@@ -446,7 +447,7 @@ export default function ChatAnalyticsDashboard() {
                           <td className="text-right px-3 text-yellow-400">{gap.low_confidence_count}</td>
                           <td className="text-right px-3 text-red-400">{gap.thumbs_down_count}</td>
                           <td className="pl-3 text-gray-500 text-xs">
-                            {gap.first_seen ? new Date(gap.first_seen).toLocaleDateString() : '—'}
+                            {gap.first_seen ? _fmtDate(gap.first_seen) : '—'}
                           </td>
                         </tr>
                       ))}

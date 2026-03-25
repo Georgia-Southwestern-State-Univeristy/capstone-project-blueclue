@@ -15,7 +15,7 @@ const setToken = (token) => {
 /**
  * Get authentication token from localStorage
  */
-const getToken = () => {
+export const getToken = () => {
     return localStorage.getItem('blueclue_token');
 };
 
@@ -403,6 +403,61 @@ export const getUserId = () => {
     return user?.id || null;
 };
 
+/**
+ * Update user profile (display name)
+ * @param {Object} fields - { firstName, lastName }
+ * @returns {Promise<Object>} Updated user + fresh token
+ */
+export const updateProfile = async ({ firstName, lastName, phone, company, timezone }) => {
+    const response = await fetch(`${API_URL}/auth/profile`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ firstName, lastName, phone, company, timezone }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to update profile');
+    }
+
+    // Persist the refreshed token + user data
+    if (data.token) setToken(data.token);
+    if (data.user) setUser(data.user);
+
+    return data;
+};
+
+/**
+ * Update email address (requires current password)
+ * @param {Object} fields - { newEmail, password }
+ * @returns {Promise<Object>} Updated user + fresh token
+ */
+export const updateEmail = async ({ newEmail, password }) => {
+    const response = await fetch(`${API_URL}/auth/email`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ newEmail, password }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        throw new Error(data.message || 'Failed to update email');
+    }
+
+    if (data.token) setToken(data.token);
+    if (data.user) setUser(data.user);
+
+    return data;
+};
+
 export default {
     login,
     register,
@@ -410,6 +465,8 @@ export default {
     logout,
     refreshAccessToken,
     getCurrentUser,
+    updateProfile,
+    updateEmail,
     isAuthenticated,
     needsPasswordChange,
     getUserRole,
