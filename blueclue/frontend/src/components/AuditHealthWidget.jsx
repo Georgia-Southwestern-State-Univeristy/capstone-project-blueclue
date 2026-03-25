@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import BaseWidget from './BaseWidget'
 import { useToast } from '../hooks/useToast'
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+
 /**
  * AuditHealthWidget
  * Displays real-time health status of audit logging systems.
@@ -25,7 +27,7 @@ function AuditHealthWidget() {
         throw new Error('Authentication token not found')
       }
 
-      const response = await fetch('/api/admin/audit-health', {
+      const response = await fetch(`${API_BASE_URL}/admin/audit-health`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
