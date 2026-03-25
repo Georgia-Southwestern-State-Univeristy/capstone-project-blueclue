@@ -15,7 +15,6 @@ import TicketControlWidget from '../components/TicketControlWidget'
 import TicketTimeline from '../components/TicketTimeline'
 import PendingRequestsWidget from '../components/PendingRequestsWidget'
 import DeletedTicketsWidget from '../components/DeletedTicketsWidget'
-import QuickActionsPanel from '../components/QuickActionsPanel'
 import TicketDetailView from '../components/TicketDetailView'
 import UpdateRequestResponseTimeAnalytics from '../components/UpdateRequestResponseTimeAnalytics'
 import AuditHealthWidget from '../components/AuditHealthWidget'
@@ -508,9 +507,6 @@ function ManagementDashboard() {
       </div>
 
       {/* Main Content - Charts and Widgets */}
-      {/* Quick Actions - Floating right-side panel */}
-      <QuickActionsPanel />
-
       {/* Draggable Widget Grid */}
       <ManagementWidgetGrid
         tickets={tickets}

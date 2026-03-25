@@ -5,7 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import axios from 'axios'
 import { formatDateTime } from '../utils/dateFormatter'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
 /**
  * TechnicianManagement Component
@@ -22,7 +22,7 @@ function TechnicianManagement() {
   const fetchTechnicians = useCallback(async () => {
     try {
       const token = localStorage.getItem('blueclue_token')
-      const response = await axios.get(`${API_BASE_URL}/api/admin/technicians`, {
+      const response = await axios.get(`${API_BASE_URL}/admin/technicians`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       setTechnicians(response.data.data || [])
@@ -32,7 +32,7 @@ function TechnicianManagement() {
     } finally {
       setLoading(false)
     }
-  }, [toast])
+  }, [])
 
   useEffect(() => {
     fetchTechnicians()
