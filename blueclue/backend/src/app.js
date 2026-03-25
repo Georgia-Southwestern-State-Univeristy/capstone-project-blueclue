@@ -40,6 +40,7 @@ import { startUpdateRequestReminderJob } from './jobs/updateRequestReminders.js'
 import { startChatQualityJob } from './jobs/chatQualityJob.js';
 import { errorHandler, notFoundHandler, InternalServerError } from './middleware/errorHandler.js';
 import { startAlertDetectionJob } from './jobs/alertDetectionJob.js';
+import { startEmailQueueJob } from './jobs/emailQueueJob.js';
 
 dotenv.config();
 
@@ -61,6 +62,7 @@ initializeSocketHandlers(io);
 startUpdateRequestReminderJob(io);
 startChatQualityJob();
 startAlertDetectionJob();
+startEmailQueueJob();
 
 // Make io accessible to routes/controllers
 app.set('io', io);
