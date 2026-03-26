@@ -36,6 +36,7 @@ import themeRoutes from './routes/themes.js';
 import chatRoutes from './routes/chat.js';
 import mlAdminRoutes from './routes/mlAdmin.js';
 import requestLogsRoutes from './routes/requestLogs.js';
+import searchHistoryRoutes from './routes/searchHistory.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 import { startUpdateRequestReminderJob } from './jobs/updateRequestReminders.js';
 import { startChatQualityJob } from './jobs/chatQualityJob.js';
@@ -124,6 +125,7 @@ app.use('/api/admin/analytics/requests', requestLogsRoutes); // Request logs ana
 app.use('/api/themes', themeRoutes); // User theme preferences
 app.use('/api/chat', chatRoutes); // Chat bot routes
 app.use('/api/ml-admin', mlAdminRoutes); // ML Admin – monitoring, explainability, versioning
+app.use('/api/search-history', searchHistoryRoutes); // User search history
 app.use('/api/dev', devRoutes);
 app.use('/api/admin', adminRoutes);
 
