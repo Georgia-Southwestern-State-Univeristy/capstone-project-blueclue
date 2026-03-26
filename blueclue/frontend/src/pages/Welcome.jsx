@@ -63,16 +63,7 @@ function Welcome() {
                   <svg className="w-6 h-6 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                   </svg>
-                  <span>All Tickets</span>
-                </Link>
-                <Link
-                  to="/my-tickets"
-                  className="bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-6 rounded-lg font-semibold transition-all transform hover:scale-105 shadow-lg flex items-center gap-3"
-                >
-                  <svg className="w-6 h-6 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7 12a5 5 0 1110 0A5 5 0 017 12z" />
-                  </svg>
-                  <span>My Assigned Tickets</span>
+                  <span>Dashboard</span>
                 </Link>
               </>
             )}
@@ -158,10 +149,10 @@ function Welcome() {
           )}
           {isTechnician && (
             <Link
-              to="/my-tickets"
+              to="/technician"
               className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
             >
-              View My Tickets →
+              Go to Dashboard →
             </Link>
           )}
           {isManagement && (

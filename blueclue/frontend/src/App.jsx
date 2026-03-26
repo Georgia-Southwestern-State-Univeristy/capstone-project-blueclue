@@ -9,7 +9,6 @@ import Welcome from './pages/Welcome'
 import ClientDashboard from './pages/ClientDashboard'
 import TechnicianDashboard from './pages/TechnicianDashboard'
 import ManagementDashboard from './pages/ManagementDashboard'
-import MyAssignedTickets from './pages/MyAssignedTickets'
 import AnalyticsDashboard from './pages/AnalyticsDashboard'
 import KnowledgeBaseManagement from './pages/KnowledgeBaseManagement'
 import FAQ from './pages/FAQ'
@@ -62,11 +61,6 @@ function AppRoutes() {
         <Route path="/analytics" element={
           <ProtectedRoute allowedRoles={['technician', 'senior_technician', 'management', 'admin']}>
             <AnalyticsDashboard />
-          </ProtectedRoute>
-        } />
-        <Route path="/my-tickets" element={
-          <ProtectedRoute allowedRoles={['technician', 'senior_technician', 'management', 'admin']}>
-            <MyAssignedTickets />
           </ProtectedRoute>
         } />
         <Route path="/knowledge-base" element={

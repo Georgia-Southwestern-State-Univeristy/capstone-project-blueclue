@@ -112,6 +112,17 @@ const PREVIEW_PATTERNS = {
   chatBot:'chat-bubbles',                // Chat bubble icon + message bubbles + input
   recentActivity:'activity-feed',          // Clock icon + activity log rows
   ticketUpdates:'activity-list',            // Filter tabs + update entries with change-type icons
+  // Technician widgets
+  statusDonut:    'chart-donut',      // Donut chart (status distribution)
+  priorityPie:    'chart-pie',        // Pie chart (priority distribution)
+  ticketQueue:    'card-grid',        // Ticket queue card grid
+  availableTickets:'card-grid',       // Available tickets card grid
+  ringRequests:   'list-pending',     // Ring-for-help request list
+  chatPanel:      'list-pending',     // Chat handoff request list
+  // Client & admin widgets
+  clientTickets:  'data-table',       // Client ticket list table
+  auditHealth:    'list-pending',     // Audit health monitoring
+  quickActions:   'list-actions',     // Quick action shortcut panel
 }
 
 /** Tiny SVG preview matching the widget type */
