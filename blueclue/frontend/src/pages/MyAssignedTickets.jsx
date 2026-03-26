@@ -64,7 +64,8 @@ function MyAssignedTickets() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
-  const { minimize: handleMinimize } = useMinimizedTickets()
+  const { minimize } = useMinimizedTickets()
+  const handleMinimize = (ticketData) => { minimize(ticketData); setIsDetailOpen(false) }
   const [selectedUpdateRequest, setSelectedUpdateRequest] = useState(null)
 
   // Filter state
