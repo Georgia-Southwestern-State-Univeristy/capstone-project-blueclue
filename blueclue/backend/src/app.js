@@ -35,12 +35,14 @@ import templateRoutes from './routes/templates.js';
 import themeRoutes from './routes/themes.js';
 import chatRoutes from './routes/chat.js';
 import mlAdminRoutes from './routes/mlAdmin.js';
+import requestLogsRoutes from './routes/requestLogs.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 import { startUpdateRequestReminderJob } from './jobs/updateRequestReminders.js';
 import { startChatQualityJob } from './jobs/chatQualityJob.js';
 import { errorHandler, notFoundHandler, InternalServerError } from './middleware/errorHandler.js';
 import { startAlertDetectionJob } from './jobs/alertDetectionJob.js';
 import { startEmailQueueJob } from './jobs/emailQueueJob.js';
+import { requestLogger } from './middleware/requestLogger.js';
 import { runHealthChecks } from './services/healthCheckService.js';
 
 dotenv.config();
@@ -88,6 +90,9 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' })); // For parsing Mailgun webhook form data
 app.use(cookieParser());
 
+// Request logging middleware (must be after body parsers, before routes)
+app.use(requestLogger);
+
 // ── Static file serving (chat uploads) ──────────────────────────────────────
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -115,6 +120,7 @@ app.use('/api/dashboard-layouts', dashboardLayoutRoutes); // Dashboard layout pe
 app.use('/api/widgets', widgetRoutes); // Widget RBAC and validation
 app.use('/api/knowledge-base', knowledgeBaseRoutes); // Knowledge base management
 app.use('/api/templates', templateRoutes); // Ticket templates
+app.use('/api/admin/analytics/requests', requestLogsRoutes); // Request logs analytics (admin-only)
 app.use('/api/themes', themeRoutes); // User theme preferences
 app.use('/api/chat', chatRoutes); // Chat bot routes
 app.use('/api/ml-admin', mlAdminRoutes); // ML Admin – monitoring, explainability, versioning
