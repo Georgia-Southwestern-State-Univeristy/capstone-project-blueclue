@@ -6,6 +6,7 @@ import ArticleEditor from '../components/knowledgeBase/ArticleEditor';
 import ArticleViewer from '../components/knowledgeBase/ArticleViewer';
 import CategoryManager from '../components/knowledgeBase/CategoryManager';
 import KBAnalytics from '../components/knowledgeBase/KBAnalytics';
+import SearchWithHistory from '../components/SearchWithHistory';
 
 const getAuthHeaders = () => {
     const token = localStorage.getItem('blueclue_token');
@@ -241,12 +242,13 @@ const KnowledgeBaseManagement = () => {
                         {/* Filters and Create Button */}
                         <div className="bg-gray-800 rounded-xl border border-gray-700 p-4 mb-6">
                             <div className="flex flex-wrap gap-4 items-center">
-                                <input
-                                    type="text"
-                                    placeholder="Search articles..."
+                                <SearchWithHistory
+                                    searchType="knowledge_base"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder="Search articles..."
                                     className="flex-1 min-w-[200px] px-4 py-2 bg-gray-900/50 border border-gray-700 text-gray-200 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    showClearButton={false}
                                 />
                                 <select
                                     value={filterCategory}
