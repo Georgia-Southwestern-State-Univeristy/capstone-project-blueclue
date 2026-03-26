@@ -269,6 +269,7 @@ function ClientDashboard() {
         tickets={minimizedTickets}
         onRestore={handleRestoreMinimized}
         onClose={handleCloseMinimized}
+        onClearAll={() => setMinimizedTickets([])}
       />
     </div>
   )

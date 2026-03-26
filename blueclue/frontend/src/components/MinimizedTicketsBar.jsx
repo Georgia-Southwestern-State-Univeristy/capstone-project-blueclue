@@ -5,11 +5,20 @@ import { createPortal } from 'react-dom'
  * Fixed bottom bar showing minimized ticket chips.
  * Each chip shows ticket number + subject, and can be restored or closed.
  */
-function MinimizedTicketsBar({ tickets = [], onRestore, onClose }) {
+function MinimizedTicketsBar({ tickets = [], onRestore, onClose, onClearAll }) {
   if (tickets.length === 0) return null
 
   return createPortal(
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900/95 backdrop-blur-sm border-t border-gray-700 shadow-2xl px-4 py-2">
+    <div className="fixed bottom-0 left-0 right-0 z-40">
+      <div className="flex justify-start px-4 pb-1">
+        <button
+          onClick={onClearAll}
+          className="text-[10px] text-gray-400 hover:text-red-400 bg-gray-800/90 hover:bg-gray-700 border border-gray-700 rounded px-2 py-0.5 transition-colors"
+        >
+          Clear all
+        </button>
+      </div>
+      <div className="bg-gray-900/95 backdrop-blur-sm border-t border-gray-700 shadow-2xl px-4 py-2">
       <div className="flex items-center gap-1.5 overflow-x-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 transparent' }}>
         {tickets.map((t) => (
           <div
@@ -35,6 +44,7 @@ function MinimizedTicketsBar({ tickets = [], onRestore, onClose }) {
             </button>
           </div>
         ))}
+      </div>
       </div>
     </div>,
     document.body

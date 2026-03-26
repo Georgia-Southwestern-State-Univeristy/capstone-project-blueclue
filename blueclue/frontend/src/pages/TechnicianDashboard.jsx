@@ -450,6 +450,7 @@ function TechnicianDashboard() {
         tickets={minimizedTickets}
         onRestore={handleRestoreMinimized}
         onClose={handleCloseMinimized}
+        onClearAll={() => setMinimizedTickets([])}
       />
 
       {/* Update Response Modal */}
