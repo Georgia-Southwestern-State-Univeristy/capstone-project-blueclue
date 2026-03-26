@@ -6,6 +6,7 @@ import TicketTimeline from '../components/TicketTimeline'
 import PieChart from '../components/PieChart'
 import AvailableTickets from '../components/AvailableTickets'
 import TicketDetailView from '../components/TicketDetailView'
+import MinimizedTicketsBar from '../components/MinimizedTicketsBar'
 import RingRequestWidget from '../components/RingRequestWidget'
 import UpdateRequestAlert from '../components/UpdateRequestAlert'
 import UpdateResponseModal from '../components/UpdateResponseModal'
@@ -156,6 +157,20 @@ function TechnicianDashboard() {
   const [assigningTicketId, setAssigningTicketId] = useState(null)
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const [minimizedTickets, setMinimizedTickets] = useState([])
+
+  const handleMinimize = (ticketData) => {
+    setMinimizedTickets(prev => prev.some(t => t.ticketId === ticketData.ticketId) ? prev : [...prev, ticketData])
+    setIsDetailOpen(false)
+  }
+  const handleRestoreMinimized = (ticketId) => {
+    setMinimizedTickets(prev => prev.filter(t => t.ticketId !== ticketId))
+    setSelectedTicketId(ticketId)
+    setIsDetailOpen(true)
+  }
+  const handleCloseMinimized = (ticketId) => {
+    setMinimizedTickets(prev => prev.filter(t => t.ticketId !== ticketId))
+  }
   const [includeCancelled, setIncludeCancelled] = useState(false)
   const [selectedUpdateRequest, setSelectedUpdateRequest] = useState(null)
 
@@ -429,6 +444,12 @@ function TechnicianDashboard() {
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         onTicketUpdated={fetchTickets}
+        onMinimize={handleMinimize}
+      />
+      <MinimizedTicketsBar
+        tickets={minimizedTickets}
+        onRestore={handleRestoreMinimized}
+        onClose={handleCloseMinimized}
       />
 
       {/* Update Response Modal */}

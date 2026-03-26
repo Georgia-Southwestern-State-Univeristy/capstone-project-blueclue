@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import TicketSubmissionModal from '../components/TicketSubmissionModal'
 import TicketDetailView from '../components/TicketDetailView'
+import MinimizedTicketsBar from '../components/MinimizedTicketsBar'
 import ClientTicketListWidget from '../components/ClientTicketListWidget'
 import CreateTicketWidget from '../components/CreateTicketWidget'
 import WelcomeBanner from '../components/WelcomeBanner'
@@ -114,6 +115,20 @@ function ClientDashboard() {
   const [currentUser, setCurrentUser] = useState(null)
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const [minimizedTickets, setMinimizedTickets] = useState([])
+
+  const handleMinimize = (ticketData) => {
+    setMinimizedTickets(prev => prev.some(t => t.ticketId === ticketData.ticketId) ? prev : [...prev, ticketData])
+    setIsDetailOpen(false)
+  }
+  const handleRestoreMinimized = (ticketId) => {
+    setMinimizedTickets(prev => prev.filter(t => t.ticketId !== ticketId))
+    setSelectedTicketId(ticketId)
+    setIsDetailOpen(true)
+  }
+  const handleCloseMinimized = (ticketId) => {
+    setMinimizedTickets(prev => prev.filter(t => t.ticketId !== ticketId))
+  }
 
   // Fetch tickets on component mount
   useEffect(() => {
@@ -248,6 +263,12 @@ function ClientDashboard() {
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         onTicketUpdated={() => { fetchTickets() }}
+        onMinimize={handleMinimize}
+      />
+      <MinimizedTicketsBar
+        tickets={minimizedTickets}
+        onRestore={handleRestoreMinimized}
+        onClose={handleCloseMinimized}
       />
     </div>
   )

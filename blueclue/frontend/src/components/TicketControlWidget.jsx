@@ -38,7 +38,7 @@ const getWorkloadTier = (count) => {
 
 // ── Component ────────────────────────────────────────────────────────────
 
-function TicketControlWidget({ tickets = [], onRefresh, onTicketUpdated }) {
+function TicketControlWidget({ tickets = [], onRefresh, onTicketUpdated, onMinimize }) {
   // ── Container-responsive sizing ──
   const [containerRef, { width: containerWidth }] = useContainerSize()
   const ticketCols = containerWidth >= 900 ? 3 : containerWidth >= 550 ? 2 : 1
@@ -700,6 +700,7 @@ function TicketControlWidget({ tickets = [], onRefresh, onTicketUpdated }) {
       isOpen={isDetailOpen}
       onClose={() => setIsDetailOpen(false)}
       onTicketUpdated={onTicketUpdated}
+      onMinimize={(data) => { setIsDetailOpen(false); onMinimize?.(data) }}
     />
     </>
   )
