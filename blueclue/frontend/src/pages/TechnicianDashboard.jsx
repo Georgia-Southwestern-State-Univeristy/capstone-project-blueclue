@@ -100,13 +100,7 @@ function TechnicianWidgetGrid({
         <TechTicketQueueWidget
           tickets={tickets}
           loading={loading}
-          technicians={technicians}
           onTicketClick={handleTicketClick}
-          onStatusChange={handleStatusChange}
-          onAssignmentChange={handleAssignmentChange}
-          updatingTicketId={updatingTicketId}
-          assigningTicketId={assigningTicketId}
-          ticketErrors={ticketErrors}
           includeCancelled={includeCancelled}
         />
       ),

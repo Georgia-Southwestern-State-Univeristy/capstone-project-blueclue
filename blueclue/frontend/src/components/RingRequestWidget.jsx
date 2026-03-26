@@ -91,7 +91,7 @@ const RingRequestWidget = ({ onViewTicket }) => {
       try {
         const user = JSON.parse(userStr);
         if (user.role === 'technician') {
-          navigate('/my-tickets');
+          navigate('/technician');
         } else if (user.role === 'management') {
           navigate('/management-dashboard');
         } else {

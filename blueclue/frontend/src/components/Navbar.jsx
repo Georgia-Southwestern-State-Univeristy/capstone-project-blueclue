@@ -489,10 +489,7 @@ function Navbar() {
                 {['technician', 'senior_technician', 'admin'].includes(user?.role) && (
                   <>
                     <Link to="/technician" className="text-gray-300 hover:text-white transition-colors">
-                      All Tickets
-                    </Link>
-                    <Link to="/my-tickets" className="text-gray-300 hover:text-white transition-colors">
-                      My Tickets
+                      Dashboard
                     </Link>
                     {/* Knowledge Base only shown here if NOT also management/admin (avoid duplicate) */}
                     {user?.role !== 'management' && user?.role !== 'admin' && (
@@ -719,14 +716,7 @@ function Navbar() {
                 onClick={() => setMobileMenuOpen(false)}
                 className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
               >
-                All Tickets
-              </Link>
-              <Link
-                to="/my-tickets"
-                onClick={() => setMobileMenuOpen(false)}
-                className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
-              >
-                My Tickets
+                Dashboard
               </Link>
             </>
           )}

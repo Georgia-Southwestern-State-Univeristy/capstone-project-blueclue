@@ -331,19 +331,14 @@ function AvailableTickets({ onTicketClick }) {
               return (
                 <div
                   key={ticket.id}
-                  className="bg-gray-800 border border-gray-700 rounded-lg p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-1 hover:border-blue-500 flex flex-col"
+                  className={`bg-gray-800 border border-gray-700 rounded-lg p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-1 hover:border-blue-500 flex flex-col ${onTicketClick ? 'cursor-pointer' : ''}`}
+                  onClick={() => onTicketClick && onTicketClick(ticket.id)}
                 >
                   {/* Header */}
                   <div className="mb-3">
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <h3
-                        className={`font-bold text-white text-sm leading-tight flex-1 break-words ${onTicketClick ? 'cursor-pointer hover:text-blue-400 transition-colors' : ''}`}
-                        onClick={(e) => {
-                          if (onTicketClick) {
-                            e.stopPropagation();
-                            onTicketClick(ticket.id);
-                          }
-                        }}
+                        className="font-bold text-white text-sm leading-tight flex-1 break-words"
                       >
                         {ticket.subject}
                       </h3>
@@ -415,7 +410,7 @@ function AvailableTickets({ onTicketClick }) {
 
                   {/* Request Assignment Button */}
                   <button
-                    onClick={() => handleRequestClick(ticket)}
+                    onClick={(e) => { e.stopPropagation(); handleRequestClick(ticket); }}
                     className="w-full mt-auto px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-colors flex items-center justify-center gap-2"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
