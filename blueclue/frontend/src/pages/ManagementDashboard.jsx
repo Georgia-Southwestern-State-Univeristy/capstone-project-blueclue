@@ -16,6 +16,7 @@ import TicketTimeline from '../components/TicketTimeline'
 import PendingRequestsWidget from '../components/PendingRequestsWidget'
 import DeletedTicketsWidget from '../components/DeletedTicketsWidget'
 import TicketDetailView from '../components/TicketDetailView'
+import { useMinimizedTickets } from '../contexts/MinimizedTicketsContext'
 import UpdateRequestResponseTimeAnalytics from '../components/UpdateRequestResponseTimeAnalytics'
 import AuditHealthWidget from '../components/AuditHealthWidget'
 import TicketTrendWidget from '../components/TicketTrendWidget'
@@ -100,7 +101,7 @@ function ManagementWidgetGrid({
   widgetFilters, handleWidgetFilterChange,
   categoryFilter, setCategoryFilter,
   handleTicketClick, pendingRequestsRef,
-  onSubmitTicket,
+  onSubmitTicket, onMinimize,
 }) {
   // Fetch widgets available to the current user based on their role
   const { widgets: availableWidgets } = useAvailableWidgets(MANAGEMENT_WIDGET_KEYS);
@@ -134,7 +135,7 @@ function ManagementWidgetGrid({
       timeline: (
         <TicketTimeline tickets={tickets} onTicketClick={handleTicketClick} />
       ),
-      ticketControl: <TicketControlWidget tickets={tickets} onTicketUpdated={fetchTickets} />,
+      ticketControl: <TicketControlWidget tickets={tickets} onTicketUpdated={fetchTickets} onMinimize={onMinimize} />,
       assignedChart: (
         <UnassignedVsAssignedWidget
           tickets={tickets}
@@ -292,6 +293,8 @@ function ManagementDashboard() {
   useNotificationSocket(handleNewNotification, null, handleTicketChange)
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const { minimize } = useMinimizedTickets()
+  const handleMinimize = (ticketData) => { minimize(ticketData); setIsDetailOpen(false) }
 
   const handleTicketClick = (ticketId) => {
     setSelectedTicketId(ticketId)
@@ -376,8 +379,8 @@ function ManagementDashboard() {
     const unassignedTickets = activeTickets.length - assignedTickets
     
     const overdueTickets = activeTickets.filter(t => {
-      if (!t.due_date) return false
-      const dueDate = new Date(t.due_date)
+      if (!t.resolution_due_at) return false
+      const dueDate = new Date(t.resolution_due_at)
       return dueDate < now && t.status !== 'resolved' && t.status !== 'closed'
     }).length
 
@@ -521,6 +524,7 @@ function ManagementDashboard() {
         handleTicketClick={handleTicketClick}
         pendingRequestsRef={pendingRequestsRef}
         onSubmitTicket={handleSubmitTicket}
+        onMinimize={handleMinimize}
       />
 
       {/* Ticket Detail View Modal */}
@@ -529,6 +533,7 @@ function ManagementDashboard() {
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         onTicketUpdated={fetchTickets}
+        onMinimize={handleMinimize}
       />
     </div>
   )

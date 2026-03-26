@@ -5,6 +5,7 @@ import { LineChart, BarChart, StackedBarChart, Heatmap, MetricCard } from '../co
 import DonutChart from '../components/DonutChart'
 import * as analyticsService from '../services/analyticsService'
 import TicketDetailView from '../components/TicketDetailView'
+import { useMinimizedTickets } from '../contexts/MinimizedTicketsContext'
 import { useToast } from '../hooks/useToast'
 
 /**
@@ -41,6 +42,8 @@ function AnalyticsDashboard() {
   // Ticket detail state
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const { minimize } = useMinimizedTickets()
+  const handleMinimize = (ticketData) => { minimize(ticketData); setIsDetailOpen(false) }
 
   // Check user authentication and role
   useEffect(() => {
@@ -393,11 +396,11 @@ function AnalyticsDashboard() {
         />
       )}
 
-      {/* Ticket Detail View Modal */}
       <TicketDetailView
         ticketId={selectedTicketId}
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
+        onMinimize={handleMinimize}
       />
     </div>
   )

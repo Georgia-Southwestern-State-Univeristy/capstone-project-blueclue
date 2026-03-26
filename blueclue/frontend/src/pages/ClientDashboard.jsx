@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import TicketSubmissionModal from '../components/TicketSubmissionModal'
 import TicketDetailView from '../components/TicketDetailView'
+import { useMinimizedTickets } from '../contexts/MinimizedTicketsContext'
 import ClientTicketListWidget from '../components/ClientTicketListWidget'
 import CreateTicketWidget from '../components/CreateTicketWidget'
 import WelcomeBanner from '../components/WelcomeBanner'
@@ -114,6 +115,8 @@ function ClientDashboard() {
   const [currentUser, setCurrentUser] = useState(null)
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const { minimize } = useMinimizedTickets()
+  const handleMinimize = (ticketData) => { minimize(ticketData); setIsDetailOpen(false) }
 
   // Fetch tickets on component mount
   useEffect(() => {
@@ -248,6 +251,7 @@ function ClientDashboard() {
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         onTicketUpdated={() => { fetchTickets() }}
+        onMinimize={handleMinimize}
       />
     </div>
   )

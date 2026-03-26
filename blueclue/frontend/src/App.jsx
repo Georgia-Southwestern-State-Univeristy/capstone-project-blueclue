@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ToastProvider } from './contexts/ToastContext'
+import { MinimizedTicketsProvider } from './contexts/MinimizedTicketsContext'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import VerifyEmail from './pages/VerifyEmail'
@@ -21,6 +22,7 @@ import TechnicianManagement from './pages/TechnicianManagement'
 import Navbar from './components/Navbar'
 import ProtectedRoute from './components/ProtectedRoute'
 import usePageTitle from './hooks/usePageTitle'
+import GlobalMinimizedBar from './components/GlobalMinimizedBar'
 
 function AppRoutes() {
   usePageTitle()
@@ -93,6 +95,7 @@ function AppRoutes() {
           </ProtectedRoute>
         } />
       </Routes>
+      <GlobalMinimizedBar />
     </>
   )
 }
@@ -101,7 +104,9 @@ function App() {
   return (
     <BrowserRouter>
       <ToastProvider>
-        <AppRoutes />
+        <MinimizedTicketsProvider>
+          <AppRoutes />
+        </MinimizedTicketsProvider>
       </ToastProvider>
     </BrowserRouter>
   )

@@ -21,11 +21,10 @@ import { formatDateTime as _fmtDateTime, formatTimeAgo as _fmtTimeAgo } from '..
  * Supports close (X / Escape / backdrop), minimize (collapse to bottom bar),
  * and inline status updates.
  */
-function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
+function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimize, preserveState = false }) {
   const [ticket, setTicket] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [minimized, setMinimized] = useState(false)
   const [activeTab, setActiveTab] = useState('details')
   const [statusUpdating, setStatusUpdating] = useState(false)
   const [statusError, setStatusError] = useState(null)
@@ -84,6 +83,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   const statusDropdownRef = useRef(null)
   const previousOverflow = useRef('')
   const ticketCache = useRef(new Map())  // ticketId -> { data, fetchedAt }
+  const wasMinimized = useRef(false)
 
   // ─── Role-based visibility ─────────────────────────────────────
   const userRole = getUserRole()
@@ -153,7 +153,11 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
 
   useEffect(() => {
     if (isOpen && ticketId) {
-      setMinimized(false)
+      // Skip resets when restoring from minimize — keep all form state intact
+      if (wasMinimized.current && preserveState) {
+        wasMinimized.current = false
+        return
+      }
       setActiveTab('details')
       setStatusError(null)
       setStatusSuccess(null)
@@ -173,7 +177,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
 
   // ─── Body scroll lock ────────────────────────────────────────────
   useEffect(() => {
-    if (isOpen && !minimized) {
+    if (isOpen) {
       previousOverflow.current = document.body.style.overflow
       document.body.style.overflow = 'hidden'
     } else {
@@ -182,22 +186,18 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     return () => {
       document.body.style.overflow = previousOverflow.current || 'unset'
     }
-  }, [isOpen, minimized])
+  }, [isOpen])
 
   // ─── Keyboard: Escape closes ─────────────────────────────────────
   useEffect(() => {
     const handleKey = (e) => {
       if (e.key === 'Escape' && isOpen) {
-        if (minimized) {
-          onClose()
-        } else {
-          setMinimized(true)
-        }
+        onClose()
       }
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [isOpen, minimized, onClose])
+  }, [isOpen, onClose])
 
   // ─── Backdrop click ──────────────────────────────────────────────
   const handleBackdropClick = (e) => {
@@ -670,50 +670,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     reopened: ['in_progress', 'waiting_on_customer', 'resolved', 'closed'],
   }
 
-  if (!isOpen) return null
-
-  // ─── Minimized bar ───────────────────────────────────────────────
-  if (minimized) {
-    return createPortal(
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 border-t border-gray-700 shadow-2xl px-4 py-3 flex items-center justify-between">
-        <button
-          onClick={() => setMinimized(false)}
-          className="flex items-center gap-3 text-left flex-1 min-w-0"
-        >
-          <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 animate-pulse" />
-          <div className="min-w-0">
-            <p className="text-white text-sm font-medium truncate">
-              {ticket?.ticket_number || `Ticket #${ticketId}`}
-              {ticket?.subject && (
-                <span className="text-gray-400 ml-2 font-normal">— {ticket.subject}</span>
-              )}
-            </p>
-          </div>
-        </button>
-        <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-          <button
-            onClick={() => setMinimized(false)}
-            className="text-gray-400 hover:text-white p-1.5 rounded hover:bg-gray-800 transition-colors"
-            title="Expand"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-            </svg>
-          </button>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-red-400 p-1.5 rounded hover:bg-gray-800 transition-colors"
-            title="Close"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      </div>,
-      document.body
-    )
-  }
+  if (!isOpen && !preserveState) return null
 
   // ─── Full modal overlay ──────────────────────────────────────────
   return createPortal(
@@ -721,6 +678,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
       ref={modalRef}
       onClick={handleBackdropClick}
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-stretch md:items-center md:justify-center overflow-hidden md:p-6"
+      style={!isOpen && preserveState ? { display: 'none' } : undefined}
     >
       <div className="bg-gray-950 w-full max-w-6xl flex flex-col h-full md:h-auto md:max-h-full md:rounded-xl md:border md:border-gray-700 shadow-2xl">
         {/* ── Top bar ─────────────────────────────────────────────── */}
@@ -738,12 +696,12 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
           <div className="flex items-center gap-1 flex-shrink-0 ml-3">
             {/* Minimize */}
             <button
-              onClick={() => setMinimized(true)}
+              onClick={() => { wasMinimized.current = true; onMinimize?.({ ticketId, ticketNumber: ticket?.ticket_number, subject: ticket?.subject }) }}
               className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 transition-colors"
               title="Minimize"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14" />
               </svg>
             </button>
             {/* Close */}
