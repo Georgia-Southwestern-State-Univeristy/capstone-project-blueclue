@@ -16,7 +16,7 @@ import TicketTimeline from '../components/TicketTimeline'
 import PendingRequestsWidget from '../components/PendingRequestsWidget'
 import DeletedTicketsWidget from '../components/DeletedTicketsWidget'
 import TicketDetailView from '../components/TicketDetailView'
-import MinimizedTicketsBar from '../components/MinimizedTicketsBar'
+import { useMinimizedTickets } from '../contexts/MinimizedTicketsContext'
 import UpdateRequestResponseTimeAnalytics from '../components/UpdateRequestResponseTimeAnalytics'
 import AuditHealthWidget from '../components/AuditHealthWidget'
 import TicketTrendWidget from '../components/TicketTrendWidget'
@@ -293,19 +293,7 @@ function ManagementDashboard() {
   useNotificationSocket(handleNewNotification, null, handleTicketChange)
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
-  const [minimizedTickets, setMinimizedTickets] = useState([])
-
-  const handleMinimize = (ticketData) => {
-    setMinimizedTickets(prev => prev.some(t => t.ticketId === ticketData.ticketId) ? prev : [...prev, ticketData])
-    setIsDetailOpen(false)
-  }
-  const handleRestoreMinimized = (ticketId) => {
-    setSelectedTicketId(ticketId)
-    setIsDetailOpen(true)
-  }
-  const handleCloseMinimized = (ticketId) => {
-    setMinimizedTickets(prev => prev.filter(t => t.ticketId !== ticketId))
-  }
+  const { minimize: handleMinimize } = useMinimizedTickets()
 
   const handleTicketClick = (ticketId) => {
     setSelectedTicketId(ticketId)
@@ -538,33 +526,13 @@ function ManagementDashboard() {
         onMinimize={handleMinimize}
       />
 
-      {/* Ticket Detail View Modals — one per minimized ticket to preserve form state */}
-      {minimizedTickets.map((mt) => (
-        <TicketDetailView
-          key={mt.ticketId}
-          ticketId={mt.ticketId}
-          isOpen={isDetailOpen && selectedTicketId === mt.ticketId}
-          onClose={() => setIsDetailOpen(false)}
-          onTicketUpdated={fetchTickets}
-          onMinimize={handleMinimize}
-          preserveState
-        />
-      ))}
-      {/* Fallback for tickets opened without minimize history */}
-      {(!minimizedTickets.some(t => t.ticketId === selectedTicketId)) && (
-        <TicketDetailView
-          ticketId={selectedTicketId}
-          isOpen={isDetailOpen}
-          onClose={() => setIsDetailOpen(false)}
-          onTicketUpdated={fetchTickets}
-          onMinimize={handleMinimize}
-        />
-      )}
-      <MinimizedTicketsBar
-        tickets={minimizedTickets.filter(t => !(isDetailOpen && selectedTicketId === t.ticketId))}
-        onRestore={handleRestoreMinimized}
-        onClose={handleCloseMinimized}
-        onClearAll={() => setMinimizedTickets([])}
+      {/* Ticket Detail View Modal */}
+      <TicketDetailView
+        ticketId={selectedTicketId}
+        isOpen={isDetailOpen}
+        onClose={() => setIsDetailOpen(false)}
+        onTicketUpdated={fetchTickets}
+        onMinimize={handleMinimize}
       />
     </div>
   )

@@ -5,6 +5,7 @@ import DonutChart from '../components/DonutChart'
 import TicketTimeline from '../components/TicketTimeline'
 import PieChart from '../components/PieChart'
 import TicketDetailView from '../components/TicketDetailView'
+import { useMinimizedTickets } from '../contexts/MinimizedTicketsContext'
 import UpdateRequestAlert from '../components/UpdateRequestAlert'
 import UpdateResponseModal from '../components/UpdateResponseModal'
 import { getMyAssignedTickets, updateTicketStatus } from '../services/ticketService'
@@ -63,6 +64,7 @@ function MyAssignedTickets() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const { minimize: handleMinimize } = useMinimizedTickets()
   const [selectedUpdateRequest, setSelectedUpdateRequest] = useState(null)
 
   // Filter state
@@ -592,6 +594,7 @@ function MyAssignedTickets() {
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         onTicketUpdated={fetchTickets}
+        onMinimize={handleMinimize}
       />
 
       {/* Update Response Modal */}

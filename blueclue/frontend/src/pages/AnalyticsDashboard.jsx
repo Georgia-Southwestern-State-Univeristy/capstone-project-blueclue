@@ -5,7 +5,7 @@ import { LineChart, BarChart, StackedBarChart, Heatmap, MetricCard } from '../co
 import DonutChart from '../components/DonutChart'
 import * as analyticsService from '../services/analyticsService'
 import TicketDetailView from '../components/TicketDetailView'
-import MinimizedTicketsBar from '../components/MinimizedTicketsBar'
+import { useMinimizedTickets } from '../contexts/MinimizedTicketsContext'
 import { useToast } from '../hooks/useToast'
 
 /**
@@ -42,19 +42,7 @@ function AnalyticsDashboard() {
   // Ticket detail state
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
-  const [minimizedTickets, setMinimizedTickets] = useState([])
-
-  const handleMinimize = (ticketData) => {
-    setMinimizedTickets(prev => prev.some(t => t.ticketId === ticketData.ticketId) ? prev : [...prev, ticketData])
-    setIsDetailOpen(false)
-  }
-  const handleRestoreMinimized = (ticketId) => {
-    setSelectedTicketId(ticketId)
-    setIsDetailOpen(true)
-  }
-  const handleCloseMinimized = (ticketId) => {
-    setMinimizedTickets(prev => prev.filter(t => t.ticketId !== ticketId))
-  }
+  const { minimize: handleMinimize } = useMinimizedTickets()
 
   // Check user authentication and role
   useEffect(() => {
@@ -407,30 +395,11 @@ function AnalyticsDashboard() {
         />
       )}
 
-      {/* Ticket Detail View Modals — one per minimized ticket to preserve form state */}
-      {minimizedTickets.map((mt) => (
-        <TicketDetailView
-          key={mt.ticketId}
-          ticketId={mt.ticketId}
-          isOpen={isDetailOpen && selectedTicketId === mt.ticketId}
-          onClose={() => setIsDetailOpen(false)}
-          onMinimize={handleMinimize}
-          preserveState
-        />
-      ))}
-      {(!minimizedTickets.some(t => t.ticketId === selectedTicketId)) && (
-        <TicketDetailView
-          ticketId={selectedTicketId}
-          isOpen={isDetailOpen}
-          onClose={() => setIsDetailOpen(false)}
-          onMinimize={handleMinimize}
-        />
-      )}
-      <MinimizedTicketsBar
-        tickets={minimizedTickets.filter(t => !(isDetailOpen && selectedTicketId === t.ticketId))}
-        onRestore={handleRestoreMinimized}
-        onClose={handleCloseMinimized}
-        onClearAll={() => setMinimizedTickets([])}
+      <TicketDetailView
+        ticketId={selectedTicketId}
+        isOpen={isDetailOpen}
+        onClose={() => setIsDetailOpen(false)}
+        onMinimize={handleMinimize}
       />
     </div>
   )
