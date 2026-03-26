@@ -122,7 +122,6 @@ function ClientDashboard() {
     setIsDetailOpen(false)
   }
   const handleRestoreMinimized = (ticketId) => {
-    setMinimizedTickets(prev => prev.filter(t => t.ticketId !== ticketId))
     setSelectedTicketId(ticketId)
     setIsDetailOpen(true)
   }
@@ -257,16 +256,29 @@ function ClientDashboard() {
         onSubmit={handleSubmit}
       />
 
-      {/* Ticket Detail View Modal */}
-      <TicketDetailView
-        ticketId={selectedTicketId}
-        isOpen={isDetailOpen}
-        onClose={() => setIsDetailOpen(false)}
-        onTicketUpdated={() => { fetchTickets() }}
-        onMinimize={handleMinimize}
-      />
+      {/* Ticket Detail View Modals — one per minimized ticket to preserve form state */}
+      {minimizedTickets.map((mt) => (
+        <TicketDetailView
+          key={mt.ticketId}
+          ticketId={mt.ticketId}
+          isOpen={isDetailOpen && selectedTicketId === mt.ticketId}
+          onClose={() => setIsDetailOpen(false)}
+          onTicketUpdated={() => { fetchTickets() }}
+          onMinimize={handleMinimize}
+          preserveState
+        />
+      ))}
+      {(!minimizedTickets.some(t => t.ticketId === selectedTicketId)) && (
+        <TicketDetailView
+          ticketId={selectedTicketId}
+          isOpen={isDetailOpen}
+          onClose={() => setIsDetailOpen(false)}
+          onTicketUpdated={() => { fetchTickets() }}
+          onMinimize={handleMinimize}
+        />
+      )}
       <MinimizedTicketsBar
-        tickets={minimizedTickets}
+        tickets={minimizedTickets.filter(t => !(isDetailOpen && selectedTicketId === t.ticketId))}
         onRestore={handleRestoreMinimized}
         onClose={handleCloseMinimized}
         onClearAll={() => setMinimizedTickets([])}

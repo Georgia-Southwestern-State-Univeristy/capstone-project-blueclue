@@ -701,6 +701,7 @@ function TicketControlWidget({ tickets = [], onRefresh, onTicketUpdated, onMinim
       onClose={() => setIsDetailOpen(false)}
       onTicketUpdated={onTicketUpdated}
       onMinimize={(data) => { setIsDetailOpen(false); onMinimize?.(data) }}
+      preserveState
     />
     </>
   )

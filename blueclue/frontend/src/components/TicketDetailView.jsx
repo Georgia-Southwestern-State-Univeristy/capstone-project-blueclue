@@ -21,7 +21,7 @@ import { formatDateTime as _fmtDateTime, formatTimeAgo as _fmtTimeAgo } from '..
  * Supports close (X / Escape / backdrop), minimize (collapse to bottom bar),
  * and inline status updates.
  */
-function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimize }) {
+function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimize, preserveState = false }) {
   const [ticket, setTicket] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -83,6 +83,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
   const statusDropdownRef = useRef(null)
   const previousOverflow = useRef('')
   const ticketCache = useRef(new Map())  // ticketId -> { data, fetchedAt }
+  const wasMinimized = useRef(false)
 
   // ─── Role-based visibility ─────────────────────────────────────
   const userRole = getUserRole()
@@ -152,6 +153,11 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
 
   useEffect(() => {
     if (isOpen && ticketId) {
+      // Skip resets when restoring from minimize — keep all form state intact
+      if (wasMinimized.current && preserveState) {
+        wasMinimized.current = false
+        return
+      }
       setActiveTab('details')
       setStatusError(null)
       setStatusSuccess(null)
@@ -664,7 +670,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
     reopened: ['in_progress', 'waiting_on_customer', 'resolved', 'closed'],
   }
 
-  if (!isOpen) return null
+  if (!isOpen && !preserveState) return null
 
   // ─── Full modal overlay ──────────────────────────────────────────
   return createPortal(
@@ -672,6 +678,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
       ref={modalRef}
       onClick={handleBackdropClick}
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-stretch md:items-center md:justify-center overflow-hidden md:p-6"
+      style={!isOpen && preserveState ? { display: 'none' } : undefined}
     >
       <div className="bg-gray-950 w-full max-w-6xl flex flex-col h-full md:h-auto md:max-h-full md:rounded-xl md:border md:border-gray-700 shadow-2xl">
         {/* ── Top bar ─────────────────────────────────────────────── */}
@@ -689,7 +696,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
           <div className="flex items-center gap-1 flex-shrink-0 ml-3">
             {/* Minimize */}
             <button
-              onClick={() => onMinimize?.({ ticketId, ticketNumber: ticket?.ticket_number, subject: ticket?.subject })}
+              onClick={() => { wasMinimized.current = true; onMinimize?.({ ticketId, ticketNumber: ticket?.ticket_number, subject: ticket?.subject }) }}
               className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 transition-colors"
               title="Minimize"
             >
