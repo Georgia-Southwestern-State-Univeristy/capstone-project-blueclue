@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import SearchWithHistory from '../components/SearchWithHistory';
 
 const FAQ = () => {
     const navigate = useNavigate();
@@ -90,10 +91,16 @@ const FAQ = () => {
     };
 
     const handleSearch = async (e) => {
-        e.preventDefault();
+        if (e && e.preventDefault) e.preventDefault();
         if (!searchQuery.trim()) return;
         
         navigate(`/faq/search?q=${encodeURIComponent(searchQuery)}`);
+    };
+
+    const handleSearchSubmit = () => {
+        if (searchQuery.trim()) {
+            navigate(`/faq/search?q=${encodeURIComponent(searchQuery)}`);
+        }
     };
 
     const handleCategoryClick = (categoryName) => {
@@ -137,25 +144,15 @@ const FAQ = () => {
                     
                     {/* Search Bar */}
                     <form onSubmit={handleSearch} className="max-w-2xl">
-                        <div className="relative">
-                            <input
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Search for help articles..."
-                                className="w-full px-6 py-4 pr-12 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                aria-label="Search knowledge base"
-                            />
-                            <button
-                                type="submit"
-                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-blue-600"
-                                aria-label="Submit search"
-                            >
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                </svg>
-                            </button>
-                        </div>
+                        <SearchWithHistory
+                            searchType="knowledge_base"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onSubmit={handleSearchSubmit}
+                            placeholder="Search for help articles..."
+                            className="w-full px-6 py-4 pr-12 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            showClearButton={false}
+                        />
                     </form>
                 </div>
             </div>
