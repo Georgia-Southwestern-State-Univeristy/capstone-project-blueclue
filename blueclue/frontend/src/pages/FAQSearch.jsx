@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import SearchWithHistory from '../components/SearchWithHistory';
 
 const FAQSearch = () => {
     const navigate = useNavigate();
@@ -39,6 +40,12 @@ const FAQSearch = () => {
         }
     };
 
+    const handleSearchSubmit = () => {
+        if (searchInput.trim()) {
+            navigate(`/faq/search?q=${encodeURIComponent(searchInput)}`);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-950">
             {/* Header */}
@@ -48,24 +55,15 @@ const FAQSearch = () => {
                     
                     {/* Search Bar */}
                     <form onSubmit={handleSearch}>
-                        <div className="relative">
-                            <input
-                                type="text"
-                                value={searchInput}
-                                onChange={(e) => setSearchInput(e.target.value)}
-                                placeholder="Search for help articles..."
-                                className="w-full px-6 py-4 pr-12 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                autoFocus
-                            />
-                            <button
-                                type="submit"
-                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-blue-600"
-                            >
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                </svg>
-                            </button>
-                        </div>
+                        <SearchWithHistory
+                            searchType="knowledge_base"
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
+                            onSubmit={handleSearchSubmit}
+                            placeholder="Search for help articles..."
+                            className="w-full px-6 py-4 pr-12 rounded-lg bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            showClearButton={false}
+                        />
                     </form>
                 </div>
             </div>
