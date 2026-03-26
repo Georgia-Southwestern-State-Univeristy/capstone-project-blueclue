@@ -499,7 +499,7 @@ export default function DashboardGrid({
         className={`relative transition-shadow duration-200
                     ${isEditMode ? 'rgl-edit-mode' : ''}
                     ${isDraggingExternal ? 'external-drop-active ring-2 ring-blue-500/30 ring-inset rounded-lg bg-blue-500/5' : ''}`}
-        style={galleryVisible ? { paddingBottom: '240px' } : undefined}
+        style={undefined}
       >
         {/* Grid – v2 API: pass width directly, use dragConfig/resizeConfig objects */}
         {mounted && (
@@ -578,18 +578,13 @@ export default function DashboardGrid({
         )}
       </div>
 
-      {/* ── Bottom overlay gallery panel ── */}
+      {/* ── Top overlay gallery panel ── */}
       {hasGallery && (
         <div
-          className={`fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 ease-in-out
-                      ${galleryVisible ? 'translate-y-0' : 'translate-y-full'}`}
+          className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ease-in-out
+                      ${galleryVisible ? 'translate-y-0' : '-translate-y-full'}`}
           style={{ height: '250px' }}
         >
-          {/* Resize handle / grab bar at top */}
-          <div className="flex items-center justify-center h-6 bg-gray-900/95 backdrop-blur-sm
-                          border-t border-x border-gray-700/60 rounded-t-xl cursor-default select-none">
-            <div className="w-10 h-1 rounded-full bg-gray-600" />
-          </div>
           {/* Gallery content */}
           <div className="h-[calc(100%-1.5rem)] bg-gray-900/95 backdrop-blur-sm border-x border-gray-700/60 overflow-hidden">
             <WidgetGallery
@@ -608,25 +603,30 @@ export default function DashboardGrid({
               resetLayout={resetLayout}
             />
           </div>
+          {/* Grab bar at bottom */}
+          <div className="flex items-center justify-center h-6 bg-gray-900/95 backdrop-blur-sm
+                          border-b border-x border-gray-700/60 rounded-b-xl cursor-default select-none">
+            <div className="w-10 h-1 rounded-full bg-gray-600" />
+          </div>
         </div>
       )}
 
-      {/* Pull-up button when gallery is hidden */}
+      {/* Pull-down button when gallery is hidden */}
       {hasGallery && !showGallery && (
-        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 z-50">
+        <div className="fixed top-0 left-1/2 -translate-x-1/2 z-50">
           <button
             onClick={() => setShowGallery(true)}
-            className="flex items-center gap-2 px-5 py-2 rounded-t-lg
+            className="flex items-center gap-2 px-5 py-2 rounded-b-lg
                        bg-gray-800/95 hover:bg-gray-700/95 backdrop-blur-sm
-                       border border-b-0 border-gray-600/50 hover:border-blue-500/50
+                       border border-t-0 border-gray-600/50 hover:border-blue-500/50
                        text-gray-400 hover:text-blue-400 transition-all shadow-lg
                        group"
             title="Show Manage Layout"
           >
-            <svg className="w-4 h-4 transition-transform group-hover:-translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-            </svg>
             <span className="text-[11px] font-semibold tracking-wide">MANAGE LAYOUT</span>
+            <svg className="w-4 h-4 transition-transform group-hover:translate-y-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
           </button>
         </div>
       )}
