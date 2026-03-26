@@ -391,8 +391,8 @@ function ManagementDashboard() {
     const unassignedTickets = activeTickets.length - assignedTickets
     
     const overdueTickets = activeTickets.filter(t => {
-      if (!t.due_date) return false
-      const dueDate = new Date(t.due_date)
+      if (!t.resolution_due_at) return false
+      const dueDate = new Date(t.resolution_due_at)
       return dueDate < now && t.status !== 'resolved' && t.status !== 'closed'
     }).length
 
