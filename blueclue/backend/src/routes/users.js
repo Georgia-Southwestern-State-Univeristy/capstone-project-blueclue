@@ -33,7 +33,7 @@ router.get('/technicians', authenticateToken, async (req, res) => {
 
 /**
  * GET /api/users/directory
- * Get all users for the staff/client directory
+ * Get all users for the staff directory
  * Accessible by staff roles (technician, senior_technician, management, admin)
  */
 router.get('/directory', authenticateToken, checkRole('technician', 'senior_technician', 'management', 'admin'), async (req, res) => {

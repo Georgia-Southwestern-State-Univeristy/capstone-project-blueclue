@@ -571,7 +571,7 @@ function Navbar() {
                 )}
                 {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
                   <Link to="/directory" className="text-gray-300 hover:text-white transition-colors">
-                    Staff/Client Directory
+                    Staff Directory
                   </Link>
                 )}
               </>
@@ -783,7 +783,7 @@ function Navbar() {
               onClick={() => setMobileMenuOpen(false)}
               className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
             >
-              Staff/Client Directory
+              Staff Directory
             </Link>
           )}
           {(user?.role === 'management' || user?.role === 'admin') && (

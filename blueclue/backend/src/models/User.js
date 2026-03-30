@@ -44,6 +44,9 @@ class User {
         params.push(currentUserId || null);
         paramIndex++;
 
+        // Only include staff roles
+        conditions.push(`u.role IN ('admin', 'management', 'senior_technician', 'technician')`);
+
         if (role) {
             conditions.push(`u.role = $${paramIndex++}`);
             params.push(role);

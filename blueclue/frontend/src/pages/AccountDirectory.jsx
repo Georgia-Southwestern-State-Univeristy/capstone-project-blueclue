@@ -8,7 +8,6 @@ const ROLE_OPTIONS = [
   { value: 'management', label: 'Management' },
   { value: 'senior_technician', label: 'Senior Technician' },
   { value: 'technician', label: 'Technician' },
-  { value: 'customer', label: 'Customer' },
 ]
 
 const ROLE_COLORS = {
@@ -16,8 +15,6 @@ const ROLE_COLORS = {
   management: 'bg-purple-500/20 text-purple-400',
   senior_technician: 'bg-blue-500/20 text-blue-400',
   technician: 'bg-cyan-500/20 text-cyan-400',
-  customer: 'bg-green-500/20 text-green-400',
-  guest: 'bg-gray-500/20 text-gray-400',
 }
 
 const formatRole = (role) => {
@@ -76,7 +73,7 @@ export default function AccountDirectory() {
   return (
     <div className="min-h-screen bg-gray-950 text-white p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-2xl md:text-3xl font-bold mb-6">Staff / Client Directory</h1>
+        <h1 className="text-2xl md:text-3xl font-bold mb-6">Staff Directory</h1>
 
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
