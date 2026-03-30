@@ -65,8 +65,15 @@ class User {
                 u.created_at,
                 u.last_login,
                 u.phone,
-                u.company
+                u.company,
+                u.dnd_enabled,
+                u.dnd_until,
+                u.timezone,
+                np.quiet_hours_enabled,
+                np.quiet_hours_start,
+                np.quiet_hours_end
             FROM users u
+            LEFT JOIN notification_preferences np ON np.user_id = u.id
             ${whereClause}
             ORDER BY u.first_name, u.last_name
         `;

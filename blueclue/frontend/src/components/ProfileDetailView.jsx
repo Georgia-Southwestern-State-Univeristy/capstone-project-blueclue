@@ -13,6 +13,15 @@ const ROLE_COLORS = {
 const formatRole = (role) =>
   role?.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) || 'Unknown'
 
+const formatTime12h = (timeStr) => {
+  if (!timeStr) return '—'
+  const [h, m] = timeStr.split(':')
+  const hour = parseInt(h, 10)
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const h12 = hour % 12 || 12
+  return `${h12}:${m.padStart(2, '0')} ${ampm}`
+}
+
 const formatDate = (value) => {
   if (!value) return '—'
   return new Date(value).toLocaleDateString('en-US', {
@@ -150,8 +159,37 @@ export default function ProfileDetailView({ user, isOpen, onClose }) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <DetailField icon={calendarIcon} label="Created" value={formatDate(user.created_at)} />
                   <DetailField icon={clockIcon} label="Last Login" value={formatDate(user.last_login)} />
+                  <DetailField icon={globeIcon} label="Timezone" value={user.timezone || `${Intl.DateTimeFormat().resolvedOptions().timeZone} (Browser Default)`} />
                 </div>
               </section>
+
+              {/* Do Not Disturb */}
+              {user.dnd_enabled && user.dnd_until && new Date(user.dnd_until) > new Date() && (
+                <section>
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Do Not Disturb</h3>
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-3 flex items-center gap-3">
+                    <span className="text-yellow-400">{moonIcon}</span>
+                    <div>
+                      <div className="text-yellow-300 text-sm font-medium">Do Not Disturb is active</div>
+                      <div className="text-yellow-400/70 text-xs">Until {formatDate(user.dnd_until)}</div>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* Quiet Hours */}
+              {user.quiet_hours_enabled && (
+                <section>
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Quiet Hours</h3>
+                  <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-lg px-4 py-3 flex items-center gap-3">
+                    <span className="text-indigo-400">{moonIcon}</span>
+                    <div>
+                      <div className="text-indigo-300 text-sm font-medium">Quiet Hours enabled</div>
+                      <div className="text-indigo-400/70 text-xs">{formatTime12h(user.quiet_hours_start)} &mdash; {formatTime12h(user.quiet_hours_end)}</div>
+                    </div>
+                  </div>
+                </section>
+              )}
             </div>
           </div>
         </div>
@@ -208,5 +246,17 @@ const calendarIcon = (
 const clockIcon = (
   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+)
+
+const moonIcon = (
+  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+  </svg>
+)
+
+const globeIcon = (
+  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
   </svg>
 )
