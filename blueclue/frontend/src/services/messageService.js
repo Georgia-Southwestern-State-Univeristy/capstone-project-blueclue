@@ -35,18 +35,57 @@ export const getMessages = async (userId, { limit = 50, before } = {}) => {
  * Send a direct message to a user
  * @param {number} userId - Receiver user ID
  * @param {string} message - Message text
+ * @param {string} [imageUrl] - Optional uploaded image URL
  * @returns {Promise<Object>}
  */
-export const sendMessage = async (userId, message) => {
+export const sendMessage = async (userId, message, imageUrl = null) => {
+  const body = { message }
+  if (imageUrl) body.image_url = imageUrl
+
   const res = await fetch(`${API_BASE_URL}/messages/${userId}`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ message }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.message || 'Failed to send message')
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.message || 'Failed to send message')
   }
   const json = await res.json()
   return json.data
+}
+
+/**
+ * Upload an image for a DM
+ * @param {File} file - Browser File object
+ * @returns {Promise<{url: string, filename: string, mimeType: string}>}
+ */
+export const uploadDMImage = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = async () => {
+      try {
+        const dataBase64 = reader.result.split(',')[1]
+        const res = await fetch(`${API_BASE_URL}/messages/upload`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            filename: file.name,
+            mimeType: file.type,
+            dataBase64,
+          }),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.message || 'Image upload failed')
+        }
+        const json = await res.json()
+        resolve(json.data)
+      } catch (err) {
+        reject(err)
+      }
+    }
+    reader.onerror = () => reject(new Error('Failed to read file'))
+    reader.readAsDataURL(file)
+  })
 }

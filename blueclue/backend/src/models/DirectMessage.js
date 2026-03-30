@@ -4,12 +4,12 @@ class DirectMessage {
   /**
    * Send a direct message
    */
-  static async create({ senderId, receiverId, message }) {
+  static async create({ senderId, receiverId, message, imageUrl = null }) {
     const result = await pool.query(
-      `INSERT INTO direct_messages (sender_id, receiver_id, message)
-       VALUES ($1, $2, $3)
+      `INSERT INTO direct_messages (sender_id, receiver_id, message, image_url)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [senderId, receiverId, message]
+      [senderId, receiverId, message, imageUrl]
     );
     return result.rows[0];
   }

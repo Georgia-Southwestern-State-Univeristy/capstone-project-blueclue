@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { getUser } from '../services/authService'
-import { getMessages, sendMessage } from '../services/messageService'
+import { getMessages, sendMessage, uploadDMImage } from '../services/messageService'
+
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace('/api', '')
 
 const ROLE_COLORS = {
   admin: 'bg-red-500/20 text-red-400 border-red-500/30',
@@ -232,8 +234,12 @@ function MessagesTab({ userId, userName }) {
   const [draft, setDraft] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [imagePreview, setImagePreview] = useState(null)
+  const [pendingImageUrl, setPendingImageUrl] = useState(null)
   const [error, setError] = useState(null)
   const bottomRef = useRef(null)
+  const fileInputRef = useRef(null)
   const currentUser = getUser()
 
   const loadMessages = useCallback(async () => {
@@ -261,14 +267,49 @@ function MessagesTab({ userId, userName }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  const handleImageSelect = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setError('Only image files are allowed')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image must be under 5 MB')
+      return
+    }
+    setUploading(true)
+    setError(null)
+    // Show local preview
+    setImagePreview(URL.createObjectURL(file))
+    try {
+      const result = await uploadDMImage(file)
+      setPendingImageUrl(result.url)
+    } catch (err) {
+      setError(err.message)
+      setImagePreview(null)
+      setPendingImageUrl(null)
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const cancelImage = () => {
+    setImagePreview(null)
+    setPendingImageUrl(null)
+  }
+
   const handleSend = async (e) => {
     e.preventDefault()
-    if (!draft.trim() || sending) return
+    if ((!draft.trim() && !pendingImageUrl) || sending) return
     setSending(true)
     try {
-      const sent = await sendMessage(userId, draft.trim())
+      const sent = await sendMessage(userId, draft.trim() || '', pendingImageUrl)
       setMessages((prev) => [...prev, sent])
       setDraft('')
+      setImagePreview(null)
+      setPendingImageUrl(null)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -314,7 +355,15 @@ function MessagesTab({ userId, userName }) {
                   ? 'bg-blue-600 text-white rounded-br-sm'
                   : 'bg-gray-800 text-gray-100 rounded-bl-sm'
               }`}>
-                <div className="text-sm whitespace-pre-wrap break-words">{msg.message}</div>
+                {msg.image_url && (
+                  <img
+                    src={`${API_BASE}${msg.image_url}`}
+                    alt="Shared image"
+                    className="max-h-48 rounded-lg mb-1 cursor-pointer"
+                    onClick={() => window.open(`${API_BASE}${msg.image_url}`, '_blank')}
+                  />
+                )}
+                {msg.message && <div className="text-sm whitespace-pre-wrap break-words">{msg.message}</div>}
                 <div className={`text-[10px] mt-1 ${isMine ? 'text-blue-200/60' : 'text-gray-500'}`}>
                   {formatMsgTime(msg.created_at)}
                 </div>
@@ -325,8 +374,48 @@ function MessagesTab({ userId, userName }) {
         <div ref={bottomRef} />
       </div>
 
+      {/* Image preview */}
+      {imagePreview && (
+        <div className="flex-shrink-0 border-t border-gray-800 px-3 pt-3 bg-gray-900/60">
+          <div className="relative inline-block">
+            <img src={imagePreview} alt="Preview" className="max-h-28 rounded-lg border border-gray-700" />
+            {uploading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg">
+                <svg className="w-6 h-6 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={cancelImage}
+              className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+            >&times;</button>
+          </div>
+        </div>
+      )}
+
       {/* Input bar */}
       <form onSubmit={handleSend} className="flex-shrink-0 border-t border-gray-800 p-3 md:p-4 flex gap-2 bg-gray-900/60">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/gif,image/webp"
+          className="hidden"
+          onChange={handleImageSelect}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-gray-300 px-3 py-2.5 rounded-lg text-sm transition-colors flex-shrink-0"
+          title="Send image"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        </button>
         <input
           type="text"
           value={draft}
@@ -337,7 +426,7 @@ function MessagesTab({ userId, userName }) {
         />
         <button
           type="submit"
-          disabled={!draft.trim() || sending}
+          disabled={(!draft.trim() && !pendingImageUrl) || sending}
           className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0"
         >
           {sending ? (
