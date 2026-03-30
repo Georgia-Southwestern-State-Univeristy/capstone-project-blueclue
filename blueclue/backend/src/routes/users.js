@@ -63,4 +63,21 @@ router.get('/directory', authenticateToken, checkRole('technician', 'senior_tech
  */
 router.get('/:id/workload', authenticateToken, getTechnicianWorkload);
 
+/**
+ * GET /api/users/:id
+ * Get a single user by ID (for profile view)
+ */
+router.get('/:id', authenticateToken, async (req, res) => {
+    try {
+        const user = await User.getById(parseInt(req.params.id, 10));
+        if (!user) {
+            return res.status(404).json({ status: 'error', message: 'User not found' });
+        }
+        res.json({ status: 'success', data: user });
+    } catch (error) {
+        console.error('Get user by ID error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to retrieve user' });
+    }
+});
+
 export default router;

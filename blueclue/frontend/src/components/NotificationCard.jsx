@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { markNotificationAsRead, deleteNotification } from '../services/notificationService';
 import { formatTimeAgo } from '../utils/dateFormatter';
 
-function NotificationCard({ notification, onUpdate, onTicketClick, onError }) {
+function NotificationCard({ notification, onUpdate, onTicketClick, onDirectMessageClick, onError }) {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleClick = async () => {
@@ -18,6 +18,11 @@ function NotificationCard({ notification, onUpdate, onTicketClick, onError }) {
           onError('Failed to mark notification as read. Please try again.');
         }
       }
+    }
+    // If DM notification, open the sender's profile messages
+    if (notification.type === 'direct_message' && notification.metadata?.sender_id && onDirectMessageClick) {
+      onDirectMessageClick(notification.metadata.sender_id);
+      return;
     }
     // If notification has a ticket, navigate to it
     if (notification.ticket_id && onTicketClick) {
@@ -122,7 +127,12 @@ function NotificationCard({ notification, onUpdate, onTicketClick, onError }) {
 
           <div className="flex items-center gap-2 mt-1">
             <p className="text-xs text-gray-500">{formatTime(notification.createdAt)}</p>
-            {notification.ticket_id && (
+            {notification.type === 'direct_message' && notification.metadata?.sender_id && (
+              <span className="text-xs text-emerald-400 hover:text-emerald-300">
+                View message →
+              </span>
+            )}
+            {notification.ticket_id && notification.type !== 'direct_message' && (
               <span className="text-xs text-blue-400 hover:text-blue-300">
                 View ticket →
               </span>

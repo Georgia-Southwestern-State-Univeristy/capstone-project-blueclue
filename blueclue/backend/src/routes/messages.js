@@ -120,14 +120,14 @@ router.post('/:userId', authenticateToken, async (req, res, next) => {
         message: dm.message,
         image_url: dm.image_url,
         created_at: dm.created_at,
-        sender_first_name: req.user.first_name,
-        sender_last_name: req.user.last_name,
+        sender_first_name: req.user.firstName,
+        sender_last_name: req.user.lastName,
       });
     }
 
     // Create a push notification for the receiver
     try {
-      const senderName = [req.user.first_name, req.user.last_name].filter(Boolean).join(' ') || 'Someone';
+      const senderName = [req.user.firstName, req.user.lastName].filter(Boolean).join(' ') || 'Someone';
       const preview = dm.image_url
         ? '📷 Sent an image'
         : dm.message.length > 100 ? dm.message.substring(0, 100) + '…' : dm.message;

@@ -72,7 +72,22 @@ export const getDirectory = async ({ role, search } = {}) => {
   }
 };
 
+/**
+ * Get a single user by ID
+ * @param {number} id - User ID
+ * @returns {Promise<Object>} User object
+ */
+export const getUserById = async (id) => {
+  const response = await fetch(`${API_BASE_URL}/users/${id}`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to fetch user');
+  const data = await response.json();
+  return data.data;
+};
+
 export default {
   getTechnicians,
   getDirectory,
+  getUserById,
 };

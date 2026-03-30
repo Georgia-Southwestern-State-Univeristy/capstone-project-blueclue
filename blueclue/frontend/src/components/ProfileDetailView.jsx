@@ -57,24 +57,24 @@ const INITIALS_BG = {
  * Full-screen modal overlay showing expanded user profile details + messaging.
  * Pattern matches TicketDetailView: portal, backdrop blur, Escape to close.
  */
-export default function ProfileDetailView({ user, isOpen, onClose }) {
+export default function ProfileDetailView({ user, isOpen, onClose, initialTab = 'profile' }) {
   const modalRef = useRef(null)
   const previousOverflow = useRef('')
-  const [activeTab, setActiveTab] = useState('profile')
+  const [activeTab, setActiveTab] = useState(initialTab)
 
   // Body scroll lock
   useEffect(() => {
     if (isOpen) {
       previousOverflow.current = document.body.style.overflow
       document.body.style.overflow = 'hidden'
-      setActiveTab('profile')
+      setActiveTab(initialTab)
     } else {
       document.body.style.overflow = previousOverflow.current || 'unset'
     }
     return () => {
       document.body.style.overflow = previousOverflow.current || 'unset'
     }
-  }, [isOpen])
+  }, [isOpen, initialTab])
 
   // Escape to close
   useEffect(() => {

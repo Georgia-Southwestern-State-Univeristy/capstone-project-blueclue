@@ -111,7 +111,11 @@ class User {
                 phone,
                 company,
                 timezone,
-                is_active
+                is_active,
+                created_at,
+                last_login,
+                dnd_enabled,
+                dnd_until
             FROM users
             WHERE id = $1
         `;
