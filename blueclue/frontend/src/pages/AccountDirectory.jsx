@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { getDirectory } from '../services/userService'
+import ProfileDetailView from '../components/ProfileDetailView'
 
 const ROLE_OPTIONS = [
   { value: '', label: 'All Roles' },
@@ -29,6 +30,7 @@ export default function AccountDirectory() {
   const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
+  const [selectedUser, setSelectedUser] = useState(null)
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -129,7 +131,7 @@ export default function AccountDirectory() {
                     </tr>
                   ) : (
                     filteredUsers.map(user => (
-                      <tr key={user.id} className="hover:bg-gray-800/50 transition-colors">
+                      <tr key={user.id} onClick={() => setSelectedUser(user)} className="hover:bg-gray-800/50 transition-colors cursor-pointer">
                         <td className="px-4 py-3">
                           <div className="font-medium text-white">{user.first_name} {user.last_name}</div>
                         </td>
@@ -156,6 +158,12 @@ export default function AccountDirectory() {
           </div>
         )}
       </div>
+
+      <ProfileDetailView
+        user={selectedUser}
+        isOpen={!!selectedUser}
+        onClose={() => setSelectedUser(null)}
+      />
     </div>
   )
 }
