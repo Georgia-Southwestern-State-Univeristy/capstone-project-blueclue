@@ -44,6 +44,7 @@ import { startChatQualityJob } from './jobs/chatQualityJob.js';
 import { errorHandler, notFoundHandler, InternalServerError } from './middleware/errorHandler.js';
 import { startAlertDetectionJob } from './jobs/alertDetectionJob.js';
 import { startEmailQueueJob } from './jobs/emailQueueJob.js';
+import { startMessageCleanupJob } from './jobs/messageCleanupJob.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { runHealthChecks } from './services/healthCheckService.js';
 
@@ -68,6 +69,7 @@ startUpdateRequestReminderJob(io);
 startChatQualityJob();
 startAlertDetectionJob();
 startEmailQueueJob();
+startMessageCleanupJob();
 
 // Make io accessible to routes/controllers
 app.set('io', io);
