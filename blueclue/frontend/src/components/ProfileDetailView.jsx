@@ -1,5 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
+import { getUser } from '../services/authService'
+import { getMessages, sendMessage } from '../services/messageService'
 
 const ROLE_COLORS = {
   admin: 'bg-red-500/20 text-red-400 border-red-500/30',
@@ -50,18 +52,20 @@ const INITIALS_BG = {
 
 /**
  * ProfileDetailView
- * Full-screen modal overlay showing expanded user profile details.
+ * Full-screen modal overlay showing expanded user profile details + messaging.
  * Pattern matches TicketDetailView: portal, backdrop blur, Escape to close.
  */
 export default function ProfileDetailView({ user, isOpen, onClose }) {
   const modalRef = useRef(null)
   const previousOverflow = useRef('')
+  const [activeTab, setActiveTab] = useState('profile')
 
   // Body scroll lock
   useEffect(() => {
     if (isOpen) {
       previousOverflow.current = document.body.style.overflow
       document.body.style.overflow = 'hidden'
+      setActiveTab('profile')
     } else {
       document.body.style.overflow = previousOverflow.current || 'unset'
     }
@@ -87,6 +91,8 @@ export default function ProfileDetailView({ user, isOpen, onClose }) {
 
   const roleColor = ROLE_COLORS[user.role] || ROLE_COLORS.guest
   const initialsBg = INITIALS_BG[user.role] || INITIALS_BG.guest
+  const currentUser = getUser()
+  const isSelf = currentUser?.id === user.id
 
   return createPortal(
     <div
@@ -94,7 +100,7 @@ export default function ProfileDetailView({ user, isOpen, onClose }) {
       onClick={handleBackdropClick}
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-stretch md:items-center md:justify-center overflow-hidden md:p-6"
     >
-      <div className="bg-gray-950 w-full max-w-3xl flex flex-col h-full md:h-auto md:max-h-full md:rounded-xl md:border md:border-gray-700 shadow-2xl">
+      <div className="bg-gray-950 w-full max-w-4xl flex flex-col h-full md:h-[80vh] md:rounded-xl md:border md:border-gray-700 shadow-2xl">
         {/* ── Top bar ─────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-4 md:px-6 py-3 border-b border-gray-800 flex-shrink-0 bg-gray-900/80 md:rounded-t-xl">
           <div className="flex items-center gap-3 min-w-0">
@@ -116,86 +122,237 @@ export default function ProfileDetailView({ user, isOpen, onClose }) {
           </button>
         </div>
 
-        {/* ── Content ─────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6">
-          <div className="flex flex-col md:flex-row gap-6">
-            {/* Left: Avatar + quick info */}
-            <div className="flex flex-col items-center md:items-start gap-4 md:w-56 flex-shrink-0">
-              {/* Avatar */}
-              <div className={`w-24 h-24 rounded-full ${initialsBg} flex items-center justify-center text-3xl font-bold text-white shadow-lg`}>
-                {getInitials(user)}
-              </div>
+        {/* ── Tabs ────────────────────────────────────────────── */}
+        <div className="flex border-b border-gray-800 flex-shrink-0 bg-gray-900/40">
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`px-5 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === 'profile'
+                ? 'text-white border-b-2 border-blue-500'
+                : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            Profile
+          </button>
+          {!isSelf && (
+            <button
+              onClick={() => setActiveTab('messages')}
+              className={`px-5 py-2.5 text-sm font-medium transition-colors ${
+                activeTab === 'messages'
+                  ? 'text-white border-b-2 border-blue-500'
+                  : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Messages
+            </button>
+          )}
+        </div>
 
-              {/* Role badge */}
-              <span className={`px-3 py-1 rounded-full text-sm font-medium border ${roleColor}`}>
-                {formatRole(user.role)}
-              </span>
-
-              {/* Status */}
-              <div className="flex items-center gap-2 text-sm">
-                <span className={`w-2.5 h-2.5 rounded-full ${user.is_active ? 'bg-green-500' : 'bg-gray-500'}`}></span>
-                <span className={user.is_active ? 'text-green-400' : 'text-gray-500'}>
-                  {user.is_active ? 'Active' : 'Inactive'}
+        {/* ── Tab Content ─────────────────────────────────────── */}
+        {activeTab === 'profile' ? (
+          <div className="flex-1 overflow-y-auto p-4 md:p-6">
+            <div className="flex flex-col md:flex-row gap-6">
+              {/* Left: Avatar + quick info */}
+              <div className="flex flex-col items-center md:items-start gap-4 md:w-56 flex-shrink-0">
+                <div className={`w-24 h-24 rounded-full ${initialsBg} flex items-center justify-center text-3xl font-bold text-white shadow-lg`}>
+                  {getInitials(user)}
+                </div>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium border ${roleColor}`}>
+                  {formatRole(user.role)}
                 </span>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className={`w-2.5 h-2.5 rounded-full ${user.is_active ? 'bg-green-500' : 'bg-gray-500'}`}></span>
+                  <span className={user.is_active ? 'text-green-400' : 'text-gray-500'}>
+                    {user.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
               </div>
-            </div>
 
-            {/* Right: Detail fields */}
-            <div className="flex-1 space-y-5">
-              {/* Contact Information */}
-              <section>
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Contact Information</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <DetailField icon={emailIcon} label="Email" value={user.email} />
-                  <DetailField icon={phoneIcon} label="Phone" value={user.phone || '—'} />
-                  <DetailField icon={userIcon} label="Username" value={user.username} />
-                  <DetailField icon={buildingIcon} label="Company" value={user.company || '—'} />
-                </div>
-              </section>
-
-              {/* Account Details */}
-              <section>
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Account Details</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <DetailField icon={calendarIcon} label="Created" value={formatDate(user.created_at)} />
-                  <DetailField icon={clockIcon} label="Last Login" value={formatDate(user.last_login)} />
-                  <DetailField icon={globeIcon} label="Timezone" value={user.timezone || `${Intl.DateTimeFormat().resolvedOptions().timeZone} (Browser Default)`} />
-                </div>
-              </section>
-
-              {/* Do Not Disturb */}
-              {user.dnd_enabled && user.dnd_until && new Date(user.dnd_until) > new Date() && (
+              {/* Right: Detail fields */}
+              <div className="flex-1 space-y-5">
                 <section>
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Do Not Disturb</h3>
-                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-3 flex items-center gap-3">
-                    <span className="text-yellow-400">{moonIcon}</span>
-                    <div>
-                      <div className="text-yellow-300 text-sm font-medium">Do Not Disturb is active</div>
-                      <div className="text-yellow-400/70 text-xs">Until {formatDate(user.dnd_until)}</div>
-                    </div>
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Contact Information</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <DetailField icon={emailIcon} label="Email" value={user.email} />
+                    <DetailField icon={phoneIcon} label="Phone" value={user.phone || '—'} />
+                    <DetailField icon={userIcon} label="Username" value={user.username} />
+                    <DetailField icon={buildingIcon} label="Company" value={user.company || '—'} />
                   </div>
                 </section>
-              )}
 
-              {/* Quiet Hours */}
-              {user.quiet_hours_enabled && (
                 <section>
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Quiet Hours</h3>
-                  <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-lg px-4 py-3 flex items-center gap-3">
-                    <span className="text-indigo-400">{moonIcon}</span>
-                    <div>
-                      <div className="text-indigo-300 text-sm font-medium">Quiet Hours enabled</div>
-                      <div className="text-indigo-400/70 text-xs">{formatTime12h(user.quiet_hours_start)} &mdash; {formatTime12h(user.quiet_hours_end)}</div>
-                    </div>
+                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Account Details</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <DetailField icon={calendarIcon} label="Created" value={formatDate(user.created_at)} />
+                    <DetailField icon={clockIcon} label="Last Login" value={formatDate(user.last_login)} />
+                    <DetailField icon={globeIcon} label="Timezone" value={user.timezone || `${Intl.DateTimeFormat().resolvedOptions().timeZone} (Browser Default)`} />
                   </div>
                 </section>
-              )}
+
+                {user.dnd_enabled && user.dnd_until && new Date(user.dnd_until) > new Date() && (
+                  <section>
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Do Not Disturb</h3>
+                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-3 flex items-center gap-3">
+                      <span className="text-yellow-400">{moonIcon}</span>
+                      <div>
+                        <div className="text-yellow-300 text-sm font-medium">Do Not Disturb is active</div>
+                        <div className="text-yellow-400/70 text-xs">Until {formatDate(user.dnd_until)}</div>
+                      </div>
+                    </div>
+                  </section>
+                )}
+
+                {user.quiet_hours_enabled && (
+                  <section>
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Quiet Hours</h3>
+                    <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-lg px-4 py-3 flex items-center gap-3">
+                      <span className="text-indigo-400">{moonIcon}</span>
+                      <div>
+                        <div className="text-indigo-300 text-sm font-medium">Quiet Hours enabled</div>
+                        <div className="text-indigo-400/70 text-xs">{formatTime12h(user.quiet_hours_start)} &mdash; {formatTime12h(user.quiet_hours_end)}</div>
+                      </div>
+                    </div>
+                  </section>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <MessagesTab userId={user.id} userName={`${user.first_name} ${user.last_name}`} />
+        )}
       </div>
     </div>,
     document.body
+  )
+}
+
+/* ── Messages Tab ──────────────────────────────────────────────── */
+function MessagesTab({ userId, userName }) {
+  const [messages, setMessages] = useState([])
+  const [draft, setDraft] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState(null)
+  const bottomRef = useRef(null)
+  const currentUser = getUser()
+
+  const loadMessages = useCallback(async () => {
+    try {
+      setError(null)
+      const data = await getMessages(userId)
+      // API returns newest first, reverse to show oldest at top
+      setMessages(data.reverse())
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [userId])
+
+  useEffect(() => {
+    loadMessages()
+    // Poll every 5 seconds for new messages
+    const interval = setInterval(loadMessages, 5000)
+    return () => clearInterval(interval)
+  }, [loadMessages])
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  const handleSend = async (e) => {
+    e.preventDefault()
+    if (!draft.trim() || sending) return
+    setSending(true)
+    try {
+      const sent = await sendMessage(userId, draft.trim())
+      setMessages((prev) => [...prev, sent])
+      setDraft('')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const formatMsgTime = (ts) => {
+    const d = new Date(ts)
+    const now = new Date()
+    const isToday = d.toDateString() === now.toDateString()
+    if (isToday) {
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    }
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  }
+
+  return (
+    <div className="flex-1 flex flex-col min-h-0">
+      {/* Message list */}
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3">
+        {loading && (
+          <div className="flex items-center justify-center h-full text-gray-500 text-sm">Loading messages…</div>
+        )}
+        {!loading && messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full text-gray-500 text-sm gap-2">
+            <svg className="w-10 h-10 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            <span>No messages yet with {userName}</span>
+            <span className="text-gray-600 text-xs">Send a message to start a conversation</span>
+          </div>
+        )}
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2 text-red-400 text-sm">{error}</div>
+        )}
+        {messages.map((msg) => {
+          const isMine = msg.sender_id === currentUser?.id
+          return (
+            <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[75%] rounded-xl px-4 py-2.5 ${
+                isMine
+                  ? 'bg-blue-600 text-white rounded-br-sm'
+                  : 'bg-gray-800 text-gray-100 rounded-bl-sm'
+              }`}>
+                <div className="text-sm whitespace-pre-wrap break-words">{msg.message}</div>
+                <div className={`text-[10px] mt-1 ${isMine ? 'text-blue-200/60' : 'text-gray-500'}`}>
+                  {formatMsgTime(msg.created_at)}
+                </div>
+              </div>
+            </div>
+          )
+        })}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input bar */}
+      <form onSubmit={handleSend} className="flex-shrink-0 border-t border-gray-800 p-3 md:p-4 flex gap-2 bg-gray-900/60">
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={`Message ${userName}…`}
+          maxLength={2000}
+          className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+        />
+        <button
+          type="submit"
+          disabled={!draft.trim() || sending}
+          className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0"
+        >
+          {sending ? (
+            <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          )}
+        </button>
+      </form>
+    </div>
   )
 }
 

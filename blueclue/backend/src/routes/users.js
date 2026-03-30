@@ -39,7 +39,7 @@ router.get('/technicians', authenticateToken, async (req, res) => {
 router.get('/directory', authenticateToken, checkRole('technician', 'senior_technician', 'management', 'admin'), async (req, res) => {
     try {
         const { role, search } = req.query;
-        const users = await User.getAllUsers({ role, search });
+        const users = await User.getAllUsers({ role, search, currentUserId: req.user.id });
 
         res.status(200).json({
             status: 'success',

@@ -32,12 +32,17 @@ class User {
      * @param {Object} options - Filter options
      * @param {string} [options.role] - Filter by role
      * @param {string} [options.search] - Search by name or email
+     * @param {number} [options.currentUserId] - ID of the requesting user (for unread DM count)
      * @returns {Promise<Array>} Array of user objects
      */
-    static async getAllUsers({ role, search } = {}) {
+    static async getAllUsers({ role, search, currentUserId } = {}) {
         const conditions = [];
         const params = [];
         let paramIndex = 1;
+
+        // Reserve $1 for currentUserId (used in the unread subquery)
+        params.push(currentUserId || null);
+        paramIndex++;
 
         if (role) {
             conditions.push(`u.role = $${paramIndex++}`);
@@ -71,7 +76,14 @@ class User {
                 u.timezone,
                 np.quiet_hours_enabled,
                 np.quiet_hours_start,
-                np.quiet_hours_end
+                np.quiet_hours_end,
+                COALESCE((
+                    SELECT COUNT(*)
+                    FROM direct_messages dm
+                    WHERE dm.sender_id = u.id
+                      AND dm.receiver_id = $1
+                      AND dm.read_at IS NULL
+                ), 0)::int AS unread_messages
             FROM users u
             LEFT JOIN notification_preferences np ON np.user_id = u.id
             ${whereClause}

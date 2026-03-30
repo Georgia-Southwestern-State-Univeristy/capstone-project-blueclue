@@ -49,15 +49,28 @@ export default function AccountDirectory() {
   }, [roleFilter])
 
   const filteredUsers = useMemo(() => {
-    if (!search.trim()) return users
-    const term = search.toLowerCase()
-    return users.filter(u =>
-      u.first_name?.toLowerCase().includes(term) ||
-      u.last_name?.toLowerCase().includes(term) ||
-      u.email?.toLowerCase().includes(term) ||
-      u.username?.toLowerCase().includes(term) ||
-      u.company?.toLowerCase().includes(term)
-    )
+    let list = users
+    if (search.trim()) {
+      const term = search.toLowerCase()
+      list = list.filter(u =>
+        u.first_name?.toLowerCase().includes(term) ||
+        u.last_name?.toLowerCase().includes(term) ||
+        u.email?.toLowerCase().includes(term) ||
+        u.username?.toLowerCase().includes(term) ||
+        u.company?.toLowerCase().includes(term)
+      )
+    }
+    // Sort: users with unread messages first, then alphabetical
+    return [...list].sort((a, b) => {
+      const aUnread = a.unread_messages || 0
+      const bUnread = b.unread_messages || 0
+      if (aUnread > 0 && bUnread === 0) return -1
+      if (aUnread === 0 && bUnread > 0) return 1
+      // Both have unread – sort by count desc
+      if (aUnread !== bUnread) return bUnread - aUnread
+      // Fallback: alphabetical
+      return (a.first_name || '').localeCompare(b.first_name || '')
+    })
   }, [users, search])
 
   return (
@@ -131,9 +144,16 @@ export default function AccountDirectory() {
                     </tr>
                   ) : (
                     filteredUsers.map(user => (
-                      <tr key={user.id} onClick={() => setSelectedUser(user)} className="hover:bg-gray-800/50 transition-colors cursor-pointer">
+                      <tr key={user.id} onClick={() => setSelectedUser(user)} className={`hover:bg-gray-800/50 transition-colors cursor-pointer ${user.unread_messages > 0 ? 'bg-blue-500/10 border-l-2 border-l-blue-500' : ''}`}>
                         <td className="px-4 py-3">
-                          <div className="font-medium text-white">{user.first_name} {user.last_name}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="font-medium text-white">{user.first_name} {user.last_name}</div>
+                            {user.unread_messages > 0 && (
+                              <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-blue-500 text-white text-xs font-bold">
+                                {user.unread_messages}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-gray-300">{user.email}</td>
                         <td className="px-4 py-3 text-gray-400 hidden md:table-cell">{user.username}</td>
