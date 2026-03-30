@@ -7,7 +7,7 @@ import {
 import LoadingSpinner from './LoadingSpinner';
 import NotificationCard from './NotificationCard';
 
-function NotificationDropdown({ isOpen, onClose, onNotificationUpdate, onTicketClick }) {
+function NotificationDropdown({ isOpen, onClose, onNotificationUpdate, onTicketClick, onDirectMessageClick }) {
   const [notifications, setNotifications] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -134,6 +134,10 @@ function NotificationDropdown({ isOpen, onClose, onNotificationUpdate, onTicketC
                 }}
                 onTicketClick={(ticketId) => {
                   if (onTicketClick) onTicketClick(ticketId);
+                  onClose();
+                }}
+                onDirectMessageClick={(senderId) => {
+                  if (onDirectMessageClick) onDirectMessageClick(senderId);
                   onClose();
                 }}
                 onError={(message) => {

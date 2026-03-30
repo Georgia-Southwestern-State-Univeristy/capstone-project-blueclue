@@ -18,6 +18,7 @@ import TemplateManager from './pages/TemplateManager'
 import MLAdminDashboard from './pages/MLAdminDashboard'
 import ChatAnalyticsDashboard from './pages/ChatAnalyticsDashboard'
 import TechnicianManagement from './pages/TechnicianManagement'
+import AccountDirectory from './pages/AccountDirectory'
 import Navbar from './components/Navbar'
 import ProtectedRoute from './components/ProtectedRoute'
 import usePageTitle from './hooks/usePageTitle'
@@ -86,6 +87,11 @@ function AppRoutes() {
         <Route path="/chat-analytics" element={
           <ProtectedRoute allowedRoles={['management', 'admin']}>
             <ChatAnalyticsDashboard />
+          </ProtectedRoute>
+        } />
+        <Route path="/directory" element={
+          <ProtectedRoute allowedRoles={['technician', 'senior_technician', 'management', 'admin']}>
+            <AccountDirectory />
           </ProtectedRoute>
         } />
       </Routes>

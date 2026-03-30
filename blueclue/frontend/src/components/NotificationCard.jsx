@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { markNotificationAsRead, deleteNotification } from '../services/notificationService';
 import { formatTimeAgo } from '../utils/dateFormatter';
 
-function NotificationCard({ notification, onUpdate, onTicketClick, onError }) {
+function NotificationCard({ notification, onUpdate, onTicketClick, onDirectMessageClick, onError }) {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleClick = async () => {
@@ -18,6 +18,11 @@ function NotificationCard({ notification, onUpdate, onTicketClick, onError }) {
           onError('Failed to mark notification as read. Please try again.');
         }
       }
+    }
+    // If DM notification, open the sender's profile messages
+    if (notification.type === 'direct_message' && notification.metadata?.sender_id && onDirectMessageClick) {
+      onDirectMessageClick(notification.metadata.sender_id);
+      return;
     }
     // If notification has a ticket, navigate to it
     if (notification.ticket_id && onTicketClick) {
@@ -72,6 +77,12 @@ function NotificationCard({ notification, onUpdate, onTicketClick, onError }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
           </svg>
         );
+      case 'direct_message':
+        return (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+        );
       default:
         return (
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -88,6 +99,7 @@ function NotificationCard({ notification, onUpdate, onTicketClick, onError }) {
       case 'update_request': return 'text-yellow-400';
       case 'mention': return 'text-purple-400';
       case 'ring_request': return 'text-amber-400';
+      case 'direct_message': return 'text-emerald-400';
       default: return 'text-gray-400';
     }
   };
@@ -115,7 +127,12 @@ function NotificationCard({ notification, onUpdate, onTicketClick, onError }) {
 
           <div className="flex items-center gap-2 mt-1">
             <p className="text-xs text-gray-500">{formatTime(notification.createdAt)}</p>
-            {notification.ticket_id && (
+            {notification.type === 'direct_message' && notification.metadata?.sender_id && (
+              <span className="text-xs text-emerald-400 hover:text-emerald-300">
+                View message →
+              </span>
+            )}
+            {notification.ticket_id && notification.type !== 'direct_message' && (
               <span className="text-xs text-blue-400 hover:text-blue-300">
                 View ticket →
               </span>

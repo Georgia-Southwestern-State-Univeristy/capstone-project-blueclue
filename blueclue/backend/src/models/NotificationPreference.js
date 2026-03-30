@@ -4,6 +4,9 @@ import pool from '../config/database.js';
 const DEFAULTS = {
   browser_notifications: true,
   email_notifications: true,
+  quiet_hours_enabled: false,
+  quiet_hours_start: '22:00',
+  quiet_hours_end: '07:00',
   type_assignment: true,
   type_overdue: true,
   type_update_request: true,
@@ -43,14 +46,18 @@ class NotificationPreference {
     const result = await pool.query(
       `INSERT INTO notification_preferences
          (user_id, browser_notifications, email_notifications,
+          quiet_hours_enabled, quiet_hours_start, quiet_hours_end,
           type_assignment, type_overdue, type_update_request, type_mention,
           type_ticket_cancelled, type_ring_request, type_ring_response,
           type_update_fulfilled, type_update_overdue, type_chat_handoff,
           type_update_request_reminder, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())
        ON CONFLICT (user_id) DO UPDATE SET
          browser_notifications       = EXCLUDED.browser_notifications,
          email_notifications         = EXCLUDED.email_notifications,
+         quiet_hours_enabled         = EXCLUDED.quiet_hours_enabled,
+         quiet_hours_start           = EXCLUDED.quiet_hours_start,
+         quiet_hours_end             = EXCLUDED.quiet_hours_end,
          type_assignment             = EXCLUDED.type_assignment,
          type_overdue                = EXCLUDED.type_overdue,
          type_update_request         = EXCLUDED.type_update_request,
@@ -68,6 +75,9 @@ class NotificationPreference {
         userId,
         prefs.browserNotifications ?? DEFAULTS.browser_notifications,
         prefs.emailNotifications ?? DEFAULTS.email_notifications,
+        prefs.quietHoursEnabled ?? DEFAULTS.quiet_hours_enabled,
+        prefs.quietHoursStart ?? DEFAULTS.quiet_hours_start,
+        prefs.quietHoursEnd ?? DEFAULTS.quiet_hours_end,
         prefs.types?.assignment ?? DEFAULTS.type_assignment,
         prefs.types?.overdue ?? DEFAULTS.type_overdue,
         prefs.types?.update_request ?? DEFAULTS.type_update_request,
@@ -89,6 +99,9 @@ class NotificationPreference {
     return {
       browserNotifications: row.browser_notifications,
       emailNotifications: row.email_notifications,
+      quietHoursEnabled: row.quiet_hours_enabled,
+      quietHoursStart: row.quiet_hours_start,
+      quietHoursEnd: row.quiet_hours_end,
       types: {
         assignment: row.type_assignment,
         overdue: row.type_overdue,

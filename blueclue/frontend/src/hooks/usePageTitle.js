@@ -20,6 +20,7 @@ const pageTitles = {
   '/template-manager': 'Template Manager',
   '/ml-admin': 'ML Admin',
   '/chat-analytics': 'Chat Analytics',
+  '/directory': 'Staff / Client Directory',
 }
 
 export default function usePageTitle() {

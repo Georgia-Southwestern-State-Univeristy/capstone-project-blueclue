@@ -8,6 +8,8 @@ import ChatWidgetButton from './ChatWidgetButton'
 import ChatWindow from './ChatWindow'
 import SettingsSidebar from './SettingsSidebar'
 import TicketDetailView from './TicketDetailView'
+import ProfileDetailView from './ProfileDetailView'
+import { getUserById } from '../services/userService'
 import TicketFromChatModal from './TicketFromChatModal'
 import useChatStore from '../hooks/useChatStore'
 import { requestNotificationPermission } from '../utils/chatNotifications'
@@ -46,6 +48,7 @@ function Navbar() {
   const [ticketFromChatOpen, setTicketFromChatOpen] = useState(false)
   const [showSurvey, setShowSurvey] = useState(false)
   const [surveyShownForConvId, setSurveyShownForConvId] = useState(null)
+  const [dmProfileUser, setDmProfileUser] = useState(null)
 
   // Persistent chat state
   const chat = useChatStore()
@@ -566,6 +569,11 @@ function Navbar() {
                     Analytics
                   </Link>
                 )}
+                {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
+                  <Link to="/directory" className="text-gray-300 hover:text-white transition-colors">
+                    Staff Directory
+                  </Link>
+                )}
               </>
             )}
           </div>
@@ -601,6 +609,14 @@ function Navbar() {
                   onTicketClick={(ticketId) => {
                     setTicketDetailId(ticketId);
                     setTicketDetailOpen(true);
+                  }}
+                  onDirectMessageClick={async (senderId) => {
+                    try {
+                      const user = await getUserById(senderId);
+                      setDmProfileUser(user);
+                    } catch (err) {
+                      console.error('Failed to load sender profile:', err);
+                    }
                   }}
                 />
               </div>
@@ -761,6 +777,15 @@ function Navbar() {
               Analytics
             </Link>
           )}
+          {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
+            <Link
+              to="/directory"
+              onClick={() => setMobileMenuOpen(false)}
+              className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+            >
+              Staff Directory
+            </Link>
+          )}
           {(user?.role === 'management' || user?.role === 'admin') && (
             <Link
               to="/chat-analytics"
@@ -831,6 +856,14 @@ function Navbar() {
         ticketId={ticketDetailId}
         isOpen={ticketDetailOpen}
         onClose={() => setTicketDetailOpen(false)}
+      />
+
+      {/* Profile Detail View - opened from DM notification clicks */}
+      <ProfileDetailView
+        user={dmProfileUser}
+        isOpen={!!dmProfileUser}
+        onClose={() => setDmProfileUser(null)}
+        initialTab="messages"
       />
 
       {/* End-of-conversation survey */}

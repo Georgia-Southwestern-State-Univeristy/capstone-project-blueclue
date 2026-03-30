@@ -227,10 +227,13 @@ export const getNotificationPreferences = async (req, res) => {
  * PUT /api/notifications/preferences
  */
 export const updateNotificationPreferences = async (req, res) => {
-    const { browserNotifications, emailNotifications, types } = req.body;
+    const { browserNotifications, emailNotifications, quietHoursEnabled, quietHoursStart, quietHoursEnd, types } = req.body;
     const prefs = await NotificationPreference.upsert(req.user.id, {
         browserNotifications,
         emailNotifications,
+        quietHoursEnabled,
+        quietHoursStart,
+        quietHoursEnd,
         types,
     });
     res.json({ status: 'success', data: prefs });

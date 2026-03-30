@@ -37,12 +37,14 @@ import chatRoutes from './routes/chat.js';
 import mlAdminRoutes from './routes/mlAdmin.js';
 import requestLogsRoutes from './routes/requestLogs.js';
 import searchHistoryRoutes from './routes/searchHistory.js';
+import messageRoutes from './routes/messages.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 import { startUpdateRequestReminderJob } from './jobs/updateRequestReminders.js';
 import { startChatQualityJob } from './jobs/chatQualityJob.js';
 import { errorHandler, notFoundHandler, InternalServerError } from './middleware/errorHandler.js';
 import { startAlertDetectionJob } from './jobs/alertDetectionJob.js';
 import { startEmailQueueJob } from './jobs/emailQueueJob.js';
+import { startMessageCleanupJob } from './jobs/messageCleanupJob.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { runHealthChecks } from './services/healthCheckService.js';
 
@@ -67,13 +69,14 @@ startUpdateRequestReminderJob(io);
 startChatQualityJob();
 startAlertDetectionJob();
 startEmailQueueJob();
+startMessageCleanupJob();
 
 // Make io accessible to routes/controllers
 app.set('io', io);
 app.locals.io = io;
 
 // Middleware
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({
     origin: (origin, callback) => {
         const allowed = (process.env.FRONTEND_URL || 'http://localhost:5173').split(',').map(u => u.trim());
@@ -99,6 +102,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 const uploadsDir = path.resolve(__dirname, '../../uploads');
 fs.mkdirSync(path.join(uploadsDir, 'chat'), { recursive: true });
+fs.mkdirSync(path.join(uploadsDir, 'dm'), { recursive: true });
 app.use('/uploads', express.static(uploadsDir, { maxAge: '7d' }));
 
 // API Routes
@@ -126,6 +130,7 @@ app.use('/api/themes', themeRoutes); // User theme preferences
 app.use('/api/chat', chatRoutes); // Chat bot routes
 app.use('/api/ml-admin', mlAdminRoutes); // ML Admin – monitoring, explainability, versioning
 app.use('/api/search-history', searchHistoryRoutes); // User search history
+app.use('/api/messages', messageRoutes); // Direct messages between users
 app.use('/api/dev', devRoutes);
 app.use('/api/admin', adminRoutes);
 
