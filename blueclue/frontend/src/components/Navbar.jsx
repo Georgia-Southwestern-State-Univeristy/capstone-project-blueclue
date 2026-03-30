@@ -566,6 +566,11 @@ function Navbar() {
                     Analytics
                   </Link>
                 )}
+                {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
+                  <Link to="/directory" className="text-gray-300 hover:text-white transition-colors">
+                    Staff/Client Directory
+                  </Link>
+                )}
               </>
             )}
           </div>
@@ -759,6 +764,15 @@ function Navbar() {
               className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
             >
               Analytics
+            </Link>
+          )}
+          {['technician', 'senior_technician', 'management', 'admin'].includes(user?.role) && (
+            <Link
+              to="/directory"
+              onClick={() => setMobileMenuOpen(false)}
+              className="text-gray-300 hover:text-white hover:bg-gray-800 transition-colors px-3 py-2 rounded-lg"
+            >
+              Staff/Client Directory
             </Link>
           )}
           {(user?.role === 'management' || user?.role === 'admin') && (
