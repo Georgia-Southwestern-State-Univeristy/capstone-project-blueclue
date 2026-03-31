@@ -89,6 +89,15 @@ export default function MLAdminDashboard() {
   const [driftLoading, setDriftLoading]   = useState(false)
   const [driftError, setDriftError]       = useState(null)
 
+  // Drift automation state
+  const [driftSettings, setDriftSettings]     = useState([])
+  const [driftAlerts, setDriftAlerts]         = useState([])
+  const [driftAlertsUnread, setDriftAlertsUnread] = useState(0)
+  const [driftHistory, setDriftHistory]       = useState([])
+  const [driftHistoryModel, setDriftHistoryModel] = useState('category')
+  const [settingsEditing, setSettingsEditing] = useState({}) // { [modelType]: { ...fields } }
+  const [settingsSaving, setSettingsSaving]   = useState('')  // modelType being saved
+
   // Auth guard
   useEffect(() => {
     const userData = localStorage.getItem('blueclue_user')
@@ -183,6 +192,22 @@ export default function MLAdminDashboard() {
     }
     if (activeTab === 'Drift') {
       loadDriftReports()
+      svc.getDriftSettings()
+        .then(r => {
+          const rows = r?.data || []
+          setDriftSettings(rows)
+          // Pre-populate editable copies
+          const edits = {}
+          rows.forEach(s => { edits[s.model_type] = { ...s } })
+          setSettingsEditing(edits)
+        })
+        .catch(() => {})
+      svc.getDriftAlerts({ acknowledged: false, limit: 20 })
+        .then(r => { setDriftAlerts(r?.data || []); setDriftAlertsUnread(r?.unread_count ?? 0) })
+        .catch(() => {})
+      svc.getDriftHistory({ modelType: driftHistoryModel, limit: 60 })
+        .then(r => setDriftHistory(r?.data || []))
+        .catch(() => {})
     }
     if (activeTab === 'Models' && !modelVersions) {
       svc.getModelVersions()
@@ -210,6 +235,49 @@ export default function MLAdminDashboard() {
       setDriftRunning(false)
       // Always refresh the list so existing reports remain visible
       loadDriftReports()
+      // Refresh alerts in case new one was created
+      svc.getDriftAlerts({ acknowledged: false, limit: 20 })
+        .then(r => { setDriftAlerts(r?.data || []); setDriftAlertsUnread(r?.unread_count ?? 0) })
+        .catch(() => {})
+      // Refresh history chart
+      svc.getDriftHistory({ modelType: driftHistoryModel, limit: 60 })
+        .then(r => setDriftHistory(r?.data || []))
+        .catch(() => {})
+    }
+  }
+
+  const handleAcknowledgeAlert = async (id) => {
+    try {
+      await svc.acknowledgeDriftAlert(id)
+      setDriftAlerts(prev => prev.filter(a => a.id !== id))
+      setDriftAlertsUnread(prev => Math.max(0, prev - 1))
+      toast.success('Alert acknowledged')
+    } catch (e) {
+      toast.error('Failed to acknowledge: ' + e.message)
+    }
+  }
+
+  const handleAcknowledgeAllAlerts = async () => {
+    try {
+      const r = await svc.acknowledgeAllDriftAlerts()
+      setDriftAlerts([])
+      setDriftAlertsUnread(0)
+      toast.success(`Acknowledged ${r?.acknowledged_count ?? 0} alert(s)`)
+    } catch (e) {
+      toast.error('Failed: ' + e.message)
+    }
+  }
+
+  const handleSaveDriftSettings = async (modelType) => {
+    setSettingsSaving(modelType)
+    try {
+      const { data } = await svc.updateDriftSettings(modelType, settingsEditing[modelType])
+      setDriftSettings(prev => prev.map(s => s.model_type === modelType ? data : s))
+      toast.success(`Drift settings saved for ${modelType}`)
+    } catch (e) {
+      toast.error('Save failed: ' + e.message)
+    } finally {
+      setSettingsSaving('')
     }
   }
 
@@ -902,19 +970,136 @@ export default function MLAdminDashboard() {
         {/* ════════════════════════════════════════════════════════════════ */}
         {activeTab === 'Drift' && (
           <div className="space-y-4">
-            <div className="flex gap-3 flex-wrap">
-              {['category', 'priority'].map(mt => (
-                <button
-                  key={mt}
-                  onClick={() => handleRunDrift(mt)}
-                  disabled={driftRunning}
-                  className="px-4 py-2 text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg transition-colors"
-                >
-                  {driftRunning ? 'Running…' : `Run Drift (${mt})`}
-                </button>
-              ))}
+
+            {/* ── Manual run buttons ──── */}
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex gap-3 flex-wrap">
+                {['category', 'priority'].map(mt => (
+                  <button
+                    key={mt}
+                    onClick={() => handleRunDrift(mt)}
+                    disabled={driftRunning}
+                    className="px-4 py-2 text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg transition-colors"
+                  >
+                    {driftRunning ? 'Running…' : `Run Now (${mt})`}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500">
+                Drift is also checked automatically on the schedule configured below.
+              </p>
             </div>
 
+            {/* ── Unread alerts banner ──── */}
+            {driftAlertsUnread > 0 && (
+              <div className="bg-red-900/30 border border-red-700 rounded-xl p-3 flex items-center justify-between gap-3">
+                <p className="text-sm text-red-300">
+                  ⚠️ {driftAlertsUnread} unread drift alert{driftAlertsUnread !== 1 ? 's' : ''} require your attention.
+                </p>
+                <button
+                  onClick={handleAcknowledgeAllAlerts}
+                  className="text-xs px-3 py-1 bg-red-700 hover:bg-red-600 text-white rounded-lg transition-colors"
+                >
+                  Acknowledge All
+                </button>
+              </div>
+            )}
+
+            {/* ── Drift Alerts Panel ──── */}
+            {driftAlerts.length > 0 && (
+              <Card title={`Drift Alerts (${driftAlerts.length} unacknowledged)`}>
+                <div className="space-y-2">
+                  {driftAlerts.map(a => (
+                    <div key={a.id} className="flex items-start justify-between gap-3 bg-gray-700/40 rounded-lg p-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge color={a.severity === 'high' ? 'red' : a.severity === 'medium' ? 'yellow' : 'blue'}>
+                            {a.severity}
+                          </Badge>
+                          <span className="text-xs text-gray-400 capitalize">{a.model_type}</span>
+                          <span className="text-xs text-gray-500">{a.created_at?.split('T')[0]}</span>
+                          {a.retrain_triggered && (
+                            <Badge color={a.retrain_status === 'success' ? 'green' : a.retrain_status === 'failed' ? 'red' : 'blue'}>
+                              retrain: {a.retrain_status ?? 'in progress'}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-300 truncate">{a.message}</p>
+                        {a.chi2_statistic != null && (
+                          <p className="text-[10px] text-gray-500 mt-1">
+                            χ²={a.chi2_statistic} (p={a.chi2_p_value})
+                            {a.ks_statistic != null ? `  KS=${a.ks_statistic} (p=${a.ks_p_value})` : ''}
+                            &nbsp;&bull;&nbsp;{a.sample_size} samples
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleAcknowledgeAlert(a.id)}
+                        className="text-xs px-2 py-1 bg-gray-600 hover:bg-gray-500 text-gray-200 rounded transition-colors whitespace-nowrap"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* ── Drift Metric History Chart ──── */}
+            {driftHistory.length > 0 && (
+              <Card title={`Drift Metric History – ${driftHistoryModel}`}>
+                <div className="flex gap-2 mb-3">
+                  {['category', 'priority'].map(mt => (
+                    <button
+                      key={mt}
+                      onClick={() => {
+                        setDriftHistoryModel(mt)
+                        svc.getDriftHistory({ modelType: mt, limit: 60 })
+                          .then(r => setDriftHistory(r?.data || []))
+                          .catch(() => {})
+                      }}
+                      className={`text-xs px-2 py-1 rounded-md transition-colors ${
+                        driftHistoryModel === mt
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      {mt}
+                    </button>
+                  ))}
+                </div>
+                {/* Simple SVG sparkline for chi2 p-values */}
+                <div className="overflow-x-auto">
+                  <div className="flex items-end gap-1" style={{ minWidth: `${driftHistory.length * 14}px`, height: '64px' }}>
+                    {driftHistory.map((r, i) => {
+                      // bar height: high p-value (no drift) = tall green, low p-value (drift) = short red
+                      const pVal = r.chi2_p_value ?? r.ks_p_value ?? 1
+                      const heightPct = Math.round(Math.min(pVal, 1) * 100)
+                      const isDrift = r.drift_detected
+                      return (
+                        <div
+                          key={i}
+                          title={`${r.report_date}  p=${pVal}  ${isDrift ? 'DRIFT' : 'OK'}`}
+                          className={`flex-shrink-0 w-3 rounded-sm ${
+                            isDrift ? 'bg-red-500' : 'bg-green-600'
+                          }`}
+                          style={{ height: `${Math.max(heightPct, 4)}%` }}
+                        />
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+                  <span>{driftHistory[0]?.report_date}</span>
+                  <span className="text-red-400">■ drift  </span>
+                  <span className="text-green-500">■ no drift</span>
+                  <span>{driftHistory[driftHistory.length - 1]?.report_date}</span>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-2">Bar height = p-value (higher p = less drift). Hover for details.</p>
+              </Card>
+            )}
+
+            {/* ── Recent drift reports list ──── */}
             {driftLoading ? (
               <Card><Spinner /></Card>
             ) : driftError ? (
@@ -924,76 +1109,203 @@ export default function MLAdminDashboard() {
             ) : driftReports.length === 0 ? (
               <Card>
                 <p className="text-sm text-gray-400 text-center py-4">
-                  No drift reports yet. Run a drift check above.
+                  No drift reports yet. Run a drift check above or wait for the scheduled job.
                 </p>
               </Card>
             ) : (
-              <div className="space-y-3">
-                {driftReports.map((r, i) => (
-                  <Card key={i}>
-                    <div className="flex items-start justify-between flex-wrap gap-3">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge color={r.drift_detected ? 'red' : 'green'}>
-                            {r.drift_detected ? 'Drift Detected' : 'No Drift'}
-                          </Badge>
-                          <span className="text-xs text-gray-400 capitalize">{r.model_type}</span>
-                          <span className="text-xs text-gray-500">{r.report_date}</span>
+              <Card title="Recent Drift Reports">
+                <div className="space-y-3">
+                  {driftReports.map((r, i) => (
+                    <div key={i} className="border border-gray-700 rounded-lg p-3">
+                      <div className="flex items-start justify-between flex-wrap gap-3">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge color={r.drift_detected ? 'red' : 'green'}>
+                              {r.drift_detected ? 'Drift Detected' : 'No Drift'}
+                            </Badge>
+                            {r.alert_sent && <Badge color="yellow">alert sent</Badge>}
+                            <span className="text-xs text-gray-400 capitalize">{r.model_type}</span>
+                            <span className="text-xs text-gray-500">{r.report_date}</span>
+                          </div>
+                          <p className="text-xs text-gray-400">{r.notes}</p>
                         </div>
-                        <p className="text-xs text-gray-400">{r.notes}</p>
-                      </div>
-                      <div className="flex gap-4 text-xs">
-                        {r.chi2_statistic != null && (
+                        <div className="flex gap-4 text-xs">
+                          {r.chi2_statistic != null && (
+                            <div className="text-center">
+                              <div className="font-mono font-bold text-gray-300">{r.chi2_statistic}</div>
+                              <div className="text-gray-500">χ² (p={r.chi2_p_value})</div>
+                            </div>
+                          )}
+                          {r.ks_statistic != null && (
+                            <div className="text-center">
+                              <div className="font-mono font-bold text-gray-300">{r.ks_statistic}</div>
+                              <div className="text-gray-500">KS (p={r.ks_p_value})</div>
+                            </div>
+                          )}
                           <div className="text-center">
-                            <div className="font-mono font-bold text-gray-300">{r.chi2_statistic}</div>
-                            <div className="text-gray-500">χ² (p={r.chi2_p_value})</div>
-                          </div>
-                        )}
-                        {r.ks_statistic != null && (
-                          <div className="text-center">
-                            <div className="font-mono font-bold text-gray-300">{r.ks_statistic}</div>
-                            <div className="text-gray-500">KS (p={r.ks_p_value})</div>
-                          </div>
-                        )}
-                        <div className="text-center">
                             <div className="font-mono font-bold text-gray-300">{r.sample_size}</div>
                             <div className="text-gray-500">samples</div>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Live distribution */}
-                    {r.distribution && Object.keys(r.distribution).length > 0 && (
-                      <div className="mt-3">
-                        <p className="text-[10px] text-gray-500 mb-1.5">Live distribution vs baseline:</p>
-                        <div className="space-y-1">
-                          {Object.entries(r.distribution).sort((a,b)=>b[1]-a[1]).map(([label, count]) => {
-                            const total = Object.values(r.distribution).reduce((s,v)=>s+v,0)
-                            const baseCount = r.baseline_dist?.[label] || 0
-                            const baseTotal = Object.values(r.baseline_dist||{}).reduce((s,v)=>s+v,0)
-                            return (
-                              <div key={label} className="flex items-center gap-2 text-xs">
-                                <span className="w-20 capitalize truncate text-gray-400">{label}</span>
-                                <div className="flex-1 flex items-center gap-1">
-                                  <div title="Live" className="h-2 bg-blue-500 rounded" style={{ width: `${Math.round((count/Math.max(total,1))*120)}px` }} />
-                                  {baseTotal > 0 && (
-                                    <div title="Baseline" className="h-2 bg-gray-600 rounded" style={{ width: `${Math.round((baseCount/Math.max(baseTotal,1))*120)}px` }} />
-                                  )}
+                      {/* Live distribution */}
+                      {r.distribution && Object.keys(r.distribution).length > 0 && (
+                        <div className="mt-3">
+                          <p className="text-[10px] text-gray-500 mb-1.5">Live distribution vs baseline:</p>
+                          <div className="space-y-1">
+                            {Object.entries(r.distribution).sort((a,b)=>b[1]-a[1]).map(([label, count]) => {
+                              const total = Object.values(r.distribution).reduce((s,v)=>s+v,0)
+                              const baseCount = r.baseline_dist?.[label] || 0
+                              const baseTotal = Object.values(r.baseline_dist||{}).reduce((s,v)=>s+v,0)
+                              return (
+                                <div key={label} className="flex items-center gap-2 text-xs">
+                                  <span className="w-20 capitalize truncate text-gray-400">{label}</span>
+                                  <div className="flex-1 flex items-center gap-1">
+                                    <div title="Live" className="h-2 bg-blue-500 rounded" style={{ width: `${Math.round((count/Math.max(total,1))*120)}px` }} />
+                                    {baseTotal > 0 && (
+                                      <div title="Baseline" className="h-2 bg-gray-600 rounded" style={{ width: `${Math.round((baseCount/Math.max(baseTotal,1))*120)}px` }} />
+                                    )}
+                                  </div>
+                                  <span className="text-gray-400 w-16">
+                                    {Math.round((count/Math.max(total,1))*100)}% live
+                                  </span>
                                 </div>
-                                <span className="text-gray-400 w-16">
-                                  {Math.round((count/Math.max(total,1))*100)}% live
-                                </span>
-                              </div>
-                            )
-                          })}
+                              )
+                            })}
+                          </div>
+                          <p className="text-[10px] text-gray-500 mt-1">■ Blue = live  ■ Gray = training baseline</p>
                         </div>
-                        <p className="text-[10px] text-gray-500 mt-1">■ Blue = live  ■ Gray = training baseline</p>
-                      </div>
-                    )}
-                  </Card>
-                ))}
-              </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Card>
             )}
+
+            {/* ── Configurable Settings Panel ──── */}
+            <Card title="Drift Detection Settings">
+              {driftSettings.length === 0 ? (
+                <p className="text-xs text-gray-500">Settings not loaded yet. Open this tab to load them.</p>
+              ) : (
+                <div className="space-y-6">
+                  {driftSettings.map(s => {
+                    const edit = settingsEditing[s.model_type] || s
+                    const set  = (field, val) => setSettingsEditing(prev => ({
+                      ...prev,
+                      [s.model_type]: { ...(prev[s.model_type] || s), [field]: val }
+                    }))
+                    return (
+                      <div key={s.model_type} className="border border-gray-700 rounded-lg p-4 space-y-3">
+                        <h4 className="text-sm font-semibold text-gray-200 capitalize">{s.model_type} model</h4>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {/* P-value threshold */}
+                          <div>
+                            <label className="block text-[10px] text-gray-500 mb-1">P-value threshold</label>
+                            <input
+                              type="number" step="0.01" min="0.01" max="0.2"
+                              value={edit.p_value_threshold ?? 0.05}
+                              onChange={e => set('p_value_threshold', parseFloat(e.target.value))}
+                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                            />
+                          </div>
+                          {/* Window days */}
+                          <div>
+                            <label className="block text-[10px] text-gray-500 mb-1">Window (days)</label>
+                            <input
+                              type="number" step="1" min="7" max="365"
+                              value={edit.window_days ?? 30}
+                              onChange={e => set('window_days', parseInt(e.target.value, 10))}
+                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                            />
+                          </div>
+                          {/* Min sample size */}
+                          <div>
+                            <label className="block text-[10px] text-gray-500 mb-1">Min sample size</label>
+                            <input
+                              type="number" step="5" min="10"
+                              value={edit.min_sample_size ?? 30}
+                              onChange={e => set('min_sample_size', parseInt(e.target.value, 10))}
+                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                            />
+                          </div>
+                          {/* Cron expression */}
+                          <div className="sm:col-span-2">
+                            <label className="block text-[10px] text-gray-500 mb-1">CRON schedule (UTC)</label>
+                            <input
+                              type="text"
+                              value={edit.cron_expression ?? '0 2 * * *'}
+                              onChange={e => set('cron_expression', e.target.value)}
+                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500 font-mono"
+                              placeholder="0 2 * * *"
+                            />
+                            <p className="text-[9px] text-gray-600 mt-0.5">Default: 0 2 * * * = daily at 02:00 UTC</p>
+                          </div>
+                          {/* Schedule enabled */}
+                          <div className="flex items-center gap-2 pt-4">
+                            <input
+                              type="checkbox"
+                              id={`sched-${s.model_type}`}
+                              checked={!!edit.schedule_enabled}
+                              onChange={e => set('schedule_enabled', e.target.checked)}
+                              className="accent-blue-500"
+                            />
+                            <label htmlFor={`sched-${s.model_type}`} className="text-xs text-gray-300">Schedule enabled</label>
+                          </div>
+                        </div>
+
+                        <div className="border-t border-gray-700 pt-3">
+                          <p className="text-[10px] text-gray-500 mb-2">Auto-retraining when drift is detected</p>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id={`auto-retrain-${s.model_type}`}
+                                checked={!!edit.auto_retrain_enabled}
+                                onChange={e => set('auto_retrain_enabled', e.target.checked)}
+                                className="accent-purple-500"
+                              />
+                              <label htmlFor={`auto-retrain-${s.model_type}`} className="text-xs text-gray-300">Auto-retrain</label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id={`auto-deploy-${s.model_type}`}
+                                checked={!!edit.auto_deploy_on_retrain}
+                                onChange={e => set('auto_deploy_on_retrain', e.target.checked)}
+                                className="accent-green-500"
+                              />
+                              <label htmlFor={`auto-deploy-${s.model_type}`} className="text-xs text-gray-300">Auto-deploy if better</label>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-gray-500 mb-1">Min accuracy gain</label>
+                              <input
+                                type="number" step="0.01" min="0" max="0.5"
+                                value={edit.retrain_threshold ?? 0.02}
+                                onChange={e => set('retrain_threshold', parseFloat(e.target.value))}
+                                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => handleSaveDriftSettings(s.model_type)}
+                            disabled={settingsSaving === s.model_type}
+                            className="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors"
+                          >
+                            {settingsSaving === s.model_type ? 'Saving…' : 'Save Settings'}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </Card>
+
           </div>
         )}
 

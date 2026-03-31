@@ -55,6 +55,24 @@ router.post('/drift/run', ctrl.runDriftDetection);
 /** GET /api/ml-admin/drift/reports  – List saved drift reports */
 router.get('/drift/reports', ctrl.getDriftReports);
 
+/** GET  /api/ml-admin/drift/history    – Time-series for chart/sparkline */
+router.get('/drift/history', ctrl.getDriftHistory);
+
+/** GET  /api/ml-admin/drift/settings              – All model-type settings */
+router.get('/drift/settings', ctrl.getDriftSettings);
+
+/** PUT  /api/ml-admin/drift/settings/:modelType   – Update one model's settings */
+router.put('/drift/settings/:modelType', ctrl.updateDriftSettings);
+
+/** GET  /api/ml-admin/drift/alerts                – List drift alerts */
+router.get('/drift/alerts', ctrl.getDriftAlerts);
+
+/** PATCH /api/ml-admin/drift/alerts/:id/acknowledge */
+router.patch('/drift/alerts/:id/acknowledge', ctrl.acknowledgeDriftAlert);
+
+/** POST /api/ml-admin/drift/alerts/acknowledge-all */
+router.post('/drift/alerts/acknowledge-all', ctrl.acknowledgeAllDriftAlerts);
+
 // ── Model Versions ─────────────────────────────────────────────────────────
 /** GET /api/ml-admin/models/versions  – List registered model versions */
 router.get('/models/versions', ctrl.getModelVersions);
