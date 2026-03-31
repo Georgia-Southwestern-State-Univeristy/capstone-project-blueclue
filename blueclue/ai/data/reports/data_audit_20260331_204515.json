@@ -1,0 +1,115 @@
+{
+  "audit_timestamp": "2026-03-31T20:45:15.820819Z",
+  "thresholds": {
+    "min_category_samples": 200,
+    "min_priority_samples": 150
+  },
+  "dataset_sizes": {
+    "train": 1801,
+    "val": 354,
+    "test": 364,
+    "total": 2519
+  },
+  "category_distribution": {
+    "train": {
+      "software": 336,
+      "network": 292,
+      "hardware": 254,
+      "login": 247,
+      "account": 168,
+      "other": 168,
+      "billing": 168,
+      "feature_request": 168
+    },
+    "val": {
+      "software": 72,
+      "network": 62,
+      "hardware": 54,
+      "login": 53,
+      "other": 34,
+      "billing": 29,
+      "account": 28,
+      "feature_request": 22
+    },
+    "test": {
+      "software": 72,
+      "network": 64,
+      "hardware": 55,
+      "login": 54,
+      "other": 36,
+      "account": 30,
+      "billing": 30,
+      "feature_request": 23
+    }
+  },
+  "priority_distribution": {
+    "train": {
+      "low": 662,
+      "medium": 539,
+      "high": 473,
+      "critical": 127
+    },
+    "val": {
+      "low": 129,
+      "high": 104,
+      "medium": 103,
+      "critical": 18
+    },
+    "test": {
+      "low": 121,
+      "medium": 118,
+      "high": 98,
+      "critical": 27
+    }
+  },
+  "underrepresented_categories": [
+    {
+      "class": "account",
+      "count": 168,
+      "gap": 32,
+      "pct_of_train": 9.33
+    },
+    {
+      "class": "other",
+      "count": 168,
+      "gap": 32,
+      "pct_of_train": 9.33
+    },
+    {
+      "class": "billing",
+      "count": 168,
+      "gap": 32,
+      "pct_of_train": 9.33
+    },
+    {
+      "class": "feature_request",
+      "count": 168,
+      "gap": 32,
+      "pct_of_train": 9.33
+    }
+  ],
+  "underrepresented_priorities": [
+    {
+      "class": "critical",
+      "count": 127,
+      "gap": 23,
+      "pct_of_train": 7.05
+    }
+  ],
+  "imbalance_ratios": {
+    "category_max_min": 2.0,
+    "priority_max_min": 5.21
+  },
+  "data_quality": {
+    "near_duplicates_detected": 138,
+    "short_description_count": 0,
+    "short_description_ids": [],
+    "invalid_label_count": 0,
+    "invalid_label_samples": {}
+  },
+  "recommendations": [
+    "Augment categories ['account', 'other', 'billing', 'feature_request'] to reach 200 training samples each using SyntheticDataGenerator with targeted category overrides.",
+    "Augment priority classes ['critical'] to reach 150 training samples each.",
+    "Priority imbalance ratio 5.21x exceeds 4x \u2014 enable class_weight='balanced' in the priority model to improve recall on minority classes."
+  ]
+}

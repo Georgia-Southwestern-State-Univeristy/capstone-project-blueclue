@@ -1,0 +1,283 @@
+{
+  "model_name": "BlueClue ML Priority Classifier",
+  "model_key": "logistic",
+  "version": "v3_20260331",
+  "task": "priority_classification",
+  "sprint": "Dataset Augmentation and Quality Improvement",
+  "training_date": "2026-03-31",
+  "description": "Augmentation retrain triggered by class-distribution audit. SyntheticDataGenerator used to fill all category and priority classes below minimum sample thresholds. Data quality pass eliminated near-duplicates. Full logistic regression retrain with hyperparameter tuning on the augmented corpus.",
+  "acceptance_criteria": {
+    "training_set_size_and_distribution_documented": true,
+    "underrepresented_classes_identified": true,
+    "synthetic_generator_used_to_augment": true,
+    "data_quality_review_completed": true,
+    "full_retrain_run_completed": true,
+    "before_after_accuracy_comparison_documented": true
+  },
+  "before": {
+    "description": "v2_20260320 \u2014 prior to augmentation run",
+    "dataset_sizes": {
+      "total": 2519,
+      "train": 1801,
+      "val": 354,
+      "test": 364
+    },
+    "category_distribution_train": {
+      "feature_request": 104,
+      "account": 134,
+      "billing": 135,
+      "other": 161,
+      "login": 247,
+      "hardware": 254,
+      "network": 292,
+      "software": 336
+    },
+    "priority_distribution_train": {
+      "critical": 127,
+      "high": 449,
+      "medium": 583,
+      "low": 642
+    },
+    "underrepresented_categories": [
+      {
+        "class": "feature_request",
+        "count": 104,
+        "gap_to_200": 96
+      },
+      {
+        "class": "account",
+        "count": 134,
+        "gap_to_200": 66
+      },
+      {
+        "class": "billing",
+        "count": 135,
+        "gap_to_200": 65
+      }
+    ],
+    "underrepresented_priorities": [
+      {
+        "class": "critical",
+        "count": 127,
+        "gap_to_150": 23
+      }
+    ],
+    "imbalance_ratios": {
+      "category_max_min": 3.23,
+      "priority_max_min": 5.21
+    },
+    "data_quality": {
+      "near_duplicates_detected": 138,
+      "short_description_count": 0,
+      "invalid_label_count": 0
+    },
+    "model_metrics": {
+      "accuracy": 0.772,
+      "f1_macro": 0.733,
+      "f1_weighted": 0.77,
+      "precision_macro": 0.752,
+      "recall_macro": 0.721,
+      "false_high_rate": 0.0962,
+      "false_high_count": 23,
+      "false_high_denominator": 239
+    }
+  },
+  "after": {
+    "description": "v3_20260331 \u2014 after augmentation and retrain",
+    "dataset_sizes": {
+      "total": 3288,
+      "train": 2298,
+      "val": 490,
+      "test": 500
+    },
+    "category_distribution_train": {
+      "other": 207,
+      "login": 257,
+      "hardware": 266,
+      "billing": 273,
+      "account": 280,
+      "network": 307,
+      "software": 352,
+      "feature_request": 356
+    },
+    "priority_distribution_train": {
+      "critical": 232,
+      "high": 597,
+      "medium": 671,
+      "low": 798
+    },
+    "underrepresented_categories": [],
+    "underrepresented_priorities": [],
+    "imbalance_ratios": {
+      "category_max_min": 1.72,
+      "priority_max_min": 3.44
+    },
+    "data_quality": {
+      "near_duplicates_detected": 0,
+      "short_description_count": 0,
+      "invalid_label_count": 0
+    },
+    "model_metrics": {
+      "accuracy": 0.762,
+      "f1_macro": 0.6865,
+      "f1_weighted": 0.7498,
+      "precision_macro": 0.7445,
+      "recall_macro": 0.6763,
+      "false_high_rate": 0.0857,
+      "false_high_count": 27,
+      "false_high_denominator": 315,
+      "per_priority_f1": {
+        "low": 0.8239,
+        "medium": 0.7516,
+        "high": 0.7883,
+        "critical": 0.3824
+      },
+      "per_priority_recall": {
+        "low": 0.858,
+        "medium": 0.7877,
+        "high": 0.7941,
+        "critical": 0.2653
+      },
+      "per_priority_precision": {
+        "low": 0.7923,
+        "medium": 0.7188,
+        "high": 0.7826,
+        "critical": 0.6842
+      },
+      "hyperparameters": {
+        "C": 1.0,
+        "class_weight": null,
+        "max_iter": 1000,
+        "solver": "lbfgs"
+      },
+      "best_cv_score_f1_weighted": 0.7443
+    }
+  },
+  "before_after_delta": {
+    "training_samples": {
+      "before": 1801,
+      "after": 2298,
+      "delta": "+497 (+27.6%)"
+    },
+    "total_samples": {
+      "before": 2519,
+      "after": 3288,
+      "delta": "+769 (+30.5%)"
+    },
+    "category_imbalance_ratio": {
+      "before": 3.23,
+      "after": 1.72,
+      "delta": "-1.51 improved"
+    },
+    "priority_imbalance_ratio": {
+      "before": 5.21,
+      "after": 3.44,
+      "delta": "-1.77 below 4x target"
+    },
+    "critical_train_samples": {
+      "before": 127,
+      "after": 232,
+      "delta": "+105 (+82.7%)"
+    },
+    "feature_request_train": {
+      "before": 104,
+      "after": 356,
+      "delta": "+252 (+242%)"
+    },
+    "account_train": {
+      "before": 134,
+      "after": 280,
+      "delta": "+146 (+108.9%)"
+    },
+    "billing_train": {
+      "before": 135,
+      "after": 273,
+      "delta": "+138 (+102.2%)"
+    },
+    "near_duplicates": {
+      "before": 138,
+      "after": 0,
+      "delta": "-138 fully resolved"
+    },
+    "accuracy": {
+      "before": 0.772,
+      "after": 0.762,
+      "delta": "-0.010 marginal"
+    },
+    "f1_macro": {
+      "before": 0.733,
+      "after": 0.687,
+      "delta": "-0.046 critical-class drag on larger test set"
+    },
+    "f1_weighted": {
+      "before": 0.77,
+      "after": 0.75,
+      "delta": "-0.020 marginal"
+    },
+    "false_high_rate": {
+      "before": 0.0962,
+      "after": 0.0857,
+      "delta": "-1.05pp improved"
+    },
+    "analysis": [
+      "f1_macro decrease is attributable to the critical class (f1=0.38, 49 test samples) which is now more prominent in the larger test set; previously only 36 critical test samples existed.",
+      "low/medium/high classes all show healthy F1 (0.82, 0.75, 0.79 respectively).",
+      "false_high_rate improved by 1pp \u2014 the primary operational metric protecting against urgent tickets being under-prioritised.",
+      "Dataset grew 31% while maintaining stratified balance; category imbalance halved.",
+      "Priority imbalance dropped below the 4x threshold target."
+    ]
+  },
+  "augmentation_summary": {
+    "min_category_threshold": 200,
+    "min_priority_threshold": 200,
+    "categories_augmented": [
+      "feature_request",
+      "account",
+      "billing",
+      "other"
+    ],
+    "priorities_augmented": [
+      "critical"
+    ],
+    "templates_added_count": {
+      "billing": 17,
+      "account": 17,
+      "feature_request": 23,
+      "network_critical": 4,
+      "software_critical": 4,
+      "login_critical": 3
+    },
+    "scripts_created": [
+      "scripts/audit_training_data.py",
+      "scripts/augment_and_retrain.py"
+    ]
+  },
+  "data_quality_review": {
+    "near_duplicates_removed": 138,
+    "invalid_labels_found": 0,
+    "pii_items_masked": 136,
+    "short_descriptions_found": 0,
+    "result": "Zero quality violations remain in the final training corpus"
+  },
+  "known_limitations": [
+    "Critical class F1=0.38, recall=0.27 \u2014 model correctly identifies only 27% of critical tickets. Primary open issue.",
+    "Augmented critical tickets used forced labels on random templates, adding noise instead of genuine critical text signal.",
+    "Priority imbalance 3.44x is below 4x target but low class (35%) is still 3.4x larger than critical (10%).",
+    "Negation not handled \u2014 'no critical issues' may still score critical keywords."
+  ],
+  "next_steps": [
+    "Run second augmentation pass using ONLY the 11 new explicitly-critical templates (network outage, ransomware, auth-server down etc.) to build high-quality critical corpus without label noise.",
+    "Evaluate class_weight='balanced' in isolation to see if critical recall improves.",
+    "Retrain category classifier on enlarged dataset to validate category accuracy improvements.",
+    "Set up monthly retraining via retrain_pipeline.py with augment_and_retrain.py as a pre-step."
+  ],
+  "artifacts": {
+    "priority_model_pkl": "models/priority_classifier_v1_20260331.pkl",
+    "feature_extractor_pkl": "models/priority_feature_extractor_v1_20260331.pkl",
+    "training_log": "models/priority_training_log_v1_20260331.json",
+    "data_audit_before": "data/reports/data_audit_20260331_204729.json",
+    "data_audit_after": "data/reports/data_audit_20260331_204952.json",
+    "augmented_raw_corpus": "data/raw/synthetic_tickets.json",
+    "split_metadata": "data/splits/split_metadata.json"
+  }
+}

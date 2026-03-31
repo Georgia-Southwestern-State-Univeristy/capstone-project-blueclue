@@ -1,0 +1,154 @@
+{
+  "model_name": "BlueClue ML Priority + Category Classifier",
+  "version": "v3_20260331",
+  "run_type": "augmentation_retrain",
+  "training_date": "2026-03-31T20:50:02.188975+00:00",
+  "description": "Augmentation retrain triggered by underrepresented class audit. SyntheticDataGenerator used to fill classes below minimum sample threshold. Data quality pass removed duplicates and mislabelled examples before retraining.",
+  "before": {
+    "dataset_sizes": {
+      "train": 2245,
+      "val": 478,
+      "test": 490,
+      "total": 3213
+    },
+    "category_distribution_train": {
+      "feature_request": 352,
+      "software": 341,
+      "network": 298,
+      "account": 275,
+      "billing": 268,
+      "hardware": 258,
+      "login": 250,
+      "other": 203
+    },
+    "priority_distribution_train": {
+      "low": 792,
+      "medium": 675,
+      "high": 592,
+      "critical": 186
+    },
+    "underrepresented_categories": [],
+    "underrepresented_priorities": [
+      {
+        "class": "critical",
+        "count": 186,
+        "gap": 14,
+        "pct_of_train": 8.29
+      }
+    ],
+    "imbalance_ratios": {
+      "category_max_min": 1.73,
+      "priority_max_min": 4.26
+    },
+    "data_quality": {
+      "near_duplicates_detected": 0,
+      "short_description_count": 0,
+      "short_description_ids": [],
+      "invalid_label_count": 0,
+      "invalid_label_samples": {}
+    },
+    "model_metrics": {
+      "accuracy": 0.772,
+      "f1_macro": 0.733,
+      "f1_weighted": 0.77,
+      "precision_macro": 0.752,
+      "recall_macro": 0.721,
+      "false_high_rate": 0.0962,
+      "false_high_count": 23,
+      "false_high_denominator": 239,
+      "per_class": {
+        "low": {
+          "precision": 0.754,
+          "recall": 0.86,
+          "f1": 0.803,
+          "support": 121
+        },
+        "medium": {
+          "precision": 0.826,
+          "recall": 0.763,
+          "f1": 0.793,
+          "support": 118
+        },
+        "high": {
+          "precision": 0.76,
+          "recall": 0.745,
+          "f1": 0.753,
+          "support": 98
+        },
+        "critical": {
+          "precision": 0.667,
+          "recall": 0.519,
+          "f1": 0.583,
+          "support": 27
+        }
+      }
+    }
+  },
+  "after": {
+    "dataset_sizes": {
+      "train": 2298,
+      "val": 490,
+      "test": 500,
+      "total": 3288
+    },
+    "category_distribution_train": {
+      "feature_request": 356,
+      "software": 352,
+      "network": 307,
+      "account": 280,
+      "billing": 273,
+      "hardware": 266,
+      "login": 257,
+      "other": 207
+    },
+    "priority_distribution_train": {
+      "low": 798,
+      "medium": 671,
+      "high": 597,
+      "critical": 232
+    },
+    "underrepresented_categories": [],
+    "underrepresented_priorities": [],
+    "imbalance_ratios": {
+      "category_max_min": 1.72,
+      "priority_max_min": 3.44
+    },
+    "data_quality": {
+      "near_duplicates_detected": 0,
+      "short_description_count": 0,
+      "short_description_ids": [],
+      "invalid_label_count": 0,
+      "invalid_label_samples": {}
+    },
+    "model_metrics": {
+      "note": "See priority_model_card_v3_*.json written by train_priority_model.py for full metrics."
+    }
+  },
+  "augmentation": {
+    "min_category_threshold": 200,
+    "min_priority_threshold": 200,
+    "augmentation_seed": 90191,
+    "categories_augmented": [],
+    "priorities_augmented": [
+      "critical"
+    ],
+    "samples_added": 75
+  },
+  "training_run_results": {
+    "priority": {
+      "status": "success"
+    }
+  },
+  "changes": [
+    "Added 17 new billing templates covering: auto-renewal disputes, VAT invoices, price-increase notices, failed ACH, account suspension, itemized invoices, outage credits, refund requests, upgrade/downgrade, duplicate accounts.",
+    "Added 17 new account templates covering: 2FA reset, username change, role change, contractor onboarding, account re-enable for rehire, ownership transfer, emergency data export, audit log request, account unfreeze, IP restriction.",
+    "Added 23 new feature_request templates covering: API access, PDF export, accessibility, custom report builder, dark mode, multi-language, mobile push notifications, webhooks, AI suggestions, MFA, audit trails, offline mode, recurring tasks, saved filters, calendar sync, batch import, granular roles, SLA tracking, ticket duplication, white-label, boolean search.",
+    "Created scripts/audit_training_data.py for reproducible class-distribution audits.",
+    "Created scripts/augment_and_retrain.py for targeted augmentation + retrain pipeline."
+  ],
+  "thresholds": {
+    "min_category_samples": 200,
+    "min_priority_samples": 200,
+    "description": "Classes with fewer than 200 training samples (category) or 200 (priority) are flagged as underrepresented and targeted for augmentation."
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "audit_timestamp": "2026-03-31T20:47:29.437758Z",
+  "thresholds": {
+    "min_category_samples": 200,
+    "min_priority_samples": 150
+  },
+  "dataset_sizes": {
+    "train": 1840,
+    "val": 390,
+    "test": 402,
+    "total": 2632
+  },
+  "category_distribution": {
+    "train": {
+      "software": 341,
+      "network": 298,
+      "hardware": 258,
+      "login": 250,
+      "other": 203,
+      "billing": 174,
+      "account": 172,
+      "feature_request": 144
+    },
+    "val": {
+      "software": 73,
+      "network": 63,
+      "hardware": 55,
+      "login": 53,
+      "other": 43,
+      "billing": 37,
+      "account": 36,
+      "feature_request": 30
+    },
+    "test": {
+      "software": 74,
+      "network": 65,
+      "hardware": 56,
+      "login": 55,
+      "other": 44,
+      "account": 38,
+      "billing": 38,
+      "feature_request": 32
+    }
+  },
+  "priority_distribution": {
+    "train": {
+      "low": 644,
+      "medium": 549,
+      "high": 484,
+      "critical": 163
+    },
+    "val": {
+      "low": 146,
+      "medium": 118,
+      "high": 91,
+      "critical": 35
+    },
+    "test": {
+      "low": 129,
+      "high": 127,
+      "medium": 118,
+      "critical": 28
+    }
+  },
+  "underrepresented_categories": [
+    {
+      "class": "feature_request",
+      "count": 144,
+      "gap": 56,
+      "pct_of_train": 7.83
+    },
+    {
+      "class": "account",
+      "count": 172,
+      "gap": 28,
+      "pct_of_train": 9.35
+    },
+    {
+      "class": "billing",
+      "count": 174,
+      "gap": 26,
+      "pct_of_train": 9.46
+    }
+  ],
+  "underrepresented_priorities": [],
+  "imbalance_ratios": {
+    "category_max_min": 2.37,
+    "priority_max_min": 3.95
+  },
+  "data_quality": {
+    "near_duplicates_detected": 0,
+    "short_description_count": 0,
+    "short_description_ids": [],
+    "invalid_label_count": 0,
+    "invalid_label_samples": {}
+  },
+  "recommendations": [
+    "Augment categories ['feature_request', 'account', 'billing'] to reach 200 training samples each using SyntheticDataGenerator with targeted category overrides."
+  ]
+}
