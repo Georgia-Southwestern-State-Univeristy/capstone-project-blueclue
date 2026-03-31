@@ -111,6 +111,123 @@ class MLFeedback {
         `, [limit]);
         return result.rows;
     }
+
+    // ── Training review methods ──────────────────────────────────────────────
+
+    /**
+     * Return feedback records awaiting admin review before entering training.
+     * Only overrides (category or priority) are reviewable.
+     */
+    static async getPendingReview({ limit = 100 } = {}) {
+        const result = await pool.query(`
+            SELECT
+                f.*,
+                t.ticket_number,
+                t.subject,
+                u.first_name || ' ' || u.last_name AS technician_name,
+                u.email AS technician_email
+            FROM ml_prediction_feedback f
+            LEFT JOIN tickets t ON t.id = f.ticket_id
+            LEFT JOIN users   u ON u.id = f.user_id
+            WHERE f.training_status = 'pending'
+              AND (f.category_overridden = true OR f.priority_overridden = true)
+            ORDER BY f.created_at DESC
+            LIMIT $1
+        `, [limit]);
+        return result.rows;
+    }
+
+    /**
+     * Approve a feedback record for inclusion in the training dataset.
+     */
+    static async approve(id, reviewerId, note = null) {
+        const result = await pool.query(`
+            UPDATE ml_prediction_feedback
+            SET training_status = 'approved',
+                reviewed_by     = $2,
+                reviewed_at     = NOW(),
+                review_note     = $3
+            WHERE id = $1
+            RETURNING *
+        `, [id, reviewerId, note]);
+        return result.rows[0] || null;
+    }
+
+    /**
+     * Reject a feedback record from the training dataset.
+     */
+    static async reject(id, reviewerId, note = null) {
+        const result = await pool.query(`
+            UPDATE ml_prediction_feedback
+            SET training_status = 'rejected',
+                reviewed_by     = $2,
+                reviewed_at     = NOW(),
+                review_note     = $3
+            WHERE id = $1
+            RETURNING *
+        `, [id, reviewerId, note]);
+        return result.rows[0] || null;
+    }
+
+    /**
+     * Bulk-approve all pending records (convenience for admins).
+     * Returns count of rows updated.
+     */
+    static async bulkApprove(reviewerId) {
+        const result = await pool.query(`
+            UPDATE ml_prediction_feedback
+            SET training_status = 'approved',
+                reviewed_by     = $1,
+                reviewed_at     = NOW(),
+                review_note     = 'Bulk approved'
+            WHERE training_status = 'pending'
+              AND (category_overridden = true OR priority_overridden = true)
+        `, [reviewerId]);
+        return result.rowCount;
+    }
+
+    /**
+     * Aggregate summary for the admin panel:
+     * - total overrides, override rate by category, most corrected categories.
+     */
+    static async getTrainingSummary() {
+        const [totals, byCategory, mostCorrected, pendingCount] = await Promise.all([
+            // Overall counts
+            pool.query(`
+                SELECT
+                    COUNT(*)                                                      AS total_feedback,
+                    SUM(CASE WHEN category_overridden THEN 1 ELSE 0 END)          AS category_overrides,
+                    SUM(CASE WHEN priority_overridden THEN 1 ELSE 0 END)          AS priority_overrides,
+                    COALESCE(
+                        ROUND(100.0 *
+                            SUM(CASE WHEN category_overridden OR priority_overridden THEN 1 ELSE 0 END)
+                            / NULLIF(COUNT(*), 0), 2), 0
+                    )                                                              AS overall_override_rate_pct,
+                    SUM(CASE WHEN training_status = 'pending'  THEN 1 ELSE 0 END) AS pending_review,
+                    SUM(CASE WHEN training_status = 'approved' THEN 1 ELSE 0 END) AS approved_for_training,
+                    SUM(CASE WHEN training_status = 'rejected' THEN 1 ELSE 0 END) AS rejected_from_training
+                FROM ml_prediction_feedback
+            `),
+            // Per-category override rates
+            pool.query(`SELECT * FROM vw_model_feedback_summary LIMIT 20`),
+            // Most corrected (AI said X, user changed to Y)
+            pool.query(`SELECT * FROM vw_most_corrected_categories LIMIT 15`),
+            // Pending review count for badge
+            pool.query(`
+                SELECT COUNT(*) AS pending
+                FROM ml_prediction_feedback
+                WHERE training_status = 'pending'
+                  AND (category_overridden = true OR priority_overridden = true)
+            `),
+        ]);
+
+        return {
+            totals:          totals.rows[0],
+            by_category:     byCategory.rows,
+            most_corrected:  mostCorrected.rows,
+            pending_count:   parseInt(pendingCount.rows[0]?.pending ?? 0, 10),
+        };
+    }
 }
 
 export default MLFeedback;

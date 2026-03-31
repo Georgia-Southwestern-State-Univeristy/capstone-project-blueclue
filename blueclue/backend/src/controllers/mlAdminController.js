@@ -201,6 +201,73 @@ export const getOverrideRates = async (req, res) => {
 };
 
 // -----------------------------------------------------------------------------
+// Training feedback review  (admin-only workflow)
+// -----------------------------------------------------------------------------
+
+/**
+ * GET /api/ml-admin/feedback/training-summary
+ * Returns per-category override counts, most-corrected categories, pending count.
+ */
+export const getTrainingSummary = async (req, res) => {
+        const summary = await MLFeedback.getTrainingSummary();
+        return res.json({ success: true, data: summary });
+};
+
+/**
+ * GET /api/ml-admin/feedback/pending
+ * Returns feedback records awaiting admin review.
+ * Query: limit (default 100)
+ */
+export const getPendingFeedback = async (req, res) => {
+        const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
+        const rows  = await MLFeedback.getPendingReview({ limit });
+        return res.json({ success: true, data: rows, count: rows.length });
+};
+
+/**
+ * PATCH /api/ml-admin/feedback/:id/approve
+ * Marks a feedback record as approved for training.
+ * Body: { note? }
+ */
+export const approveFeedback = async (req, res) => {
+        const feedbackId = parseInt(req.params.id, 10);
+        if (isNaN(feedbackId)) {
+            throw new BadRequestError('Invalid feedback id');
+        }
+        const record = await MLFeedback.approve(feedbackId, req.user.id, req.body.note || null);
+        if (!record) {
+            throw new BadRequestError('Feedback record not found');
+        }
+        return res.json({ success: true, data: record });
+};
+
+/**
+ * PATCH /api/ml-admin/feedback/:id/reject
+ * Marks a feedback record as rejected (excluded from training).
+ * Body: { note? }
+ */
+export const rejectFeedback = async (req, res) => {
+        const feedbackId = parseInt(req.params.id, 10);
+        if (isNaN(feedbackId)) {
+            throw new BadRequestError('Invalid feedback id');
+        }
+        const record = await MLFeedback.reject(feedbackId, req.user.id, req.body.note || null);
+        if (!record) {
+            throw new BadRequestError('Feedback record not found');
+        }
+        return res.json({ success: true, data: record });
+};
+
+/**
+ * POST /api/ml-admin/feedback/bulk-approve
+ * Bulk-approves all pending feedback records.
+ */
+export const bulkApproveFeedback = async (req, res) => {
+        const count = await MLFeedback.bulkApprove(req.user.id);
+        return res.json({ success: true, approved_count: count });
+};
+
+// -----------------------------------------------------------------------------
 // Drift detection
 // -----------------------------------------------------------------------------
 
