@@ -17,7 +17,8 @@ import {
     reassignTicket,
     getTicketHistory,
     cancelTicket,
-    reopenTicket
+    reopenTicket,
+    overrideCategory
 } from '../controllers/ticketController.js';
 import {
     addCollaborator,
@@ -247,6 +248,13 @@ router.put('/:id', authenticateToken, updateTicket);
  * @access  Private (requires CAN_DELETE_TICKETS privilege or admin)
  */
 router.delete('/:id', authenticateToken, checkPrivilege('CAN_DELETE_TICKETS'), deleteTicket);
+
+/**
+ * @route   PATCH /api/tickets/:id/override-category
+ * @desc    Technician/management override of AI-suggested category. Logged for retraining.
+ * @access  Private (technician, senior_technician, management)
+ */
+router.patch('/:id/override-category', authenticateToken, overrideCategory);
 
 /**
  * @route   PATCH /api/tickets/:id/restore
