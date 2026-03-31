@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getTicketHistory } from '../services/ticketService'
 import { formatDateTime } from '../utils/dateFormatter'
+import RelativeTime from './RelativeTime'
 
 /**
  * TicketActivityLog
@@ -34,10 +35,7 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
 
   if (!isOpen) return null
 
-  // Format timestamp to display
-  const formatTime = (dateStr) => {
-    return formatDateTime(dateStr)
-  }
+  // (timeline timestamps rendered by <RelativeTime> component)
 
   // Get icon + color for each change type
   const getChangeTypeInfo = (changeType) => {
@@ -435,7 +433,7 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
                 <span className={`text-xs font-semibold uppercase tracking-wide ${info.color}`}>
                   {info.label}
                 </span>
-                <span className="text-xs text-gray-500">{formatTime(entry.created_at)}</span>
+                <RelativeTime timestamp={entry.created_at} className="text-xs text-gray-500" />
               </div>
               <div className="text-sm text-gray-300">
                 {getDescription(entry)}

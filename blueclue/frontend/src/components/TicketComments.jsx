@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getUserRole, getCurrentUser } from '../services/authService';
 import { getSocket } from '../services/socketService';
-import { formatTimeAgo as _fmtTimeAgo } from '../utils/dateFormatter';
+import RelativeTime from './RelativeTime';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -346,10 +346,7 @@ function TicketComments({ ticketId }) {
     }));
   };
 
-  // Format date
-  const formatDate = (dateString) => {
-    return _fmtTimeAgo(dateString) || 'Just now';
-  };
+  // (date formatting handled by <RelativeTime> component)
 
   // Render single comment
   const renderComment = (comment, isReply = false) => {
@@ -401,7 +398,7 @@ function TicketComments({ ticketId }) {
                   </span>
                 )}
               </div>
-              <span className="text-xs text-gray-500">{formatDate(comment.created_at)}</span>
+              <RelativeTime timestamp={comment.created_at} className="text-xs text-gray-500" />
             </div>
           </div>
           {(canEdit || canDelete) && !isEditing && (
