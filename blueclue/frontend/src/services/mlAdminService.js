@@ -183,3 +183,53 @@ export const exportPredictions = (since = null) => {
     return res.blob();
   });
 };
+
+// ── Drift Settings ───────────────────────────────────────────────────────────
+
+/** GET /api/ml-admin/drift/settings */
+export const getDriftSettings = () =>
+  fetch(`${API_BASE_URL}/ml-admin/drift/settings`, {
+    headers: getAuthHeaders(),
+  }).then(handleResponse);
+
+/** PUT /api/ml-admin/drift/settings/:modelType */
+export const updateDriftSettings = (modelType, settings) =>
+  fetch(`${API_BASE_URL}/ml-admin/drift/settings/${modelType}`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(settings),
+  }).then(handleResponse);
+
+// ── Drift Alerts ─────────────────────────────────────────────────────────────
+
+/** GET /api/ml-admin/drift/alerts */
+export const getDriftAlerts = ({ modelType = null, acknowledged = null, limit = 50 } = {}) => {
+  const params = new URLSearchParams({ limit });
+  if (modelType)     params.append('model_type',   modelType);
+  if (acknowledged !== null) params.append('acknowledged', String(acknowledged));
+  return fetch(`${API_BASE_URL}/ml-admin/drift/alerts?${params}`, {
+    headers: getAuthHeaders(),
+  }).then(handleResponse);
+};
+
+/** PATCH /api/ml-admin/drift/alerts/:id/acknowledge */
+export const acknowledgeDriftAlert = (id) =>
+  fetch(`${API_BASE_URL}/ml-admin/drift/alerts/${id}/acknowledge`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+  }).then(handleResponse);
+
+/** POST /api/ml-admin/drift/alerts/acknowledge-all */
+export const acknowledgeAllDriftAlerts = () =>
+  fetch(`${API_BASE_URL}/ml-admin/drift/alerts/acknowledge-all`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  }).then(handleResponse);
+
+// ── Drift History ────────────────────────────────────────────────────────────
+
+/** GET /api/ml-admin/drift/history?model_type=category&limit=60 */
+export const getDriftHistory = ({ modelType = 'category', limit = 60 } = {}) =>
+  fetch(`${API_BASE_URL}/ml-admin/drift/history?model_type=${modelType}&limit=${limit}`, {
+    headers: getAuthHeaders(),
+  }).then(handleResponse);

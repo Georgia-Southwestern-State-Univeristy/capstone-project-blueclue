@@ -520,3 +520,209 @@ export const exportPredictions = async (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         return res.json(result.rows);
 };
+
+// -----------------------------------------------------------------------------
+// Drift settings  (configurable thresholds – no code change required)
+// -----------------------------------------------------------------------------
+
+/**
+ * GET /api/ml-admin/drift/settings
+ * Returns drift configuration for all model types.
+ */
+export const getDriftSettings = async (req, res) => {
+        const result = await pool.query(
+            `SELECT * FROM ml_drift_settings ORDER BY model_type`
+        );
+        return res.json({ success: true, data: result.rows });
+};
+
+/**
+ * PUT /api/ml-admin/drift/settings/:modelType
+ * Update drift configuration for one model type.
+ * Body: { p_value_threshold?, window_days?, min_sample_size?,
+ *         schedule_enabled?, cron_expression?,
+ *         auto_retrain_enabled?, auto_deploy_on_retrain?, retrain_threshold? }
+ *
+ * Also reschedules the cron job if cron_expression or schedule_enabled changed.
+ */
+export const updateDriftSettings = async (req, res) => {
+        const { modelType } = req.params;
+        if (!['category', 'priority'].includes(modelType)) {
+            throw new BadRequestError('model_type must be "category" or "priority"');
+        }
+
+        const fields = [
+            'p_value_threshold', 'window_days', 'min_sample_size',
+            'schedule_enabled', 'cron_expression',
+            'auto_retrain_enabled', 'auto_deploy_on_retrain', 'retrain_threshold',
+        ];
+
+        const updates = [];
+        const values  = [];
+        for (const f of fields) {
+            if (req.body[f] !== undefined) {
+                values.push(req.body[f]);
+                updates.push(`${f} = $${values.length}`);
+            }
+        }
+
+        if (updates.length === 0) {
+            throw new BadRequestError('No valid fields provided to update');
+        }
+
+        values.push(req.user?.id || null);
+        updates.push(`updated_by = $${values.length}`);
+        updates.push('updated_at = NOW()');
+
+        values.push(modelType);
+        const query = `
+            UPDATE ml_drift_settings
+            SET ${updates.join(', ')}
+            WHERE model_type = $${values.length}
+            RETURNING *
+        `;
+
+        const { rows } = await pool.query(query, values);
+        if (!rows.length) {
+            throw new BadRequestError(`No settings row found for model_type "${modelType}"`);
+        }
+        const updated = rows[0];
+
+        // Reschedule the cron job with the new settings
+        try {
+            const { scheduleDriftJob } = await import('../jobs/driftMonitorJob.js');
+            if (updated.schedule_enabled) {
+                scheduleDriftJob(modelType, updated.cron_expression);
+            } else {
+                // Pass a never-firing expression to effectively pause the job
+                scheduleDriftJob(modelType, '0 0 31 2 *'); // Feb 31 – never fires
+            }
+        } catch (err) {
+            console.warn('[DriftSettings] Could not reschedule drift job:', err.message);
+        }
+
+        return res.json({ success: true, data: updated });
+};
+
+// -----------------------------------------------------------------------------
+// Drift alerts  (admin-panel notifications when drift is detected)
+// -----------------------------------------------------------------------------
+
+/**
+ * GET /api/ml-admin/drift/alerts
+ * Query: model_type?, acknowledged?, limit
+ */
+export const getDriftAlerts = async (req, res) => {
+        const limit      = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+        const modelType  = req.query.model_type || null;
+        const ackFilter  = req.query.acknowledged; // 'true' | 'false' | undefined
+
+        const conditions = [];
+        const values     = [];
+
+        if (modelType) {
+            values.push(modelType);
+            conditions.push(`a.model_type = $${values.length}`);
+        }
+        if (ackFilter === 'true') {
+            conditions.push('a.acknowledged = true');
+        } else if (ackFilter === 'false') {
+            conditions.push('a.acknowledged = false');
+        }
+
+        const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+        values.push(limit);
+
+        const { rows } = await pool.query(`
+            SELECT
+                a.*,
+                r.triggered_by   AS run_triggered_by,
+                r.status         AS run_status,
+                r.completed_at   AS run_completed_at,
+                u.first_name || ' ' || u.last_name AS acknowledged_by_name
+            FROM ml_drift_alerts a
+            LEFT JOIN ml_retraining_runs r ON r.id = a.retrain_run_id
+            LEFT JOIN users u ON u.id = a.acknowledged_by
+            ${where}
+            ORDER BY a.created_at DESC
+            LIMIT $${values.length}
+        `, values);
+
+        // Unread count
+        const { rows: countRows } = await pool.query(
+            `SELECT COUNT(*) AS cnt FROM ml_drift_alerts WHERE acknowledged = false`
+        );
+        const unread = parseInt(countRows[0]?.cnt || 0, 10);
+
+        return res.json({ success: true, data: rows, unread_count: unread });
+};
+
+/**
+ * PATCH /api/ml-admin/drift/alerts/:id/acknowledge
+ * Mark a drift alert as acknowledged.
+ */
+export const acknowledgeDriftAlert = async (req, res) => {
+        const alertId = parseInt(req.params.id, 10);
+        if (isNaN(alertId)) throw new BadRequestError('Invalid alert id');
+
+        const { rows } = await pool.query(`
+            UPDATE ml_drift_alerts
+            SET acknowledged    = true,
+                acknowledged_at = NOW(),
+                acknowledged_by = $1
+            WHERE id = $2
+            RETURNING *
+        `, [req.user?.id || null, alertId]);
+
+        if (!rows.length) throw new BadRequestError('Alert not found');
+        return res.json({ success: true, data: rows[0] });
+};
+
+/**
+ * POST /api/ml-admin/drift/alerts/acknowledge-all
+ * Acknowledge all unread alerts.
+ */
+export const acknowledgeAllDriftAlerts = async (req, res) => {
+        const { rowCount } = await pool.query(`
+            UPDATE ml_drift_alerts
+            SET acknowledged    = true,
+                acknowledged_at = NOW(),
+                acknowledged_by = $1
+            WHERE acknowledged = false
+        `, [req.user?.id || null]);
+
+        return res.json({ success: true, acknowledged_count: rowCount });
+};
+
+/**
+ * GET /api/ml-admin/drift/history
+ * Time-series of drift metric values for sparkline/chart rendering.
+ * Query: model_type, limit (default 60 = 2 months of daily runs)
+ */
+export const getDriftHistory = async (req, res) => {
+        const modelType = req.query.model_type || 'category';
+        const limit     = Math.min(parseInt(req.query.limit, 10) || 60, 365);
+
+        const { rows } = await pool.query(`
+            SELECT
+                id,
+                report_date,
+                model_type,
+                ks_statistic,
+                ks_p_value,
+                chi2_statistic,
+                chi2_p_value,
+                drift_detected,
+                drift_threshold,
+                sample_size,
+                alert_sent,
+                notes,
+                created_at
+            FROM ml_drift_reports
+            WHERE model_type = $1
+            ORDER BY report_date DESC, created_at DESC
+            LIMIT $2
+        `, [modelType, limit]);
+
+        return res.json({ success: true, data: rows.reverse() }); // chronological order
+};
