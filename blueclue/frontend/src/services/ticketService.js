@@ -656,6 +656,28 @@ export const reopenTicket = async (ticketId, reason) => {
   }
 };
 
+/**
+ * Override the AI-suggested category for a ticket.
+ * Recorded for retraining purposes.
+ * @param {number} ticketId
+ * @param {string} newCategory
+ * @param {string} [reason]
+ */
+export const overrideTicketCategory = async (ticketId, newCategory, reason = '') => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/override-category`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ new_category: newCategory, reason: reason || undefined }),
+    });
+    return await handleResponse(response, 'Failed to override category');
+  } catch (error) {
+    console.error('Override category error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to override category. Please try again.');
+    throw new Error(message);
+  }
+};
+
 export default {
   createTicket,
   getAllTickets,
@@ -682,4 +704,5 @@ export default {
   getDeletedTickets,
   restoreTicket,
   reopenTicket,
+  overrideTicketCategory,
 };

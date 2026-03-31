@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { getTicketById, updateTicketStatus, updateTicket, deleteTicket, getTechnicians, assignSingleTicket, reassignTicket, cancelTicket, reopenTicket } from '../services/ticketService'
+import { getTicketById, updateTicketStatus, updateTicket, deleteTicket, getTechnicians, assignSingleTicket, reassignTicket, cancelTicket, reopenTicket, overrideTicketCategory } from '../services/ticketService'
 import { getUserRole, getUser, getUserId } from '../services/authService'
 import TicketActivityLog from './TicketActivityLog'
 import CancelTicketModal from './CancelTicketModal'
@@ -13,6 +13,12 @@ import RequestUpdateModal from './RequestUpdateModal'
 import { getCollaborators, addCollaborator, removeCollaborator } from '../services/collaboratorService'
 import { getUpdateRequests, handleExtensionRequest } from '../services/updateRequestService'
 import { formatDateTime as _fmtDateTime, formatTimeAgo as _fmtTimeAgo } from '../utils/dateFormatter'
+
+/**
+ * Classifications below this threshold are flagged as "Low confidence".
+ * Matches the default in the AI service (can be overridden via environment config).
+ */
+const AI_CONFIDENCE_THRESHOLD = parseFloat(import.meta.env.VITE_AI_CONFIDENCE_THRESHOLD ?? 0.70);
 
 /**
  * TicketDetailView
@@ -61,6 +67,14 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
   const [reopenReason, setReopenReason] = useState('')
   const [reopenLoading, setReopenLoading] = useState(false)
   const [reopenError, setReopenError] = useState(null)
+
+  // ─── AI category override state ───────────────────────────────
+  const [showOverrideDropdown, setShowOverrideDropdown] = useState(false)
+  const [pendingOverrideCategory, setPendingOverrideCategory] = useState('')
+  const [overrideReason, setOverrideReason] = useState('')
+  const [overrideLoading, setOverrideLoading] = useState(false)
+  const [overrideError, setOverrideError] = useState(null)
+  const [overrideSuccess, setOverrideSuccess] = useState(null)
 
   // ─── Collaboration state ─────────────────────────────────────
   const [showCollaboratorModal, setShowCollaboratorModal] = useState(false)
@@ -468,6 +482,31 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
       setReopenError(err.message || 'Failed to reopen ticket')
     } finally {
       setReopenLoading(false)
+    }
+  }
+
+  // ─── AI category override handler ────────────────────────────────
+  const handleOverrideCategory = async () => {
+    if (!pendingOverrideCategory || pendingOverrideCategory === ticket.category) {
+      setShowOverrideDropdown(false)
+      return
+    }
+    setOverrideLoading(true)
+    setOverrideError(null)
+    setOverrideSuccess(null)
+    try {
+      await overrideTicketCategory(ticketId, pendingOverrideCategory, overrideReason.trim())
+      setShowOverrideDropdown(false)
+      setPendingOverrideCategory('')
+      setOverrideReason('')
+      await fetchTicket(true)
+      if (onTicketUpdated) onTicketUpdated()
+      setOverrideSuccess(`Category updated to "${pendingOverrideCategory.replace(/_/g, ' ')}"`)
+      setTimeout(() => setOverrideSuccess(null), 4000)
+    } catch (err) {
+      setOverrideError(err.message || 'Failed to override category')
+    } finally {
+      setOverrideLoading(false)
     }
   }
 
@@ -1282,16 +1321,108 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
                 {/* Category */}
                 <div>
                   <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">Category</label>
-                  <span className="inline-block px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200 capitalize">
-                    {ticket.category?.replace(/_/g, ' ') || '—'}
-                  </span>
-                  {canSeeAudit && ticket.ai_classified && (
-                    <span className="ml-2 text-xs text-gray-500">
-                      AI classified
-                      {ticket.ai_confidence != null && (
-                        <span className="text-gray-400"> ({Math.round(ticket.ai_confidence * 100)}%)</span>
-                      )}
+
+                  {/* Category badge + inline AI confidence (visible to all staff) */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`inline-block px-3 py-1.5 rounded-lg text-sm text-gray-200 capitalize border ${
+                      ticket.category_override ? 'bg-indigo-900/30 border-indigo-700' : 'bg-gray-800 border-gray-700'
+                    }`}>
+                      {ticket.category?.replace(/_/g, ' ') || '—'}
                     </span>
+
+                    {/* Confidence badge — visible to technicians & management */}
+                    {canSeeInternals && ticket.ai_classified && ticket.ai_confidence != null && (
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded border ${
+                        ticket.ai_confidence >= AI_CONFIDENCE_THRESHOLD
+                          ? 'text-green-400 bg-green-900/20 border-green-800'
+                          : 'text-amber-400 bg-amber-900/20 border-amber-700'
+                      }`}>
+                        {Math.round(ticket.ai_confidence * 100)}% confidence
+                      </span>
+                    )}
+
+                    {/* Overridden indicator */}
+                    {canSeeInternals && ticket.category_override && (
+                      <span className="text-xs text-indigo-400 bg-indigo-900/20 border border-indigo-800 px-2 py-0.5 rounded">
+                        Overridden
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Low-confidence warning — visible to all staff */}
+                  {canSeeInternals && ticket.ai_classified && ticket.ai_confidence != null &&
+                   ticket.ai_confidence < AI_CONFIDENCE_THRESHOLD && !ticket.category_override && (
+                    <div className="mt-2 flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-900/20 border border-amber-700/50">
+                      <svg className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                      </svg>
+                      <p className="text-amber-300 text-xs leading-relaxed">
+                        <span className="font-semibold">Low confidence</span> — please verify the AI-suggested category before proceeding.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Override success message */}
+                  {overrideSuccess && (
+                    <p className="mt-1.5 text-xs text-green-400">{overrideSuccess}</p>
+                  )}
+                  {overrideError && (
+                    <p className="mt-1.5 text-xs text-red-400">{overrideError}</p>
+                  )}
+
+                  {/* Override button — technicians & management */}
+                  {canSeeInternals && ticket.ai_classified && !showOverrideDropdown && (
+                    <button
+                      onClick={() => {
+                        setPendingOverrideCategory(ticket.category || '')
+                        setOverrideReason('')
+                        setOverrideError(null)
+                        setShowOverrideDropdown(true)
+                      }}
+                      className="mt-2 text-xs text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
+                    >
+                      Override classification
+                    </button>
+                  )}
+
+                  {/* Override inline form */}
+                  {canSeeInternals && showOverrideDropdown && (
+                    <div className="mt-3 p-3 rounded-lg bg-gray-900 border border-gray-700 space-y-2">
+                      <label className="text-gray-400 text-xs font-medium uppercase tracking-wider block">
+                        Select correct category
+                      </label>
+                      <select
+                        value={pendingOverrideCategory}
+                        onChange={(e) => setPendingOverrideCategory(e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500 capitalize"
+                      >
+                        {['general', 'technical', 'billing', 'account', 'feature_request', 'hardware', 'software', 'network', 'login', 'other'].map((cat) => (
+                          <option key={cat} value={cat}>{cat.replace(/_/g, ' ')}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="Reason (optional)"
+                        value={overrideReason}
+                        onChange={(e) => setOverrideReason(e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleOverrideCategory}
+                          disabled={overrideLoading || pendingOverrideCategory === ticket.category}
+                          className="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs rounded font-medium transition-colors"
+                        >
+                          {overrideLoading ? 'Saving…' : 'Confirm override'}
+                        </button>
+                        <button
+                          onClick={() => setShowOverrideDropdown(false)}
+                          className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
 
@@ -1785,33 +1916,58 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
                       </div>
                     ) : null}
 
-                    {/* AI Classification Details - management only */}
-                    {canSeeAudit && ticket.ai_classified && (
+                    {/* AI Classification Details — visible to all technicians & management */}
+                    {canSeeInternals && ticket.ai_classified && (
                       <div>
                         <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">AI Classification</label>
-                        <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 space-y-2">
-                          <div className="flex flex-wrap gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-500">Category: </span>
-                              <span className="text-gray-200 capitalize">{ticket.category?.replace(/_/g, ' ')}</span>
-                            </div>
+                        <div className={`rounded-lg border p-4 space-y-3 ${
+                          ticket.ai_confidence != null && ticket.ai_confidence < AI_CONFIDENCE_THRESHOLD && !ticket.category_override
+                            ? 'bg-amber-900/10 border-amber-700/50'
+                            : 'bg-gray-900 border-gray-800'
+                        }`}>
+
+                          {/* Category + confidence headline */}
+                          <div className="flex flex-wrap items-center gap-3">
+                            <span className="text-gray-200 text-sm font-medium capitalize">
+                              {ticket.category?.replace(/_/g, ' ')}
+                            </span>
                             {ticket.ai_confidence != null && (
-                              <div>
-                                <span className="text-gray-500">Confidence: </span>
-                                <span className={`font-medium ${
-                                  ticket.ai_confidence >= 0.8 ? 'text-green-400' :
-                                  ticket.ai_confidence >= 0.5 ? 'text-yellow-400' : 'text-red-400'
-                                }`}>
-                                  {Math.round(ticket.ai_confidence * 100)}%
-                                </span>
-                              </div>
+                              <span className={`text-sm font-semibold ${
+                                ticket.ai_confidence >= AI_CONFIDENCE_THRESHOLD ? 'text-green-400' :
+                                ticket.ai_confidence >= 0.5 ? 'text-yellow-400' : 'text-red-400'
+                              }`}>
+                                — {Math.round(ticket.ai_confidence * 100)}% confidence
+                              </span>
                             )}
-                            {ticket.ai_fallback_used && (
-                              <span className="text-amber-500 text-xs bg-amber-900/30 px-2 py-0.5 rounded">Fallback used</span>
+                            {ticket.category_override && (
+                              <span className="text-xs text-indigo-400 bg-indigo-900/30 border border-indigo-700 px-2 py-0.5 rounded">
+                                Manually overridden
+                              </span>
                             )}
                           </div>
+
+                          {/* Low-confidence callout */}
+                          {ticket.ai_confidence != null && ticket.ai_confidence < AI_CONFIDENCE_THRESHOLD && !ticket.category_override && (
+                            <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-900/20 border border-amber-700/50">
+                              <svg className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                              </svg>
+                              <p className="text-amber-300 text-xs leading-relaxed">
+                                <span className="font-semibold">Low confidence — please verify.</span> The AI is uncertain about this classification. Use the override option in the sidebar to correct it if needed.
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Meta row */}
+                          <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                            {ticket.ai_fallback_used && (
+                              <span className="text-amber-500 bg-amber-900/30 px-2 py-0.5 rounded">Fallback used</span>
+                            )}
+                          </div>
+
+                          {/* Matched keywords */}
                           {ticket.ai_keywords_matched && Object.keys(ticket.ai_keywords_matched).length > 0 && (
-                            <div className="mt-2">
+                            <div>
                               <span className="text-gray-500 text-xs">Matched keywords: </span>
                               <div className="flex flex-wrap gap-1 mt-1">
                                 {(Array.isArray(ticket.ai_keywords_matched)
