@@ -13,6 +13,7 @@ import RequestUpdateModal from './RequestUpdateModal'
 import { getCollaborators, addCollaborator, removeCollaborator } from '../services/collaboratorService'
 import { getUpdateRequests, handleExtensionRequest } from '../services/updateRequestService'
 import { formatDateTime as _fmtDateTime, formatTimeAgo as _fmtTimeAgo } from '../utils/dateFormatter'
+import RelativeTime from './RelativeTime'
 
 /**
  * Classifications below this threshold are flagged as "Low confidence".
@@ -1518,14 +1519,14 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
                     <label className="text-gray-500 text-xs font-medium uppercase tracking-wider block">Created</label>
                     <p className="text-gray-300 text-sm mt-0.5">
                       {formatDate(ticket.created_at)}
-                      <span className="text-gray-600 ml-1 text-xs">({formatTimeAgo(ticket.created_at)})</span>
+                      <span className="text-gray-600 ml-1 text-xs">(<RelativeTime timestamp={ticket.created_at} />)</span>
                     </p>
                   </div>
                   <div>
                     <label className="text-gray-500 text-xs font-medium uppercase tracking-wider block">Last Updated</label>
                     <p className="text-gray-300 text-sm mt-0.5">
                       {formatDate(ticket.updated_at)}
-                      <span className="text-gray-600 ml-1 text-xs">({formatTimeAgo(ticket.updated_at)})</span>
+                      <span className="text-gray-600 ml-1 text-xs">(<RelativeTime timestamp={ticket.updated_at} />)</span>
                     </p>
                   </div>
                   {ticket.resolved_at && (
@@ -1655,7 +1656,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
                       <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-500">
                         <span>Submitted by <span className="text-gray-400">{ticket.customer_name || '—'}</span></span>
                         <span>&middot;</span>
-                        <span>{formatTimeAgo(ticket.created_at)}</span>
+                        <RelativeTime timestamp={ticket.created_at} />
                       </div>
                     </div>
 

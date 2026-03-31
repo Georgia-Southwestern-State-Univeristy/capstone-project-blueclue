@@ -52,7 +52,7 @@ export function formatTime(value, opts = { hour: 'numeric', minute: '2-digit' })
 }
 
 /**
- * Format a date as a relative time string (e.g. "2 hours ago", "Just now").
+ * Format a date as a relative time string (e.g. "just now", "30s ago", "2m ago").
  * @param {string|Date} value
  */
 export function formatTimeAgo(value) {
@@ -61,7 +61,8 @@ export function formatTimeAgo(value) {
   if (isNaN(date)) return '';
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
 
-  if (seconds < 60) return 'Just now';
+  if (seconds < 5) return 'just now';
+  if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
