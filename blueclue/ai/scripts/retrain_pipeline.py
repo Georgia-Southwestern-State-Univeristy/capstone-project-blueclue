@@ -71,6 +71,94 @@ def step_export_data() -> int:
         return 0
 
 
+def step_incorporate_feedback() -> int:
+    """
+    Export approved technician-override feedback records and merge them into
+    the raw training data directory as a weighted supplement.
+
+    Approved feedback represents cases where a human expert disagreed with the
+    model.  These high-signal examples are worth more than an ordinary ticket,
+    so this step writes them as a *separate* file that downstream training
+    scripts can weight more heavily.
+
+    Returns:
+        Number of approved feedback records incorporated (0 on failure).
+    """
+    logger.info("─" * 60)
+    logger.info("STEP 1b: Incorporating approved technician-override feedback")
+
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        logger.warning("DATABASE_URL not set – skipping feedback incorporation")
+        return 0
+
+    try:
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        import json as _json
+        from datetime import datetime as _dt
+
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+
+        cur.execute("""
+            SELECT
+                f.ticket_id,
+                t.ticket_number,
+                t.subject,
+                t.description,
+                -- The corrected label is the ground-truth for retraining
+                COALESCE(f.user_category, t.category::text)   AS category,
+                COALESCE(f.user_priority, t.priority::text)   AS priority,
+                f.ai_category                                   AS original_ai_category,
+                f.ai_priority                                   AS original_ai_priority,
+                f.ai_confidence,
+                f.category_overridden,
+                f.priority_overridden,
+                f.override_reason,
+                f.created_at                                    AS feedback_created_at,
+                t.created_at                                    AS ticket_created_at
+            FROM ml_prediction_feedback f
+            JOIN tickets t ON t.id = f.ticket_id
+            WHERE f.training_status = 'approved'
+              AND (f.category_overridden = true OR f.priority_overridden = true)
+              AND LENGTH(t.description) >= 10
+            ORDER BY f.created_at DESC
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        if not rows:
+            logger.info("  No approved feedback records found – nothing to merge")
+            return 0
+
+        # Convert to plain dicts (handle datetime)
+        records = []
+        for row in rows:
+            d = dict(row)
+            for k, v in d.items():
+                if hasattr(v, 'isoformat'):
+                    d[k] = v.isoformat()
+            # Tag as feedback-derived so training scripts can weight them
+            d['_source'] = 'technician_feedback'
+            d['_feedback_weight'] = 2.0  # train on these corrections twice
+            records.append(d)
+
+        # Write to raw data dir so it's picked up by the prepare step
+        RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        out_path = RAW_DATA_DIR / "feedback_approved.json"
+        with open(out_path, "w", encoding="utf-8") as fh:
+            _json.dump(records, fh, indent=2, default=str)
+
+        logger.info("  Wrote %d approved feedback records → %s", len(records), out_path)
+        return len(records)
+
+    except Exception as exc:
+        logger.warning("Feedback incorporation failed (non-fatal): %s", exc)
+        return 0
+
+
 def step_prepare_data() -> bool:
     """Run data preprocessing and feature extraction."""
     logger.info("─" * 60)
@@ -331,6 +419,7 @@ def run_pipeline(
     threshold: float,
     run_id: str,
     skip_export: bool = False,
+    include_feedback: bool = True,
 ) -> Dict[str, Any]:
     start_time = time.time()
     started_at = datetime.now(tz=timezone.utc).isoformat()
@@ -346,8 +435,15 @@ def run_pipeline(
     logger.info("=" * 60)
 
     new_records = 0
+    feedback_records = 0
     if not skip_export:
         new_records = step_export_data()
+
+    # Incorporate approved technician-override feedback (optional, default on)
+    if include_feedback:
+        feedback_records = step_incorporate_feedback()
+        if feedback_records:
+            logger.info("  %d feedback records merged into training data", feedback_records)
 
     # Run data preparation (best-effort)
     step_prepare_data()
@@ -380,6 +476,8 @@ def run_pipeline(
         "model_types": model_types,
         "model_results": model_results,
         "new_records": new_records,
+        "feedback_records": feedback_records,
+        "include_feedback": include_feedback,
         "auto_deploy": auto_deploy,
         "threshold": threshold,
         "overall_status": overall_status,
@@ -421,6 +519,15 @@ def main():
         help="Skip data export step (use existing data)"
     )
     parser.add_argument(
+        "--include-feedback", action="store_true",
+        default=os.getenv("RETRAIN_INCLUDE_FEEDBACK", "1") != "0",
+        help="Merge approved technician-override feedback into training data (default: on)",
+    )
+    parser.add_argument(
+        "--no-feedback", dest="include_feedback", action="store_false",
+        help="Disable feedback incorporation for this run",
+    )
+    parser.add_argument(
         "--run-id", type=str,
         default=os.getenv("RETRAIN_RUN_ID", f"run_{int(time.time())}"),
     )
@@ -440,6 +547,7 @@ def main():
         threshold=args.threshold,
         run_id=args.run_id,
         skip_export=args.skip_export,
+        include_feedback=args.include_feedback,
     )
 
     return 0 if results["overall_status"] in ("success", "partial_failure") else 1

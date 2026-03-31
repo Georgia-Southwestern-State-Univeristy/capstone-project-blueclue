@@ -68,12 +68,15 @@ export default function MLAdminDashboard() {
   const [refreshing, setRefreshing] = useState(false)
 
   // Data state
-  const [dashboard, setDashboard]         = useState(null)
-  const [predictions, setPredictions]     = useState([])
-  const [feedback, setFeedback]           = useState(null)
-  const [driftReports, setDriftReports]   = useState([])
-  const [modelVersions, setModelVersions] = useState(null)
-  const [retrainRuns, setRetrainRuns]         = useState([])
+  const [dashboard, setDashboard]               = useState(null)
+  const [predictions, setPredictions]           = useState([])
+  const [feedback, setFeedback]                 = useState(null)
+  const [trainingSummary, setTrainingSummary]   = useState(null)
+  const [pendingFeedback, setPendingFeedback]   = useState([])
+  const [reviewLoading, setReviewLoading]       = useState(false)
+  const [driftReports, setDriftReports]         = useState([])
+  const [modelVersions, setModelVersions]       = useState(null)
+  const [retrainRuns, setRetrainRuns]           = useState([])
   const [retrainRunsLoading, setRetrainRunsLoading] = useState(false)
   const retrainPollingRef = useRef(null)
 
@@ -160,13 +163,23 @@ export default function MLAdminDashboard() {
           toast.error('Failed to load predictions: ' + (e.message || 'Unknown error'))
         })
     }
-    if (activeTab === 'Feedback' && !feedback) {
-      svc.getFeedback({ limit: 100 })
-        .then(r => setFeedback(r?.data || r))
-        .catch(e => {
-          console.error('Failed to load feedback:', e)
-          toast.error('Failed to load feedback: ' + (e.message || 'Unknown error'))
-        })
+    if (activeTab === 'Feedback') {
+      if (!feedback) {
+        svc.getFeedback({ limit: 100 })
+          .then(r => setFeedback(r?.data || r))
+          .catch(e => {
+            console.error('Failed to load feedback:', e)
+            toast.error('Failed to load feedback: ' + (e.message || 'Unknown error'))
+          })
+      }
+      if (!trainingSummary) {
+        svc.getTrainingSummary()
+          .then(r => setTrainingSummary(r?.data || r))
+          .catch(e => console.error('Failed to load training summary:', e))
+      }
+      svc.getPendingFeedback(100)
+        .then(r => setPendingFeedback(r?.data || []))
+        .catch(e => console.error('Failed to load pending feedback:', e))
     }
     if (activeTab === 'Drift') {
       loadDriftReports()
@@ -263,6 +276,51 @@ export default function MLAdminDashboard() {
       URL.revokeObjectURL(url)
     } catch (e) {
       toast.error('Export failed: ' + e.message)
+    }
+  }
+
+  // ── Feedback review handlers ──────────────────────────────────────────────
+
+  const handleApproveFeedback = async (id) => {
+    setReviewLoading(true)
+    try {
+      await svc.approveFeedback(id)
+      setPendingFeedback(prev => prev.filter(f => f.id !== id))
+      setTrainingSummary(null) // force refresh on next render
+      toast.success('Feedback approved for training')
+    } catch (e) {
+      toast.error('Approve failed: ' + e.message)
+    } finally {
+      setReviewLoading(false)
+    }
+  }
+
+  const handleRejectFeedback = async (id) => {
+    setReviewLoading(true)
+    try {
+      await svc.rejectFeedback(id)
+      setPendingFeedback(prev => prev.filter(f => f.id !== id))
+      setTrainingSummary(null)
+      toast.success('Feedback rejected from training')
+    } catch (e) {
+      toast.error('Reject failed: ' + e.message)
+    } finally {
+      setReviewLoading(false)
+    }
+  }
+
+  const handleBulkApprove = async () => {
+    if (!window.confirm(`Approve all ${pendingFeedback.length} pending feedback records for training?`)) return
+    setReviewLoading(true)
+    try {
+      const r = await svc.bulkApproveFeedback()
+      setPendingFeedback([])
+      setTrainingSummary(null)
+      toast.success(`Bulk approved ${r?.approved_count ?? 0} records`)
+    } catch (e) {
+      toast.error('Bulk approve failed: ' + e.message)
+    } finally {
+      setReviewLoading(false)
     }
   }
 
@@ -589,7 +647,106 @@ export default function MLAdminDashboard() {
           <div className="space-y-4">
             {!feedback ? <Spinner /> : (
               <>
-                {/* Stats row */}
+                {/* ── Training Summary ── */}
+                {trainingSummary && (
+                  <>
+                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Training Feedback Summary</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <Card>
+                        <Metric label="Total Overrides" value={trainingSummary.totals?.category_overrides ?? 0} />
+                      </Card>
+                      <Card>
+                        <Metric
+                          label="Overall Override Rate"
+                          value={trainingSummary.totals?.overall_override_rate_pct != null
+                            ? `${trainingSummary.totals.overall_override_rate_pct}%` : '—'}
+                          color={parseFloat(trainingSummary.totals?.overall_override_rate_pct) < 15 ? 'green' : 'red'}
+                        />
+                      </Card>
+                      <Card>
+                        <Metric
+                          label="Pending Review"
+                          value={trainingSummary.pending_count ?? 0}
+                          color={trainingSummary.pending_count > 0 ? 'yellow' : 'green'}
+                        />
+                      </Card>
+                      <Card>
+                        <Metric label="Approved for Training" value={trainingSummary.totals?.approved_for_training ?? 0} color="green" />
+                      </Card>
+                    </div>
+
+                    {/* Override rate by category */}
+                    {trainingSummary.by_category?.length > 0 && (
+                      <Card title="Override Rate by Category">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-gray-500 border-b border-gray-700 text-left">
+                                <th className="py-2 pr-3">Category</th>
+                                <th className="py-2 pr-3">Overrides</th>
+                                <th className="py-2 pr-3">Override %</th>
+                                <th className="py-2 pr-3">Avg Confidence</th>
+                                <th className="py-2 pr-3">Pending</th>
+                                <th className="py-2">Approved</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {trainingSummary.by_category.map((row, i) => (
+                                <tr key={i} className="border-b border-gray-800">
+                                  <td className="py-1.5 pr-3 capitalize font-medium text-gray-200">{row.ai_category}</td>
+                                  <td className="py-1.5 pr-3">{row.total_overrides}</td>
+                                  <td className="py-1.5 pr-3">
+                                    <Badge color={parseFloat(row.category_override_pct) > 20 ? 'red' : 'green'}>
+                                      {row.category_override_pct}%
+                                    </Badge>
+                                  </td>
+                                  <td className="py-1.5 pr-3 text-gray-400">{Math.round(row.avg_confidence * 100)}%</td>
+                                  <td className="py-1.5 pr-3">
+                                    {row.pending_review > 0
+                                      ? <Badge color="yellow">{row.pending_review}</Badge>
+                                      : <span className="text-gray-500">—</span>}
+                                  </td>
+                                  <td className="py-1.5 text-green-400">{row.approved_for_training}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </Card>
+                    )}
+
+                    {/* Most corrected categories */}
+                    {trainingSummary.most_corrected?.length > 0 && (
+                      <Card title="Most Corrected Categories (AI said → Technician changed to)">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-gray-500 border-b border-gray-700 text-left">
+                                <th className="py-2 pr-3">AI Predicted</th>
+                                <th className="py-2 pr-3">→ Corrected To</th>
+                                <th className="py-2 pr-3">Count</th>
+                                <th className="py-2">% of Corrections</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {trainingSummary.most_corrected.map((row, i) => (
+                                <tr key={i} className="border-b border-gray-800">
+                                  <td className="py-1.5 pr-3 capitalize text-red-400">{row.original_cat}</td>
+                                  <td className="py-1.5 pr-3 capitalize text-green-400">{row.corrected_to}</td>
+                                  <td className="py-1.5 pr-3">{row.correction_count}</td>
+                                  <td className="py-1.5 text-gray-400">{row.pct_of_total}%</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </Card>
+                    )}
+                  </>
+                )}
+
+                {/* ── Stats row (existing) ── */}
+                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-2">All Feedback Stats</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <Card>
                     <Metric label="Total Feedback" value={feedback.stats?.total ?? 0} />
@@ -630,6 +787,72 @@ export default function MLAdminDashboard() {
                   </Card>
                 )}
 
+                {/* ── Pending review queue ── */}
+                <Card title={`Pending Review Queue ${pendingFeedback.length > 0 ? `(${pendingFeedback.length} awaiting)` : ''}`}>
+                  {pendingFeedback.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-4">No feedback records awaiting review.</p>
+                  ) : (
+                    <>
+                      <div className="flex justify-end mb-3">
+                        <button
+                          onClick={handleBulkApprove}
+                          disabled={reviewLoading}
+                          className="px-3 py-1.5 text-xs bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white rounded-lg transition-colors"
+                        >
+                          Approve All ({pendingFeedback.length})
+                        </button>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-gray-500 border-b border-gray-700 text-left">
+                              <th className="py-2 pr-3">Ticket</th>
+                              <th className="py-2 pr-3">AI Category</th>
+                              <th className="py-2 pr-3">→ New Category</th>
+                              <th className="py-2 pr-3">Conf.</th>
+                              <th className="py-2 pr-3">Reason</th>
+                              <th className="py-2 pr-3">Technician</th>
+                              <th className="py-2 pr-3">Date</th>
+                              <th className="py-2">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pendingFeedback.map((f) => (
+                              <tr key={f.id} className="border-b border-gray-800">
+                                <td className="py-1.5 pr-3 font-mono text-blue-400">{f.ticket_number}</td>
+                                <td className="py-1.5 pr-3 capitalize text-red-300">{f.ai_category || '—'}</td>
+                                <td className="py-1.5 pr-3 capitalize text-green-300">{f.user_category || '—'}</td>
+                                <td className="py-1.5 pr-3 text-gray-400">
+                                  {f.ai_confidence != null ? `${Math.round(f.ai_confidence * 100)}%` : '—'}
+                                </td>
+                                <td className="py-1.5 pr-3 italic text-gray-400 truncate max-w-[120px]">{f.override_reason || '—'}</td>
+                                <td className="py-1.5 pr-3 text-gray-300">{f.technician_name || '—'}</td>
+                                <td className="py-1.5 pr-3 text-gray-400">{f.created_at?.split('T')[0]}</td>
+                                <td className="py-1.5 flex gap-1">
+                                  <button
+                                    onClick={() => handleApproveFeedback(f.id)}
+                                    disabled={reviewLoading}
+                                    className="px-2 py-1 text-[10px] bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white rounded transition-colors"
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectFeedback(f.id)}
+                                    disabled={reviewLoading}
+                                    className="px-2 py-1 text-[10px] bg-red-800 hover:bg-red-700 disabled:opacity-50 text-white rounded transition-colors"
+                                  >
+                                    Reject
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+                </Card>
+
                 {/* Recent entries */}
                 <Card title="Recent Feedback">
                   <div className="overflow-x-auto">
@@ -640,6 +863,7 @@ export default function MLAdminDashboard() {
                           <th className="py-2 pr-3">AI Category</th>
                           <th className="py-2 pr-3">User Category</th>
                           <th className="py-2 pr-3">Overridden?</th>
+                          <th className="py-2 pr-3">Training Status</th>
                           <th className="py-2 pr-3">Reason</th>
                           <th className="py-2">Date</th>
                         </tr>
@@ -654,6 +878,11 @@ export default function MLAdminDashboard() {
                               {f.category_overridden ? <Badge color="yellow">Cat</Badge> : ''}
                               {f.priority_overridden ? <Badge color="yellow"> Pri</Badge> : ''}
                               {!f.category_overridden && !f.priority_overridden && <Badge color="green">Accepted</Badge>}
+                            </td>
+                            <td className="py-1.5 pr-3">
+                              {f.training_status === 'approved' && <Badge color="green">Approved</Badge>}
+                              {f.training_status === 'rejected' && <Badge color="red">Rejected</Badge>}
+                              {(f.training_status === 'pending' || !f.training_status) && <Badge color="yellow">Pending</Badge>}
                             </td>
                             <td className="py-1.5 pr-3 italic text-gray-400 truncate max-w-[150px]">{f.override_reason || '—'}</td>
                             <td className="py-1.5 text-gray-400">{f.created_at?.split('T')[0]}</td>

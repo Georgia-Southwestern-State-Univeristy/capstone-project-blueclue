@@ -33,6 +33,21 @@ router.get('/feedback', ctrl.getFeedback);
 /** GET /api/ml-admin/feedback/override-rates  – 7-day per-category override rates */
 router.get('/feedback/override-rates', ctrl.getOverrideRates);
 
+/** GET /api/ml-admin/feedback/training-summary  – Overall counts, by-category rates, most-corrected */
+router.get('/feedback/training-summary', ctrl.getTrainingSummary);
+
+/** GET /api/ml-admin/feedback/pending  – Feedback records awaiting admin review */
+router.get('/feedback/pending', ctrl.getPendingFeedback);
+
+/** PATCH /api/ml-admin/feedback/:id/approve  – Approve a record for training */
+router.patch('/feedback/:id/approve', ctrl.approveFeedback);
+
+/** PATCH /api/ml-admin/feedback/:id/reject  – Reject a record from training */
+router.patch('/feedback/:id/reject', ctrl.rejectFeedback);
+
+/** POST /api/ml-admin/feedback/bulk-approve  – Bulk-approve all pending records */
+router.post('/feedback/bulk-approve', ctrl.bulkApproveFeedback);
+
 // ── Drift Detection ────────────────────────────────────────────────────────
 /** POST /api/ml-admin/drift/run  – Run drift detection for a model type */
 router.post('/drift/run', ctrl.runDriftDetection);

@@ -74,6 +74,36 @@ export const getOverrideRates = () =>
     headers: getAuthHeaders(),
   }).then(handleResponse);
 
+export const getTrainingSummary = () =>
+  fetch(`${API_BASE_URL}/ml-admin/feedback/training-summary`, {
+    headers: getAuthHeaders(),
+  }).then(handleResponse);
+
+export const getPendingFeedback = (limit = 100) =>
+  fetch(`${API_BASE_URL}/ml-admin/feedback/pending?limit=${limit}`, {
+    headers: getAuthHeaders(),
+  }).then(handleResponse);
+
+export const approveFeedback = (id, note = '') =>
+  fetch(`${API_BASE_URL}/ml-admin/feedback/${id}/approve`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ note }),
+  }).then(handleResponse);
+
+export const rejectFeedback = (id, note = '') =>
+  fetch(`${API_BASE_URL}/ml-admin/feedback/${id}/reject`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ note }),
+  }).then(handleResponse);
+
+export const bulkApproveFeedback = () =>
+  fetch(`${API_BASE_URL}/ml-admin/feedback/bulk-approve`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  }).then(handleResponse);
+
 // ── Drift Detection ──────────────────────────────────────────────────────────
 
 export const runDriftDetection = (modelType = 'category', windowDays = 30) =>

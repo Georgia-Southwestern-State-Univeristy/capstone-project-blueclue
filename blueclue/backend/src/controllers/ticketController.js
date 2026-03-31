@@ -2,6 +2,7 @@
 import Ticket from '../models/Ticket.js';
 import AIClassification from '../models/AIClassification.js';
 import PriorityOverride from '../models/PriorityOverride.js';
+import MLFeedback from '../models/MLFeedback.js';
 import AIConfiguration from '../models/AIConfiguration.js';
 import UserPrivilege from '../models/UserPrivilege.js';
 import CategoryAccess from '../models/CategoryAccess.js';
@@ -2290,7 +2291,32 @@ export const overrideCategory = async (req, res) => {
         ]
     );
 
-    // 3. Log in ticket history so it appears in the activity timeline
+    // 3. Write ml_prediction_feedback record for model retraining pipeline
+    try {
+        // Find the latest ai_classification for this ticket to reference
+        const classRow = await pool.query(
+            `SELECT id FROM ai_classifications WHERE ticket_id = $1 ORDER BY created_at DESC LIMIT 1`,
+            [parseInt(id)]
+        );
+        await MLFeedback.create({
+            ticket_id:           parseInt(id),
+            classification_id:   classRow.rows[0]?.id ?? null,
+            ai_category:         oldCategory,
+            ai_priority:         ticket.ai_priority ?? null,
+            ai_confidence:       ticket.ai_confidence ?? null,
+            user_category:       newCategory,
+            user_priority:       null,
+            category_overridden: true,
+            priority_overridden: false,
+            override_reason:     reason || null,
+            user_id:             req.user.id,
+        });
+    } catch (fbErr) {
+        // Non-fatal – log but don't fail the override
+        console.error('Failed to write ML feedback record:', fbErr.message);
+    }
+
+    // 4. Log in ticket history so it appears in the activity timeline
     try {
         const techName = `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'Technician';
         await TicketHistory.log(

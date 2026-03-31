@@ -273,6 +273,132 @@ class DataExporter:
         
         print(f"✓ Saved {len(tickets)} tickets to {filepath}")
 
+    def export_feedback(
+        self,
+        training_status: str = 'approved',
+        limit: Optional[int] = None,
+    ) -> List[Dict]:
+        """
+        Export technician override feedback records from ml_prediction_feedback.
+
+        Only records with the given training_status are exported (default
+        'approved') so that an admin review step separates raw corrections
+        from the data that actually enters the training dataset.
+
+        Each returned dict contains:
+          - All ml_prediction_feedback columns
+          - ticket subject / description (for text features)
+          - technician name (anonymised as role only)
+
+        Args:
+            training_status: 'approved' | 'pending' | 'rejected'
+            limit:           Max rows to return (None = all)
+
+        Returns:
+            List of feedback dictionaries ready for CSV/JSON export.
+        """
+        if not self.connection:
+            raise ConnectionError("Not connected to database. Call connect() first.")
+
+        valid_statuses = ('approved', 'pending', 'rejected')
+        if training_status not in valid_statuses:
+            raise ValueError(f"training_status must be one of {valid_statuses}")
+
+        query = """
+        SELECT
+            f.id                            AS feedback_id,
+            f.ticket_id,
+            t.ticket_number,
+            t.subject,
+            t.description,
+            -- AI prediction at time of override
+            f.ai_category,
+            f.ai_priority,
+            f.ai_confidence,
+            -- What the technician corrected it to
+            f.user_category,
+            f.user_priority,
+            f.category_overridden,
+            f.priority_overridden,
+            f.override_reason,
+            -- Training review metadata
+            f.training_status,
+            f.review_note,
+            f.reviewed_at,
+            -- Temporal features
+            t.created_at                    AS ticket_created_at,
+            f.created_at                    AS override_created_at,
+            -- Anonymised technician signal
+            u.role                          AS technician_role
+        FROM ml_prediction_feedback f
+        JOIN tickets t ON t.id = f.ticket_id
+        LEFT JOIN users u ON u.id = f.user_id
+        WHERE f.training_status = %s
+          AND (f.category_overridden = true OR f.priority_overridden = true)
+          AND LENGTH(t.description) >= 10
+        ORDER BY f.created_at DESC
+        """
+
+        params: list = [training_status]
+        if limit:
+            query += " LIMIT %s"
+            params.append(limit)
+
+        try:
+            with self.connection.cursor(cursor_factory=RealDictCursor) as cursor:
+                cursor.execute(query, params)
+                rows = cursor.fetchall()
+
+            result = []
+            for row in rows:
+                d = dict(row)
+                for k, v in d.items():
+                    if isinstance(v, datetime):
+                        d[k] = v.isoformat()
+                result.append(d)
+
+            print(f"✓ Exported {len(result)} feedback records (status={training_status})")
+            return result
+
+        except Exception as e:
+            print(f"✗ Error exporting feedback: {e}")
+            raise
+
+    def get_feedback_statistics(self) -> Dict:
+        """
+        Return a summary of corrective feedback records stored in
+        ml_prediction_feedback, suitable for admin dashboards and
+        pre-retraining sanity checks.
+        """
+        if not self.connection:
+            raise ConnectionError("Not connected to database. Call connect() first.")
+
+        stats: Dict = {}
+        with self.connection.cursor(cursor_factory=RealDictCursor) as cursor:
+            # Overall counts
+            cursor.execute("""
+                SELECT
+                    COUNT(*)                                                        AS total_feedback,
+                    SUM(CASE WHEN category_overridden THEN 1 ELSE 0 END)            AS category_overrides,
+                    SUM(CASE WHEN priority_overridden THEN 1 ELSE 0 END)            AS priority_overrides,
+                    SUM(CASE WHEN training_status = 'pending'  THEN 1 ELSE 0 END)   AS pending_review,
+                    SUM(CASE WHEN training_status = 'approved' THEN 1 ELSE 0 END)   AS approved_for_training,
+                    SUM(CASE WHEN training_status = 'rejected' THEN 1 ELSE 0 END)   AS rejected_from_training
+                FROM ml_prediction_feedback
+                WHERE category_overridden = true OR priority_overridden = true
+            """)
+            stats['overview'] = dict(cursor.fetchone())
+
+            # Per-category override rates (uses the view created in migration 052)
+            cursor.execute("SELECT * FROM vw_model_feedback_summary LIMIT 20")
+            stats['by_category'] = [dict(r) for r in cursor.fetchall()]
+
+            # Most-corrected label transitions
+            cursor.execute("SELECT * FROM vw_most_corrected_categories LIMIT 15")
+            stats['most_corrected'] = [dict(r) for r in cursor.fetchall()]
+
+        return stats
+
 
 # Data schema documentation
 DATA_SCHEMA = {
