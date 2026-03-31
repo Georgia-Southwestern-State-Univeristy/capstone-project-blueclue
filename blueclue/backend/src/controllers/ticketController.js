@@ -2223,3 +2223,110 @@ export const reopenTicket = async (req, res) => {
         });
 };
 
+/**
+ * Override the AI-suggested category for a ticket.
+ * Logs the override for future retraining purposes.
+ * PATCH /api/tickets/:id/override-category
+ * Body: { new_category: string, reason?: string }
+ */
+export const overrideCategory = async (req, res) => {
+    const { id } = req.params;
+    const { new_category, reason } = req.body;
+
+    if (isNaN(id)) {
+        throw new BadRequestError('Invalid ticket ID');
+    }
+
+    if (!new_category || new_category.trim() === '') {
+        throw new BadRequestError('new_category is required');
+    }
+
+    const ticket = await Ticket.getById(parseInt(id));
+    if (!ticket) {
+        throw new NotFoundError('Ticket not found');
+    }
+
+    // Only technicians and management may override categories
+    if (!req.user || !isTechnician(req.user.role)) {
+        throw new ForbiddenError('Only technicians and management may override AI classifications');
+    }
+
+    const oldCategory = ticket.category;
+    const newCategory = new_category.trim().toLowerCase();
+
+    if (oldCategory === newCategory) {
+        return res.status(200).json({
+            status: 'success',
+            message: 'Category unchanged',
+            data: ticket
+        });
+    }
+
+    // 1. Update the ticket category + mark as overridden
+    const updatedTicket = await pool.query(
+        `UPDATE tickets
+         SET category = $1,
+             category_override = TRUE,
+             category_overridden_at = NOW(),
+             category_overridden_by = $2,
+             updated_at = NOW()
+         WHERE id = $3
+         RETURNING *`,
+        [newCategory, req.user.id, parseInt(id)]
+    );
+
+    // 2. Log into category_overrides for retraining audit trail
+    await pool.query(
+        `INSERT INTO category_overrides
+             (ticket_id, overridden_by, original_category, new_category, ai_confidence, override_reason)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+            parseInt(id),
+            req.user.id,
+            oldCategory,
+            newCategory,
+            ticket.ai_confidence ?? null,
+            reason || null
+        ]
+    );
+
+    // 3. Log in ticket history so it appears in the activity timeline
+    try {
+        const techName = `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'Technician';
+        await TicketHistory.log(
+            parseInt(id),
+            req.user.id,
+            'category_change',
+            'category',
+            oldCategory,
+            newCategory,
+            reason || null,
+            {
+                action: 'ai_category_override',
+                overridden_by_name: techName,
+                ai_confidence: ticket.ai_confidence,
+                ticket_number: ticket.ticket_number
+            }
+        );
+    } catch (histErr) {
+        console.error('Failed to log category override history:', histErr.message);
+    }
+
+    // 4. Emit real-time update
+    try {
+        const io = req.app.locals.io;
+        if (io) {
+            io.emit('ticket_updated', {
+                ticket_id: parseInt(id),
+                category: newCategory
+            });
+        }
+    } catch (_) { /* non-fatal */ }
+
+    res.status(200).json({
+        status: 'success',
+        message: `Category overridden from "${oldCategory}" to "${newCategory}"`,
+        data: updatedTicket.rows[0]
+    });
+};
+
