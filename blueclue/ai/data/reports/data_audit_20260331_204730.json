@@ -1,0 +1,81 @@
+{
+  "audit_timestamp": "2026-03-31T20:47:30.758928Z",
+  "thresholds": {
+    "min_category_samples": 200,
+    "min_priority_samples": 150
+  },
+  "dataset_sizes": {
+    "train": 2245,
+    "val": 478,
+    "test": 490,
+    "total": 3213
+  },
+  "category_distribution": {
+    "train": {
+      "feature_request": 352,
+      "software": 341,
+      "network": 298,
+      "account": 275,
+      "billing": 268,
+      "hardware": 258,
+      "login": 250,
+      "other": 203
+    },
+    "val": {
+      "feature_request": 75,
+      "software": 73,
+      "network": 63,
+      "account": 59,
+      "billing": 57,
+      "hardware": 55,
+      "login": 53,
+      "other": 43
+    },
+    "test": {
+      "feature_request": 77,
+      "software": 74,
+      "network": 65,
+      "account": 60,
+      "billing": 59,
+      "hardware": 56,
+      "login": 55,
+      "other": 44
+    }
+  },
+  "priority_distribution": {
+    "train": {
+      "low": 792,
+      "medium": 675,
+      "high": 592,
+      "critical": 186
+    },
+    "val": {
+      "low": 176,
+      "medium": 151,
+      "high": 115,
+      "critical": 36
+    },
+    "test": {
+      "low": 161,
+      "high": 155,
+      "medium": 138,
+      "critical": 36
+    }
+  },
+  "underrepresented_categories": [],
+  "underrepresented_priorities": [],
+  "imbalance_ratios": {
+    "category_max_min": 1.73,
+    "priority_max_min": 4.26
+  },
+  "data_quality": {
+    "near_duplicates_detected": 0,
+    "short_description_count": 0,
+    "short_description_ids": [],
+    "invalid_label_count": 0,
+    "invalid_label_samples": {}
+  },
+  "recommendations": [
+    "Priority imbalance ratio 4.26x exceeds 4x \u2014 enable class_weight='balanced' in the priority model to improve recall on minority classes."
+  ]
+}
