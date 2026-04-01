@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import RefreshButton from './RefreshButton'
 import SearchWithHistory from './SearchWithHistory'
+import useContainerSize from '../hooks/useContainerSize'
 import { getAllTickets } from '../services/ticketService'
 import { formatDate as _fmtDate } from '../utils/dateFormatter'
 
@@ -41,6 +42,10 @@ export default function TechTicketQueueWidget({
   onTicketClick,
   includeCancelled = true,
 }) {
+  const [containerRef, { width: containerWidth }] = useContainerSize()
+  const ticketCols = containerWidth >= 900 ? 3 : containerWidth >= 550 ? 2 : 1
+  const headerRow = containerWidth >= 700
+
   const [showFilters, setShowFilters] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [filters, setFilters] = useState({ status: [], priority: [] })
@@ -94,10 +99,10 @@ export default function TechTicketQueueWidget({
   )
 
   return (
-    <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm h-full flex flex-col">
+    <div ref={containerRef} className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm h-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="p-6 border-b border-gray-700">
-        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-4 mb-4">
+        <div className={`flex gap-4 mb-4 ${headerRow ? 'flex-row justify-between items-center' : 'flex-col'}`}>
           {/* Title */}
           <h2 className="text-2xl font-bold text-white">Ticket Queue</h2>
 
@@ -209,7 +214,7 @@ export default function TechTicketQueueWidget({
               Showing <strong className="text-gray-200">{filteredTickets.length}</strong> of <strong className="text-gray-200">{tickets.length}</strong> ticket{tickets.length !== 1 ? 's' : ''}
               {hasActiveFilters && ' (filtered)'}
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${ticketCols}, minmax(0, 1fr))` }}>
               {sortedTickets.map((ticket) => {
                 const statusColor = getStatusColor(ticket.status)
                 return (
@@ -237,7 +242,7 @@ export default function TechTicketQueueWidget({
                     </div>
 
                     {/* Description Preview */}
-                    <p className="text-gray-300 text-sm mb-4 whitespace-normal break-words">
+                    <p className="text-gray-300 text-sm mb-4 line-clamp-2 break-words">
                       {ticket.description}
                     </p>
 

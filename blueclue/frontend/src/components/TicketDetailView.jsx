@@ -2,11 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { getTicketById, updateTicketStatus, updateTicket, deleteTicket, getTechnicians, assignSingleTicket, reassignTicket, cancelTicket, reopenTicket, overrideTicketCategory } from '../services/ticketService'
+import { getTicketById, updateTicketStatus, updateTicket, deleteTicket, getTechnicians, assignSingleTicket, reassignTicket, cancelTicket, reopenTicket, overrideTicketCategory, requestTicketChat, initiateTicketChat, getTicketChat } from '../services/ticketService'
 import { getUserRole, getUser, getUserId } from '../services/authService'
 import TicketActivityLog from './TicketActivityLog'
 import CancelTicketModal from './CancelTicketModal'
 import TicketComments from './TicketComments'
+import TicketChatTab from './TicketChatTab'
 import AddCollaboratorModal from './AddCollaboratorModal'
 import RingForHelpModal from './RingForHelpModal'
 import RequestUpdateModal from './RequestUpdateModal'
@@ -93,6 +94,10 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
   // ─── Image Lightbox state ────────────────────────────────────
   const [lightboxImage, setLightboxImage] = useState(null)
 
+  // ─── Ticket Chat state ───────────────────────────────────────
+  const [ticketChat, setTicketChat] = useState(null)
+  const [chatRequesting, setChatRequesting] = useState(false)
+
   const modalRef = useRef(null)
   const assignRef = useRef(null)
   const statusDropdownRef = useRef(null)
@@ -150,6 +155,12 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
       const data = res.data || res
       ticketCache.current.set(ticketId, { data, fetchedAt: Date.now() })
       setTicket(data)
+
+      // Fetch ticket chat status
+      try {
+        const chatRes = await getTicketChat(ticketId)
+        setTicketChat(chatRes.data || null)
+      } catch { /* no chat */ }
     } catch (err) {
       if (!cached) setError(err.message || 'Failed to load ticket')
     } finally {
@@ -1189,6 +1200,58 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
               Print
             </button>
 
+            {/* Request Chat — client only, when ticket has assigned tech */}
+            {isClient && ticket?.assigned_to && (!ticketChat || ticketChat.status === 'declined' || ticketChat.status === 'closed') && (
+              <button
+                onClick={async () => {
+                  setChatRequesting(true)
+                  try {
+                    const res = await requestTicketChat(ticket.id)
+                    setTicketChat(res.data)
+                    setActiveTab('chat')
+                  } catch (err) {
+                    setStatusError(err.message)
+                  } finally {
+                    setChatRequesting(false)
+                  }
+                }}
+                disabled={chatRequesting}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800/70 text-emerald-200 hover:text-emerald-100 text-xs font-medium border border-emerald-700/50 hover:border-emerald-600 transition-colors disabled:opacity-50"
+                title="Request a private chat with the assigned technician"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                {chatRequesting ? 'Requesting...' : 'Request Chat'}
+              </button>
+            )}
+
+            {/* Initiate Conversation — tech only, when they are assigned and no active chat */}
+            {isTech && ticket?.assigned_to === currentUserId && (!ticketChat || ticketChat.status === 'declined' || ticketChat.status === 'closed') && (
+              <button
+                onClick={async () => {
+                  setChatRequesting(true)
+                  try {
+                    const res = await initiateTicketChat(ticket.id)
+                    setTicketChat(res.data)
+                    setActiveTab('chat')
+                  } catch (err) {
+                    setStatusError(err.message)
+                  } finally {
+                    setChatRequesting(false)
+                  }
+                }}
+                disabled={chatRequesting}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800/70 text-emerald-200 hover:text-emerald-100 text-xs font-medium border border-emerald-700/50 hover:border-emerald-600 transition-colors disabled:opacity-50"
+                title="Start a private chat with the customer"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                {chatRequesting ? 'Starting...' : 'Initiate Conversation'}
+              </button>
+            )}
+
             {/* Status feedback */}
             {statusSuccess && <span className="text-green-400 text-xs ml-2 animate-pulse">{statusSuccess}</span>}
             {statusError && <span className="text-red-400 text-xs ml-2">{statusError}</span>}
@@ -1610,6 +1673,9 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
                   { id: 'details', label: 'Details' },
                   { id: 'comments', label: 'Comments' },
                   { id: 'activity', label: 'Activity' },
+                  ...(ticketChat && (ticketChat.status === 'pending' || ticketChat.status === 'accepted')
+                    ? [{ id: 'chat', label: 'Chat' }]
+                    : []),
                 ].map((tab) => (
                   <button
                     key={tab.id}
@@ -1995,6 +2061,19 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
                 {activeTab === 'activity' && (
                   <div className="max-w-3xl">
                     <TicketActivityLog ticketId={ticket.id} isOpen={true} />
+                  </div>
+                )}
+
+                {activeTab === 'chat' && ticketChat && (
+                  <div className="h-full">
+                    <TicketChatTab
+                      ticketId={ticket.id}
+                      chat={ticketChat}
+                      onChatUpdate={(updated) => {
+                        setTicketChat(updated)
+                        if (!updated) setActiveTab('details')
+                      }}
+                    />
                   </div>
                 )}
               </div>

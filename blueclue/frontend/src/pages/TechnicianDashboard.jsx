@@ -11,6 +11,7 @@ import RingRequestWidget from '../components/RingRequestWidget'
 import UpdateRequestAlert from '../components/UpdateRequestAlert'
 import UpdateResponseModal from '../components/UpdateResponseModal'
 import TechTicketQueueWidget from '../components/TechTicketQueueWidget'
+import MyAssignedTicketsWidget from '../components/MyAssignedTicketsWidget'
 import TechChatPanel from '../components/TechChatPanel'
 import CreateTicketWidget from '../components/CreateTicketWidget'
 import TicketTrendWidget from '../components/TicketTrendWidget'
@@ -24,40 +25,43 @@ import { getTechnicians } from '../services/userService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
 
 // ── Default grid layouts ─────────────────────────────────────────────────────
-const LAYOUT_VERSION = 1
+const LAYOUT_VERSION = 2
 const DEFAULT_LAYOUTS = {
   lg: [
     { i: 'timeline',         x: 0,  y: 0,  w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
     { i: 'statusDonut',      x: 0,  y: 8,  w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 12, maxH: 14 },
     { i: 'priorityPie',      x: 6,  y: 8,  w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 12, maxH: 14 },
-    { i: 'ticketQueue',      x: 0,  y: 15, w: 12, h: 14, minW: 6,  minH: 8, maxW: 12, maxH: 24 },
-    { i: 'availableTickets', x: 0,  y: 29, w: 12, h: 10, minW: 4,  minH: 6, maxW: 12, maxH: 18 },
-    { i: 'ringRequests',     x: 0,  y: 39, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
-    { i: 'chatPanel',         x: 6,  y: 39, w: 6,  h: 10, minW: 4,  minH: 8, maxW: 12, maxH: 16 },
+    { i: 'myAssignedTickets', x: 0,  y: 15, w: 12, h: 11, minW: 4,  minH: 8, maxW: 12, maxH: 20 },
+    { i: 'ticketQueue',      x: 0,  y: 26, w: 12, h: 14, minW: 6,  minH: 8, maxW: 12, maxH: 24 },
+    { i: 'availableTickets', x: 0,  y: 40, w: 12, h: 10, minW: 4,  minH: 6, maxW: 12, maxH: 18 },
+    { i: 'ringRequests',     x: 0,  y: 50, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'chatPanel',         x: 6,  y: 50, w: 6,  h: 10, minW: 4,  minH: 8, maxW: 12, maxH: 16 },
   ],
   md: [
     { i: 'timeline',         x: 0,  y: 0,  w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
     { i: 'statusDonut',      x: 0,  y: 8,  w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 12, maxH: 14 },
     { i: 'priorityPie',      x: 6,  y: 8,  w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 12, maxH: 14 },
-    { i: 'ticketQueue',      x: 0,  y: 15, w: 12, h: 14, minW: 6,  minH: 8, maxW: 12, maxH: 24 },
-    { i: 'availableTickets', x: 0,  y: 29, w: 12, h: 10, minW: 4,  minH: 6, maxW: 12, maxH: 18 },
-    { i: 'ringRequests',     x: 0,  y: 39, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
-    { i: 'chatPanel',         x: 0,  y: 46, w: 12, h: 10, minW: 4,  minH: 8, maxW: 12, maxH: 16 },
+    { i: 'myAssignedTickets', x: 0,  y: 15, w: 12, h: 11, minW: 4,  minH: 8, maxW: 12, maxH: 20 },
+    { i: 'ticketQueue',      x: 0,  y: 26, w: 12, h: 14, minW: 6,  minH: 8, maxW: 12, maxH: 24 },
+    { i: 'availableTickets', x: 0,  y: 40, w: 12, h: 10, minW: 4,  minH: 6, maxW: 12, maxH: 18 },
+    { i: 'ringRequests',     x: 0,  y: 50, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'chatPanel',         x: 0,  y: 57, w: 12, h: 10, minW: 4,  minH: 8, maxW: 12, maxH: 16 },
   ],
   sm: [
     { i: 'timeline',         x: 0,  y: 0,  w: 6,  h: 8,  minW: 3,  minH: 6, maxW: 6, maxH: 16 },
     { i: 'statusDonut',      x: 0,  y: 8,  w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 6, maxH: 14 },
     { i: 'priorityPie',      x: 0,  y: 15, w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 6, maxH: 14 },
-    { i: 'ticketQueue',      x: 0,  y: 22, w: 6,  h: 14, minW: 3,  minH: 8, maxW: 6, maxH: 24 },
-    { i: 'availableTickets', x: 0,  y: 36, w: 6,  h: 10, minW: 3,  minH: 6, maxW: 6, maxH: 18 },
-    { i: 'ringRequests',     x: 0,  y: 46, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
-    { i: 'chatPanel',         x: 0,  y: 53, w: 6,  h: 10, minW: 4,  minH: 8, maxW: 6, maxH: 16 },
+    { i: 'myAssignedTickets', x: 0,  y: 22, w: 6,  h: 11, minW: 3,  minH: 8, maxW: 6, maxH: 20 },
+    { i: 'ticketQueue',      x: 0,  y: 33, w: 6,  h: 14, minW: 3,  minH: 8, maxW: 6, maxH: 24 },
+    { i: 'availableTickets', x: 0,  y: 47, w: 6,  h: 10, minW: 3,  minH: 6, maxW: 6, maxH: 18 },
+    { i: 'ringRequests',     x: 0,  y: 57, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
+    { i: 'chatPanel',         x: 0,  y: 64, w: 6,  h: 10, minW: 4,  minH: 8, maxW: 6, maxH: 16 },
   ],
 }
 
 const TECHNICIAN_WIDGET_KEYS = [
   'timeline', 'statusDonut', 'priorityPie',
-  'ticketQueue', 'availableTickets', 'ringRequests', 'chatPanel', 'ticketTrend', 'ticketStatus', 'knowledgeBase',
+  'ticketQueue', 'myAssignedTickets', 'availableTickets', 'ringRequests', 'chatPanel', 'ticketTrend', 'ticketStatus', 'knowledgeBase',
 ]
 
 /**
@@ -102,6 +106,13 @@ function TechnicianWidgetGrid({
           loading={loading}
           onTicketClick={handleTicketClick}
           includeCancelled={includeCancelled}
+        />
+      ),
+      myAssignedTickets: (
+        <MyAssignedTicketsWidget
+          tickets={tickets}
+          loading={loading}
+          onTicketClick={handleTicketClick}
         />
       ),
       availableTickets: <AvailableTickets onTicketClick={handleTicketClick} />,

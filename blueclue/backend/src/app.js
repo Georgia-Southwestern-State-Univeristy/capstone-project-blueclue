@@ -38,6 +38,7 @@ import mlAdminRoutes from './routes/mlAdmin.js';
 import requestLogsRoutes from './routes/requestLogs.js';
 import searchHistoryRoutes from './routes/searchHistory.js';
 import messageRoutes from './routes/messages.js';
+import ticketChatRoutes from './routes/ticketChat.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 import { startUpdateRequestReminderJob } from './jobs/updateRequestReminders.js';
 import { startChatQualityJob } from './jobs/chatQualityJob.js';
@@ -45,6 +46,7 @@ import { errorHandler, notFoundHandler, InternalServerError } from './middleware
 import { startAlertDetectionJob } from './jobs/alertDetectionJob.js';
 import { startEmailQueueJob } from './jobs/emailQueueJob.js';
 import { startMessageCleanupJob } from './jobs/messageCleanupJob.js';
+import { startTicketChatCleanupJob } from './jobs/ticketChatCleanupJob.js';
 import { startDriftMonitorJob } from './jobs/driftMonitorJob.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { runHealthChecks } from './services/healthCheckService.js';
@@ -71,6 +73,7 @@ startChatQualityJob();
 startAlertDetectionJob();
 startEmailQueueJob();
 startMessageCleanupJob();
+startTicketChatCleanupJob();
 startDriftMonitorJob();  // Daily drift detection + automated alerting
 
 // Make io accessible to routes/controllers
@@ -133,6 +136,7 @@ app.use('/api/chat', chatRoutes); // Chat bot routes
 app.use('/api/ml-admin', mlAdminRoutes); // ML Admin – monitoring, explainability, versioning
 app.use('/api/search-history', searchHistoryRoutes); // User search history
 app.use('/api/messages', messageRoutes); // Direct messages between users
+app.use('/api/tickets', ticketChatRoutes); // Ticket chat between client and tech
 app.use('/api/dev', devRoutes);
 app.use('/api/admin', adminRoutes);
 

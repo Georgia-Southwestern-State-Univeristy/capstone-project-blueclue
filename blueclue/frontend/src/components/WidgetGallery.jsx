@@ -117,6 +117,7 @@ const PREVIEW_PATTERNS = {
   priorityPie:    'chart-pie',        // Pie chart (priority distribution)
   ticketQueue:    'card-grid',        // Ticket queue card grid
   availableTickets:'card-grid',       // Available tickets card grid
+  myAssignedTickets:'card-grid',      // My assigned tickets card grid
   ringRequests:   'list-pending',     // Ring-for-help request list
   chatPanel:      'list-pending',     // Chat handoff request list
   // Client & admin widgets

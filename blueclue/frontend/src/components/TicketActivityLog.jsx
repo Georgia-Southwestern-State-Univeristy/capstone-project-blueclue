@@ -227,9 +227,9 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
         return (
           <span>
             {'Status changed from '}
-            <span className="text-gray-300">{entry.old_value?.replace(/_/g, ' ')}</span>
+            <span className="text-gray-300">{entry.old_value?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
             {' to '}
-            <span className="text-green-300 font-medium">{entry.new_value?.replace(/_/g, ' ')}</span>
+            <span className="text-green-300 font-medium">{entry.new_value?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
           </span>
         )
       case 'ticket_cancelled': {

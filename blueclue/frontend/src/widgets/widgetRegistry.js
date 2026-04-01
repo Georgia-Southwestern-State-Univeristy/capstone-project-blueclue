@@ -465,6 +465,22 @@ const WIDGET_REGISTRY = [
   },
 
   {
+    key: 'myAssignedTickets',
+    name: 'My Assigned Tickets',
+    description: 'Tickets currently assigned to you with search and filters',
+    icon: '📋',
+    category: CATEGORIES.TICKETS,
+    permissions: ROLE_GROUPS.TECHS,
+    size: {
+      defaultW: 12, defaultH: 11,
+      minW: 4, minH: 8,
+      maxW: 12, maxH: 20,
+    },
+    component: () => import('../components/MyAssignedTicketsWidget'),
+    previewPattern: 'card-grid',
+  },
+
+  {
     key: 'recentActivity',
     name: 'Recent Activity',
     description: 'Live feed of all ticket activity with ticket IDs and change details',
