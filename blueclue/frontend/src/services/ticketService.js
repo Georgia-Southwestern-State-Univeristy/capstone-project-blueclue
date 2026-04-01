@@ -678,6 +678,63 @@ export const overrideTicketCategory = async (ticketId, newCategory, reason = '')
   }
 };
 
+// ── Ticket Chat API ──────────────────────────────────────────────────────────
+
+export const requestTicketChat = async (ticketId) => {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/chat/request`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return await handleResponse(response, 'Failed to request chat');
+};
+
+export const getTicketChat = async (ticketId) => {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/chat`, {
+    headers: getAuthHeaders(),
+  });
+  return await handleResponse(response, 'Failed to get chat');
+};
+
+export const acceptTicketChat = async (ticketId, chatId) => {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/chat/${chatId}/accept`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return await handleResponse(response, 'Failed to accept chat');
+};
+
+export const declineTicketChat = async (ticketId, chatId) => {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/chat/${chatId}/decline`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return await handleResponse(response, 'Failed to decline chat');
+};
+
+export const closeTicketChat = async (ticketId, chatId) => {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/chat/${chatId}/close`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return await handleResponse(response, 'Failed to close chat');
+};
+
+export const getTicketChatMessages = async (ticketId, chatId) => {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/chat/${chatId}/messages`, {
+    headers: getAuthHeaders(),
+  });
+  return await handleResponse(response, 'Failed to get chat messages');
+};
+
+export const sendTicketChatMessage = async (ticketId, chatId, message) => {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/chat/${chatId}/messages`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ message }),
+  });
+  return await handleResponse(response, 'Failed to send message');
+};
+
 export default {
   createTicket,
   getAllTickets,
@@ -705,4 +762,11 @@ export default {
   restoreTicket,
   reopenTicket,
   overrideTicketCategory,
+  requestTicketChat,
+  getTicketChat,
+  acceptTicketChat,
+  declineTicketChat,
+  closeTicketChat,
+  getTicketChatMessages,
+  sendTicketChatMessage,
 };

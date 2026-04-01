@@ -38,6 +38,7 @@ import mlAdminRoutes from './routes/mlAdmin.js';
 import requestLogsRoutes from './routes/requestLogs.js';
 import searchHistoryRoutes from './routes/searchHistory.js';
 import messageRoutes from './routes/messages.js';
+import ticketChatRoutes from './routes/ticketChat.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 import { startUpdateRequestReminderJob } from './jobs/updateRequestReminders.js';
 import { startChatQualityJob } from './jobs/chatQualityJob.js';
@@ -133,6 +134,7 @@ app.use('/api/chat', chatRoutes); // Chat bot routes
 app.use('/api/ml-admin', mlAdminRoutes); // ML Admin – monitoring, explainability, versioning
 app.use('/api/search-history', searchHistoryRoutes); // User search history
 app.use('/api/messages', messageRoutes); // Direct messages between users
+app.use('/api/tickets', ticketChatRoutes); // Ticket chat between client and tech
 app.use('/api/dev', devRoutes);
 app.use('/api/admin', adminRoutes);
 
