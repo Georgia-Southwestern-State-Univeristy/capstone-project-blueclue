@@ -88,6 +88,7 @@ const WIDGET_METADATA = {
   responseTime: { name: 'Response Times', description: 'Update request response time analytics and trends', category: CATEGORIES.ANALYTICS },
   ringRequests: { name: 'Ring for Help', description: 'Incoming ring-for-help requests from technicians', category: CATEGORIES.MANAGEMENT },
   availableTickets: { name: 'Available Tickets', description: 'Unassigned tickets available for self-assignment', category: CATEGORIES.TICKETS },
+  myAssignedTickets: { name: 'My Assigned Tickets', description: 'Tickets currently assigned to you', category: CATEGORIES.TICKETS },
   quickActions: { name: 'Quick Actions', description: 'Shortcut panel for common management operations', category: CATEGORIES.MANAGEMENT },
   statusDonut: { name: 'Status Overview', description: 'Donut chart showing ticket status distribution', category: CATEGORIES.ANALYTICS },
   priorityPie: { name: 'Priority Breakdown', description: 'Pie chart showing ticket priority distribution', category: CATEGORIES.ANALYTICS },
