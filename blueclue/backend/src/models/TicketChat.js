@@ -63,17 +63,27 @@ class TicketChat {
     }
 
     /**
-     * Close a chat session
+     * Close a chat session and delete all associated data
      */
     static async closeChat(chatId) {
-        const result = await pool.query(
-            `UPDATE ticket_chats
-             SET status = 'closed', closed_at = CURRENT_TIMESTAMP
-             WHERE id = $1 AND status = 'accepted'
-             RETURNING *`,
+        // Get chat info before deleting
+        const info = await pool.query(
+            `SELECT * FROM ticket_chats WHERE id = $1 AND status = 'accepted'`,
             [chatId]
         );
-        return result.rows[0] || null;
+        if (!info.rows[0]) return null;
+
+        // Delete messages first (FK constraint)
+        await pool.query(
+            `DELETE FROM ticket_chat_messages WHERE chat_id = $1`,
+            [chatId]
+        );
+        // Delete the chat row
+        await pool.query(
+            `DELETE FROM ticket_chats WHERE id = $1`,
+            [chatId]
+        );
+        return info.rows[0];
     }
 
     /**

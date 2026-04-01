@@ -2069,7 +2069,10 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
                     <TicketChatTab
                       ticketId={ticket.id}
                       chat={ticketChat}
-                      onChatUpdate={(updated) => setTicketChat(updated)}
+                      onChatUpdate={(updated) => {
+                        setTicketChat(updated)
+                        if (!updated) setActiveTab('details')
+                      }}
                     />
                   </div>
                 )}

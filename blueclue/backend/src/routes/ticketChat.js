@@ -201,7 +201,12 @@ router.post('/:ticketId/chat/:chatId/close', authenticateToken, async (req, res)
             return res.status(400).json({ status: 'error', message: 'Chat is not active' });
         }
 
-        res.json({ status: 'success', data: chat });
+        // Notify both participants via WebSocket so the chat tab disappears
+        const io = req.app.get('io');
+        emitEventToUser(io, chat.client_id, 'ticket_chat_closed', { chatId, ticketId: chat.ticket_id });
+        emitEventToUser(io, chat.tech_id, 'ticket_chat_closed', { chatId, ticketId: chat.ticket_id });
+
+        res.json({ status: 'success', data: null });
     } catch (error) {
         console.error('Close ticket chat error:', error);
         res.status(500).json({ status: 'error', message: 'Failed to close chat' });

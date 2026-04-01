@@ -12,6 +12,7 @@ export default function TicketChatTab({ ticketId, chat: initialChat, onChatUpdat
   const [sending, setSending] = useState(false)
   const [error, setError] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [showEndConfirm, setShowEndConfirm] = useState(false)
   const messagesEndRef = useRef(null)
   const pollRef = useRef(null)
   const currentUserId = getUserId()
@@ -51,6 +52,17 @@ export default function TicketChatTab({ ticketId, chat: initialChat, onChatUpdat
       socket.on('ticket_chat_message', handleIncoming)
     }
 
+    // Listen for chat closed by the other participant
+    const handleClosed = (data) => {
+      if (data.chatId === chat.id) {
+        setChat(null)
+        onChatUpdate?.(null)
+      }
+    }
+    if (socket) {
+      socket.on('ticket_chat_closed', handleClosed)
+    }
+
     // Fallback poll in case socket is disconnected
     pollRef.current = setInterval(() => {
       const s = getSocket()
@@ -58,10 +70,13 @@ export default function TicketChatTab({ ticketId, chat: initialChat, onChatUpdat
     }, 30000)
 
     return () => {
-      if (socket) socket.off('ticket_chat_message', handleIncoming)
+      if (socket) {
+        socket.off('ticket_chat_message', handleIncoming)
+        socket.off('ticket_chat_closed', handleClosed)
+      }
       if (pollRef.current) clearInterval(pollRef.current)
     }
-  }, [chat?.status, chat?.id, fetchMessages])
+  }, [chat?.status, chat?.id, fetchMessages, onChatUpdate])
 
   // Scroll to bottom when messages change
   useEffect(() => { scrollToBottom() }, [messages])
@@ -129,13 +144,14 @@ export default function TicketChatTab({ ticketId, chat: initialChat, onChatUpdat
   const handleClose = async () => {
     setActionLoading(true)
     try {
-      const res = await closeTicketChat(ticketId, chat.id)
-      setChat(res.data)
-      onChatUpdate?.(res.data)
+      await closeTicketChat(ticketId, chat.id)
+      setChat(null)
+      onChatUpdate?.(null)
     } catch (err) {
       setError(err.message)
     } finally {
       setActionLoading(false)
+      setShowEndConfirm(false)
     }
   }
 
@@ -228,13 +244,35 @@ export default function TicketChatTab({ ticketId, chat: initialChat, onChatUpdat
           </span>
         </div>
         <button
-          onClick={handleClose}
+          onClick={() => setShowEndConfirm(true)}
           disabled={actionLoading}
           className="text-xs px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white border border-gray-600 transition-colors"
         >
           End Chat
         </button>
       </div>
+
+      {/* End Chat Confirmation */}
+      {showEndConfirm && (
+        <div className="bg-red-900/20 border-b border-red-700/50 px-4 py-3 flex items-center justify-between">
+          <span className="text-red-300 text-sm">End this chat? All messages will be deleted.</span>
+          <div className="flex gap-2">
+            <button
+              onClick={handleClose}
+              disabled={actionLoading}
+              className="px-3 py-1 text-xs font-medium rounded bg-red-600 hover:bg-red-500 text-white disabled:opacity-50 transition-colors"
+            >
+              {actionLoading ? 'Ending...' : 'Yes, End Chat'}
+            </button>
+            <button
+              onClick={() => setShowEndConfirm(false)}
+              className="px-3 py-1 text-xs font-medium rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
