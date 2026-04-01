@@ -118,6 +118,22 @@ class TicketChat {
         );
         return result.rows;
     }
+
+    /**
+     * Tech initiates a chat directly (no request/accept flow)
+     */
+    static async initiateChat(ticketId, clientId, techId) {
+        const result = await pool.query(
+            `INSERT INTO ticket_chats (ticket_id, client_id, tech_id, status, responded_at)
+             VALUES ($1, $2, $3, 'accepted', CURRENT_TIMESTAMP)
+             ON CONFLICT (ticket_id) DO UPDATE
+               SET client_id = $2, tech_id = $3, status = 'accepted',
+                   requested_at = CURRENT_TIMESTAMP, responded_at = CURRENT_TIMESTAMP, closed_at = NULL
+             RETURNING *`,
+            [ticketId, clientId, techId]
+        );
+        return result.rows[0];
+    }
 }
 
 export default TicketChat;

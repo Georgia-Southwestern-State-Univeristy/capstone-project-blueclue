@@ -56,6 +56,52 @@ router.post('/:ticketId/chat/request', authenticateToken, async (req, res) => {
 });
 
 /**
+ * POST /api/tickets/:ticketId/chat/initiate
+ * Tech initiates a chat with the ticket's customer (no request/accept flow)
+ */
+router.post('/:ticketId/chat/initiate', authenticateToken, async (req, res) => {
+    try {
+        const ticketId = parseInt(req.params.ticketId, 10);
+        const techId = req.user.id;
+
+        // Get ticket to verify assignment and find the customer
+        const ticketResult = await pool.query(
+            'SELECT id, assigned_to, customer_id, subject FROM tickets WHERE id = $1',
+            [ticketId]
+        );
+        const ticket = ticketResult.rows[0];
+        if (!ticket) {
+            return res.status(404).json({ status: 'error', message: 'Ticket not found' });
+        }
+        if (ticket.assigned_to !== techId) {
+            return res.status(403).json({ status: 'error', message: 'Only the assigned technician can initiate a chat' });
+        }
+
+        // Check for existing active chat
+        const existing = await TicketChat.getByTicketId(ticketId);
+        if (existing && (existing.status === 'pending' || existing.status === 'accepted')) {
+            return res.status(409).json({ status: 'error', message: 'A chat session already exists for this ticket', data: existing });
+        }
+
+        const chat = await TicketChat.initiateChat(ticketId, ticket.customer_id, techId);
+
+        // Notify the customer
+        await Notification.create({
+            user_id: ticket.customer_id,
+            type: 'ticket_chat_accepted',
+            message: `A technician started a chat on ticket #${ticketId}: ${ticket.subject}`,
+            ticket_id: ticketId,
+            metadata: { chat_id: chat.id, tech_id: techId }
+        });
+
+        res.status(201).json({ status: 'success', data: chat });
+    } catch (error) {
+        console.error('Initiate ticket chat error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to initiate chat' });
+    }
+});
+
+/**
  * GET /api/tickets/:ticketId/chat
  * Get chat session for a ticket (client or tech)
  */

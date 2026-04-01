@@ -688,6 +688,14 @@ export const requestTicketChat = async (ticketId) => {
   return await handleResponse(response, 'Failed to request chat');
 };
 
+export const initiateTicketChat = async (ticketId) => {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/chat/initiate`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return await handleResponse(response, 'Failed to initiate chat');
+};
+
 export const getTicketChat = async (ticketId) => {
   const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/chat`, {
     headers: getAuthHeaders(),
@@ -763,6 +771,7 @@ export default {
   reopenTicket,
   overrideTicketCategory,
   requestTicketChat,
+  initiateTicketChat,
   getTicketChat,
   acceptTicketChat,
   declineTicketChat,
