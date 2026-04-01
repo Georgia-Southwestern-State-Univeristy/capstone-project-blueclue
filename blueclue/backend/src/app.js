@@ -46,6 +46,7 @@ import { errorHandler, notFoundHandler, InternalServerError } from './middleware
 import { startAlertDetectionJob } from './jobs/alertDetectionJob.js';
 import { startEmailQueueJob } from './jobs/emailQueueJob.js';
 import { startMessageCleanupJob } from './jobs/messageCleanupJob.js';
+import { startTicketChatCleanupJob } from './jobs/ticketChatCleanupJob.js';
 import { startDriftMonitorJob } from './jobs/driftMonitorJob.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { runHealthChecks } from './services/healthCheckService.js';
@@ -72,6 +73,7 @@ startChatQualityJob();
 startAlertDetectionJob();
 startEmailQueueJob();
 startMessageCleanupJob();
+startTicketChatCleanupJob();
 startDriftMonitorJob();  // Daily drift detection + automated alerting
 
 // Make io accessible to routes/controllers
