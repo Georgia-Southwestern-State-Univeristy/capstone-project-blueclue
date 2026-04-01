@@ -3,6 +3,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import TicketChat from '../models/TicketChat.js';
 import Notification from '../models/Notification.js';
 import pool from '../config/database.js';
+import { emitEventToUser } from '../services/socketService.js';
 
 const router = express.Router();
 
@@ -249,14 +250,30 @@ router.post('/:ticketId/chat/:chatId/messages', authenticateToken, async (req, r
             return res.status(403).json({ status: 'error', message: 'Chat is not active or you are not a participant' });
         }
 
-        // Notify the other participant
+        // Get sender name and chat details
         const chatResult = await pool.query(
             'SELECT tc.client_id, tc.tech_id, tc.ticket_id, t.subject FROM ticket_chats tc JOIN tickets t ON t.id = tc.ticket_id WHERE tc.id = $1',
             [chatId]
         );
+        const senderResult = await pool.query(
+            "SELECT first_name || ' ' || last_name AS sender_name FROM users WHERE id = $1",
+            [req.user.id]
+        );
+        const senderName = senderResult.rows[0]?.sender_name || 'Unknown';
         const chat = chatResult.rows[0];
+
+        // Build the full message payload with sender_name
+        const msgPayload = { ...msg, sender_name: senderName };
+
         if (chat) {
+            const io = req.app.get('io');
             const recipientId = req.user.id === chat.client_id ? chat.tech_id : chat.client_id;
+
+            // Emit real-time message to both participants
+            emitEventToUser(io, recipientId, 'ticket_chat_message', { chatId, message: msgPayload });
+            emitEventToUser(io, req.user.id, 'ticket_chat_message', { chatId, message: msgPayload });
+
+            // Also create a notification for the recipient
             await Notification.create({
                 user_id: recipientId,
                 type: 'ticket_chat_message',
@@ -266,7 +283,7 @@ router.post('/:ticketId/chat/:chatId/messages', authenticateToken, async (req, r
             });
         }
 
-        res.status(201).json({ status: 'success', data: msg });
+        res.status(201).json({ status: 'success', data: msgPayload });
     } catch (error) {
         console.error('Send ticket chat message error:', error);
         res.status(500).json({ status: 'error', message: 'Failed to send message' });

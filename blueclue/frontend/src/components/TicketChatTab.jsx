@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getTicketChat, getTicketChatMessages, sendTicketChatMessage, acceptTicketChat, declineTicketChat, closeTicketChat } from '../services/ticketService'
 import { getUserId } from '../services/authService'
+import { getSocket } from '../services/socketService'
 import RelativeTime from './RelativeTime'
 
 export default function TicketChatTab({ ticketId, chat: initialChat, onChatUpdate }) {
@@ -31,14 +32,36 @@ export default function TicketChatTab({ ticketId, chat: initialChat, onChatUpdat
     }
   }, [ticketId, chat?.id, chat?.status])
 
-  // Fetch messages on mount and poll every 5 seconds
+  // Fetch messages on mount, then listen via WebSocket (fallback poll every 30s)
   useEffect(() => {
-    if (chat?.status === 'accepted') {
-      fetchMessages()
-      pollRef.current = setInterval(fetchMessages, 5000)
+    if (chat?.status !== 'accepted') return
+    fetchMessages()
+
+    const socket = getSocket()
+    const handleIncoming = (data) => {
+      if (data.chatId === chat.id) {
+        setMessages(prev => {
+          if (prev.some(m => m.id === data.message.id)) return prev
+          return [...prev, data.message]
+        })
+      }
     }
-    return () => { if (pollRef.current) clearInterval(pollRef.current) }
-  }, [chat?.status, fetchMessages])
+
+    if (socket) {
+      socket.on('ticket_chat_message', handleIncoming)
+    }
+
+    // Fallback poll in case socket is disconnected
+    pollRef.current = setInterval(() => {
+      const s = getSocket()
+      if (!s || !s.connected) fetchMessages()
+    }, 30000)
+
+    return () => {
+      if (socket) socket.off('ticket_chat_message', handleIncoming)
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [chat?.status, chat?.id, fetchMessages])
 
   // Scroll to bottom when messages change
   useEffect(() => { scrollToBottom() }, [messages])
@@ -64,9 +87,12 @@ export default function TicketChatTab({ ticketId, chat: initialChat, onChatUpdat
     setSending(true)
     setError(null)
     try {
-      await sendTicketChatMessage(ticketId, chat.id, newMessage.trim())
+      const res = await sendTicketChatMessage(ticketId, chat.id, newMessage.trim())
       setNewMessage('')
-      await fetchMessages()
+      // Append the message from the HTTP response immediately
+      if (res.data) {
+        setMessages(prev => prev.some(m => m.id === res.data.id) ? prev : [...prev, res.data])
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -263,7 +289,7 @@ function MessageBubble({ msg, isOwn }) {
         )}
         <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
         <p className={`text-xs mt-1 ${isOwn ? 'text-blue-200/60' : 'text-gray-500'}`}>
-          <RelativeTime date={msg.created_at} />
+          <RelativeTime timestamp={msg.created_at} />
         </p>
       </div>
     </div>

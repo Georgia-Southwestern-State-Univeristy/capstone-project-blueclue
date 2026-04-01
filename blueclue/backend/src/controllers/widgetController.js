@@ -54,6 +54,7 @@ const WIDGET_PERMISSIONS = {
   
   // Technicians only
   availableTickets: ROLE_GROUPS.TECHS,
+  myAssignedTickets: ROLE_GROUPS.TECHS,
   
   // Management only
   assignedChart: ROLE_GROUPS.MANAGERS,
