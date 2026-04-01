@@ -23,6 +23,11 @@ function getConfig(changeType) {
   return CHANGE_TYPE_CONFIG[changeType] || { label: changeType, color: 'text-gray-400', bgColor: 'bg-gray-400/10' }
 }
 
+function formatValue(val) {
+  if (!val) return val
+  return val.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
 function getIcon(changeType) {
   switch (changeType) {
     case 'status_change':
@@ -90,11 +95,11 @@ function buildDescription(entry) {
 
   switch (entry.change_type) {
     case 'status_change':
-      return `${who} changed status from "${entry.old_value}" to "${entry.new_value}"`
+      return `${who} changed status from "${formatValue(entry.old_value)}" to "${formatValue(entry.new_value)}"`
     case 'priority_change':
-      return `${who} changed priority from "${entry.old_value}" to "${entry.new_value}"`
+      return `${who} changed priority from "${formatValue(entry.old_value)}" to "${formatValue(entry.new_value)}"`
     case 'category_change':
-      return `${who} changed category from "${entry.old_value}" to "${entry.new_value}"`
+      return `${who} changed category from "${formatValue(entry.old_value)}" to "${formatValue(entry.new_value)}"`
     case 'ticket_assigned':
     case 'assignment': {
       const assignee = entry.change_details?.assigned_to_name || entry.new_value
