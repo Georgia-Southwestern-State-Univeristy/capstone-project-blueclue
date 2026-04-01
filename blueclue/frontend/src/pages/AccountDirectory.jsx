@@ -161,9 +161,9 @@ export default function AccountDirectory() {
                         </td>
                         <td className="px-4 py-3 text-gray-400 hidden lg:table-cell">{user.company || '—'}</td>
                         <td className="px-4 py-3 hidden lg:table-cell">
-                          <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${user.is_active ? 'bg-green-500' : 'bg-gray-500'}`}></span>
-                          <span className={user.is_active ? 'text-green-400' : 'text-gray-500'}>
-                            {user.is_active ? 'Active' : 'Inactive'}
+                          <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${user.is_online ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                          <span className={user.is_online ? 'text-green-400' : 'text-red-400'}>
+                            {user.is_online ? 'Online' : 'Offline'}
                           </span>
                         </td>
                       </tr>

@@ -163,9 +163,9 @@ export default function ProfileDetailView({ user, isOpen, onClose, initialTab = 
                   {formatRole(user.role)}
                 </span>
                 <div className="flex items-center gap-2 text-sm">
-                  <span className={`w-2.5 h-2.5 rounded-full ${user.is_active ? 'bg-green-500' : 'bg-gray-500'}`}></span>
-                  <span className={user.is_active ? 'text-green-400' : 'text-gray-500'}>
-                    {user.is_active ? 'Active' : 'Inactive'}
+                  <span className={`w-2.5 h-2.5 rounded-full ${user.is_online ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                  <span className={user.is_online ? 'text-green-400' : 'text-red-400'}>
+                    {user.is_online ? 'Online' : 'Offline'}
                   </span>
                 </div>
               </div>

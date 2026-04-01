@@ -144,7 +144,7 @@ export const login = async (req, res) => {
         );
 
         await pool.query(
-            'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1',
+            'UPDATE users SET last_login = CURRENT_TIMESTAMP, is_online = true WHERE id = $1',
             [user.id]
         );
 
@@ -270,7 +270,7 @@ export const login = async (req, res) => {
         );
 
         await pool.query(
-            'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1',
+            'UPDATE users SET last_login = CURRENT_TIMESTAMP, is_online = true WHERE id = $1',
             [user.id]
         );
 
@@ -486,6 +486,12 @@ export const logout = async (req, res) => {
     // Revoke all refresh tokens for this user
     await pool.query(
         'UPDATE refresh_tokens SET is_revoked = true WHERE user_id = $1',
+        [userId]
+    );
+
+    // Mark user as offline
+    await pool.query(
+        'UPDATE users SET is_online = false WHERE id = $1',
         [userId]
     );
 

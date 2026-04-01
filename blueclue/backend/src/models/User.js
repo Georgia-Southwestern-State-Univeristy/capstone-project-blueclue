@@ -70,6 +70,7 @@ class User {
                 u.first_name || ' ' || u.last_name as full_name,
                 u.role,
                 u.is_active,
+                u.is_online,
                 u.created_at,
                 u.last_login,
                 u.phone,
