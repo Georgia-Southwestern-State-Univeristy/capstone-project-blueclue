@@ -15,6 +15,7 @@ import { getCollaborators, addCollaborator, removeCollaborator } from '../servic
 import { getUpdateRequests, handleExtensionRequest } from '../services/updateRequestService'
 import { formatDateTime as _fmtDateTime, formatTimeAgo as _fmtTimeAgo } from '../utils/dateFormatter'
 import RelativeTime from './RelativeTime'
+import ExplainabilityPanel from './ml/ExplainabilityPanel'
 
 /**
  * Classifications below this threshold are flagged as "Low confidence".
@@ -93,6 +94,9 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
 
   // ─── Image Lightbox state ────────────────────────────────────
   const [lightboxImage, setLightboxImage] = useState(null)
+
+  // ─── AI Reasoning expandable ─────────────────────────────────
+  const [showAIReasoning, setShowAIReasoning] = useState(false)
 
   // ─── Ticket Chat state ───────────────────────────────────────
   const [ticketChat, setTicketChat] = useState(null)
@@ -2049,6 +2053,43 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
                             </div>
                           )}
                         </div>
+                      </div>
+                    )}
+
+                    {/* AI Reasoning — expandable explainability for technicians & management */}
+                    {canSeeInternals && ticket.ai_classified && ticket.description && (
+                      <div className="border-t border-gray-800 pt-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowAIReasoning(v => !v)}
+                          className="w-full flex items-center justify-between gap-2 text-xs font-medium text-gray-400 hover:text-blue-400 transition-colors py-1"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <span>🧠</span>
+                            <span className="uppercase tracking-wider">AI Reasoning</span>
+                          </span>
+                          <span className="text-gray-500">
+                            {showAIReasoning ? '▲ Hide' : '▼ Why did the AI make this decision?'}
+                          </span>
+                        </button>
+                        {showAIReasoning && (
+                          <div className="mt-3 space-y-3">
+                            <ExplainabilityPanel
+                              text={ticket.description}
+                              prediction={ticket.category || ''}
+                              confidence={ticket.ai_confidence ?? 0}
+                              modelType="category"
+                              autoLoad
+                            />
+                            <ExplainabilityPanel
+                              text={ticket.description}
+                              prediction={ticket.ai_priority || ticket.priority || ''}
+                              confidence={ticket.ai_confidence ?? 0}
+                              modelType="priority"
+                              autoLoad
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

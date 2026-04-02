@@ -23,6 +23,9 @@ router.get('/health', ctrl.getMLHealth);
 /** POST /api/ml-admin/explain  – Why did the AI choose this prediction? */
 router.post('/explain', ctrl.explainPrediction);
 
+/** GET /api/ml-admin/explain/global-features  – Top features per model globally */
+router.get('/explain/global-features', ctrl.getGlobalTopFeatures);
+
 // ── Feedback / Overrides ───────────────────────────────────────────────────
 /** POST /api/ml-admin/feedback  – Submit user accept/override decision */
 router.post('/feedback', ctrl.submitFeedback);

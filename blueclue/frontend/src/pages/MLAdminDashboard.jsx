@@ -76,6 +76,7 @@ export default function MLAdminDashboard() {
   const [reviewLoading, setReviewLoading]       = useState(false)
   const [driftReports, setDriftReports]         = useState([])
   const [modelVersions, setModelVersions]       = useState(null)
+  const [globalFeatures, setGlobalFeatures]     = useState(null)
   const [retrainRuns, setRetrainRuns]           = useState([])
   const [retrainRunsLoading, setRetrainRunsLoading] = useState(false)
   const retrainPollingRef = useRef(null)
@@ -216,6 +217,9 @@ export default function MLAdminDashboard() {
           console.error('Failed to load model versions:', e)
           toast.error('Failed to load model versions: ' + (e.message || 'Unknown error'))
         })
+      svc.getGlobalTopFeatures()
+        .then(r => setGlobalFeatures(r?.data || r))
+        .catch(() => {}) // non-critical – silently omit if unavailable
     }
     if (activeTab === 'Retraining') {
       refreshRetrainRuns()
@@ -1415,6 +1419,49 @@ export default function MLAdminDashboard() {
                   </>
                 )}
               </>
+            )}
+
+            {/* ── Model Insights: Global Top Features ─────────────────── */}
+            {globalFeatures && (Object.values(globalFeatures).some(v => v?.length > 0)) && (
+              <Card title="Model Insights — Top Features Globally">
+                <p className="text-xs text-gray-500 mb-4">
+                  Most influential features across all predictions, derived from model feature importances.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {['category', 'priority'].map(mt => {
+                    const features = globalFeatures[mt]
+                    if (!features?.length) return null
+                    const maxScore = features[0]?.score || 1
+                    return (
+                      <div key={mt}>
+                        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                          {mt.charAt(0).toUpperCase() + mt.slice(1)} Model
+                        </h4>
+                        <div className="space-y-2">
+                          {features.slice(0, 10).map((f, i) => {
+                            const pct = Math.min(100, Math.round((f.score / maxScore) * 100))
+                            const color = pct >= 70 ? 'bg-blue-500' : pct >= 40 ? 'bg-blue-400' : 'bg-blue-300'
+                            return (
+                              <div key={i} className="flex items-center gap-2">
+                                <span className="text-xs text-gray-300 w-28 truncate font-mono" title={f.feature}>
+                                  {f.feature}
+                                </span>
+                                <div className="flex-1 bg-gray-700 rounded-full h-1.5">
+                                  <div
+                                    className={`h-1.5 rounded-full ${color} transition-all duration-300`}
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs text-gray-500 w-10 text-right">{pct}%</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </Card>
             )}
           </div>
         )}

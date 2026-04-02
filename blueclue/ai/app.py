@@ -87,6 +87,7 @@ class CategoryResponse(BaseModel):
     all_scores: Dict[str, float]
     model_version: str
     low_confidence: bool = False
+    top_features: Optional[List[Dict[str, Any]]] = None
 
 
 class PriorityResponse(BaseModel):
@@ -95,6 +96,7 @@ class PriorityResponse(BaseModel):
     all_scores: Dict[str, float]
     model_version: str
     low_confidence: bool = False
+    top_features: Optional[List[Dict[str, Any]]] = None
 
 
 class TimeResponse(BaseModel):
@@ -178,6 +180,8 @@ class CombinedResponse(BaseModel):
     fallback_used: bool = False
     model_versions: Dict[str, str]
     low_confidence: bool = False
+    category_top_features: Optional[List[Dict[str, Any]]] = None
+    priority_top_features: Optional[List[Dict[str, Any]]] = None
 
 
 class HealthResponse(BaseModel):
@@ -699,11 +703,41 @@ class ExplainabilityManager:
         )
         return result.to_dict()
 
+    def get_global_features(self, model_type: str, top_n: int = 10) -> Optional[List[Dict]]:
+        """Return model-level top features from the fitted model (not per-prediction)."""
+        engine = self._engines.get(model_type)
+        if engine is None:
+            return None
+        return engine.get_global_top_features(top_n)
+
     def is_ready(self, model_type: str) -> bool:
         return model_type in self._engines
 
 
 explainer_mgr = ExplainabilityManager()
+
+
+async def _inline_explain(
+    model_type: str, text: str, subject: str,
+    prediction: str, confidence: float,
+) -> Optional[List[Dict[str, Any]]]:
+    """
+    Best-effort inline explainability with an 80 ms hard cap.
+    Returns the top_features list or None on timeout / error.
+    """
+    if not explainer_mgr.is_ready(model_type):
+        return None
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(
+                explainer_mgr.explain,
+                model_type, text, subject, prediction, confidence,
+            ),
+            timeout=0.08,
+        )
+        return result.get("top_features") if result else None
+    except Exception:
+        return None
 
 
 # --------------------------------------------------------------------------- #
@@ -1026,7 +1060,9 @@ async def classify_category(req: ClassifyRequest):
                 confidence=fb["confidence"], category=fb["category"], fallback=True)
             return CategoryResponse(**result)
 
-        resp = CategoryResponse(**result)
+        top_features = await _inline_explain(
+            "category", req.text, req.subject or "", result["category"], result["confidence"])
+        resp = CategoryResponse(**result, top_features=top_features)
         cache.set(req.text, "category", resp)
         metrics.record_request(
             latency_ms=(time.time() - t0) * 1000,
@@ -1070,7 +1106,9 @@ async def classify_priority(req: ClassifyRequest):
                 confidence=fb["confidence"], priority=fb["priority"], fallback=True)
             return PriorityResponse(**result)
 
-        resp = PriorityResponse(**result)
+        top_features = await _inline_explain(
+            "priority", req.text, req.subject or "", result["priority"], result["confidence"])
+        resp = PriorityResponse(**result, top_features=top_features)
         cache.set(cache_key_text, "priority", resp)
         metrics.record_request(
             latency_ms=(time.time() - t0) * 1000,
@@ -1198,6 +1236,17 @@ async def _classify_combined_impl(req: ClassifyRequest) -> CombinedResponse:
     overall_confidence = min(cat_result["confidence"], pri_result["confidence"])
     low_conf = cat_result.get("low_confidence", False) or pri_result.get("low_confidence", False)
 
+    # Inline explain – parallel, best-effort, 80 ms hard cap each
+    cat_feats, pri_feats = await asyncio.gather(
+        _inline_explain("category", req.text, req.subject or "",
+                        cat_result["category"], cat_result["confidence"]),
+        _inline_explain("priority", req.text, req.subject or "",
+                        pri_result["priority"], pri_result["confidence"]),
+        return_exceptions=True,
+    )
+    cat_feats = cat_feats if not isinstance(cat_feats, Exception) else None
+    pri_feats = pri_feats if not isinstance(pri_feats, Exception) else None
+
     resp = CombinedResponse(
         category=cat_result["category"],
         priority=pri_result["priority"],
@@ -1208,6 +1257,8 @@ async def _classify_combined_impl(req: ClassifyRequest) -> CombinedResponse:
         fallback_used=fallback_used,
         model_versions=model_versions,
         low_confidence=low_conf,
+        category_top_features=cat_feats,
+        priority_top_features=pri_feats,
     )
 
     cache.set(req.text, "combined", resp)
@@ -1359,6 +1410,22 @@ async def explain_prediction(req: ExplainRequest):
     except Exception as exc:
         logger.error("Explain endpoint error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ---- Global model insights ---------------------------------------------- #
+
+
+@app.get("/explain/global-features")
+async def get_global_top_features():
+    """
+    Return the top contributing features globally for each model type.
+    Uses model.feature_importances_ (tree) or mean |coef_| (linear).
+    Useful for the 'Model Insights' admin view.
+    """
+    return {
+        "category": explainer_mgr.get_global_features("category", top_n=15),
+        "priority": explainer_mgr.get_global_features("priority", top_n=15),
+    }
 
 
 # ---- Feedback collection ------------------------------------------------- #

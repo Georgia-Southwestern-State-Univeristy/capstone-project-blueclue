@@ -134,6 +134,16 @@ export const explainPrediction = async (req, res) => {
         return res.json({ success: true, data });
 };
 
+/**
+ * GET /api/ml-admin/explain/global-features
+ * Returns top contributing features globally for each model type (category + priority).
+ * Proxied to the Python ML service GET /explain/global-features.
+ */
+export const getGlobalTopFeatures = async (req, res) => {
+    const data = await callMLService('/explain/global-features', { method: 'GET' });
+    return res.json({ success: true, data });
+};
+
 // -----------------------------------------------------------------------------
 // Feedback collection
 // -----------------------------------------------------------------------------
