@@ -47,6 +47,15 @@ export const explainPrediction = (text, modelType = 'category', prediction = '',
     body: JSON.stringify({ text, model_type: modelType, prediction, confidence }),
   }).then(handleResponse);
 
+/**
+ * GET /api/ml-admin/explain/global-features
+ * Top contributing features globally per model type (for Model Insights view).
+ */
+export const getGlobalTopFeatures = () =>
+  fetch(`${API_BASE_URL}/ml-admin/explain/global-features`, {
+    headers: getAuthHeaders(),
+  }).then(handleResponse);
+
 // ── Feedback / Overrides ─────────────────────────────────────────────────────
 
 /**
