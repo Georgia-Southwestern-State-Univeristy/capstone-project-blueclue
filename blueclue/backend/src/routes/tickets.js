@@ -27,8 +27,10 @@ import {
     getCollaborators,
     getTechnicianWorkload
 } from '../controllers/collaboratorController.js';
+import { predictResolutionTime } from '../services/aiService.js';
 import { optionalAuth, authenticateToken } from '../middleware/auth.js';
 import { checkPrivilege } from '../middleware/rbac.js';
+import pool from '../config/database.js';
 
 const router = express.Router();
 
@@ -262,5 +264,59 @@ router.patch('/:id/override-category', authenticateToken, overrideCategory);
  * @access  Private (requires CAN_DELETE_TICKETS privilege or admin)
  */
 router.patch('/:id/restore', authenticateToken, checkPrivilege('CAN_DELETE_TICKETS'), restoreTicket);
+
+/**
+ * @route   GET /api/tickets/:id/predict-resolution-time
+ * @desc    Return an AI-predicted resolution time range for a ticket.
+ *          Passes technician workload so the model can account for queue depth.
+ * @access  Private (all authenticated staff)
+ */
+router.get('/:id/predict-resolution-time', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Fetch minimal ticket fields needed for prediction
+        const { rows } = await pool.query(
+            `SELECT t.description, t.subject, t.category, t.priority,
+                    t.created_at, t.assigned_to,
+                    t.ai_confidence, t.reopen_count,
+                    (SELECT COUNT(*) FROM tickets WHERE assigned_to = t.assigned_to
+                     AND status NOT IN ('resolved','closed','cancelled')) AS technician_workload
+             FROM tickets t
+             WHERE t.id = $1`,
+            [id]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'Ticket not found' });
+        }
+
+        const ticket = rows[0];
+        const prediction = await predictResolutionTime(
+            ticket.description || '',
+            ticket.subject || '',
+            ticket.category || null,
+            ticket.priority || null
+        );
+
+        if (!prediction) {
+            return res.status(503).json({ error: 'AI service unavailable' });
+        }
+
+        return res.json({
+            ticket_id: id,
+            estimated_hours: prediction.estimated_hours,
+            confidence_range: prediction.confidence_range,
+            uncertainty_label: prediction.uncertainty_label ||
+                `${Math.round(prediction.confidence_range?.lower_hours ?? prediction.estimated_hours * 0.7)} – ` +
+                `${Math.round(prediction.confidence_range?.upper_hours ?? prediction.estimated_hours * 1.3)} hours`,
+            model_version: prediction.model_version,
+            technician_workload: parseInt(ticket.technician_workload, 10) || 0,
+        });
+    } catch (err) {
+        console.error('[predict-resolution-time]', err);
+        res.status(500).json({ error: err.message || 'Internal server error' });
+    }
+});
 
 export default router;

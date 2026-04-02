@@ -217,24 +217,29 @@ class TimeFeatureExtractor:
         features.append(text.count('?') / 5.0)  # Questions
         features.append(text.count('.') / 10.0)  # Sentences
         
-        # Time of creation (business hours vs off-hours)
+        # Time of creation (business hours, day of week, hour of day)
         created_at = ticket.get('created_at', '')
         if created_at:
             try:
                 dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
                 features.append(1.0 if 9 <= dt.hour <= 17 else 0.5)  # Business hours
-                features.append(1.0 if dt.weekday() >= 5 else 0.5)  # Weekend
-                features.append(dt.hour / 24.0)  # Hour of day
+                features.append(1.0 if dt.weekday() >= 5 else 0.5)   # Weekend
+                features.append(dt.hour / 24.0)                        # Hour of day
+                features.append(dt.weekday() / 6.0)                    # Day of week (0=Mon, 6=Sun)
             except:
-                features.extend([0.5, 0.5, 0.5])
+                features.extend([0.5, 0.5, 0.5, 0.5])
         else:
-            features.extend([0.5, 0.5, 0.5])
+            features.extend([0.5, 0.5, 0.5, 0.5])
         
         # Comment count (more comments = longer resolution typically)
         features.append(float(ticket.get('comment_count', 0)) / 10.0)
         
         # Reopen count
         features.append(float(ticket.get('reopen_count', 0)))
+        
+        # Technician workload: open tickets currently assigned to the same technician.
+        # A higher workload suggests slower resolution due to competing priorities.
+        features.append(float(ticket.get('technician_workload', 0)) / 20.0)
         
         return features
     
@@ -279,7 +284,8 @@ class TimeFeatureExtractor:
             ['complexity_high', 'complexity_low'] +
             ['priority_factor', 'ai_confidence', 'user_tickets', 'text_len',
              'word_count', 'questions', 'sentences', 'business_hours',
-             'is_weekend', 'hour_of_day', 'comment_count', 'reopen_count']
+             'is_weekend', 'hour_of_day', 'day_of_week',
+             'comment_count', 'reopen_count', 'technician_workload']
         )
         
         self.is_fitted = True
@@ -845,7 +851,7 @@ class TimeModelTrainer:
         result = self.results[self.best_model_name]
         test_results = result.get('test', result.get('validation', {}))
         
-        version = f"v1_{datetime.now().strftime('%Y%m%d')}"
+        version = f"v2_{datetime.now().strftime('%Y%m%d')}"
         
         # Save model
         model_filename = f"time_predictor_{version}.pkl"
@@ -889,7 +895,9 @@ class TimeModelTrainer:
             'notes': [
                 f"Trained on {len(self.y_train)} resolved tickets",
                 "Uses log-transformed target for skewed distribution",
-                f"Outliers >{self.outlier_percentile}th percentile removed from training"
+                f"Outliers >{self.outlier_percentile}th percentile removed from training",
+                "v2 feature set adds: technician_workload, day_of_week",
+                "Baseline (v1) MAE: 33.997h, RMSE: 47.796h, R2: 0.388"
             ]
         }
         

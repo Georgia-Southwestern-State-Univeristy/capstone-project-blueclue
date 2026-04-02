@@ -1,0 +1,66 @@
+{
+  "model_name": "Random Forest Regressor",
+  "model_key": "random_forest",
+  "version": "v2_20260402",
+  "task": "resolution_time_prediction",
+  "training_date": "2026-04-02T00:00:00.000000",
+  "training_samples": null,
+  "test_samples": null,
+  "n_features": 528,
+  "uses_log_transform": true,
+  "outlier_percentile": 95,
+  "baseline_metrics_v1": {
+    "version": "v1_20260224",
+    "rmse_hours": 47.7964953876167,
+    "mae_hours": 33.99718656753866,
+    "median_ae_hours": 19.714664358420308,
+    "r2_score": 0.3876384521872832,
+    "within_4h_pct": 10.367892976588628,
+    "within_8h_pct": 20.735785953177256,
+    "notes": [
+      "MAE of ~34h and RMSE of ~48h indicate large average prediction errors.",
+      "R\u00b2 of 0.39 explains only ~39% of variance — significant room for improvement.",
+      "Only 10% of predictions within 4 hours; unreliable for tight SLA scheduling."
+    ]
+  },
+  "metrics": {
+    "rmse_hours": null,
+    "mae_hours": null,
+    "median_ae_hours": null,
+    "r2_score": null,
+    "within_4h_pct": null,
+    "within_8h_pct": null,
+    "_note": "Run `python src/train_time_model.py --model random_forest --tune` to populate these metrics."
+  },
+  "feature_changes_v2": {
+    "added": [
+      "day_of_week — encodes Mon-Sun (0\u20136) normalized to [0,1]; captures weekly workload patterns",
+      "technician_workload — number of currently open tickets assigned to the same technician, normalized by 20; high workload predicts slower resolution"
+    ],
+    "improved": [
+      "Time-of-day now emits four features: business_hours, is_weekend, hour_of_day, day_of_week (prev: three)"
+    ],
+    "retained": [
+      "TF-IDF text features (500 max, bigrams)",
+      "Category one-hot encoding",
+      "Priority one-hot encoding + numeric priority factor",
+      "Complexity keyword scores (high / low)",
+      "AI confidence, user_previous_tickets",
+      "Text length, word count, question count, sentence count",
+      "Comment count, reopen count"
+    ]
+  },
+  "inference_time_ms": null,
+  "hyperparameters": {
+    "max_depth": 15,
+    "n_estimators": 200
+  },
+  "random_seed": 42,
+  "notes": [
+    "v2 adds technician_workload and day_of_week features",
+    "Uses log-transformed target for skewed distribution",
+    "Outliers >95th percentile removed from training",
+    "Baseline (v1) MAE: 33.997h, RMSE: 47.796h, R\u00b2: 0.388",
+    "Predicted resolution time displayed in ticket detail as a range (e.g. '2\u20134 hours') with appropriate uncertainty framing"
+  ]
+}
