@@ -226,6 +226,23 @@ export const getTicketById = async (id) => {
 };
 
 /**
+ * Fetch an AI-predicted resolution time range for a ticket.
+ * @param {number|string} id - The ticket ID
+ * @returns {Promise<{estimated_hours:number, confidence_range:{lower_hours:number,upper_hours:number}, uncertainty_label:string, model_version:string}|null>}
+ */
+export const predictTicketResolutionTime = async (id) => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${id}/predict-resolution-time`, {
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch resolution time prediction');
+  } catch (error) {
+    console.error('Resolution time prediction error:', error);
+    return null;
+  }
+};
+
+/**
  * Get ticket activity history
  * @param {number|string} id - The ticket ID
  * @returns {Promise<Object>} Object with data array of history entries
@@ -770,6 +787,7 @@ export default {
   restoreTicket,
   reopenTicket,
   overrideTicketCategory,
+  predictTicketResolutionTime,
   requestTicketChat,
   initiateTicketChat,
   getTicketChat,
