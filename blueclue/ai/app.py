@@ -103,6 +103,7 @@ class TimeResponse(BaseModel):
     estimated_hours: float
     confidence_range: Dict[str, float]
     model_version: str
+    uncertainty_label: Optional[str] = None  # e.g. "2–4 hours"
 
 
 # ---- New schemas for monitoring / explainability / feedback -------------- #
@@ -467,6 +468,17 @@ class ModelManager:
         lower = max(0.5, estimated_hours * 0.7)
         upper = estimated_hours * 1.3
 
+        # Build human-readable uncertainty label (e.g. "2–4 hours" or "1–3 days")
+        def _fmt_hours(h: float) -> str:
+            if h < 1:
+                return "< 1 hour"
+            if h < 24:
+                return f"{int(round(h))} hour{'s' if round(h) != 1 else ''}"
+            days = h / 24
+            return f"{int(round(days))} day{'s' if round(days) != 1 else ''}"
+
+        uncertainty_label = f"{_fmt_hours(lower)} – {_fmt_hours(upper)}"
+
         return {
             "estimated_hours": round(estimated_hours, 2),
             "confidence_range": {
@@ -474,6 +486,7 @@ class ModelManager:
                 "upper_hours": round(upper, 2),
             },
             "model_version": self.time_card.get("version", "unknown"),
+            "uncertainty_label": uncertainty_label,
         }
 
     # ---- helpers ---------------------------------------------------------- #
@@ -1143,11 +1156,22 @@ async def predict_resolution_time(req: ClassifyRequest):
                 metadata=req.metadata)
         else:
             priority_hours = {"critical": 4, "high": 8, "medium": 24, "low": 48}
-            est = priority_hours.get(req.priority or "medium", 24)
+            est = float(priority_hours.get(req.priority or "medium", 24))
+            lower, upper = est * 0.5, est * 2.0
+
+            def _fmt_h(h: float) -> str:
+                if h < 1:
+                    return "< 1 hour"
+                if h < 24:
+                    return f"{int(round(h))} hour{'s' if round(h) != 1 else ''}"
+                days = h / 24
+                return f"{int(round(days))} day{'s' if round(days) != 1 else ''}"
+
             result = {
-                "estimated_hours": float(est),
-                "confidence_range": {"lower_hours": est * 0.5, "upper_hours": est * 2.0},
+                "estimated_hours": est,
+                "confidence_range": {"lower_hours": lower, "upper_hours": upper},
                 "model_version": "rule-based-fallback",
+                "uncertainty_label": f"{_fmt_h(lower)} \u2013 {_fmt_h(upper)}",
             }
 
         resp = TimeResponse(**result)
