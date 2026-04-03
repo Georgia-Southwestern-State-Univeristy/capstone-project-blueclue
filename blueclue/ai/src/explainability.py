@@ -345,10 +345,14 @@ class ExplainabilityEngine:
             else:
                 vals = shap_values[0]
 
+            # Ensure vals is a flat 1-D array of Python scalars so that
+            # abs() and sorted() work correctly regardless of SHAP version.
+            vals = np.asarray(vals).flatten()
+
             # Pair feature names with absolute SHAP values, sort descending
             scored = sorted(
                 zip(feature_names, vals),
-                key=lambda x: abs(x[1]),
+                key=lambda x: float(abs(x[1])),
                 reverse=True,
             )
 
@@ -374,9 +378,11 @@ class ExplainabilityEngine:
 
         except Exception as exc:
             logger.warning("SHAP explanation failed, falling back: %s", exc)
-            return self._feature_importance_explanation(
-                features, feature_names, "", prediction, confidence, top_n
-            )
+            if hasattr(self.model, "feature_importances_"):
+                return self._feature_importance_explanation(
+                    features, feature_names, "", prediction, confidence, top_n
+                )
+            return self._keyword_fallback("", prediction, confidence)
 
     def _feature_importance_explanation(
         self,
