@@ -1063,8 +1063,8 @@ function SettingsSidebar({ isOpen, onClose, onLogout }) {
 
       {/* ── Sub-Panel (slides left from behind the sidebar) ── */}
       <div
-        className={`fixed top-0 right-0 h-full w-[400px] border-l border-gray-700 shadow-2xl z-[70] transform transition-transform duration-300 ease-in-out ${
-          isOpen && activePanel ? 'translate-x-[-340px]' : 'translate-x-full'
+        className={`fixed top-0 right-0 h-full w-full sm:w-[400px] border-l border-gray-700 shadow-2xl z-[70] sm:z-[70] z-[85] transform transition-transform duration-300 ease-in-out ${
+          isOpen && activePanel ? 'translate-x-0 sm:translate-x-[-340px]' : 'translate-x-full'
         }`}
         style={{ backgroundColor: 'var(--bg-sub-panel)' }}
       >
@@ -1102,7 +1102,7 @@ function SettingsSidebar({ isOpen, onClose, onLogout }) {
 
       {/* ── Main Settings Sidebar ── */}
       <div
-        className={`fixed top-0 right-0 h-full w-[340px] bg-gray-900 border-l border-gray-700 shadow-2xl z-[80] transform transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 right-0 h-full w-full sm:w-[340px] bg-gray-900 border-l border-gray-700 shadow-2xl z-[80] transform transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
