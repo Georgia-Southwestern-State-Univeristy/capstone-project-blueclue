@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import NotificationPreferences from './NotificationPreferences';
+import TicketTemplateManager from './TicketTemplateManager';
 import { getUser, updateProfile, updateEmail, changePassword } from '../services/authService';
 import { useNavigate } from 'react-router-dom';
 import useTheme from '../hooks/useTheme';
@@ -972,6 +973,17 @@ const SECTIONS = [
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     ),
   },
+  {
+    key: 'templates',
+    label: 'Templates',
+    description: 'Create & manage ticket templates',
+    iconBg: 'bg-indigo-600/20',
+    iconColor: 'text-indigo-400',
+    roles: ['management', 'admin'],
+    icon: (
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    ),
+  },
 ];
 
 /* ── Main component ──────────────────────────────────────────────────── */
@@ -984,6 +996,13 @@ const SECTIONS = [
 function SettingsSidebar({ isOpen, onClose, onLogout }) {
   const [activePanel, setActivePanel] = useState(null); // key of open sub-panel
   const navigate = useNavigate();
+  const currentUser = getUser();
+
+  // Filter sections by user role
+  const visibleSections = SECTIONS.filter((s) => {
+    if (!s.roles) return true;
+    return s.roles.includes(currentUser?.role);
+  });
 
   // Handle full close — reset everything
   const handleClose = useCallback(() => {
@@ -1023,7 +1042,7 @@ function SettingsSidebar({ isOpen, onClose, onLogout }) {
   };
 
   // Resolve the sub-panel title from the active key
-  const activeSectionMeta = SECTIONS.find((s) => s.key === activePanel);
+  const activeSectionMeta = visibleSections.find((s) => s.key === activePanel);
 
   // Render the correct content inside the sub-panel
   const renderPanelContent = () => {
@@ -1040,6 +1059,8 @@ function SettingsSidebar({ isOpen, onClose, onLogout }) {
         return <AppearancePanelContent />;
       case 'about':
         return <AboutPanelContent />;
+      case 'templates':
+        return <TicketTemplateManager />;
       default:
         return null;
     }
@@ -1127,7 +1148,7 @@ function SettingsSidebar({ isOpen, onClose, onLogout }) {
 
         {/* Section list */}
         <div className="overflow-y-auto h-[calc(100%-65px)]">
-          {SECTIONS.map((section) => (
+          {visibleSections.map((section) => (
             <div key={section.key} className="border-b border-gray-800">
               <button
                 onClick={() => togglePanel(section.key)}
