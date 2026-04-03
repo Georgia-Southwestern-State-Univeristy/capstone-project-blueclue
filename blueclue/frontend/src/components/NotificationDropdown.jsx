@@ -61,7 +61,7 @@ function NotificationDropdown({ isOpen, onClose, onNotificationUpdate, onTicketC
   if (!isOpen) return null;
 
   return (
-    <div className="absolute right-0 mt-2 w-96 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-50">
+    <div className="fixed right-2 left-2 sm:left-auto top-16 sm:absolute sm:right-0 sm:top-auto sm:mt-2 sm:w-96 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-50">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
         <h3 className="text-lg font-semibold text-white">Notifications</h3>
