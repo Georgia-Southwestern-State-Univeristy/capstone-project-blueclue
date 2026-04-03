@@ -5,14 +5,15 @@
 import MLFeedback from '../models/MLFeedback.js';
 import MLModelVersion from '../models/MLModelVersion.js';
 import pool from '../config/database.js';
+import { BadRequestError } from '../middleware/errorHandler.js';
 
 const _rawAiUrl      = process.env.AI_SERVICE_URL || 'http://localhost:5000';
 const AI_SERVICE_URL  = /^https?:\/\//i.test(_rawAiUrl) ? _rawAiUrl : `http://${_rawAiUrl}`;
 const AI_TIMEOUT     = parseInt(process.env.AI_SERVICE_TIMEOUT, 10) || 8000;
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Internal helper: call Python ML service
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 async function callMLService(path, { method = 'GET', body = null } = {}) {
     const controller = new AbortController();
@@ -35,16 +36,15 @@ async function callMLService(path, { method = 'GET', body = null } = {}) {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Monitoring dashboard
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * GET /api/ml-admin/dashboard
  * Returns everything the ML admin dashboard needs in one call.
  */
 export const getDashboard = async (req, res) => {
-    try {
         const [
             mlMetrics,
             mlHealth,
@@ -116,36 +116,37 @@ export const getDashboard = async (req, res) => {
                 db_stats,
             },
         });
-    } catch (err) {
-        console.error('ML Admin dashboard error:', err);
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Explainability
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * POST /api/ml-admin/explain
  * Body: { text, subject?, model_type?, prediction?, confidence? }
  */
 export const explainPrediction = async (req, res) => {
-    try {
         const data = await callMLService('/explain', {
             method: 'POST',
             body: req.body,
         });
         return res.json({ success: true, data });
-    } catch (err) {
-        console.error('Explain error:', err);
-        return res.status(502).json({ success: false, message: err.message });
-    }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * GET /api/ml-admin/explain/global-features
+ * Returns top contributing features globally for each model type (category + priority).
+ * Proxied to the Python ML service GET /explain/global-features.
+ */
+export const getGlobalTopFeatures = async (req, res) => {
+    const data = await callMLService('/explain/global-features', { method: 'GET' });
+    return res.json({ success: true, data });
+};
+
+// -----------------------------------------------------------------------------
 // Feedback collection
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * POST /api/ml-admin/feedback
@@ -153,7 +154,6 @@ export const explainPrediction = async (req, res) => {
  * Body: FeedbackRequest (mirrors the Python schema)
  */
 export const submitFeedback = async (req, res) => {
-    try {
         const {
             ticket_id, classification_id,
             ai_category, ai_priority, ai_confidence,
@@ -163,7 +163,7 @@ export const submitFeedback = async (req, res) => {
         } = req.body;
 
         if (!ticket_id) {
-            return res.status(400).json({ success: false, message: 'ticket_id is required' });
+            throw new BadRequestError('ticket_id is required');
         }
 
         const record = await MLFeedback.create({
@@ -181,10 +181,6 @@ export const submitFeedback = async (req, res) => {
         });
 
         return res.status(201).json({ success: true, data: record });
-    } catch (err) {
-        console.error('Feedback submit error:', err);
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
 };
 
 /**
@@ -193,7 +189,6 @@ export const submitFeedback = async (req, res) => {
  * Query: limit, category, overridden_only
  */
 export const getFeedback = async (req, res) => {
-    try {
         const limit    = Math.min(parseInt(req.query.limit, 10) || 100, 500);
         const category = req.query.category || null;
         const onlyOverrides = req.query.overridden_only === 'true';
@@ -205,34 +200,92 @@ export const getFeedback = async (req, res) => {
         ]);
 
         return res.json({ success: true, data: { entries, stats, top_reasons: reasons } });
-    } catch (err) {
-        console.error('Get feedback error:', err);
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
 };
 
 /**
  * GET /api/ml-admin/feedback/override-rates
  */
 export const getOverrideRates = async (req, res) => {
-    try {
         const rates = await MLFeedback.getOverrideRates();
         return res.json({ success: true, data: rates });
-    } catch (err) {
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
+// Training feedback review  (admin-only workflow)
+// -----------------------------------------------------------------------------
+
+/**
+ * GET /api/ml-admin/feedback/training-summary
+ * Returns per-category override counts, most-corrected categories, pending count.
+ */
+export const getTrainingSummary = async (req, res) => {
+        const summary = await MLFeedback.getTrainingSummary();
+        return res.json({ success: true, data: summary });
+};
+
+/**
+ * GET /api/ml-admin/feedback/pending
+ * Returns feedback records awaiting admin review.
+ * Query: limit (default 100)
+ */
+export const getPendingFeedback = async (req, res) => {
+        const limit = Math.min(parseInt(req.query.limit, 10) || 100, 500);
+        const rows  = await MLFeedback.getPendingReview({ limit });
+        return res.json({ success: true, data: rows, count: rows.length });
+};
+
+/**
+ * PATCH /api/ml-admin/feedback/:id/approve
+ * Marks a feedback record as approved for training.
+ * Body: { note? }
+ */
+export const approveFeedback = async (req, res) => {
+        const feedbackId = parseInt(req.params.id, 10);
+        if (isNaN(feedbackId)) {
+            throw new BadRequestError('Invalid feedback id');
+        }
+        const record = await MLFeedback.approve(feedbackId, req.user.id, req.body.note || null);
+        if (!record) {
+            throw new BadRequestError('Feedback record not found');
+        }
+        return res.json({ success: true, data: record });
+};
+
+/**
+ * PATCH /api/ml-admin/feedback/:id/reject
+ * Marks a feedback record as rejected (excluded from training).
+ * Body: { note? }
+ */
+export const rejectFeedback = async (req, res) => {
+        const feedbackId = parseInt(req.params.id, 10);
+        if (isNaN(feedbackId)) {
+            throw new BadRequestError('Invalid feedback id');
+        }
+        const record = await MLFeedback.reject(feedbackId, req.user.id, req.body.note || null);
+        if (!record) {
+            throw new BadRequestError('Feedback record not found');
+        }
+        return res.json({ success: true, data: record });
+};
+
+/**
+ * POST /api/ml-admin/feedback/bulk-approve
+ * Bulk-approves all pending feedback records.
+ */
+export const bulkApproveFeedback = async (req, res) => {
+        const count = await MLFeedback.bulkApprove(req.user.id);
+        return res.json({ success: true, approved_count: count });
+};
+
+// -----------------------------------------------------------------------------
 // Drift detection
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * POST /api/ml-admin/drift/run
  * Body: { model_type, window_days }
  */
 export const runDriftDetection = async (req, res) => {
-    try {
         const data = await callMLService('/drift/run', {
             method: 'POST',
             body: { model_type: req.body.model_type || 'category', window_days: req.body.window_days || 30 },
@@ -266,10 +319,6 @@ export const runDriftDetection = async (req, res) => {
         }
 
         return res.json({ success: true, data });
-    } catch (err) {
-        console.error('Drift run error:', err);
-        return res.status(502).json({ success: false, message: err.message });
-    }
 };
 
 /**
@@ -277,7 +326,6 @@ export const runDriftDetection = async (req, res) => {
  * Query: model_type, limit
  */
 export const getDriftReports = async (req, res) => {
-    try {
         const modelType = req.query.model_type || null;
         const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
 
@@ -292,21 +340,17 @@ export const getDriftReports = async (req, res) => {
 
         const result = await pool.query(query, values);
         return res.json({ success: true, data: result.rows });
-    } catch (err) {
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Model version management
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * GET /api/ml-admin/models/versions
  * Query: model_type
  */
 export const getModelVersions = async (req, res) => {
-    try {
         // Try Python registry first (most up-to-date)
         const mlData = await callMLService(
             `/models/versions${req.query.model_type ? '?model_type=' + req.query.model_type : ''}`
@@ -322,10 +366,6 @@ export const getModelVersions = async (req, res) => {
                 db_versions: dbVersions,
             },
         });
-    } catch (err) {
-        console.error('Get model versions error:', err);
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
 };
 
 /**
@@ -333,10 +373,9 @@ export const getModelVersions = async (req, res) => {
  * Body: { model_type, version }
  */
 export const deployModelVersion = async (req, res) => {
-    try {
         const { model_type, version } = req.body;
         if (!model_type || !version) {
-            return res.status(400).json({ success: false, message: 'model_type and version are required' });
+            throw new BadRequestError('model_type and version are required');
         }
 
         const data = await callMLService('/models/deploy', {
@@ -348,10 +387,6 @@ export const deployModelVersion = async (req, res) => {
         await MLModelVersion.setActive(model_type, version).catch(() => null);
 
         return res.json({ success: true, data });
-    } catch (err) {
-        console.error('Deploy error:', err);
-        return res.status(502).json({ success: false, message: err.message });
-    }
 };
 
 /**
@@ -359,10 +394,9 @@ export const deployModelVersion = async (req, res) => {
  * Body: { model_type, target_version? }
  */
 export const rollbackModel = async (req, res) => {
-    try {
         const { model_type, target_version } = req.body;
         if (!model_type) {
-            return res.status(400).json({ success: false, message: 'model_type is required' });
+            throw new BadRequestError('model_type is required');
         }
 
         const data = await callMLService('/models/rollback', {
@@ -375,34 +409,25 @@ export const rollbackModel = async (req, res) => {
         }
 
         return res.json({ success: true, data });
-    } catch (err) {
-        console.error('Rollback error:', err);
-        return res.status(502).json({ success: false, message: err.message });
-    }
 };
 
 /**
  * GET /api/ml-admin/models/registry/history
  */
 export const getRegistryHistory = async (req, res) => {
-    try {
         const data = await callMLService('/models/registry/history');
         return res.json({ success: true, data });
-    } catch (err) {
-        return res.status(502).json({ success: false, message: err.message });
-    }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Retraining
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * POST /api/ml-admin/retrain
  * Body: { model_types?, auto_deploy?, improvement_threshold? }
  */
 export const triggerRetraining = async (req, res) => {
-    try {
         const modelTypes   = req.body.model_types || ['category', 'priority', 'time'];
         const triggeredBy  = req.body.triggered_by || 'manual';
 
@@ -424,10 +449,6 @@ export const triggerRetraining = async (req, res) => {
 
         const data = await callMLService('/retrain', { method: 'POST', body: payload });
         return res.json({ success: true, data: { ...data, db_run_id: dbRunId } });
-    } catch (err) {
-        console.error('Retrain trigger error:', err);
-        return res.status(502).json({ success: false, message: err.message });
-    }
 };
 
 /**
@@ -435,33 +456,25 @@ export const triggerRetraining = async (req, res) => {
  * Lists retraining run reports from DB.
  */
 export const getRetrainingRuns = async (req, res) => {
-    try {
         const result = await pool.query(
             `SELECT * FROM ml_retraining_runs ORDER BY started_at DESC LIMIT 50`
         );
         return res.json({ success: true, data: result.rows });
-    } catch (err) {
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Model health summary
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * GET /api/ml-admin/health
  */
 export const getMLHealth = async (req, res) => {
-    try {
         const [health, metrics] = await Promise.all([
             callMLService('/health'),
             callMLService('/metrics/rolling'),
         ]);
         return res.json({ success: true, data: { health, metrics } });
-    } catch (err) {
-        return res.status(502).json({ success: false, message: err.message });
-    }
 };
 
 /**
@@ -469,7 +482,6 @@ export const getMLHealth = async (req, res) => {
  * Returns recent AI classifications from DB.
  */
 export const getRecentPredictions = async (req, res) => {
-    try {
         const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
         const result = await pool.query(`
             SELECT
@@ -489,9 +501,6 @@ export const getRecentPredictions = async (req, res) => {
             LIMIT $1
         `, [limit]);
         return res.json({ success: true, data: result.rows });
-    } catch (err) {
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
 };
 
 /**
@@ -499,7 +508,6 @@ export const getRecentPredictions = async (req, res) => {
  * Export prediction log as JSON for analysis.
  */
 export const exportPredictions = async (req, res) => {
-    try {
         const since = req.query.since
             ? new Date(req.query.since)
             : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -521,7 +529,210 @@ export const exportPredictions = async (req, res) => {
         res.setHeader('Content-Disposition', 'attachment; filename="predictions_export.json"');
         res.setHeader('Content-Type', 'application/json');
         return res.json(result.rows);
-    } catch (err) {
-        return res.status(500).json({ success: false, message: 'Internal server error' });
-    }
+};
+
+// -----------------------------------------------------------------------------
+// Drift settings  (configurable thresholds – no code change required)
+// -----------------------------------------------------------------------------
+
+/**
+ * GET /api/ml-admin/drift/settings
+ * Returns drift configuration for all model types.
+ */
+export const getDriftSettings = async (req, res) => {
+        const result = await pool.query(
+            `SELECT * FROM ml_drift_settings ORDER BY model_type`
+        );
+        return res.json({ success: true, data: result.rows });
+};
+
+/**
+ * PUT /api/ml-admin/drift/settings/:modelType
+ * Update drift configuration for one model type.
+ * Body: { p_value_threshold?, window_days?, min_sample_size?,
+ *         schedule_enabled?, cron_expression?,
+ *         auto_retrain_enabled?, auto_deploy_on_retrain?, retrain_threshold? }
+ *
+ * Also reschedules the cron job if cron_expression or schedule_enabled changed.
+ */
+export const updateDriftSettings = async (req, res) => {
+        const { modelType } = req.params;
+        if (!['category', 'priority'].includes(modelType)) {
+            throw new BadRequestError('model_type must be "category" or "priority"');
+        }
+
+        const fields = [
+            'p_value_threshold', 'window_days', 'min_sample_size',
+            'schedule_enabled', 'cron_expression',
+            'auto_retrain_enabled', 'auto_deploy_on_retrain', 'retrain_threshold',
+        ];
+
+        const updates = [];
+        const values  = [];
+        for (const f of fields) {
+            if (req.body[f] !== undefined) {
+                values.push(req.body[f]);
+                updates.push(`${f} = $${values.length}`);
+            }
+        }
+
+        if (updates.length === 0) {
+            throw new BadRequestError('No valid fields provided to update');
+        }
+
+        values.push(req.user?.id || null);
+        updates.push(`updated_by = $${values.length}`);
+        updates.push('updated_at = NOW()');
+
+        values.push(modelType);
+        const query = `
+            UPDATE ml_drift_settings
+            SET ${updates.join(', ')}
+            WHERE model_type = $${values.length}
+            RETURNING *
+        `;
+
+        const { rows } = await pool.query(query, values);
+        if (!rows.length) {
+            throw new BadRequestError(`No settings row found for model_type "${modelType}"`);
+        }
+        const updated = rows[0];
+
+        // Reschedule the cron job with the new settings
+        try {
+            const { scheduleDriftJob } = await import('../jobs/driftMonitorJob.js');
+            if (updated.schedule_enabled) {
+                scheduleDriftJob(modelType, updated.cron_expression);
+            } else {
+                // Pass a never-firing expression to effectively pause the job
+                scheduleDriftJob(modelType, '0 0 31 2 *'); // Feb 31 – never fires
+            }
+        } catch (err) {
+            console.warn('[DriftSettings] Could not reschedule drift job:', err.message);
+        }
+
+        return res.json({ success: true, data: updated });
+};
+
+// -----------------------------------------------------------------------------
+// Drift alerts  (admin-panel notifications when drift is detected)
+// -----------------------------------------------------------------------------
+
+/**
+ * GET /api/ml-admin/drift/alerts
+ * Query: model_type?, acknowledged?, limit
+ */
+export const getDriftAlerts = async (req, res) => {
+        const limit      = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+        const modelType  = req.query.model_type || null;
+        const ackFilter  = req.query.acknowledged; // 'true' | 'false' | undefined
+
+        const conditions = [];
+        const values     = [];
+
+        if (modelType) {
+            values.push(modelType);
+            conditions.push(`a.model_type = $${values.length}`);
+        }
+        if (ackFilter === 'true') {
+            conditions.push('a.acknowledged = true');
+        } else if (ackFilter === 'false') {
+            conditions.push('a.acknowledged = false');
+        }
+
+        const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+        values.push(limit);
+
+        const { rows } = await pool.query(`
+            SELECT
+                a.*,
+                r.triggered_by   AS run_triggered_by,
+                r.status         AS run_status,
+                r.completed_at   AS run_completed_at,
+                u.first_name || ' ' || u.last_name AS acknowledged_by_name
+            FROM ml_drift_alerts a
+            LEFT JOIN ml_retraining_runs r ON r.id = a.retrain_run_id
+            LEFT JOIN users u ON u.id = a.acknowledged_by
+            ${where}
+            ORDER BY a.created_at DESC
+            LIMIT $${values.length}
+        `, values);
+
+        // Unread count
+        const { rows: countRows } = await pool.query(
+            `SELECT COUNT(*) AS cnt FROM ml_drift_alerts WHERE acknowledged = false`
+        );
+        const unread = parseInt(countRows[0]?.cnt || 0, 10);
+
+        return res.json({ success: true, data: rows, unread_count: unread });
+};
+
+/**
+ * PATCH /api/ml-admin/drift/alerts/:id/acknowledge
+ * Mark a drift alert as acknowledged.
+ */
+export const acknowledgeDriftAlert = async (req, res) => {
+        const alertId = parseInt(req.params.id, 10);
+        if (isNaN(alertId)) throw new BadRequestError('Invalid alert id');
+
+        const { rows } = await pool.query(`
+            UPDATE ml_drift_alerts
+            SET acknowledged    = true,
+                acknowledged_at = NOW(),
+                acknowledged_by = $1
+            WHERE id = $2
+            RETURNING *
+        `, [req.user?.id || null, alertId]);
+
+        if (!rows.length) throw new BadRequestError('Alert not found');
+        return res.json({ success: true, data: rows[0] });
+};
+
+/**
+ * POST /api/ml-admin/drift/alerts/acknowledge-all
+ * Acknowledge all unread alerts.
+ */
+export const acknowledgeAllDriftAlerts = async (req, res) => {
+        const { rowCount } = await pool.query(`
+            UPDATE ml_drift_alerts
+            SET acknowledged    = true,
+                acknowledged_at = NOW(),
+                acknowledged_by = $1
+            WHERE acknowledged = false
+        `, [req.user?.id || null]);
+
+        return res.json({ success: true, acknowledged_count: rowCount });
+};
+
+/**
+ * GET /api/ml-admin/drift/history
+ * Time-series of drift metric values for sparkline/chart rendering.
+ * Query: model_type, limit (default 60 = 2 months of daily runs)
+ */
+export const getDriftHistory = async (req, res) => {
+        const modelType = req.query.model_type || 'category';
+        const limit     = Math.min(parseInt(req.query.limit, 10) || 60, 365);
+
+        const { rows } = await pool.query(`
+            SELECT
+                id,
+                report_date,
+                model_type,
+                ks_statistic,
+                ks_p_value,
+                chi2_statistic,
+                chi2_p_value,
+                drift_detected,
+                drift_threshold,
+                sample_size,
+                alert_sent,
+                notes,
+                created_at
+            FROM ml_drift_reports
+            WHERE model_type = $1
+            ORDER BY report_date DESC, created_at DESC
+            LIMIT $2
+        `, [modelType, limit]);
+
+        return res.json({ success: true, data: rows.reverse() }); // chronological order
 };

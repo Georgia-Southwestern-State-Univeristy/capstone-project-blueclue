@@ -56,7 +56,7 @@ const WIDGET_REGISTRY = [
     description: 'Visual timeline of ticket activity and trends over time',
     icon: '',
     category: CATEGORIES.ANALYTICS,
-    permissions: ROLE_GROUPS.ALL,
+    permissions: ROLE_GROUPS.STAFF,
     size: {
       defaultW: 12, defaultH: 8,
       minW: 6, minH: 6,
@@ -173,10 +173,10 @@ const WIDGET_REGISTRY = [
   {
     key: 'techPerformance',
     name: 'Tech Performance',
-    description: 'Technician resolution times and workload metrics',
+    description: 'Technician resolution times and workload metrics (technicians see only their own)',
     icon: '',
     category: CATEGORIES.PERFORMANCE,
-    permissions: ROLE_GROUPS.MANAGERS,
+    permissions: ROLE_GROUPS.STAFF,
     size: {
       defaultW: 12, defaultH: 8,
       minW: 5, minH: 5,
@@ -338,6 +338,21 @@ const WIDGET_REGISTRY = [
   },
   // ── Client-specific widgets ──────────────────────────────────────────────
   {
+    key: 'createTicket',
+    name: 'Create a Ticket',
+    description: 'Submit a new support ticket directly from the dashboard',
+    icon: '✏️',
+    category: CATEGORIES.TICKETS,
+    permissions: ROLE_GROUPS.ALL,
+    size: {
+      defaultW: 12, defaultH: 10,
+      minW: 6, minH: 6,
+      maxW: 12, maxH: 18,
+    },
+    component: () => import('../components/CreateTicketWidget'),
+    previewPattern: 'card-grid',
+  },
+  {
     key: 'clientTickets',
     name: 'My Tickets',
     description: 'Your submitted tickets with status tracking',
@@ -351,6 +366,134 @@ const WIDGET_REGISTRY = [
     },
     component: () => import('../components/ClientTicketListWidget'),
     previewPattern: 'data-table',
+  },
+  // ── Management/Admin System Monitoring ───────────────────────────────────
+  {
+    key: 'auditHealth',
+    name: 'Audit Health',
+    description: 'Real-time audit logging system health status and monitoring',
+    icon: '🔍',
+    category: CATEGORIES.MANAGEMENT,
+    permissions: ROLE_GROUPS.MANAGERS,
+    size: {
+      defaultW: 12, defaultH: 10,
+      minW: 4, minH: 6,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/AuditHealthWidget'),
+    previewPattern: 'list-pending',
+  },
+  // ── Analytics: Ticket Trend ──────────────────────────────────────────────
+  {
+    key: 'ticketTrend',
+    name: 'Ticket Trend',
+    description: 'Opened vs resolved tickets over time',
+    icon: '📈',
+    category: CATEGORIES.ANALYTICS,
+    permissions: ROLE_GROUPS.STAFF,
+    size: {
+      defaultW: 12, defaultH: 8,
+      minW: 6, minH: 6,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/TicketTrendWidget'),
+    previewPattern: 'chart-trend',
+  },
+  // ── Analytics: Ticket Status Breakdown ───────────────────────────────────
+  {
+    key: 'ticketStatus',
+    name: 'Ticket Status',
+    description: 'Open ticket count with status breakdown',
+    icon: '📊',
+    category: CATEGORIES.ANALYTICS,
+    permissions: ROLE_GROUPS.STAFF,
+    size: {
+      defaultW: 6, defaultH: 7,
+      minW: 4, minH: 5,
+      maxW: 12, maxH: 14,
+    },
+    component: () => import('../components/TicketStatusWidget'),
+    previewPattern: 'chart-hbar',
+  },
+  // ── Performance: Tech Response Times ──────────────────────────────────────
+  {
+    key: 'techResponseTime',
+    name: 'Tech Response Times',
+    description: 'Average first-response time per technician with search',
+    icon: '⏱️',
+    category: CATEGORIES.PERFORMANCE,
+    permissions: ROLE_GROUPS.MANAGERS,
+    size: {
+      defaultW: 6, defaultH: 8,
+      minW: 4, minH: 6,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/TechResponseTimeWidget'),
+    previewPattern: 'clock-bars',
+  },
+  // ── Quick Access: Knowledge Base ──────────────────────────────────────────
+  {
+    key: 'knowledgeBase',
+    name: 'Knowledge Base',
+    description: 'Quick access to search and browse support articles',
+    icon: '📖',
+    category: CATEGORIES.TICKETS,
+    permissions: ROLE_GROUPS.ALL,
+    size: {
+      defaultW: 6, defaultH: 8,
+      minW: 4, minH: 6,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/KnowledgeBaseWidget'),
+    previewPattern: 'kb-search',
+  },
+  // ── Client: Ticket Update Log ─────────────────────────────────────────────
+  {
+    key: 'ticketUpdates',
+    name: 'Ticket Update Log',
+    description: 'Chronological log of all updates to your tickets',
+    icon: '📋',
+    category: CATEGORIES.TICKETS,
+    permissions: [ROLES.CUSTOMER],
+    size: {
+      defaultW: 12, defaultH: 10,
+      minW: 6, minH: 6,
+      maxW: 12, maxH: 20,
+    },
+    component: () => import('../components/ClientTicketUpdatesWidget'),
+    previewPattern: 'activity-list',
+  },
+
+  {
+    key: 'myAssignedTickets',
+    name: 'My Assigned Tickets',
+    description: 'Tickets currently assigned to you with search and filters',
+    icon: '📋',
+    category: CATEGORIES.TICKETS,
+    permissions: ROLE_GROUPS.TECHS,
+    size: {
+      defaultW: 12, defaultH: 11,
+      minW: 4, minH: 8,
+      maxW: 12, maxH: 20,
+    },
+    component: () => import('../components/MyAssignedTicketsWidget'),
+    previewPattern: 'card-grid',
+  },
+
+  {
+    key: 'recentActivity',
+    name: 'Recent Activity',
+    description: 'Live feed of all ticket activity with ticket IDs and change details',
+    icon: '🕐',
+    category: CATEGORIES.MANAGEMENT,
+    permissions: ROLE_GROUPS.MANAGERS,
+    size: {
+      defaultW: 6, defaultH: 8,
+      minW: 4, minH: 6,
+      maxW: 12, maxH: 16,
+    },
+    component: () => import('../components/RecentActivityWidget'),
+    previewPattern: 'activity-feed',
   },
 ]
 

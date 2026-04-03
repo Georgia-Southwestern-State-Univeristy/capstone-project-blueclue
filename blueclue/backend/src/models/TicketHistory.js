@@ -63,6 +63,59 @@ class TicketHistory {
     }
 
     /**
+     * Get ALL recent ticket activity across all tickets (all change types).
+     * For the Recent Activity widget (management only).
+     * @param {number} limit - Max entries to return (default 50)
+     * @returns {Array} Recent history entries
+     */
+    static async getAllRecentActivity(limit = 50) {
+        const query = `
+            SELECT 
+                th.*,
+                u.first_name || ' ' || u.last_name AS changed_by_name,
+                u.role AS changed_by_role,
+                t.ticket_number,
+                t.subject AS ticket_subject,
+                t.status AS ticket_status,
+                t.priority AS ticket_priority
+            FROM ticket_history th
+            LEFT JOIN users u ON th.changed_by = u.id
+            LEFT JOIN tickets t ON th.ticket_id = t.id
+            ORDER BY th.created_at DESC
+            LIMIT $1
+        `;
+        const result = await pool.query(query, [limit]);
+        return result.rows;
+    }
+
+    /**
+     * Get recent activity for tickets owned by a specific user (client view).
+     * @param {number} userId - The user ID who created the tickets
+     * @param {number} limit - Max entries to return (default 50)
+     * @returns {Array} Recent history entries for the user's tickets
+     */
+    static async getActivityForUser(userId, limit = 50) {
+        const query = `
+            SELECT 
+                th.*,
+                u.first_name || ' ' || u.last_name AS changed_by_name,
+                u.role AS changed_by_role,
+                t.ticket_number,
+                t.subject AS ticket_subject,
+                t.status AS ticket_status,
+                t.priority AS ticket_priority
+            FROM ticket_history th
+            LEFT JOIN users u ON th.changed_by = u.id
+            INNER JOIN tickets t ON th.ticket_id = t.id
+            WHERE t.customer_id = $1
+            ORDER BY th.created_at DESC
+            LIMIT $2
+        `;
+        const result = await pool.query(query, [userId, limit]);
+        return result.rows;
+    }
+
+    /**
      * Get all history entries for a ticket, with user names joined
      * @param {number} ticketId - The ticket ID
      * @returns {Array} History entries sorted by created_at DESC

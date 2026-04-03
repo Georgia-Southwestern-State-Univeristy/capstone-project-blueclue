@@ -1,18 +1,14 @@
-// src/controllers/configController.js
+﻿// src/controllers/configController.js
 import AIConfiguration from '../models/AIConfiguration.js';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../middleware/errorHandler.js';
 
 /**
  * Authorization check - only management and admin can access
  */
-const checkAuthorization = (req, res) => {
+const checkAuthorization = (req) => {
     if (!['management', 'admin'].includes(req.user?.role)) {
-        res.status(403).json({
-            status: 'error',
-            message: 'Insufficient permissions. Management or admin role required.'
-        });
-        return false;
+        throw new ForbiddenError('Insufficient permissions. Management or admin role required.');
     }
-    return true;
 };
 
 /**
@@ -20,8 +16,7 @@ const checkAuthorization = (req, res) => {
  * GET /api/config/ai
  */
 export const getAllConfigurations = async (req, res) => {
-    try {
-        if (!checkAuthorization(req, res)) return;
+        checkAuthorization(req);
 
         const configurations = await AIConfiguration.getAll();
 
@@ -30,14 +25,6 @@ export const getAllConfigurations = async (req, res) => {
             data: configurations
         });
 
-    } catch (error) {
-        console.error('Get configurations error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve configurations',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -45,17 +32,13 @@ export const getAllConfigurations = async (req, res) => {
  * GET /api/config/ai/:key
  */
 export const getConfiguration = async (req, res) => {
-    try {
-        if (!checkAuthorization(req, res)) return;
+        checkAuthorization(req);
 
         const { key } = req.params;
         const config = await AIConfiguration.getByKey(key);
 
         if (!config) {
-            return res.status(404).json({
-                status: 'error',
-                message: `Configuration '${key}' not found`
-            });
+            throw new NotFoundError(`Configuration '${key}' not found`);
         }
 
         res.json({
@@ -63,14 +46,6 @@ export const getConfiguration = async (req, res) => {
             data: config
         });
 
-    } catch (error) {
-        console.error('Get configuration error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve configuration',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -78,8 +53,7 @@ export const getConfiguration = async (req, res) => {
  * PUT /api/config/ai/priority-weights
  */
 export const updatePriorityWeights = async (req, res) => {
-    try {
-        if (!checkAuthorization(req, res)) return;
+        checkAuthorization(req);
 
         const {
             aiWeight,
@@ -114,11 +88,7 @@ export const updatePriorityWeights = async (req, res) => {
         }
 
         if (errors.length > 0) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Validation failed',
-                errors
-            });
+            throw new BadRequestError('Validation failed', errors);
         }
 
         // Update configuration
@@ -137,14 +107,6 @@ export const updatePriorityWeights = async (req, res) => {
             data: updatedConfig
         });
 
-    } catch (error) {
-        console.error('Update priority weights error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to update priority weights',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -152,8 +114,7 @@ export const updatePriorityWeights = async (req, res) => {
  * POST /api/config/ai/:key/reset
  */
 export const resetConfiguration = async (req, res) => {
-    try {
-        if (!checkAuthorization(req, res)) return;
+        checkAuthorization(req);
 
         const { key } = req.params;
 
@@ -174,10 +135,7 @@ export const resetConfiguration = async (req, res) => {
         };
 
         if (!defaults[key]) {
-            return res.status(404).json({
-                status: 'error',
-                message: `No default configuration available for '${key}'`
-            });
+            throw new NotFoundError(`No default configuration available for '${key}'`);
         }
 
         const updatedConfig = await AIConfiguration.update(key, defaults[key], req.user.id);
@@ -188,14 +146,6 @@ export const resetConfiguration = async (req, res) => {
             data: updatedConfig
         });
 
-    } catch (error) {
-        console.error('Reset configuration error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to reset configuration',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -203,8 +153,7 @@ export const resetConfiguration = async (req, res) => {
  * GET /api/config/ai/:key/history
  */
 export const getConfigurationHistory = async (req, res) => {
-    try {
-        if (!checkAuthorization(req, res)) return;
+        checkAuthorization(req);
 
         const { key } = req.params;
         const { limit = 50 } = req.query;
@@ -216,14 +165,6 @@ export const getConfigurationHistory = async (req, res) => {
             data: history
         });
 
-    } catch (error) {
-        console.error('Get configuration history error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve configuration history',
-            error: error.message
-        });
-    }
 };
 
 export default {

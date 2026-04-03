@@ -25,7 +25,9 @@ import {
     getDashboardSummary,
     exportAnalytics,
     clearCache,
-    getTicketsByFilter
+    getTicketsByFilter,
+    getTicketTrend,
+    getTicketStatusBreakdown
 } from '../controllers/analyticsController.js';
 import { getTemplateAnalytics } from '../controllers/templateController.js';
 import { authenticateToken } from '../middleware/auth.js';
@@ -226,10 +228,47 @@ router.post('/cache/clear', clearCache);
 router.get('/tickets-by-filter', getTicketsByFilter);
 
 /**
+ * @route   GET /api/analytics/ticket-trend
+ * @desc    Opened vs resolved tickets over time for trend chart
+ * @access  Staff (technicians, management, admin)
+ * @query   range (7d | 30d | 90d | 6m | 1y)
+ */
+router.get('/ticket-trend', getTicketTrend);
+
+/**
+ * @route   GET /api/analytics/ticket-status-breakdown
+ * @desc    Count of tickets grouped by status (excluding deleted)
+ * @access  Staff (technicians, management, admin)
+ */
+router.get('/ticket-status-breakdown', getTicketStatusBreakdown);
+
+/**
  * @route   GET /api/analytics/template-usage
  * @desc    Get template usage analytics and effectiveness metrics
  * @access  Management, Admin only
  */
 router.get('/template-usage', getTemplateAnalytics);
+
+/**
+ * @route   GET /api/analytics/recent-activity
+ * @desc    Get all recent ticket activity (all change types) for the activity widget
+ * @access  Management, Admin only
+ * @query   limit (default: 50)
+ */
+router.get('/recent-activity', async (req, res) => {
+  try {
+    const userRole = req.user.role;
+    if (userRole !== 'admin' && userRole !== 'management') {
+      return res.status(403).json({ status: 'error', message: 'Access denied' });
+    }
+    const TicketHistory = (await import('../models/TicketHistory.js')).default;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const activity = await TicketHistory.getAllRecentActivity(limit);
+    res.json({ status: 'success', count: activity.length, data: activity });
+  } catch (error) {
+    console.error('Get recent activity error:', error);
+    res.status(500).json({ status: 'error', message: 'Failed to retrieve recent activity' });
+  }
+});
 
 export default router;

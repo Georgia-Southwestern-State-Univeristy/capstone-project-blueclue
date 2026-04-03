@@ -9,6 +9,7 @@ import {
     validateEmailData 
 } from '../services/inboundEmailService.js';
 import { verifyChallenge } from '../services/spamProtectionService.js';
+import { AppError, BadRequestError, ForbiddenError } from '../middleware/errorHandler.js';
 
 /**
  * Check if email is a reply based on headers
@@ -27,12 +28,23 @@ const isReplyEmail = (emailData) => {
  * - Adds a comment to existing ticket (if reply email)
  */
 export const handleInboundEmail = async (req, res) => {
-    try {
         console.log('📧 Received inbound email webhook');
         console.log('📧 Headers:', JSON.stringify(req.headers, null, 2));
 
-        // Mailgun sends data in req.body (already parsed by express.urlencoded)
-        const emailData = req.body;
+        // Mailgun sends data in req.body - support both JSON and form-urlencoded
+        // JSON format: { "event-data": { ...emailData }, "signature": {...} }
+        // Form format: { sender: "...", from: "...", subject: "...", ... }
+        let emailData;
+        
+        if (req.body['event-data']) {
+            // JSON format (new Mailgun webhooks)
+            console.log('📧 Format: JSON (event-data)');
+            emailData = req.body['event-data'];
+        } else {
+            // Form-urlencoded format (legacy)
+            console.log('📧 Format: Form-urlencoded (legacy)');
+            emailData = req.body;
+        }
 
         // Log received data for debugging (sanitize sensitive info)
         console.log('📧 Email data:', JSON.stringify({
@@ -50,10 +62,7 @@ export const handleInboundEmail = async (req, res) => {
         const validation = validateEmailData(emailData);
         if (!validation.valid) {
             console.error('❌ Invalid email data:', validation.error);
-            return res.status(400).json({
-                status: 'error',
-                message: validation.error
-            });
+            throw new BadRequestError(validation.error);
         }
 
         // Check if this is a reply to an existing ticket
@@ -84,11 +93,7 @@ export const handleInboundEmail = async (req, res) => {
                 }
 
                 // Unauthorized or other error
-                return res.status(403).json({
-                    status: 'error',
-                    message: replyResult.message || 'Failed to process reply',
-                    reason: replyResult.reason
-                });
+                throw new ForbiddenError(replyResult.message || 'Failed to process reply', { reason: replyResult.reason });
             }
 
             // Reply added successfully
@@ -153,17 +158,6 @@ export const handleInboundEmail = async (req, res) => {
             }
         });
 
-    } catch (error) {
-        console.error('❌ Webhook error:', error);
-        
-        // Return error response
-        // Note: Mailgun will retry failed webhooks
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to process inbound email',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -195,20 +189,13 @@ export const webhookHealth = async (req, res) => {
 export const testInboundEmail = async (req, res) => {
     // Only allow in development
     if (process.env.NODE_ENV === 'production') {
-        return res.status(403).json({
-            status: 'error',
-            message: 'Test endpoint not available in production'
-        });
+        throw new ForbiddenError('Test endpoint not available in production');
     }
 
-    try {
         const { sender, subject, body, inReplyTo } = req.body;
 
         if (!sender || !subject || !body) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Test requires: sender, subject, body'
-            });
+            throw new BadRequestError('Test requires: sender, subject, body');
         }
 
         // Simulate Mailgun email data format
@@ -252,11 +239,7 @@ export const testInboundEmail = async (req, res) => {
                     });
                 }
 
-                return res.status(403).json({
-                    status: 'error',
-                    message: replyResult.message || 'Test reply failed',
-                    reason: replyResult.reason
-                });
+                throw new ForbiddenError(replyResult.message || 'Test reply failed', { reason: replyResult.reason });
             }
 
             return res.status(200).json({
@@ -295,14 +278,6 @@ export const testInboundEmail = async (req, res) => {
             }
         });
 
-    } catch (error) {
-        console.error('Test webhook error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to process test email',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -312,26 +287,19 @@ export const testInboundEmail = async (req, res) => {
  * Verifies the challenge token and processes the original email
  */
 export const handleEmailVerification = async (req, res) => {
-    try {
         const { token } = req.params;
         
         console.log(`🔒 Processing email verification for token: ${token.substring(0, 10)}...`);
         
         if (!token) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Verification token is required'
-            });
+            throw new BadRequestError('Verification token is required');
         }
         
         // Verify the challenge token
         const verificationResult = await verifyChallenge(token);
         
         if (!verificationResult.success) {
-            return res.status(400).json({
-                status: 'error',
-                message: verificationResult.reason || 'Invalid or expired verification token'
-            });
+            throw new BadRequestError(verificationResult.reason || 'Invalid or expired verification token');
         }
         
         // Process the original email that was held pending verification
@@ -377,10 +345,7 @@ export const handleEmailVerification = async (req, res) => {
         const result = await createTicketFromEmail(originalEmailData);
         
         if (!result.success) {
-            return res.status(400).json({
-                status: 'error',
-                message: result.message || 'Failed to create ticket after verification'
-            });
+            throw new BadRequestError(result.message || 'Failed to create ticket after verification');
         }
         
         return res.status(200).json({
@@ -396,12 +361,4 @@ export const handleEmailVerification = async (req, res) => {
             }
         });
         
-    } catch (error) {
-        console.error('❌ Email verification error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to process email verification',
-            error: error.message
-        });
-    }
 };

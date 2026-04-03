@@ -2,6 +2,7 @@
 import express from 'express';
 import User from '../models/User.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { checkRole } from '../middleware/rbac.js';
 import { getTechnicianWorkload } from '../controllers/collaboratorController.js';
 
 const router = express.Router();
@@ -31,10 +32,52 @@ router.get('/technicians', authenticateToken, async (req, res) => {
 });
 
 /**
+ * GET /api/users/directory
+ * Get all users for the staff directory
+ * Accessible by staff roles (technician, senior_technician, management, admin)
+ */
+router.get('/directory', authenticateToken, checkRole('technician', 'senior_technician', 'management', 'admin'), async (req, res) => {
+    try {
+        const { role, search } = req.query;
+        const users = await User.getAllUsers({ role, search, currentUserId: req.user.id });
+
+        res.status(200).json({
+            status: 'success',
+            count: users.length,
+            data: users
+        });
+    } catch (error) {
+        console.error('Get directory error:', error);
+        res.status(500).json({
+            status: 'error',
+            message: 'Failed to retrieve user directory',
+            error: error.message
+        });
+    }
+});
+
+/**
  * GET /api/users/:id/workload
  * Get workload statistics for a technician
  * Shows how many tickets they're assigned to (primary and assisting)
  */
 router.get('/:id/workload', authenticateToken, getTechnicianWorkload);
+
+/**
+ * GET /api/users/:id
+ * Get a single user by ID (for profile view)
+ */
+router.get('/:id', authenticateToken, async (req, res) => {
+    try {
+        const user = await User.getById(parseInt(req.params.id, 10));
+        if (!user) {
+            return res.status(404).json({ status: 'error', message: 'User not found' });
+        }
+        res.json({ status: 'success', data: user });
+    } catch (error) {
+        console.error('Get user by ID error:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to retrieve user' });
+    }
+});
 
 export default router;

@@ -106,6 +106,17 @@ class SyntheticDataGenerator:
                 ("Antivirus blocking application", "My antivirus is blocking {app} from running. I've tried adding an exception but it still blocks it.", ["security"], "medium"),
                 ("Suspicious popup messages", "I keep getting popup messages even when no browser is open. They ask me to call a number for support.", ["security"], "critical"),
                 ("Computer infected with virus", "I think my computer has a virus. It's running slow, showing popups, and my homepage changed without my doing.", ["security"], "critical"),
+                # Critical — data loss / ransomware / complete system failure
+                ("Ransomware detected — files encrypted", "We have detected ransomware on multiple systems. Files are being encrypted and we see ransom notes appearing. We have isolated affected machines but need immediate incident response.", ["security"], "critical"),
+                ("Database or file server data corruption", "Our database appears to be corrupted following an unclean shutdown. Several tables are returning errors and we cannot access critical business data.", ["os", "error"], "critical"),
+                ("Production system completely down", "Our {app} production instance is completely down. Users cannot log in and all services are returning 500 errors. This is a full business outage.", ["error", "application"], "critical"),
+                ("All company email stopped working", "No one in the company can send or receive email. Outlook and webmail are both showing errors. This started approximately {speed} hours ago.", ["office"], "critical"),
+
+                # False-urgency prevention — equipment requests worded urgently
+                ("Need new mouse ASAP", "Can I get a new mouse as soon as possible? Mine is a bit old and I'd like an upgrade.", ["peripheral"], "low"),
+                ("Urgent: need replacement keyboard", "Urgent request: my keyboard is a bit worn but functional. When can I get a replacement?", ["peripheral"], "low"),
+                ("ASAP monitor upgrade request", "I need a new monitor ASAP to improve my ergonomics. Not blocking work, just a request for an upgrade.", ["peripheral"], "low"),
+                ("Important: laptop choice help", "Important question when you have time — I'm trying to choose between two laptop models for my next upgrade.", ["peripheral"], "low"),
             ],
             "os_list": ["Windows 11", "Windows 10", "macOS", "Windows"],
             "office_apps": ["Excel", "Word", "Outlook", "PowerPoint", "Teams", "Office"],
@@ -140,8 +151,11 @@ class SyntheticDataGenerator:
                 ("VPN connection drops frequently", "My VPN connection drops every 15-20 minutes. I have to reconnect which interrupts my work.", ["vpn"], "medium"),
                 ("Slow speed when connected to VPN", "When I connect to VPN, my internet becomes extremely slow. Takes minutes to open a simple webpage.", ["vpn"], "medium"),
                 
-                # Performance
-                ("Network extremely slow for everyone", "Multiple people in my team are experiencing slow network. File transfers are taking forever.", ["performance"], "high"),
+                # Critical — complete operational stoppage
+                ("Server completely down, no access for team", "Our file server has been completely unreachable since this morning. No one in the office can access any shared files or network resources. We have {count} people unable to work.", ["connectivity", "performance"], "critical"),
+                ("Entire office network outage", "We have a complete network outage affecting our entire {city} office. No one can access the internet, internal systems, or VPN. It has been down for over {speed} hours.", ["connectivity", "wireless"], "critical"),
+                ("Network switch failure — all ports down", "The main network switch has failed and all connected devices have lost connectivity. This is affecting the entire floor / building.", ["connectivity", "lan"], "critical"),
+                ("DNS failure — no websites resolve", "Nothing works — the DNS server appears to be down. No websites or internal services resolve for anyone on the network.", ["connectivity", "performance"], "critical"),
                 ("Video calls have poor quality", "My video calls have terrible quality with constant freezing and audio delay. My internet speed seems fine.", ["performance"], "medium"),
             ],
             "devices": ["laptop", "computer", "desktop", "workstation"],
@@ -163,6 +177,11 @@ class SyntheticDataGenerator:
                 # Account locked
                 ("Account locked out", "My account is locked after too many login attempts. I was trying different passwords I thought might be correct.", ["account_locked"], "high"),
                 ("Account disabled", "I can't log in and the message says my account has been disabled. I don't know why this happened.", ["account_locked"], "critical"),
+                # Critical — all users locked out or authentication system down
+                ("All users locked out of domain", "Our entire team cannot log into any company systems. It appears the Active Directory / LDAP authentication service is down. No one can access email, files, or applications.", ["account_locked", "sso"], "critical"),
+                ("Authentication server down — company-wide login failure", "The authentication service is unreachable. All new login attempts are failing with a 'server unavailable' error across all applications.", ["sso", "account_locked"], "critical"),
+                ("Executive account breached — urgent security incident", "We believe the CEO or Finance Director account has been compromised. We are seeing login activity from a foreign IP address and need immediate account lockdown.", ["account_locked"], "critical"),
+
                 
                 # MFA issues
                 ("MFA code not working", "The code from my authenticator app isn't being accepted. I've tried multiple times with fresh codes.", ["mfa"], "high"),
@@ -184,7 +203,7 @@ class SyntheticDataGenerator:
         
         "billing": {
             "weight": 0.08,  # 8% of tickets
-            "subcategories": ["invoice", "payment", "subscription", "dispute"],
+            "subcategories": ["invoice", "payment", "subscription", "dispute", "account_suspended", "refund", "pricing"],
             "templates": [
                 ("Invoice not received", "I haven't received my invoice for {month}. Can you please resend it to my email?", ["invoice"], "low"),
                 ("Incorrect charge on invoice", "My invoice shows a charge of ${amount} that I don't recognize. Please explain this charge.", ["invoice"], "medium"),
@@ -194,14 +213,32 @@ class SyntheticDataGenerator:
                 ("Need to upgrade subscription", "I need to upgrade my subscription from Basic to Premium. Please advise on the process and pricing.", ["subscription"], "medium"),
                 ("Charged twice this month", "I was charged twice for my {service} subscription this month. Please refund the duplicate charge.", ["dispute"], "high"),
                 ("Refund not received", "I was promised a refund of ${amount} two weeks ago but I still haven't received it.", ["dispute"], "medium"),
+                # --- Additional billing templates for class augmentation ---
+                ("Subscription auto-renewed without notice", "My {service} subscription auto-renewed for ${amount} without any advance notification. I was not expecting this charge.", ["subscription", "dispute"], "medium"),
+                ("Need VAT or tax invoice", "I need a VAT / tax-compliant invoice for my {service} subscription for {month}. The standard invoice you sent doesn't include the required tax details.", ["invoice"], "low"),
+                ("Price increase not communicated", "I noticed my {service} subscription jumped from ${amount} to a higher rate this billing cycle. I never received any notice of a price increase.", ["pricing", "dispute"], "medium"),
+                ("Failed bank transfer / ACH payment", "My ACH bank transfer for this month's invoice failed. I've confirmed the bank account details are correct. Please advise on how to retry.", ["payment"], "high"),
+                ("Account suspended due to unpaid bill", "Our account has been suspended because of an unpaid invoice. We have already sent the payment — please confirm receipt and restore access immediately.", ["account_suspended", "payment"], "critical"),
+                ("Need itemized invoice breakdown", "My invoice for {month} shows a total of ${amount} but doesn't break down the charges by service or user seat. I need an itemized version for our finance team.", ["invoice"], "low"),
+                ("Refund for unused license seats", "We downgraded our plan mid-cycle and are owed a prorated refund for the unused {service} license seats. When can I expect this refund?", ["refund", "subscription"], "medium"),
+                ("Outage credit / SLA dispute", "Last month's service outage lasted over 4 hours, which exceeds our SLA. I'd like to request the service credit we're entitled to under the agreement.", ["dispute"], "medium"),
+                ("Need to update billing address", "Our company has moved offices. Please update the billing address on our account to the new location.", ["invoice"], "low"),
+                ("Request payment receipt for expense", "Could you send me a payment receipt for Invoice #{amount} dated {month}? I need it for an expense reimbursement claim.", ["invoice", "payment"], "low"),
+                ("Downgrade subscription plan", "I'd like to downgrade my {service} plan at the end of this billing period to reduce costs. Please confirm the process and the effective date.", ["subscription"], "low"),
+                ("Billing threshold alert firing unexpectedly", "I'm getting billing threshold alerts even though our usage hasn't changed. The alerts say we've hit ${amount} but my usage dashboard shows much less.", ["pricing"], "medium"),
+                ("Need to transfer billing contact", "{name} who was our billing contact has left the company. Please update the billing contact to myself and transfer the payment information securely.", ["payment", "invoice"], "medium"),
+                ("Early termination fee dispute", "We cancelled our {service} contract but were charged an early termination fee of ${amount}. According to our contract, no such fee applies after 12 months.", ["dispute"], "high"),
+                ("Credit card declined but card is valid", "Our corporate credit card is being declined for the {service} renewal even though the card is current and has available credit. Please help resolve this.", ["payment"], "high"),
+                ("Need multi-year licensing quote", "We are planning our {month} budget and would like a quote for a 3-year {service} license to take advantage of volume or multi-year pricing.", ["pricing", "subscription"], "low"),
+                ("Duplicate accounts being billed", "It looks like our company has two separate billing accounts for {service} and we are being charged twice. Please merge these accounts and issue a refund.", ["dispute", "subscription"], "high"),
             ],
-            "services": ["cloud storage", "premium support", "software license", "hosting"],
+            "services": ["cloud storage", "premium support", "software license", "hosting", "SaaS platform", "analytics suite", "backup service"],
             "months": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
         },
         
         "account": {
             "weight": 0.08,  # 8% of tickets 
-            "subcategories": ["profile", "settings", "permissions", "deletion"],
+            "subcategories": ["profile", "settings", "permissions", "deletion", "onboarding", "ownership", "audit"],
             "templates": [
                 ("Need to update my email address", "I recently got married and need to change my email address from {old_email} to {new_email}.", ["profile"], "low"),
                 ("Update my contact information", "Please update my phone number to {phone} in the system.", ["profile"], "low"),
@@ -210,14 +247,34 @@ class SyntheticDataGenerator:
                 ("Need additional permissions", "I need edit permissions for the {system} to do my job. Currently I only have view access.", ["permissions"], "medium"),
                 ("Remove user from system", "{name} has left the company and their account should be deactivated.", ["deletion"], "high"),
                 ("Request account deletion", "Please delete my account and all associated data as per GDPR requirements.", ["deletion"], "medium"),
+                # --- Additional account templates for class augmentation ---
+                ("Reset two-factor authentication method", "I got a new phone and no longer have access to my authentication app. I need someone to reset my two-factor authentication so I can set it up on the new device.", ["settings", "profile"], "high"),
+                ("Change username or login ID", "I'd like to change my username in the {system}. My current one is outdated and doesn't follow the new naming convention.", ["profile"], "low"),
+                ("Request role change to administrator", "I have taken on new responsibilities and need administrator access in {system}. My manager has approved this request.", ["permissions"], "medium"),
+                ("Account creation for new contractor", "We have a new contractor starting Monday. Please create an account in {system} with limited access appropriate for external contractors.", ["onboarding"], "medium"),
+                ("Re-enable account for returning employee", "{name} was a former employee and has rejoined the company. Their account was deactivated — please re-enable it with their previous role settings.", ["onboarding", "deletion"], "medium"),
+                ("Transfer account ownership after departure", "{name} is leaving this week and owns several shared resources in {system}. Please transfer ownership to me before their account is deactivated.", ["ownership", "deletion"], "high"),
+                ("Emergency data export for departing employee", "{name}'s termination is effective today and we need an immediate export of their data from {system} before their account is closed.", ["deletion", "ownership"], "critical"),
+                ("Request account activity audit log", "We need an audit log of all actions performed by {name} in {system} over the past 90 days for a compliance review.", ["audit"], "medium"),
+                ("Unlock frozen account", "My account appears to be frozen — I can log in but can't perform any actions and get a 'read-only mode' error everywhere.", ["settings"], "high"),
+                ("Update emergency contact in system", "I need to update my emergency contact information in the HR system. The current information is outdated.", ["profile"], "low"),
+                ("Link multiple accounts after company merger", "After our recent acquisition, I have two separate accounts in {system}. Please merge them into a single account with all my history preserved.", ["profile"], "medium"),
+                ("Grant temporary admin access for project", "I need temporary administrator access in {system} for a two-week project. Please set up the elevated permissions with an auto-expiry date.", ["permissions"], "medium"),
+                ("Account auto-locked due to inactivity", "My account in {system} was automatically locked because I was on leave for 6 weeks. Please unlock it and adjust the inactivity lockout policy for approved leave scenarios.", ["settings"], "medium"),
+                ("Restrict account to specific IP range", "For security purposes, I'd like to restrict my account login to our office IP range only. How can I configure this?", ["settings"], "low"),
+                ("Bulk deactivate accounts for project team", "Our project has concluded and the following 8 contractor accounts in {system} need to be deactivated: please process all accounts for the '{system}' project team.", ["deletion"], "medium"),
+                ("Account incorrectly showing as inactive", "My account in {system} is showing as 'inactive' even though I use it daily. This is causing reporting errors. Please correct the status.", ["settings"], "low"),
+                ("Set up shared team account", "Our team needs a shared service account in {system} to run scheduled tasks. Please create the account with the appropriate service-account permissions.", ["onboarding", "permissions"], "low"),
+                ("Account not appearing in directory", "My account does not appear in the company directory in {system}. Other employees cannot find me when they try to assign tasks or send messages.", ["profile"], "low"),
+                ("Need to change account language and locale", "I've relocated internationally and need to change the language and regional settings on my account in {system}, including date format and currency.", ["settings"], "low"),
             ],
-            "systems": ["project management", "file sharing", "CRM", "HR system"],
-            "names": ["John Smith", "Sarah Johnson", "Michael Chen", "Emily Davis"],
+            "systems": ["project management", "file sharing", "CRM", "HR system", "service desk", "identity management portal", "ERP"],
+            "names": ["John Smith", "Sarah Johnson", "Michael Chen", "Emily Davis", "Robert Wilson", "Jessica Lee"],
         },
         
         "feature_request": {
             "weight": 0.06,  # 6% of tickets
-            "subcategories": ["enhancement", "new_feature", "integration"],
+            "subcategories": ["enhancement", "new_feature", "integration", "accessibility", "reporting", "api"],
             "templates": [
                 ("Request for new feature", "It would be great if the {system} could {feature}. This would save our team a lot of time.", ["new_feature"], "low"),
                 ("Improvement suggestion", "The current {system} workflow is cumbersome. Could you add the ability to {feature}?", ["enhancement"], "low"),
@@ -225,11 +282,36 @@ class SyntheticDataGenerator:
                 ("Mobile app feature request", "Could you add {feature} to the mobile app? It's available on desktop but not mobile.", ["enhancement"], "low"),
                 ("Bulk action needed", "Please add the ability to {action} multiple items at once in the {system}.", ["enhancement"], "low"),
                 ("Dashboard customization", "I'd like to be able to customize my dashboard to show {feature}.", ["new_feature"], "low"),
+                # False-urgency prevention — feature requests worded urgently
+                ("Urgent feature request", "Urgently requesting that the {system} gets the ability to {feature}. Would be great to have.", ["new_feature"], "low"),
+                ("ASAP: need better reports", "I need better reporting ASAP. The current dashboard is missing {feature}. Not blocking, just a strong request.", ["enhancement"], "low"),
+                # --- Additional feature_request templates for class augmentation ---
+                ("API access for third-party integration", "Our development team needs API access to {system} so we can build a custom integration with our internal tools. Can you provide API documentation and credentials?", ["api", "integration"], "low"),
+                ("Export reports to PDF format", "The current {system} only allows CSV exports. Could you please add PDF export so we can share formatted reports with stakeholders who don't have system access?", ["reporting", "new_feature"], "low"),
+                ("Accessibility improvements for screen readers", "Our team has a colleague who uses a screen reader and has difficulty navigating {system}. Could you improve ARIA labeling and keyboard navigation to support accessibility standards?", ["accessibility", "enhancement"], "low"),
+                ("Custom report builder", "We would like a drag-and-drop custom report builder in {system} so we can create reports without needing to ask IT. The current fixed reports don't cover our use cases.", ["reporting", "new_feature"], "low"),
+                ("Dark mode for the interface", "Could you add a dark mode option to {system}? Working long hours with the current bright interface causes eye strain for many of our team members.", ["enhancement"], "low"),
+                ("Multi-language support", "Our company operates in multiple countries. Could you add support for additional languages in {system}, specifically Spanish, French, and German?", ["new_feature"], "low"),
+                ("Mobile push notifications", "I'd like to receive push notifications on my phone when a new {action} happens in {system}. Currently, the only option is email which I check less frequently.", ["new_feature", "enhancement"], "low"),
+                ("Webhook / event notification support", "Could you add webhook support to {system}? We want to trigger automated workflows in {other_system} when certain events occur, such as status changes.", ["api", "integration"], "low"),
+                ("AI-powered ticket suggestions in search", "It would be very helpful if {system} could use AI to suggest related articles or past tickets when I search, rather than just keyword matching.", ["new_feature"], "low"),
+                ("Two-factor authentication option", "Please add two-factor authentication as an option in {system}. Our security team has flagged the lack of MFA as a risk during our compliance review.", ["new_feature"], "low"),
+                ("Audit trail / activity history", "We need a full audit trail in {system} showing who changed what and when. This is required for our SOC 2 compliance audit next month.", ["new_feature"], "medium"),
+                ("Offline mode for mobile app", "Could you add an offline mode to the {system} mobile app? Our field technicians often work in areas with poor connectivity and need to enter data without internet access.", ["new_feature", "enhancement"], "low"),
+                ("Recurring task or ticket creation", "Please add the ability to set up recurring tickets or tasks in {system}. We have regular maintenance activities that need to be logged weekly.", ["enhancement"], "low"),
+                ("Saved search filters", "I'd like to be able to save my frequently used search filters in {system} so I don't have to re-enter them every time I open the tool.", ["enhancement"], "low"),
+                ("Calendar sync with {other_system}", "Could you add calendar synchronization between {system} and {other_system}? We want our scheduled tasks to appear in our team's calendar automatically.", ["integration"], "low"),
+                ("Batch import from CSV", "Please add the ability to import records into {system} from a CSV file. Currently we have to enter items one by one which is very time-consuming for large data sets.", ["enhancement", "new_feature"], "low"),
+                ("Granular role permissions", "The current {system} only has admin/user roles. We need more granular permissions so we can give certain users read-only access to specific modules without full admin rights.", ["new_feature"], "low"),
+                ("SLA tracking and alerting", "Could you add built-in SLA tracking to {system}? We need the system to automatically flag tickets that are approaching or have breached their SLA targets.", ["new_feature"], "medium"),
+                ("Copy ticket or duplicate template", "It would be helpful to be able to duplicate an existing ticket in {system} as a starting point for a new one. We frequently raise similar tickets with minor variations.", ["enhancement"], "low"),
+                ("White-label or custom branding", "Is it possible to customize the branding of the {system} interface with our company logo and color scheme for our client-facing portal?", ["enhancement"], "low"),
+                ("Improved search with boolean operators", "The search in {system} is very basic. Please add Boolean operators (AND, OR, NOT) and field-specific search so we can find tickets more precisely.", ["enhancement"], "low"),
             ],
-            "systems": ["project management tool", "reporting system", "dashboard", "mobile app", "portal"],
-            "features": ["export to Excel", "batch delete", "custom notifications", "dark mode", "keyboard shortcuts", "auto-save"],
-            "other_systems": ["Slack", "Teams", "Salesforce", "JIRA", "Google Drive"],
-            "actions": ["delete", "archive", "assign", "tag", "export"],
+            "systems": ["project management tool", "reporting system", "dashboard", "mobile app", "portal", "ticketing system", "knowledge base"],
+            "features": ["export to Excel", "batch delete", "custom notifications", "dark mode", "keyboard shortcuts", "auto-save", "smart search", "real-time status updates"],
+            "other_systems": ["Slack", "Teams", "Salesforce", "JIRA", "Google Drive", "ServiceNow", "Zapier"],
+            "actions": ["delete", "archive", "assign", "tag", "export", "approve", "escalate"],
         },
         
         "other": {
@@ -243,6 +325,10 @@ class SyntheticDataGenerator:
                 ("Conference room booking issue", "I'm having trouble booking conference room {room} for my meeting tomorrow.", ["general"], "medium"),
                 ("Equipment request", "I need to request a {equipment} for my work. What's the process?", ["inquiry"], "low"),
                 ("Office supplies needed", "My team needs {supplies}. How do I order them?", ["inquiry"], "low"),
+                # False-urgency prevention — informational / scheduling
+                ("Urgent: when is IT training?", "Urgent request: when is the next IT training session? I want to sign up before it fills up.", ["inquiry"], "low"),
+                ("ASAP: IT training schedule", "Can someone tell me ASAP when the next IT orientation is? I'm a new hire and want to attend.", ["inquiry"], "low"),
+                ("Important: training materials request", "This is important to me personally — can I get a link to the onboarding IT training materials?", ["inquiry"], "low"),
             ],
             "topics": ["pricing plans", "service levels", "maintenance windows", "company policies"],
             "tasks": ["export data", "change settings", "add team members", "generate reports"],
@@ -255,7 +341,11 @@ class SyntheticDataGenerator:
     }
     
     PRIORITIES = ["low", "medium", "high", "critical"]
-    PRIORITY_WEIGHTS = {"low": 0.40, "medium": 0.35, "high": 0.20, "critical": 0.05}  # Target distribution
+    # More balanced distribution reduces class imbalance for the ML priority model.
+    # Raised HIGH from 0.20 → 0.27 and CRITICAL from 0.05 → 0.08 to give the
+    # model sufficient training signal for urgent tickets.
+    # Reduced LOW from 0.40 → 0.30 to lower the baseline bias toward low.
+    PRIORITY_WEIGHTS = {"low": 0.30, "medium": 0.35, "high": 0.27, "critical": 0.08}  # Target distribution
     
     # User companies for metadata
     COMPANIES = [

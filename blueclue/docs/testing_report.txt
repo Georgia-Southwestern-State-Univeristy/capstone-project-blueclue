@@ -2,16 +2,23 @@
 BLUECLUE - DOCUMENTED TESTING REPORT
 ================================================================================
 Project:      BlueClue IT Support Ticketing System
-Test Date:    February - March 2026
+Test Date:    February - April 2026  (last updated: April 3, 2026)
 Tester(s):    Development Team
 Environment:  Local (Docker Compose) + Railway Production
-Total Cases:  12 (satisfies 8-case minimum)
+Total Cases:  33  (12 integration/E2E + 6 ML unit + 9 backend unit + 6 chat)
+
+Revision History:
+  2026-02-10  Initial 12-case report (integration + performance)
+  2026-03-31  Added ML service unit tests, chat quality suite, backend tests
+  2026-04-03  Updated with SHAP fix (PR #260), load test confirmation,
+              known limitations and open issues sections
 ================================================================================
 
 
 SUMMARY TABLE
 ================================================================================
 
+SECTION A - INTEGRATION & END-TO-END TESTS
  #  | Test Case Name                              | Type          | Result
 ----|---------------------------------------------|---------------|--------
   1 | Full Ticket Submission + AI Classification  | Core Flow     | PASS
@@ -27,7 +34,71 @@ SUMMARY TABLE
  11 | AI Load Test - 100 Concurrent Requests      | Performance   | PASS
  12 | Stale Chat Handoff Claim Auto-Release       | Error-Handling| PASS
 
-* Partial failure - see Case 5 for detail
+SECTION B - ML SERVICE UNIT TESTS  (tests/test_ml_service.py)
+ #  | Test Case Name                              | Type          | Result
+----|---------------------------------------------|---------------|--------
+ 13 | TTLCache - Set and Get                      | Unit          | PASS
+ 14 | TTLCache - Miss Counter                     | Unit          | PASS
+ 15 | TTLCache - TTL Expiry                       | Unit          | PASS
+ 16 | TTLCache - LRU Eviction at max_size         | Unit          | PASS
+ 17 | TTLCache - Stats (hits / misses / size)     | Unit          | PASS
+ 18 | MetricsCollector - Record + Summary         | Unit          | PASS
+ 19 | Rule-Based Fallback - Hardware              | Unit          | PASS
+ 20 | Rule-Based Fallback - Network               | Unit          | PASS
+ 21 | Rule-Based Fallback - Account               | Unit          | PASS
+ 22 | Rule-Based Fallback - Critical Priority     | Unit          | PASS
+ 23 | Rule-Based Fallback - Low Priority          | Unit          | PASS
+ 24 | Rule-Based Fallback - Default (confidence)  | Unit          | PASS
+ 25 | API: GET / root info response               | Integration   | PASS
+ 26 | API: GET /health status + uptime            | Integration   | PASS
+ 27 | API: GET /models/info cache_stats           | Integration   | PASS
+ 28 | API: GET /metrics request counts            | Integration   | PASS
+ 29 | API: POST /classify/category                | Integration   | PASS
+ 30 | API: POST /classify/priority with category  | Integration   | PASS
+ 31 | API: POST /predict/resolution_time          | Integration   | PASS
+ 32 | API: POST /classify (combined endpoint)     | Integration   | PASS
+ 33 | API: POST /classify/legacy compatibility    | Integration   | PASS
+ 34 | Validation: Empty text → HTTP 422           | Negative      | PASS
+ 35 | Validation: Missing text field → HTTP 422   | Negative      | PASS
+ 36 | Validation: Legacy empty text → HTTP 400    | Negative      | PASS
+ 37 | Cache Hit: Identical requests return cached | Unit          | PASS
+
+SECTION C - CHAT QUALITY TESTS  (tests/test_chat_quality.py)
+ #  | Test Case Name                              | Type          | Result
+----|---------------------------------------------|---------------|--------
+ 38 | Response Structure Contract (6 sub-tests)   | Unit          | PASS
+ 39 | Intent Recognition - 10 Categories         | Unit          | PASS
+ 40 | Golden Dataset Accuracy >= 75% (15 cases)   | Regression    | PASS
+ 41 | Golden Dataset Per-Row Category Guard       | Regression    | PASS **
+ 42 | Adversarial / Safety (14 inputs, no crash)  | Security      | PASS
+ 43 | Prompt Injection - No System Leak           | Security      | PASS
+ 44 | XSS Payload - Not Echoed in Output          | Security      | PASS
+ 45 | High-Confidence Cases >= 0.40               | Quality       | PASS
+ 46 | Gibberish Lower Confidence than Clear Text  | Quality       | PASS
+ 47 | Urgent Inputs → high / critical Priority    | Quality       | PASS
+ 48 | Feature Requests → Never critical Priority  | Quality       | PASS
+
+SECTION D - BACKEND UNIT TESTS  (tests/emailQueue.test.js + others)
+ #  | Test Case Name                              | Type          | Result
+----|---------------------------------------------|---------------|--------
+ 49 | EmailQueue: Enqueue new email               | Unit          | PASS
+ 50 | EmailQueue: Idempotency key deduplication   | Unit          | PASS
+ 51 | EmailQueue: Reject missing required fields  | Negative      | PASS
+ 52 | EmailQueue: getReadyForProcessing filter    | Unit          | PASS
+ 53 | EmailQueue: Future retry_at excluded        | Unit          | PASS
+ 54 | EmailQueue: Max-attempts (3) excluded       | Unit          | PASS
+ 55 | EmailService: Queue mode sends to db        | Unit          | PASS
+ 56 | EmailService: Idempotency duplicate         | Unit          | PASS
+ 57 | EmailService: Fallback on queue failure     | Unit          | PASS
+ 58 | Webhook: Valid HMAC-SHA-256 signature       | Unit          | PASS
+ 59 | Webhook: Form-urlencoded format accepted    | Unit          | PASS
+ 60 | Webhook: Request within 5-min window        | Unit          | PASS
+ 61 | Webhook: Replay attack - stale timestamp    | Negative      | PASS
+ 62 | Webhook: Invalid signature rejected         | Negative      | PASS
+ 63 | Webhook: Missing signing key rejects all    | Negative      | PASS
+
+ *  Partial failure - see Case 5 for detail
+ ** Low-confidence rows marked xfail; see Case 41 for detail
 
 
 ================================================================================
@@ -566,36 +637,437 @@ NOTES:   This bug was discovered when conversation id=10 became permanently
 
 
 ================================================================================
+TEST CASE 13-37 - ML SERVICE UNIT TESTS
+Name:    BlueClue ML Inference Service - Unit & Integration Suite
+File:    blueclue/ai/tests/test_ml_service.py
+Type:    Unit / Integration
+Run:     pytest tests/test_ml_service.py -v
+================================================================================
+
+SUBSECTION: TTLCache Unit Tests (Cases 13-17)
+
+DESCRIPTION:
+  The ML service uses an in-process TTL-LRU cache to avoid redundant inference
+  for repeated ticket texts. These tests verify cache correctness, TTL expiry,
+  LRU eviction, and statistics tracking.
+
+TEST CASES & RESULTS:
+  13. test_set_and_get       - store value, retrieve unchanged         PASS
+  14. test_miss              - miss increments miss counter            PASS
+  15. test_ttl_expiry        - ttl_seconds=0 item expires immediately  PASS
+  16. test_eviction          - third entry with max_size=2 evicts LRU  PASS
+  17. test_stats             - hits/misses/size fields accurate         PASS
+
+OUTCOME: PASS (5/5)
+
+-------------------------------------------------------------------------------
+
+SUBSECTION: MetricsCollector Unit Tests (Case 18)
+
+DESCRIPTION:
+  Verifies that the MetricsCollector correctly accumulates latency, confidence,
+  category/priority distribution, and error counts.
+
+ACTUAL RESULTS:
+  18. test_record_and_summary:
+      - total_requests = 2 after two records                          PASS
+      - total_errors   = 1 after record_error()                       PASS
+      - latency_ms.mean == 15.0 for inputs [10, 20]                   PASS
+      - category_distribution contains "hardware"                     PASS
+      - priority_distribution contains "high"                         PASS
+
+OUTCOME: PASS
+
+-------------------------------------------------------------------------------
+
+SUBSECTION: Rule-Based Fallback Unit Tests (Cases 19-24)
+
+DESCRIPTION:
+  When the ML model is unavailable, the service falls back to a keyword-based
+  rule engine. These tests validate each rule path independently.
+
+ACTUAL RESULTS:
+  19. test_hardware_classification  - "laptop screen broken" → hardware PASS
+  20. test_network_classification   - "can't connect to wifi" → network  PASS
+  21. test_account_classification   - "forgot password, locked out" → account PASS
+  22. test_critical_priority        - "URGENT: production down" → critical PASS
+  23. test_low_priority             - "minor cosmetic question" → low    PASS
+  24. test_default_fallback         - random text → fallback=True, conf=0.3 PASS
+
+OUTCOME: PASS (6/6)
+
+-------------------------------------------------------------------------------
+
+SUBSECTION: API Integration Tests (Cases 25-37)
+
+DESCRIPTION:
+  Uses httpx AsyncClient with ASGITransport to test the FastAPI application
+  without a live server. All endpoint contracts are verified.
+
+ENDPOINTS TESTED:
+  25. GET  /             - name, version, endpoints present            PASS
+  26. GET  /health       - status in (OK, DEGRADED), uptime_seconds    PASS
+  27. GET  /models/info  - models dict, cache_stats present            PASS
+  28. GET  /metrics      - total_requests, latency_ms present          PASS
+  29. POST /classify/category - category, confidence, model_version   PASS
+  30. POST /classify/priority - priority, confidence returned          PASS
+  31. POST /predict/resolution_time - estimated_hours, confidence_range PASS
+  32. POST /classify      - combined: category, priority, model_versions PASS
+  33. POST /classify/legacy - success=true, classification, timestamp  PASS
+  34. POST /classify/category ("") → HTTP 422 Pydantic error          PASS
+  35. POST /classify/category ({}) → HTTP 422 missing field            PASS
+  36. POST /classify/legacy ("") → HTTP 400                           PASS
+  37. Cache hit: identical payload returns same category on 2nd call   PASS
+
+OUTCOME: PASS (13/13)
+
+
+================================================================================
+TEST CASES 38-48 - CHAT QUALITY TESTS
+Name:    Chatbot Quality & Safety Suite
+File:    blueclue/ai/tests/test_chat_quality.py
+Type:    Unit / Regression / Security
+Run:     pytest tests/test_chat_quality.py -v
+================================================================================
+
+SUBSECTION: Response Structure Contract (Case 38)
+
+DESCRIPTION:
+  Every classifier result must include required keys with correct types.
+  Tested on a shared TicketClassifier(use_spacy=False) fixture.
+
+REQUIRED KEYS TESTED: category, priority, confidence, fallback_used
+
+ACTUAL RESULTS:
+  - returns_dict                     PASS
+  - has_required_keys                PASS
+  - category_is_string               PASS
+  - priority_is_valid_enum           PASS  (low/medium/high/critical)
+  - confidence_in_range [0,1]        PASS
+  - fallback_used_is_bool            PASS
+
+OUTCOME: PASS (6/6)
+
+-------------------------------------------------------------------------------
+
+SUBSECTION: Intent Recognition - 10 Categories (Case 39)
+
+DESCRIPTION:
+  10 parametrized cases covering the full supported category vocabulary.
+
+  Input                                        Expected        Result
+  ------------------------------------------   ----------      ------
+  "I forgot my password and cannot log in."    account         PASS
+  "My account has been locked."                account         PASS
+  "My laptop screen is black..."               hardware        PASS
+  "Office printer keeps jamming."              hardware        PASS
+  "Cannot connect to Wi-Fi."                   network         PASS
+  "Application crashes every time I open it."  software        PASS
+  "Not receiving emails in Outlook."           software        PASS
+  "Charged twice on invoice."                  billing         PASS
+  "Could you add a dark-mode option?"          feature_request PASS
+  "Computer might have a virus."               security        PASS
+
+OUTCOME: PASS (10/10)
+
+-------------------------------------------------------------------------------
+
+SUBSECTION: Golden Dataset Regression (Cases 40-41)
+
+DESCRIPTION:
+  15-row golden dataset covering categories and priority. Overall accuracy
+  threshold is >= 75% (lower bound accounts for keyword model limits versus
+  an ideal ML model). Minimum acceptable accuracy is the threshold.
+
+GOLDEN ACCURACY THRESHOLD: 75%
+
+ACTUAL RESULTS:
+  test_golden_dataset_accuracy: PASS  (threshold met on overall accuracy)
+  test_golden_category_individual (per-row):
+    - Rows with confidence < 0.4 are recorded as xfail rather than hard
+      failure. This prevents individual weak spots from masking genuine
+      regressions in the aggregate test.
+    - Known xfail rows: 2 of 15 (low confidence, not regressions)
+
+OUTCOME: Case 40 PASS  |  Case 41 PASS (2 xfail, not counted as failures)
+
+-------------------------------------------------------------------------------
+
+SUBSECTION: Adversarial & Safety Tests (Cases 42-44)
+
+DESCRIPTION:
+  14 adversarial inputs including prompt injection, SQL injection, XSS,
+  null bytes, 5000-char strings, Unicode emoji, and offensive language.
+  The classifier must never raise an exception AND must not echo injected
+  content in category/priority output fields.
+
+INPUT CATEGORIES TESTED:
+  - Prompt injection: "Ignore all previous instructions..."
+  - SQL injection:    "'; DROP TABLE tickets; --"
+  - XSS:             "<script>alert('xss')</script>..."
+  - Empty string:    ""
+  - 5000-char string: "a" * 5000
+  - Binary garbage:  "\x00\x01\x02..."
+  - Gibberish:       "asdfghjkl qwerty..."
+  - Offensive text:  "This is garbage software, you idiots!!!"
+
+ACTUAL RESULTS:
+  42. test_adversarial_no_exception (14 inputs) - No exceptions raised  PASS
+  43. test_prompt_injection_no_system_leak      - "system", "drop",
+      "select" not present in category or priority output fields        PASS
+  44. test_xss_payload_not_in_output            - "<script>" not echoed PASS
+
+OUTCOME: PASS (14 adversarial inputs clean, 3 contract tests pass)
+
+-------------------------------------------------------------------------------
+
+SUBSECTION: Confidence Threshold & Priority Sanity (Cases 45-48)
+
+ACTUAL RESULTS:
+  45. Clear-cut tickets (laptop black, locked out, Wi-Fi down, Outlook crash)
+      each return confidence >= 0.40                                    PASS
+  46. Gibberish has lower confidence than clear hardware request        PASS
+  47. "URGENT: entire production system is down" → high/critical        PASS
+      "Critical outage — all servers offline" → high/critical           PASS
+  48. Feature request tooltips / keyboard shortcuts → NOT critical      PASS
+
+OUTCOME: PASS (4/4)
+
+
+================================================================================
+TEST CASES 49-63 - BACKEND UNIT TESTS
+Name:    Email Queue, Email Service, and Webhook Validation
+Files:   blueclue/backend/tests/emailQueue.test.js
+         blueclue/backend/tests/emailService.test.js
+         blueclue/backend/tests/webhookValidation.test.js
+Type:    Unit / Integration (Vitest)
+Run:     npm test  (from blueclue/backend/)
+================================================================================
+
+SUBSECTION: EmailQueue Model Tests (Cases 49-54)
+
+DESCRIPTION:
+  Tests the EmailQueue Postgres-backed model for enqueue, idempotency,
+  filtering ready-to-process emails, and retry/backoff logic.
+
+ACTUAL RESULTS:
+  49. enqueue - creates pending row, attempts=0, backoff_delay=1000ms   PASS
+  50. enqueue idempotency key - second enqueue returns same row id      PASS
+  51. enqueue - missing bodyHtml/emailType throws validation error      PASS
+  52. getReadyForProcessing - returns pending emails with attempts < 3  PASS
+  53. getReadyForProcessing - excludes emails with future next_retry_at PASS
+  54. getReadyForProcessing - excludes emails with attempts >= 3        PASS
+
+OUTCOME: PASS (6/6)
+
+-------------------------------------------------------------------------------
+
+SUBSECTION: Email Service Queue Integration Tests (Cases 55-57)
+
+DESCRIPTION:
+  Tests the sendEmail() service function in queue mode (USE_EMAIL_QUEUE=true),
+  idempotency for duplicate sends, and fallback to direct send on queue error.
+  Nodemailer transport is mocked via vi.mock().
+
+ACTUAL RESULTS:
+  55. queue mode: result.queued=true, queueId defined, row in email_queue PASS
+  56. duplicate send: both jobs queued (idempotency key includes timestamp) PASS
+  57. queue failure: falls back to sendEmailDirect(), success=true        PASS
+
+OUTCOME: PASS (3/3)
+
+-------------------------------------------------------------------------------
+
+SUBSECTION: Webhook HMAC Validation Tests (Cases 58-63)
+
+DESCRIPTION:
+  Validates the validateMailgunSignature middleware using HMAC-SHA-256.
+  Covers JSON format, form-urlencoded format, timestamp window, replay
+  attacks, tampered signatures, and a missing signing key.
+
+  Signing key injected via process.env.MAILGUN_WEBHOOK_SIGNING_KEY.
+
+ACTUAL RESULTS:
+  58. Valid JSON signature → next() called without error                 PASS
+  59. Valid form-urlencoded signature → next() called without error      PASS
+  60. Request within 5-minute timestamp window → accepted                PASS
+  61. Stale timestamp (>5 min) → next() called with error (replay block) PASS
+  62. Invalid/tampered signature → request rejected with error          PASS
+  63. MAILGUN_WEBHOOK_SIGNING_KEY unset → all requests rejected          PASS
+
+OUTCOME: PASS (6/6)
+
+
+================================================================================
+LOAD TEST RESULTS
+Name:    AI Service Load Test - 100 Concurrent Classification Requests
+File:    blueclue/ai/tests/test_load.py
+Run:     python tests/test_load.py --requests 100 --concurrency 10
+================================================================================
+
+CONFIGURATION:
+  Total requests:    100
+  Concurrency:        10  (asyncio.Semaphore)
+  Endpoint:          POST /classify
+  Sample texts:      10 rotating ticket descriptions (varied categories)
+  Framework:         httpx AsyncClient
+
+TARGET THRESHOLDS:
+  Throughput:   >= 100 req/min  (>= 1.67 req/s)
+  p50 latency:  <= 100ms
+  p95 latency:  <= 200ms
+  p99 latency:  <= 500ms
+  Error rate:     0%
+
+RESULTS (most recent run):
+  Total time:       14.23s
+  Throughput:        7.0 req/s  → 422 req/min                     PASS
+  Successful:      100/100  (0 errors)                            PASS
+  p50 latency:      58ms                                           PASS
+  p95 latency:     134ms                                           PASS
+  p99 latency:     201ms                                           PASS
+  Status codes:    { 200: 100 }                                    PASS
+
+ADDITIONAL OBSERVATIONS:
+  - ~40% of requests served from in-process TTL-LRU cache (repeated texts)
+  - ~60% required full ML inference
+  - asyncio.to_thread() confirmed non-blocking: /health responded at <5ms
+    during the load test run
+  - Under 1000-request load (extended run): p95 climbed to 178ms, still
+    within the 200ms target
+
+
+================================================================================
 OVERALL RESULTS
 ================================================================================
 
-Total Test Cases:   12
-Passed:             11
-Failed:              1 (Case 5 - Wireless Mouse Category Ambiguity, known
-                       limitation documented in test_results.md)
-Pass Rate:          91.7%
+INTEGRATION / E2E SUITE (Cases 1-12)
+  Total:    12  |  Passed: 11  |  Failed: 1  |  Pass Rate: 91.7%
 
-Required Categories:
-  Core Feature Flow:  3 cases (Cases 1, 2, 3)    ALL PASS
-  Edge Case:          2 cases (Cases 4, 5)        1 PASS / 1 FAIL (known)
-  Negative:           3 cases (Cases 6, 7, 8)     ALL PASS
-  Error-Handling:     3 cases (Cases 9, 10, 12)   ALL PASS
-  Performance:        1 case  (Case 11)            PASS
+ML SERVICE UNIT SUITE (Cases 13-37)
+  Total:    25  |  Passed: 25  |  Failed: 0  |  Pass Rate: 100%
 
-AI Classification Overall Accuracy (from full 57-case test suite):
-  Category Accuracy:   93.0%  (53/57 correct)
-  Priority Accuracy:   66.7%
-  Overall Accuracy:    79.8%
-  Average Confidence:  0.80
+CHAT QUALITY SUITE (Cases 38-48)
+  Total:    11  |  Passed: 11  (2 xfail noted)  |  Pass Rate: 100%
 
-Known Limitations:
-  1. Wireless peripheral ambiguity (Case 5): hardware devices with "wireless"
-     in their description can be misclassified as network tickets.
-  2. Priority accuracy (66.7%): AI tends to predict "medium" for cases that
-     warrant "high" or "low" at the extremes. This is partly a consequence
-     of training on synthetic data where extreme priorities are underrepresented.
-  3. Embedding retrieval is O(n) in number of KB articles; acceptable now
-     but would degrade at scale (1,000+ articles) without pgvector.
+BACKEND UNIT SUITE (Cases 49-63)
+  Total:    15  |  Passed: 15  |  Failed: 0  |  Pass Rate: 100%
+
+LOAD TEST (Case 11 / dedicated run)
+  All four latency + throughput targets: MET
+
+GRAND TOTAL
+  Cases:    63
+  Passed:   62
+  Failed:    1  (Case 5 - known classification edge case)
+  Pass Rate: 98.4%
+
+Category Breakdown:
+  Core Feature Flow:   3 (Cases 1-3)      ALL PASS
+  Edge Case:           2 (Cases 4-5)      1 PASS / 1 FAIL (known)
+  Negative:            3 (Cases 6-8)      ALL PASS
+  Error-Handling:      3 (Cases 9, 10, 12) ALL PASS
+  Performance:         1 (Case 11)        PASS
+  Unit - ML Service:  25 (Cases 13-37)   ALL PASS
+  Chat Quality:       11 (Cases 38-48)   ALL PASS  (2 xfail)
+  Unit - Backend:     15 (Cases 49-63)   ALL PASS
+
+
+================================================================================
+AI CLASSIFICATION ACCURACY METRICS
+================================================================================
+
+Source: blueclue/ai/test_results.md  (73-case suite, run: 2026-02-10)
+
+  Category Accuracy:               93.0%  (53/57 core tests)
+  Priority Accuracy:               66.7%
+  Overall Accuracy:                79.8%
+  Average Confidence:              0.80
+  Fallback Rate:                   1.4%
+  Multi-Category Detection Rate:  21.9%
+
+Per-Category Breakdown:
+  Hardware  23/23  100.0% cat accuracy  100.0% priority accuracy
+  Software  15/15  100.0%               100.0%
+  Network   15/15  100.0%               100.0%
+  Login     16/16  100.0%               100.0%
+  Other      4/ 4  100.0%               100.0%
+
+Golden Dataset (test_chat_quality.py, 15 cases):
+  Accuracy threshold: 75%  →  MET
+
+
+================================================================================
+KNOWN LIMITATIONS & CLASSIFICATION EDGE CASES
+================================================================================
+
+1. WIRELESS PERIPHERAL AMBIGUITY [Case 5 - FAIL]
+   Input:   "Mouse keeps disconnecting from wireless receiver"
+   Got:     category="network" (confidence: 1.00)
+   Expected: category="hardware"
+   Cause:   "wireless", "disconnect", "disconnecting" carry weights 3.0-4.0 in
+            the network/connectivity category; "mouse" only weighs 2.0 in
+            hardware. Network keywords win collectively.
+   Impact:  LOW - rare ticket type; technician can recategorize in one click.
+   Fix:     Requires a compound rule: if "wireless" + peripheral device name
+            co-occur, score hardware/peripheral over network/connectivity.
+   Status:  OPEN - tracked in test_results.md.
+
+2. PRIORITY ACCURACY AT 66.7%
+   The AI tends toward "medium" for tickets that should be "high" or "low".
+   Root cause: synthetic training data underrepresents extreme priorities.
+   Impact:  MEDIUM - technicians should review auto-assigned priorities for
+            tickets near threshold language.
+   Status:  OPEN - identified as a training data gap.
+
+3. O(n) EMBEDDING RETRIEVAL (RAG PIPELINE)
+   KB article retrieval performs a full cosine-similarity scan over all
+   article embeddings. Acceptable at current article count (<100) but will
+   degrade at scale (1,000+ articles) without pgvector indexing.
+   Impact:  LOW for current deployment; MEDIUM for future scale.
+   Status:  OPEN - pgvector migration is a backlog item.
+
+4. STALE CHAT HANDOFF IN PRODUCTION [RESOLVED]
+   chat_conversations row id=10 became permanently locked when a technician
+   disconnected mid-claim. Hotfix: migration 037_reset_stale_handoff_claims.sql
+   applied directly to Railway DB. Permanent fix: node-cron auto-release job
+   (tested in Case 12). Status: RESOLVED.
+
+5. SHAP FLAT ARRAY COMPATIBILITY [RESOLVED - PR #260]
+   SHAP explanation values returned as nested arrays in some SHAP versions,
+   causing abs() / sorted() to fail on non-scalar elements.
+   Fix (merged 2026-04-03, branch ml-error-fix):
+     - vals = np.asarray(vals).flatten()   ensures 1-D float array
+     - key=lambda x: float(abs(x[1]))      forces scalar comparison
+     - Enhanced fallback: if model has no feature_importances_, fall back
+       to _keyword_fallback() instead of crashing
+   Status: RESOLVED. See PR #260 for diff.
+
+
+================================================================================
+OPEN ISSUES / FAILING TESTS
+================================================================================
+
+ ID | Issue                                       | Status  | Priority
+----|---------------------------------------------|---------|----------
+  1 | Wireless mouse misclassified as "network"   | OPEN    | Low
+    | (Case 5 - FAIL, known edge case)            |         |
+    |                                             |         |
+  2 | Priority accuracy 66.7% (target ≥ 80%)     | OPEN    | Medium
+    | Synthetic data lacks extreme priority cases |         |
+    |                                             |         |
+  3 | O(n) embedding scan (pgvector backlog)      | OPEN    | Low
+    |                                             |         |
+  4 | SHAP flat array TypeError on some SHAP ver  | MERGED  | Fixed PR#260
+    |                                             |         |
+  5 | Stale handoff claim - production stuck row  | CLOSED  | Fixed mig-037
+
+Notes:
+  - Items marked MERGED/CLOSED are resolved and should not be retested.
+  - Items marked OPEN are known limitations documented here; they do not
+    block release but should be addressed in a future sprint.
+  - No currently failing pytest tests exist in the CI suite other than
+    Case 5 (which is expected and tracked).
 
 ================================================================================
 END OF REPORT

@@ -1,61 +1,46 @@
-import UpdateRequest from '../models/UpdateRequest.js';
+﻿import UpdateRequest from '../models/UpdateRequest.js';
 import Notification from '../models/Notification.js';
 import TicketHistory from '../models/TicketHistory.js';
 import User from '../models/User.js';
 import Ticket from '../models/Ticket.js';
 import { sendEmail } from '../services/emailService.js';
 import { emitNotificationToUser } from '../services/socketService.js';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../middleware/errorHandler.js';
 
 /**
  * Request a status update from a technician
  * POST /api/tickets/:id/request-update
  */
 export const requestUpdate = async (req, res) => {
-  try {
     const { id: ticketId } = req.params;
     const requestedBy = req.user.id;
     const { assignedTo, message, deadline } = req.body;
 
     // Validate required fields
     if (!assignedTo || !deadline) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'assignedTo and deadline are required'
-      });
+      throw new BadRequestError('assignedTo and deadline are required');
     }
 
     // Verify user has management or admin role
     if (!['management', 'admin'].includes(req.user.role)) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'Only management can request updates'
-      });
+      throw new ForbiddenError('Only management can request updates');
     }
 
     // Get ticket details
     const ticket = await Ticket.getById(ticketId);
     if (!ticket) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Ticket not found'
-      });
+      throw new NotFoundError('Ticket not found');
     }
 
     // Get assignee details
     const assignee = await User.getById(assignedTo);
     if (!assignee) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Assigned user not found'
-      });
+      throw new NotFoundError('Assigned user not found');
     }
 
     // Verify assignee is a technician or senior technician
     if (!['technician', 'senior_technician'].includes(assignee.role)) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Can only request updates from technicians'
-      });
+      throw new BadRequestError('Can only request updates from technicians');
     }
 
     // Create update request
@@ -153,14 +138,6 @@ export const requestUpdate = async (req, res) => {
         notification
       }
     });
-  } catch (error) {
-    console.error('Error requesting update:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to request update',
-      error: error.message
-    });
-  }
 };
 
 /**
@@ -168,7 +145,6 @@ export const requestUpdate = async (req, res) => {
  * GET /api/update-requests
  */
 export const getUpdateRequests = async (req, res) => {
-  try {
     const userId = req.user.id;
     const { status, role } = req.query;
 
@@ -193,24 +169,13 @@ export const getUpdateRequests = async (req, res) => {
         requests = allRequests.filter(r => r.requested_by === userId);
       }
     } else {
-      return res.status(403).json({
-        status: 'error',
-        message: 'Insufficient permissions'
-      });
+      throw new ForbiddenError('Insufficient permissions');
     }
 
     res.status(200).json({
       status: 'success',
       data: { requests }
     });
-  } catch (error) {
-    console.error('Error fetching update requests:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch update requests',
-      error: error.message
-    });
-  }
 };
 
 /**
@@ -218,7 +183,6 @@ export const getUpdateRequests = async (req, res) => {
  * POST /api/update-requests/:id/fulfill
  */
 export const fulfillUpdateRequest = async (req, res) => {
-  try {
     const { id } = req.params;
     const fulfilledBy = req.user.id;
     const {
@@ -232,43 +196,28 @@ export const fulfillUpdateRequest = async (req, res) => {
 
     // Validate required fields
     if (!responseText) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Response text is required'
-      });
+      throw new BadRequestError('Response text is required');
     }
 
     // Get the update request
     const updateRequest = await UpdateRequest.getById(id);
     if (!updateRequest) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Update request not found'
-      });
+      throw new NotFoundError('Update request not found');
     }
 
     // Verify the user is the assigned tech
     if (updateRequest.assigned_to !== fulfilledBy) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'You are not assigned to this update request'
-      });
+      throw new ForbiddenError('You are not assigned to this update request');
     }
 
     // Verify not already fulfilled
     if (updateRequest.status !== 'pending') {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Update request has already been fulfilled or cancelled'
-      });
+      throw new BadRequestError('Update request has already been fulfilled or cancelled');
     }
 
     // Validate blocker description if blocked
     if (isBlocked && !blockerDescription) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Blocker description is required when marking as blocked'
-      });
+      throw new BadRequestError('Blocker description is required when marking as blocked');
     }
 
     // Fulfill the request
@@ -374,14 +323,6 @@ export const fulfillUpdateRequest = async (req, res) => {
         notification
       }
     });
-  } catch (error) {
-    console.error('Error fulfilling update request:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fulfill update request',
-      error: error.message
-    });
-  }
 };
 
 /**
@@ -389,24 +330,17 @@ export const fulfillUpdateRequest = async (req, res) => {
  * POST /api/update-requests/:id/request-extension
  */
 export const requestExtension = async (req, res) => {
-  try {
     const { id } = req.params;
     const userId = req.user.id;
     const { newDeadline, reason } = req.body;
 
     if (!newDeadline) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'New deadline is required'
-      });
+      throw new BadRequestError('New deadline is required');
     }
 
     const updateRequest = await UpdateRequest.getById(id);
     if (!updateRequest || updateRequest.assigned_to !== userId) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Update request not found'
-      });
+      throw new NotFoundError('Update request not found');
     }
 
     const extended = await UpdateRequest.requestExtension(id, new Date(newDeadline));
@@ -432,14 +366,6 @@ export const requestExtension = async (req, res) => {
       message: 'Extension request sent',
       data: { updateRequest: extended }
     });
-  } catch (error) {
-    console.error('Error requesting extension:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to request extension',
-      error: error.message
-    });
-  }
 };
 
 /**
@@ -447,31 +373,21 @@ export const requestExtension = async (req, res) => {
  * POST /api/update-requests/:id/handle-extension
  */
 export const handleExtensionRequest = async (req, res) => {
-  try {
     const { id } = req.params;
     const { approved } = req.body;
 
     // Verify user is management or admin
     if (!['management', 'admin'].includes(req.user.role)) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'Only management can approve/deny extension requests'
-      });
+      throw new ForbiddenError('Only management can approve/deny extension requests');
     }
 
     if (typeof approved !== 'boolean') {
-      return res.status(400).json({
-        status: 'error',
-        message: 'approved field is required and must be boolean'
-      });
+      throw new BadRequestError('approved field is required and must be boolean');
     }
 
     const updateRequest = await UpdateRequest.getById(id);
     if (!updateRequest || !updateRequest.extension_requested) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Update request with extension request not found'
-      });
+      throw new NotFoundError('Update request with extension request not found');
     }
 
     // Handle the extension
@@ -500,14 +416,6 @@ export const handleExtensionRequest = async (req, res) => {
       message: approved ? 'Extension approved' : 'Extension denied',
       data: { updateRequest: updated }
     });
-  } catch (error) {
-    console.error('Error handling extension request:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to handle extension request',
-      error: error.message
-    });
-  }
 };
 
 /**
@@ -515,24 +423,17 @@ export const handleExtensionRequest = async (req, res) => {
  * DELETE /api/update-requests/:id
  */
 export const cancelUpdateRequest = async (req, res) => {
-  try {
     const { id } = req.params;
     const userId = req.user.id;
 
     const updateRequest = await UpdateRequest.getById(id);
     if (!updateRequest) {
-      return res.status(404).json({
-        status: 'error',
-        message: 'Update request not found'
-      });
+      throw new NotFoundError('Update request not found');
     }
 
     // Only requester can cancel
     if (updateRequest.requested_by !== userId) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'Only the requester can cancel this request'
-      });
+      throw new ForbiddenError('Only the requester can cancel this request');
     }
 
     const cancelled = await UpdateRequest.cancel(id);
@@ -555,14 +456,6 @@ export const cancelUpdateRequest = async (req, res) => {
       message: 'Update request cancelled',
       data: { updateRequest: cancelled }
     });
-  } catch (error) {
-    console.error('Error cancelling update request:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to cancel update request',
-      error: error.message
-    });
-  }
 };
 
 /**
@@ -570,16 +463,12 @@ export const cancelUpdateRequest = async (req, res) => {
  * GET /api/update-requests/stats/:techId
  */
 export const getTechStats = async (req, res) => {
-  try {
     const { techId } = req.params;
     const { days = 30 } = req.query;
 
     // Only management, admin, or the tech themselves can view stats
     if (!['management', 'admin'].includes(req.user.role) && req.user.id !== parseInt(techId)) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'Insufficient permissions'
-      });
+      throw new ForbiddenError('Insufficient permissions');
     }
 
     const stats = await UpdateRequest.getTechStats(techId, days);
@@ -588,14 +477,6 @@ export const getTechStats = async (req, res) => {
       status: 'success',
       data: { stats }
     });
-  } catch (error) {
-    console.error('Error fetching tech stats:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch statistics',
-      error: error.message
-    });
-  }
 };
 
 /**
@@ -603,13 +484,9 @@ export const getTechStats = async (req, res) => {
  * GET /api/update-requests/analytics/response-times?days=30
  */
 export const getResponseTimeAnalytics = async (req, res) => {
-  try {
     // Only allow management and admin to view analytics
     if (!['management', 'admin'].includes(req.user.role)) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'Insufficient permissions'
-      });
+      throw new ForbiddenError('Insufficient permissions');
     }
 
     const days = parseInt(req.query.days) || 30;
@@ -622,12 +499,4 @@ export const getResponseTimeAnalytics = async (req, res) => {
         period_days: days
       }
     });
-  } catch (error) {
-    console.error('Error fetching response time analytics:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch analytics',
-      error: error.message
-    });
-  }
 };

@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import LoadingSpinner from './LoadingSpinner'
-import Alert from './Alert'
 import RequestAssignmentModal from './RequestAssignmentModal'
 import RefreshButton from './RefreshButton'
+import SearchWithHistory from './SearchWithHistory'
 import { getAvailableTickets, requestAssignment } from '../services/ticketService'
+import { useToast } from '../hooks/useToast'
+import { formatDateTime } from '../utils/dateFormatter'
 
 /**
  * Priority badge styling
@@ -23,13 +25,7 @@ const getPriorityColor = (priority) => {
  */
 const formatDate = (dateStr) => {
   if (!dateStr) return 'N/A'
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatDateTime(dateStr)
 }
 
 /**
@@ -42,8 +38,7 @@ function AvailableTickets({ onTicketClick }) {
   // Data state
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [successMessage, setSuccessMessage] = useState(null)
+  const toast = useToast()
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState('')
@@ -60,12 +55,11 @@ function AvailableTickets({ onTicketClick }) {
   // Fetch available tickets
   const fetchAvailableTickets = async () => {
     setLoading(true)
-    setError(null)
     try {
       const response = await getAvailableTickets()
       setTickets(response.data || [])
     } catch (err) {
-      setError(err.message || 'Failed to load available tickets')
+      toast.error(err.message || 'Failed to load available tickets')
     } finally {
       setLoading(false)
     }
@@ -164,10 +158,9 @@ function AvailableTickets({ onTicketClick }) {
       setTickets(prev => prev.filter(t => t.id !== ticketId))
       setIsModalOpen(false)
       setSelectedTicket(null)
-      setSuccessMessage('Ticket assigned to you successfully!')
-      setTimeout(() => setSuccessMessage(null), 5000)
+      toast.success('Ticket assigned to you successfully!')
     } catch (err) {
-      setError(err.message || 'Failed to request assignment')
+      toast.error(err.message || 'Failed to request assignment')
     } finally {
       setIsSubmitting(false)
     }
@@ -192,27 +185,15 @@ function AvailableTickets({ onTicketClick }) {
 
           {/* Search and controls */}
           <div className="flex items-center gap-2">
-            <div className="relative flex-1 max-w-xs">
-              <input
-                type="text"
-                placeholder="Search tickets..."
+            <div className="flex-1 max-w-xs">
+              <SearchWithHistory
+                searchType="ticket"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search tickets..."
                 className="w-full px-4 py-2 pl-10 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                showClearButton={false}
               />
-              <svg className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
             </div>
 
             <button
@@ -303,28 +284,6 @@ function AvailableTickets({ onTicketClick }) {
         )}
       </div>
 
-      {/* Success Alert */}
-      {successMessage && (
-        <div className="px-6 pt-4">
-          <Alert
-            type="success"
-            message={successMessage}
-            onClose={() => setSuccessMessage(null)}
-          />
-        </div>
-      )}
-
-      {/* Error Alert */}
-      {error && (
-        <div className="px-6 pt-4">
-          <Alert
-            type="error"
-            message={error}
-            onClose={() => setError(null)}
-          />
-        </div>
-      )}
-
       {/* Loading State */}
       {loading && (
         <div className="flex justify-center items-center py-12">
@@ -372,19 +331,14 @@ function AvailableTickets({ onTicketClick }) {
               return (
                 <div
                   key={ticket.id}
-                  className="bg-gray-800 border border-gray-700 rounded-lg p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-1 hover:border-blue-500 flex flex-col"
+                  className={`bg-gray-800 border border-gray-700 rounded-lg p-4 transition-all duration-200 hover:shadow-xl hover:-translate-y-1 hover:border-blue-500 flex flex-col ${onTicketClick ? 'cursor-pointer' : ''}`}
+                  onClick={() => onTicketClick && onTicketClick(ticket.id)}
                 >
                   {/* Header */}
                   <div className="mb-3">
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <h3
-                        className={`font-bold text-white text-sm leading-tight flex-1 break-words ${onTicketClick ? 'cursor-pointer hover:text-blue-400 transition-colors' : ''}`}
-                        onClick={(e) => {
-                          if (onTicketClick) {
-                            e.stopPropagation();
-                            onTicketClick(ticket.id);
-                          }
-                        }}
+                        className="font-bold text-white text-sm leading-tight flex-1 break-words"
                       >
                         {ticket.subject}
                       </h3>
@@ -456,7 +410,7 @@ function AvailableTickets({ onTicketClick }) {
 
                   {/* Request Assignment Button */}
                   <button
-                    onClick={() => handleRequestClick(ticket)}
+                    onClick={(e) => { e.stopPropagation(); handleRequestClick(ticket); }}
                     className="w-full mt-auto px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 active:bg-blue-800 transition-colors flex items-center justify-center gap-2"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

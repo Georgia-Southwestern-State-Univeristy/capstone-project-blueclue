@@ -1,71 +1,89 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import Alert from '../components/Alert'
+import { useToast } from '../hooks/useToast'
+import { useAvailableWidgets } from '../hooks/useAvailableWidgets'
 import DonutChart from '../components/DonutChart'
 import TicketTimeline from '../components/TicketTimeline'
 import PieChart from '../components/PieChart'
 import AvailableTickets from '../components/AvailableTickets'
 import TicketDetailView from '../components/TicketDetailView'
+import { useMinimizedTickets } from '../contexts/MinimizedTicketsContext'
 import RingRequestWidget from '../components/RingRequestWidget'
 import UpdateRequestAlert from '../components/UpdateRequestAlert'
 import UpdateResponseModal from '../components/UpdateResponseModal'
 import TechTicketQueueWidget from '../components/TechTicketQueueWidget'
+import MyAssignedTicketsWidget from '../components/MyAssignedTicketsWidget'
 import TechChatPanel from '../components/TechChatPanel'
+import CreateTicketWidget from '../components/CreateTicketWidget'
+import TicketTrendWidget from '../components/TicketTrendWidget'
+import TicketStatusWidget from '../components/TicketStatusWidget'
+import KnowledgeBaseWidget from '../components/KnowledgeBaseWidget'
 import DashboardGrid from '../components/DashboardGrid'
 import useDashboardLayout from '../hooks/useDashboardLayout'
 import { buildGalleryItems, buildWidgetConfig } from '../widgets'
-import { getAllTickets, updateTicketStatus, assignTicket } from '../services/ticketService'
+import { getAllTickets, updateTicketStatus, assignTicket, createTicket } from '../services/ticketService'
 import { getTechnicians } from '../services/userService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
 
 // ── Default grid layouts ─────────────────────────────────────────────────────
-const LAYOUT_VERSION = 1
+const LAYOUT_VERSION = 2
 const DEFAULT_LAYOUTS = {
   lg: [
     { i: 'timeline',         x: 0,  y: 0,  w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
     { i: 'statusDonut',      x: 0,  y: 8,  w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 12, maxH: 14 },
     { i: 'priorityPie',      x: 6,  y: 8,  w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 12, maxH: 14 },
-    { i: 'ticketQueue',      x: 0,  y: 15, w: 12, h: 14, minW: 6,  minH: 8, maxW: 12, maxH: 24 },
-    { i: 'availableTickets', x: 0,  y: 29, w: 12, h: 10, minW: 4,  minH: 6, maxW: 12, maxH: 18 },
-    { i: 'ringRequests',     x: 0,  y: 39, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
-    { i: 'chatPanel',         x: 6,  y: 39, w: 6,  h: 10, minW: 4,  minH: 8, maxW: 12, maxH: 16 },
+    { i: 'myAssignedTickets', x: 0,  y: 15, w: 12, h: 11, minW: 4,  minH: 8, maxW: 12, maxH: 20 },
+    { i: 'ticketQueue',      x: 0,  y: 26, w: 12, h: 14, minW: 6,  minH: 8, maxW: 12, maxH: 24 },
+    { i: 'availableTickets', x: 0,  y: 40, w: 12, h: 10, minW: 4,  minH: 6, maxW: 12, maxH: 18 },
+    { i: 'ringRequests',     x: 0,  y: 50, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'chatPanel',         x: 6,  y: 50, w: 6,  h: 10, minW: 4,  minH: 8, maxW: 12, maxH: 16 },
   ],
   md: [
     { i: 'timeline',         x: 0,  y: 0,  w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
     { i: 'statusDonut',      x: 0,  y: 8,  w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 12, maxH: 14 },
     { i: 'priorityPie',      x: 6,  y: 8,  w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 12, maxH: 14 },
-    { i: 'ticketQueue',      x: 0,  y: 15, w: 12, h: 14, minW: 6,  minH: 8, maxW: 12, maxH: 24 },
-    { i: 'availableTickets', x: 0,  y: 29, w: 12, h: 10, minW: 4,  minH: 6, maxW: 12, maxH: 18 },
-    { i: 'ringRequests',     x: 0,  y: 39, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
-    { i: 'chatPanel',         x: 0,  y: 46, w: 12, h: 10, minW: 4,  minH: 8, maxW: 12, maxH: 16 },
+    { i: 'myAssignedTickets', x: 0,  y: 15, w: 12, h: 11, minW: 4,  minH: 8, maxW: 12, maxH: 20 },
+    { i: 'ticketQueue',      x: 0,  y: 26, w: 12, h: 14, minW: 6,  minH: 8, maxW: 12, maxH: 24 },
+    { i: 'availableTickets', x: 0,  y: 40, w: 12, h: 10, minW: 4,  minH: 6, maxW: 12, maxH: 18 },
+    { i: 'ringRequests',     x: 0,  y: 50, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'chatPanel',         x: 0,  y: 57, w: 12, h: 10, minW: 4,  minH: 8, maxW: 12, maxH: 16 },
   ],
   sm: [
     { i: 'timeline',         x: 0,  y: 0,  w: 6,  h: 8,  minW: 3,  minH: 6, maxW: 6, maxH: 16 },
     { i: 'statusDonut',      x: 0,  y: 8,  w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 6, maxH: 14 },
     { i: 'priorityPie',      x: 0,  y: 15, w: 6,  h: 7,  minW: 3,  minH: 5, maxW: 6, maxH: 14 },
-    { i: 'ticketQueue',      x: 0,  y: 22, w: 6,  h: 14, minW: 3,  minH: 8, maxW: 6, maxH: 24 },
-    { i: 'availableTickets', x: 0,  y: 36, w: 6,  h: 10, minW: 3,  minH: 6, maxW: 6, maxH: 18 },
-    { i: 'ringRequests',     x: 0,  y: 46, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
-    { i: 'chatPanel',         x: 0,  y: 53, w: 6,  h: 10, minW: 4,  minH: 8, maxW: 6, maxH: 16 },
+    { i: 'myAssignedTickets', x: 0,  y: 22, w: 6,  h: 11, minW: 3,  minH: 8, maxW: 6, maxH: 20 },
+    { i: 'ticketQueue',      x: 0,  y: 33, w: 6,  h: 14, minW: 3,  minH: 8, maxW: 6, maxH: 24 },
+    { i: 'availableTickets', x: 0,  y: 47, w: 6,  h: 10, minW: 3,  minH: 6, maxW: 6, maxH: 18 },
+    { i: 'ringRequests',     x: 0,  y: 57, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
+    { i: 'chatPanel',         x: 0,  y: 64, w: 6,  h: 10, minW: 4,  minH: 8, maxW: 6, maxH: 16 },
   ],
 }
 
 const TECHNICIAN_WIDGET_KEYS = [
   'timeline', 'statusDonut', 'priorityPie',
-  'ticketQueue', 'availableTickets', 'ringRequests', 'chatPanel',
+  'ticketQueue', 'myAssignedTickets', 'availableTickets', 'ringRequests', 'chatPanel', 'ticketTrend', 'ticketStatus', 'knowledgeBase',
 ]
-
-const WIDGET_GALLERY_ITEMS = buildGalleryItems({ keys: TECHNICIAN_WIDGET_KEYS })
 
 /**
  * TechnicianWidgetGrid — drag-and-drop widget grid for the technician dashboard
  */
 function TechnicianWidgetGrid({
-  tickets, loading, fetchTickets,
+  tickets, loading,
   technicians, handleTicketClick,
   handleStatusChange, handleAssignmentChange,
   updatingTicketId, assigningTicketId, ticketErrors,
   includeCancelled, stats, donutSegments, prioritySegments,
+  onSubmitTicket,
 }) {
+  // Fetch widgets available to the current user based on their role
+  const { widgets: availableWidgets } = useAvailableWidgets(TECHNICIAN_WIDGET_KEYS);
+  
+  // Build gallery items from available widgets
+  const galleryItems = useMemo(() => {
+    const availableKeys = availableWidgets.map(w => w.key);
+    return buildGalleryItems({ keys: availableKeys });
+  }, [availableWidgets]);
+
   const {
     layouts, isEditMode, editModeToggledRef, onLayoutChange,
     resetLayout, toggleEditMode, hiddenWidgets, addWidget, removeWidget,
@@ -86,25 +104,30 @@ function TechnicianWidgetGrid({
         <TechTicketQueueWidget
           tickets={tickets}
           loading={loading}
-          technicians={technicians}
           onTicketClick={handleTicketClick}
-          onStatusChange={handleStatusChange}
-          onAssignmentChange={handleAssignmentChange}
-          updatingTicketId={updatingTicketId}
-          assigningTicketId={assigningTicketId}
-          ticketErrors={ticketErrors}
           includeCancelled={includeCancelled}
+        />
+      ),
+      myAssignedTickets: (
+        <MyAssignedTicketsWidget
+          tickets={tickets}
+          loading={loading}
+          onTicketClick={handleTicketClick}
         />
       ),
       availableTickets: <AvailableTickets onTicketClick={handleTicketClick} />,
       ringRequests: <RingRequestWidget onViewTicket={handleTicketClick} />,
       chatPanel: <TechChatPanel />,
+      ticketTrend: <TicketTrendWidget />,
+      ticketStatus: <TicketStatusWidget />,
+      knowledgeBase: <KnowledgeBaseWidget />,
+      createTicket: <CreateTicketWidget onSubmit={onSubmitTicket} />,
     }
     return buildWidgetConfig(TECHNICIAN_WIDGET_KEYS, componentMap)
-  }, [tickets, loading, fetchTickets, technicians, handleTicketClick,
+  }, [tickets, loading, technicians, handleTicketClick,
       handleStatusChange, handleAssignmentChange, updatingTicketId,
       assigningTicketId, ticketErrors, includeCancelled, stats,
-      donutSegments, prioritySegments])
+      donutSegments, prioritySegments, onSubmitTicket])
 
   return (
     <DashboardGrid
@@ -116,7 +139,7 @@ function TechnicianWidgetGrid({
       resetLayout={resetLayout}
       widgetConfig={widgetConfig}
       rowHeight={60}
-      galleryItems={WIDGET_GALLERY_ITEMS}
+      galleryItems={galleryItems}
       hiddenWidgets={hiddenWidgets}
       onAddWidget={addWidget}
       onRemoveWidget={removeWidget}
@@ -130,15 +153,17 @@ function TechnicianWidgetGrid({
 }
 
 function TechnicianDashboard() {
+  const toast = useToast()
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
   const [updatingTicketId, setUpdatingTicketId] = useState(null)
   const [ticketErrors, setTicketErrors] = useState({})
   const [technicians, setTechnicians] = useState([])
   const [assigningTicketId, setAssigningTicketId] = useState(null)
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const { minimize } = useMinimizedTickets()
+  const handleMinimize = (ticketData) => { minimize(ticketData); setIsDetailOpen(false) }
   const [includeCancelled, setIncludeCancelled] = useState(false)
   const [selectedUpdateRequest, setSelectedUpdateRequest] = useState(null)
 
@@ -146,6 +171,7 @@ function TechnicianDashboard() {
   useEffect(() => {
     fetchTickets()
     fetchTechnicians()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Check for ticket to auto-open from Ring for Help
@@ -161,12 +187,11 @@ function TechnicianDashboard() {
   const fetchTickets = async () => {
     // Only show full loading spinner on initial load
     if (tickets.length === 0) setLoading(true)
-    setError(null)
     try {
       const response = await getAllTickets()
       setTickets(response.data || [])
     } catch (err) {
-      setError(err.message || 'Failed to load tickets')
+      toast.error(err.message || 'Failed to load tickets')
       console.error('Error fetching tickets:', err)
     } finally {
       setLoading(false)
@@ -185,7 +210,21 @@ function TechnicianDashboard() {
       setTechnicians(techList || [])
     } catch (err) {
       console.error('Error fetching technicians:', err)
-      // Don't show error to user, just log it
+      // Set a non-blocking inline error for the assignment dropdown
+      // Don't use the main error state as this is a secondary feature
+      setTicketErrors(prev => ({
+        ...prev,
+        technician_list: 'Could not load technician list for assignments'
+      }))
+      
+      // Auto-clear after 5 seconds
+      setTimeout(() => {
+        setTicketErrors(prev => {
+          const newErrors = { ...prev }
+          delete newErrors.technician_list
+          return newErrors
+        })
+      }, 5000)
     }
   }
 
@@ -281,6 +320,22 @@ function TechnicianDashboard() {
     setIsDetailOpen(true)
   }
 
+  // Handle ticket creation from the CreateTicketWidget
+  const handleSubmitTicket = async (formData) => {
+    try {
+      const response = await createTicket(formData)
+      const ticketId = response.ticket?.id || response.ticket?.ticket_id || response.data?.id || response.data?.ticket_id
+      toast.success(ticketId
+        ? `Ticket #${ticketId} created successfully!`
+        : 'Ticket submitted successfully!')
+      await fetchTickets()
+    } catch (error) {
+      console.error('Failed to create ticket:', error)
+      toast.error(error.message || 'Failed to submit ticket. Please try again.')
+      throw error
+    }
+  }
+
   // Calculate ticket statistics
   const activeTickets = includeCancelled ? tickets : tickets.filter(t => t.status !== 'cancelled')
   const cancelledCount = tickets.filter(t => t.status === 'cancelled').length
@@ -351,17 +406,6 @@ function TechnicianDashboard() {
         </label>
       </div>
 
-      {/* Error Alert */}
-      {error && (
-        <div className="mb-6">
-          <Alert 
-            type="error" 
-            message={error}
-            onClose={() => setError(null)}
-          />
-        </div>
-      )}
-
       {/* Update Request Alert Banner */}
       <div className="mb-6">
         <UpdateRequestAlert
@@ -373,7 +417,6 @@ function TechnicianDashboard() {
       <TechnicianWidgetGrid
         tickets={tickets}
         loading={loading}
-        fetchTickets={fetchTickets}
         technicians={technicians}
         handleTicketClick={handleTicketClick}
         handleStatusChange={handleStatusChange}
@@ -385,14 +428,15 @@ function TechnicianDashboard() {
         stats={stats}
         donutSegments={donutSegments}
         prioritySegments={prioritySegments}
+        onSubmitTicket={handleSubmitTicket}
       />
 
-      {/* Ticket Detail View Modal */}
       <TicketDetailView
         ticketId={selectedTicketId}
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         onTicketUpdated={fetchTickets}
+        onMinimize={handleMinimize}
       />
 
       {/* Update Response Modal */}

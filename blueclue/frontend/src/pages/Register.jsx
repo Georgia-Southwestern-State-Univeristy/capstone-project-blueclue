@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { register as registerService } from '../services/authService'
 import logo from '../assets/EditedBlueClueLogo.png'
+import { useToast } from '../hooks/useToast'
 
 function Register() {
   const navigate = useNavigate()
@@ -14,9 +15,9 @@ function Register() {
     phone: '',
     company: ''
   })
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [passwordStrength, setPasswordStrength] = useState('')
+  const toast = useToast()
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -24,7 +25,7 @@ function Register() {
       ...formData,
       [name]: value
     })
-    setError('')
+
 
     // Check password strength
     if (name === 'password') {
@@ -48,16 +49,15 @@ function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setError('')
 
     // Validation
     if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match.')
+      toast.error('Passwords do not match.')
       return
     }
 
     if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters long.')
+      toast.error('Password must be at least 8 characters long.')
       return
     }
 
@@ -93,7 +93,7 @@ function Register() {
       }
 
     } catch (err) {
-      setError(err.message || 'Registration failed. Please try again.')
+      toast.error(err.message || 'Registration failed. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -138,13 +138,6 @@ function Register() {
         {/* Registration Form */}
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Error Alert */}
-            {error && (
-              <div className="bg-red-900/20 border border-red-500 text-red-400 px-4 py-3 rounded-lg">
-                {error}
-              </div>
-            )}
-
             {/* Name Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>

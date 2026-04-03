@@ -90,6 +90,36 @@ test_cases = [
         "expected": "low",
         "reason": "information, not urgent"
     },
+
+    # ── EDGE CASES: false-high prevention ────────────────────────────────────
+    # Tickets that contain urgency words but describe trivially low requests.
+    {
+        "description": "ASAP: can I get a new mouse? Mine is a bit old",
+        "expected": "low",
+        "reason": "false-high: urgency word + trivial equipment request (no work stoppage)"
+    },
+    {
+        "description": "Urgent request: when is the next IT training session?",
+        "expected": "low",
+        "reason": "false-high: 'urgent' + informational inquiry only"
+    },
+    {
+        "description": "Need help ASAP choosing between two monitor models",
+        "expected": "low",
+        "reason": "false-high: ASAP + purchasing inquiry; not blocking work"
+    },
+
+    # ── EDGE CASES: missed HIGH (deadline + device) ──────────────────────────
+    {
+        "description": "Laptop won't start at all — I have a client presentation deadline this afternoon",
+        "expected": "high",
+        "reason": "device completely unusable + imminent deadline"
+    },
+    {
+        "description": "VPN keeps dropping every 15 minutes and I cannot finish my work today",
+        "expected": "high",
+        "reason": "VPN instability blocking work + today deadline"
+    },
 ]
 
 print(f"Testing {len(test_cases)} priority classification scenarios...\n")

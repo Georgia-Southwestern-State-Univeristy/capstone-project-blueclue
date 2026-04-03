@@ -250,6 +250,14 @@ if (process.env.NODE_ENV !== 'production') {
         });
     });
 
+    /**
+     * GET /api/dev/test-500
+     * Trigger an unhandled error to verify the global errorHandler returns { status: 'error', ... }
+     */
+    router.get('/test-500', (req, res) => {
+        throw new Error('Intentional test error — verifying 500 error handler shape');
+    });
+
 } else {
     // In production, return 404 for all dev routes
     router.use((req, res) => {

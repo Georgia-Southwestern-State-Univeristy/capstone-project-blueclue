@@ -28,6 +28,77 @@ class User {
     }
 
     /**
+     * Get all users for the directory listing
+     * @param {Object} options - Filter options
+     * @param {string} [options.role] - Filter by role
+     * @param {string} [options.search] - Search by name or email
+     * @param {number} [options.currentUserId] - ID of the requesting user (for unread DM count)
+     * @returns {Promise<Array>} Array of user objects
+     */
+    static async getAllUsers({ role, search, currentUserId } = {}) {
+        const conditions = [];
+        const params = [];
+        let paramIndex = 1;
+
+        // Reserve $1 for currentUserId (used in the unread subquery)
+        params.push(currentUserId || null);
+        paramIndex++;
+
+        // Only include staff roles
+        conditions.push(`u.role IN ('admin', 'management', 'senior_technician', 'technician')`);
+
+        if (role) {
+            conditions.push(`u.role = $${paramIndex++}`);
+            params.push(role);
+        }
+
+        if (search) {
+            conditions.push(`(u.first_name ILIKE $${paramIndex} OR u.last_name ILIKE $${paramIndex} OR u.email ILIKE $${paramIndex} OR u.username ILIKE $${paramIndex})`);
+            params.push(`%${search}%`);
+            paramIndex++;
+        }
+
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+        const query = `
+            SELECT 
+                u.id,
+                u.email,
+                u.first_name,
+                u.last_name,
+                u.username,
+                u.first_name || ' ' || u.last_name as full_name,
+                u.role,
+                u.is_active,
+                u.is_online,
+                u.created_at,
+                u.last_login,
+                u.phone,
+                u.company,
+                u.dnd_enabled,
+                u.dnd_until,
+                u.timezone,
+                np.quiet_hours_enabled,
+                np.quiet_hours_start,
+                np.quiet_hours_end,
+                COALESCE((
+                    SELECT COUNT(*)
+                    FROM direct_messages dm
+                    WHERE dm.sender_id = u.id
+                      AND dm.receiver_id = $1
+                      AND dm.read_at IS NULL
+                ), 0)::int AS unread_messages
+            FROM users u
+            LEFT JOIN notification_preferences np ON np.user_id = u.id
+            ${whereClause}
+            ORDER BY u.first_name, u.last_name
+        `;
+
+        const result = await pool.query(query, params);
+        return result.rows;
+    }
+
+    /**
      * Get user by ID
      * @param {number} id - User ID
      * @returns {Promise<Object|null>} User object or null
@@ -43,7 +114,12 @@ class User {
                 role,
                 phone,
                 company,
-                is_active
+                timezone,
+                is_active,
+                created_at,
+                last_login,
+                dnd_enabled,
+                dnd_until
             FROM users
             WHERE id = $1
         `;
@@ -69,6 +145,7 @@ class User {
                 role,
                 phone,
                 company,
+                timezone,
                 is_active,
                 force_password_change
             FROM users
@@ -76,6 +153,25 @@ class User {
         `;
         
         const result = await pool.query(query, [email]);
+        return result.rows[0] || null;
+    }
+
+    /**
+     * Update user profile (first name, last name)
+     * @param {number} userId - User ID
+     * @param {Object} fields - Fields to update
+     * @param {string} fields.firstName - First name
+     * @param {string} fields.lastName - Last name
+     * @returns {Promise<Object>} Updated user object
+     */
+    static async updateProfile(userId, { firstName, lastName, phone, company, timezone }) {
+        const result = await pool.query(
+            `UPDATE users
+             SET first_name = $2, last_name = $3, phone = $4, company = $5, timezone = $6, updated_at = NOW()
+             WHERE id = $1
+             RETURNING id, email, first_name, last_name, username, role, phone, company, timezone`,
+            [userId, firstName, lastName, phone || null, company || null, timezone || null]
+        );
         return result.rows[0] || null;
     }
 }

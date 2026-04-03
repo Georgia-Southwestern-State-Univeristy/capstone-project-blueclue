@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import NotificationPreferences from './NotificationPreferences';
-import { getUser } from '../services/authService';
+import TicketTemplateManager from './TicketTemplateManager';
+import { getUser, updateProfile, updateEmail, changePassword } from '../services/authService';
 import { useNavigate } from 'react-router-dom';
 import useTheme from '../hooks/useTheme';
 
@@ -25,8 +26,239 @@ function SectionChevron({ expanded }) {
 
 /* ── Sub-panel content per section ───────────────────────────────────── */
 
-function AccountPanelContent({ onNavigate, onLogout }) {
+function EmailChangeSection() {
   const user = getUser();
+  const [newEmail, setNewEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const handleSaveEmail = async () => {
+    if (!newEmail.trim()) {
+      setErrorMsg('Email is required');
+      return;
+    }
+    if (!password) {
+      setErrorMsg('Current password is required to change email');
+      return;
+    }
+    setSaving(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      await updateEmail({ newEmail: newEmail.trim(), password });
+      setSuccessMsg('Email updated successfully');
+      setNewEmail('');
+      setPassword('');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to update email');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-gray-800/60 rounded-lg p-4 space-y-3">
+      <h3 className="text-sm font-semibold text-gray-300">Email Address</h3>
+      <p className="text-xs text-gray-500">Current: {user?.email || '—'}</p>
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">New Email</label>
+        <input
+          type="email"
+          value={newEmail}
+          onChange={(e) => setNewEmail(e.target.value)}
+          placeholder="new@example.com"
+          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+        />
+      </div>
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">Current Password</label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Confirm your password"
+          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+        />
+      </div>
+      {errorMsg && <p className="text-red-400 text-xs">{errorMsg}</p>}
+      {successMsg && <p className="text-green-400 text-xs">{successMsg}</p>}
+      <button
+        onClick={handleSaveEmail}
+        disabled={!newEmail.trim() || !password || saving}
+        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+      >
+        {saving ? 'Saving...' : 'Update Email'}
+      </button>
+    </div>
+  );
+}
+
+function PasswordChangeSection() {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const getStrength = (pw) => {
+    if (!pw) return '';
+    if (pw.length < 8) return 'weak';
+    if (pw.length >= 12 && /[A-Z]/.test(pw) && /[0-9]/.test(pw)) return 'strong';
+    return 'medium';
+  };
+  const strength = getStrength(newPassword);
+
+  const handleSubmit = async () => {
+    setErrorMsg('');
+    setSuccessMsg('');
+    if (!currentPassword) { setErrorMsg('Current password is required'); return; }
+    if (newPassword.length < 8) { setErrorMsg('New password must be at least 8 characters'); return; }
+    if (newPassword !== confirmPassword) { setErrorMsg('Passwords do not match'); return; }
+
+    setSaving(true);
+    try {
+      await changePassword(currentPassword, newPassword);
+      setSuccessMsg('Password changed. You will be redirected to login.');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      // Backend revokes tokens — redirect to login after brief delay
+      setTimeout(() => { window.location.href = '/login'; }, 2000);
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to change password');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="bg-gray-800/60 rounded-lg p-4 space-y-3">
+      <h3 className="text-sm font-semibold text-gray-300">Change Password</h3>
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">Current Password</label>
+        <input
+          type="password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+        />
+      </div>
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">New Password</label>
+        <input
+          type="password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+        />
+        {strength && (
+          <div className="mt-1.5 flex items-center gap-2">
+            <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+              <div className={`h-full transition-all duration-300 ${
+                strength === 'strong' ? 'w-full bg-green-500' :
+                strength === 'medium' ? 'w-2/3 bg-yellow-500' :
+                'w-1/3 bg-red-500'
+              }`} />
+            </div>
+            <span className={`text-xs ${
+              strength === 'strong' ? 'text-green-400' :
+              strength === 'medium' ? 'text-yellow-400' :
+              'text-red-400'
+            }`}>{strength.charAt(0).toUpperCase() + strength.slice(1)}</span>
+          </div>
+        )}
+      </div>
+      <div>
+        <label className="block text-xs text-gray-500 mb-1">Confirm New Password</label>
+        <input
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+        />
+        {confirmPassword && newPassword !== confirmPassword && (
+          <p className="text-red-400 text-xs mt-1">Passwords do not match</p>
+        )}
+      </div>
+      {errorMsg && <p className="text-red-400 text-xs">{errorMsg}</p>}
+      {successMsg && <p className="text-green-400 text-xs">{successMsg}</p>}
+      <button
+        onClick={handleSubmit}
+        disabled={saving || !currentPassword || !newPassword || !confirmPassword}
+        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+      >
+        {saving ? 'Changing...' : 'Change Password'}
+      </button>
+    </div>
+  );
+}
+
+function AccountPanelContent({ onLogout }) {
+  const user = getUser();
+  const [firstName, setFirstName] = useState(user?.firstName || '');
+  const [lastName, setLastName] = useState(user?.lastName || '');
+  const [phone, setPhone] = useState(user?.phone || '');
+  const [company, setCompany] = useState(user?.company || '');
+  const [timezone, setTimezone] = useState(user?.timezone || '');
+  const [saving, setSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // Build timezone list from Intl API
+  const timezoneOptions = (() => {
+    try {
+      return Intl.supportedValuesOf('timeZone');
+    } catch {
+      // Fallback for older browsers
+      return [
+        'America/New_York','America/Chicago','America/Denver','America/Los_Angeles',
+        'America/Anchorage','Pacific/Honolulu','America/Phoenix',
+        'America/Toronto','America/Vancouver','America/Sao_Paulo',
+        'Europe/London','Europe/Paris','Europe/Berlin','Europe/Moscow',
+        'Asia/Tokyo','Asia/Shanghai','Asia/Kolkata','Asia/Dubai',
+        'Australia/Sydney','Pacific/Auckland','UTC'
+      ];
+    }
+  })();
+
+  const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  const hasChanges =
+    firstName.trim() !== (user?.firstName || '') ||
+    lastName.trim() !== (user?.lastName || '') ||
+    (phone.trim() || '') !== (user?.phone || '') ||
+    (company.trim() || '') !== (user?.company || '') ||
+    (timezone || '') !== (user?.timezone || '');
+
+  const handleSaveProfile = async () => {
+    if (!firstName.trim() || !lastName.trim()) {
+      setErrorMsg('First and last name are required');
+      return;
+    }
+    setSaving(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      await updateProfile({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phone: phone.trim() || null,
+        company: company.trim() || null,
+        timezone: timezone || null,
+      });
+      setSuccessMsg('Profile updated successfully');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to update profile');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* User info card */}
@@ -46,20 +278,87 @@ function AccountPanelContent({ onNavigate, onLogout }) {
         </div>
       </div>
 
+      {/* Edit Profile */}
+      <div className="bg-gray-800/60 rounded-lg p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-gray-300">Profile</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">First Name</label>
+            <input
+              type="text"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              maxLength={100}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Last Name</label>
+            <input
+              type="text"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              maxLength={100}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Phone</label>
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+1 (555) 123-4567"
+            maxLength={20}
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Company / Organization</label>
+          <input
+            type="text"
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+            placeholder="Acme Corp"
+            maxLength={255}
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Timezone</label>
+          <select
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500 appearance-none"
+          >
+            <option value="">Browser default ({browserTimezone})</option>
+            {timezoneOptions.map((tz) => (
+              <option key={tz} value={tz}>
+                {tz.replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
+        </div>
+        {errorMsg && <p className="text-red-400 text-xs">{errorMsg}</p>}
+        {successMsg && <p className="text-green-400 text-xs">{successMsg}</p>}
+        <button
+          onClick={handleSaveProfile}
+          disabled={!hasChanges || saving}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-lg transition-colors"
+        >
+          {saving ? 'Saving...' : 'Save Profile'}
+        </button>
+      </div>
+
+      {/* Edit Email */}
+      <EmailChangeSection />
+
+      {/* Change Password */}
+      <PasswordChangeSection />
+
       {/* Actions */}
       <div className="space-y-1">
-        <button
-          onClick={onNavigate}
-          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-          </svg>
-          Change Password
-        </button>
-
-        <hr className="border-gray-700 my-2" />
-
         <button
           onClick={onLogout}
           className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-400 hover:text-red-300 hover:bg-red-950 rounded-lg transition-colors"
@@ -674,6 +973,17 @@ const SECTIONS = [
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     ),
   },
+  {
+    key: 'templates',
+    label: 'Templates',
+    description: 'Create & manage ticket templates',
+    iconBg: 'bg-indigo-600/20',
+    iconColor: 'text-indigo-400',
+    roles: ['management', 'admin'],
+    icon: (
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    ),
+  },
 ];
 
 /* ── Main component ──────────────────────────────────────────────────── */
@@ -686,6 +996,13 @@ const SECTIONS = [
 function SettingsSidebar({ isOpen, onClose, onLogout }) {
   const [activePanel, setActivePanel] = useState(null); // key of open sub-panel
   const navigate = useNavigate();
+  const currentUser = getUser();
+
+  // Filter sections by user role
+  const visibleSections = SECTIONS.filter((s) => {
+    if (!s.roles) return true;
+    return s.roles.includes(currentUser?.role);
+  });
 
   // Handle full close — reset everything
   const handleClose = useCallback(() => {
@@ -725,7 +1042,7 @@ function SettingsSidebar({ isOpen, onClose, onLogout }) {
   };
 
   // Resolve the sub-panel title from the active key
-  const activeSectionMeta = SECTIONS.find((s) => s.key === activePanel);
+  const activeSectionMeta = visibleSections.find((s) => s.key === activePanel);
 
   // Render the correct content inside the sub-panel
   const renderPanelContent = () => {
@@ -735,7 +1052,6 @@ function SettingsSidebar({ isOpen, onClose, onLogout }) {
       case 'account':
         return (
           <AccountPanelContent
-            onNavigate={() => { navigate('/change-password'); handleClose(); }}
             onLogout={onLogout}
           />
         );
@@ -743,6 +1059,8 @@ function SettingsSidebar({ isOpen, onClose, onLogout }) {
         return <AppearancePanelContent />;
       case 'about':
         return <AboutPanelContent />;
+      case 'templates':
+        return <TicketTemplateManager />;
       default:
         return null;
     }
@@ -766,8 +1084,8 @@ function SettingsSidebar({ isOpen, onClose, onLogout }) {
 
       {/* ── Sub-Panel (slides left from behind the sidebar) ── */}
       <div
-        className={`fixed top-0 right-0 h-full w-[400px] border-l border-gray-700 shadow-2xl z-[70] transform transition-transform duration-300 ease-in-out ${
-          isOpen && activePanel ? 'translate-x-[-340px]' : 'translate-x-full'
+        className={`fixed top-0 right-0 h-full w-full sm:w-[400px] border-l border-gray-700 shadow-2xl z-[70] sm:z-[70] z-[85] transform transition-transform duration-300 ease-in-out ${
+          isOpen && activePanel ? 'translate-x-0 sm:translate-x-[-340px]' : 'translate-x-full'
         }`}
         style={{ backgroundColor: 'var(--bg-sub-panel)' }}
       >
@@ -805,7 +1123,7 @@ function SettingsSidebar({ isOpen, onClose, onLogout }) {
 
       {/* ── Main Settings Sidebar ── */}
       <div
-        className={`fixed top-0 right-0 h-full w-[340px] bg-gray-900 border-l border-gray-700 shadow-2xl z-[80] transform transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 right-0 h-full w-full sm:w-[340px] bg-gray-900 border-l border-gray-700 shadow-2xl z-[80] transform transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
@@ -830,7 +1148,7 @@ function SettingsSidebar({ isOpen, onClose, onLogout }) {
 
         {/* Section list */}
         <div className="overflow-y-auto h-[calc(100%-65px)]">
-          {SECTIONS.map((section) => (
+          {visibleSections.map((section) => (
             <div key={section.key} className="border-b border-gray-800">
               <button
                 onClick={() => togglePanel(section.key)}

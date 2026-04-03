@@ -1,0 +1,79 @@
+{
+  "audit_timestamp": "2026-03-31T20:49:52.278145Z",
+  "thresholds": {
+    "min_category_samples": 200,
+    "min_priority_samples": 200
+  },
+  "dataset_sizes": {
+    "train": 2298,
+    "val": 490,
+    "test": 500,
+    "total": 3288
+  },
+  "category_distribution": {
+    "train": {
+      "feature_request": 356,
+      "software": 352,
+      "network": 307,
+      "account": 280,
+      "billing": 273,
+      "hardware": 266,
+      "login": 257,
+      "other": 207
+    },
+    "val": {
+      "feature_request": 76,
+      "software": 75,
+      "network": 65,
+      "account": 60,
+      "billing": 58,
+      "hardware": 57,
+      "login": 55,
+      "other": 44
+    },
+    "test": {
+      "software": 77,
+      "feature_request": 77,
+      "network": 67,
+      "account": 60,
+      "billing": 59,
+      "hardware": 58,
+      "login": 56,
+      "other": 46
+    }
+  },
+  "priority_distribution": {
+    "train": {
+      "low": 798,
+      "medium": 671,
+      "high": 597,
+      "critical": 232
+    },
+    "val": {
+      "low": 162,
+      "medium": 147,
+      "high": 129,
+      "critical": 52
+    },
+    "test": {
+      "low": 169,
+      "medium": 146,
+      "high": 136,
+      "critical": 49
+    }
+  },
+  "underrepresented_categories": [],
+  "underrepresented_priorities": [],
+  "imbalance_ratios": {
+    "category_max_min": 1.72,
+    "priority_max_min": 3.44
+  },
+  "data_quality": {
+    "near_duplicates_detected": 0,
+    "short_description_count": 0,
+    "short_description_ids": [],
+    "invalid_label_count": 0,
+    "invalid_label_samples": {}
+  },
+  "recommendations": []
+}

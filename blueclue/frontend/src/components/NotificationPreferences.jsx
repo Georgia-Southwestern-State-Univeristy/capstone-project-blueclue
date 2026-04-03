@@ -1,26 +1,51 @@
-import { useState } from 'react';
-import { getPreferences, savePreferences } from '../services/preferencesService';
+import { useState, useEffect } from 'react';
+import { fetchPreferences, savePreferences } from '../services/preferencesService';
 
 /**
  * NotificationPreferences Component
- * Allows users to customize notification settings
+ * Allows users to customize notification settings (persisted to database)
  */
 function NotificationPreferences() {
-  const [preferences, setPreferences] = useState(getPreferences());
+  const [preferences, setPreferences] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleBrowserNotificationToggle = (e) => {
+  useEffect(() => {
+    fetchPreferences()
+      .then((prefs) => setPreferences(prefs))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleBrowserNotificationToggle = () => {
     const updated = {
       ...preferences,
-      browserNotifications: e.target.checked,
+      browserNotifications: !preferences.browserNotifications,
     };
     setPreferences(updated);
   };
 
-  const handleEmailNotificationToggle = (e) => {
+  const handleEmailNotificationToggle = () => {
     const updated = {
       ...preferences,
-      emailNotifications: e.target.checked,
+      emailNotifications: !preferences.emailNotifications,
+    };
+    setPreferences(updated);
+  };
+
+  const handleQuietHoursToggle = () => {
+    const updated = {
+      ...preferences,
+      quietHoursEnabled: !preferences.quietHoursEnabled,
+    };
+    setPreferences(updated);
+  };
+
+  const handleQuietHoursTimeChange = (field, value) => {
+    const updated = {
+      ...preferences,
+      [field]: value,
     };
     setPreferences(updated);
   };
@@ -36,10 +61,17 @@ function NotificationPreferences() {
     setPreferences(updated);
   };
 
-  const handleSave = () => {
-    savePreferences(preferences);
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+  const handleSave = async () => {
+    setIsSaving(true);
+    setError('');
+    const ok = await savePreferences(preferences);
+    setIsSaving(false);
+    if (ok) {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } else {
+      setError('Failed to save preferences. Please try again.');
+    }
   };
 
   const notificationTypeLabels = {
@@ -47,6 +79,13 @@ function NotificationPreferences() {
     overdue: 'Overdue Alerts',
     update_request: 'Update Requests',
     mention: 'Mentions',
+    ticket_cancelled: 'Ticket Cancelled',
+    ring_request: 'Ring Requests',
+    ring_response: 'Ring Responses',
+    update_fulfilled: 'Update Fulfilled',
+    update_overdue: 'Update Overdue',
+    chat_handoff: 'Chat Handoff',
+    update_request_reminder: 'Update Reminders',
   };
 
   const notificationTypeDescriptions = {
@@ -54,7 +93,22 @@ function NotificationPreferences() {
     overdue: 'When a ticket becomes overdue',
     update_request: 'When someone requests an update on your ticket',
     mention: 'When someone mentions you in a comment',
+    ticket_cancelled: 'When a ticket you are involved with is cancelled',
+    ring_request: 'When a technician ring is requested for a ticket',
+    ring_response: 'When someone responds to a ring request',
+    update_fulfilled: 'When a requested update has been provided',
+    update_overdue: 'When a requested update is overdue',
+    chat_handoff: 'When a chat conversation is handed off to you',
+    update_request_reminder: 'Reminders for pending update requests',
   };
+
+  if (loading || !preferences) {
+    return (
+      <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 text-gray-400">
+        Loading preferences...
+      </div>
+    );
+  }
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
@@ -76,17 +130,26 @@ function NotificationPreferences() {
         <p className="text-gray-400 text-sm mb-4">
           Receive desktop notifications for important events
         </p>
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={preferences.browserNotifications}
-            onChange={handleBrowserNotificationToggle}
-            className="w-4 h-4 rounded bg-gray-700 border-gray-600 checked:bg-blue-600 cursor-pointer"
+        <div className="flex items-center gap-3">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={preferences.browserNotifications}
+          onClick={handleBrowserNotificationToggle}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+            preferences.browserNotifications ? 'bg-blue-600' : 'bg-gray-600'
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              preferences.browserNotifications ? 'translate-x-6' : 'translate-x-1'
+            }`}
           />
-          <span className="text-gray-200">
-            {preferences.browserNotifications ? 'Enabled' : 'Disabled'}
-          </span>
-        </label>
+        </button>
+        <span className="text-gray-200">
+          {preferences.browserNotifications ? 'Enabled' : 'Disabled'}
+        </span>
+        </div>
       </div>
 
       {/* Email Notifications Section */}
@@ -105,17 +168,86 @@ function NotificationPreferences() {
         <p className="text-gray-400 text-sm mb-4">
           Receive email notifications for important updates
         </p>
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={preferences.emailNotifications}
-            onChange={handleEmailNotificationToggle}
-            className="w-4 h-4 rounded bg-gray-700 border-gray-600 checked:bg-blue-600 cursor-pointer"
+        <div className="flex items-center gap-3">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={preferences.emailNotifications}
+          onClick={handleEmailNotificationToggle}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+            preferences.emailNotifications ? 'bg-blue-600' : 'bg-gray-600'
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              preferences.emailNotifications ? 'translate-x-6' : 'translate-x-1'
+            }`}
           />
+        </button>
+        <span className="text-gray-200">
+          {preferences.emailNotifications ? 'Enabled' : 'Disabled'}
+        </span>
+        </div>
+      </div>
+
+      {/* Quiet Hours / Do Not Disturb Section */}
+      <div className="mb-8">
+        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+            />
+          </svg>
+          Quiet Hours
+        </h3>
+        <p className="text-gray-400 text-sm mb-4">
+          Suppress browser notifications during specific hours (e.g., overnight)
+        </p>
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={preferences.quietHoursEnabled ?? false}
+            onClick={handleQuietHoursToggle}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              preferences.quietHoursEnabled ? 'bg-blue-600' : 'bg-gray-600'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                preferences.quietHoursEnabled ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
           <span className="text-gray-200">
-            {preferences.emailNotifications ? 'Enabled' : 'Disabled'}
+            {preferences.quietHoursEnabled ? 'Enabled' : 'Disabled'}
           </span>
-        </label>
+        </div>
+        {preferences.quietHoursEnabled && (
+          <div className="grid grid-cols-2 gap-3 max-w-xs pl-1">
+            <div>
+              <label className="block text-gray-300 text-sm mb-1">From</label>
+              <input
+                type="time"
+                value={preferences.quietHoursStart || '22:00'}
+                onChange={(e) => handleQuietHoursTimeChange('quietHoursStart', e.target.value)}
+                className="bg-gray-700 border border-gray-600 text-gray-200 text-sm rounded-lg px-2 py-1.5 w-full focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-300 text-sm mb-1">To</label>
+              <input
+                type="time"
+                value={preferences.quietHoursEnd || '07:00'}
+                onChange={(e) => handleQuietHoursTimeChange('quietHoursEnd', e.target.value)}
+                className="bg-gray-700 border border-gray-600 text-gray-200 text-sm rounded-lg px-2 py-1.5 w-full focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Notification Types Section */}
@@ -135,18 +267,27 @@ function NotificationPreferences() {
 
         <div className="space-y-3">
           {Object.entries(preferences.types).map(([type, enabled]) => (
-            <label key={type} className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-700/30 transition-colors cursor-pointer">
-              <input
-                type="checkbox"
-                checked={enabled}
-                onChange={() => handleTypeToggle(type)}
-                className="w-4 h-4 rounded bg-gray-700 border-gray-600 checked:bg-blue-600 cursor-pointer mt-1"
-              />
-              <div className="flex-1">
+            <div key={type} className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-700/30 transition-colors">
+              <div className="flex-1 mr-3">
                 <div className="text-gray-200 font-medium">{notificationTypeLabels[type]}</div>
                 <div className="text-gray-500 text-sm">{notificationTypeDescriptions[type]}</div>
               </div>
-            </label>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={enabled}
+                onClick={() => handleTypeToggle(type)}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                  enabled ? 'bg-blue-600' : 'bg-gray-600'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    enabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
           ))}
         </div>
       </div>
@@ -155,9 +296,10 @@ function NotificationPreferences() {
       <div className="flex gap-3">
         <button
           onClick={handleSave}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+          disabled={isSaving}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors font-medium"
         >
-          Save Preferences
+          {isSaving ? 'Saving...' : 'Save Preferences'}
         </button>
         {isSaved && (
           <div className="flex items-center gap-2 text-green-400 text-sm">
@@ -167,13 +309,14 @@ function NotificationPreferences() {
             Saved successfully!
           </div>
         )}
+        {error && <p className="flex items-center text-red-400 text-sm">{error}</p>}
       </div>
 
       {/* Info Section */}
       <div className="mt-8 p-4 bg-gray-700/30 border border-gray-700 rounded-lg">
         <p className="text-gray-400 text-sm">
-          <strong>Note:</strong> Your notification preferences are saved locally. Browser notifications require permission
-          from your browser.
+          <strong>Note:</strong> Your notification preferences are saved to your account and will persist across sessions.
+          Browser notifications require permission from your browser.
         </p>
       </div>
     </div>

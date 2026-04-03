@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useToast } from '../hooks/useToast'
 import * as svc from '../services/mlAdminService'
 import ExplainabilityPanel from '../components/ml/ExplainabilityPanel'
 
@@ -61,18 +62,22 @@ const TABS = ['Overview', 'Predictions', 'Feedback', 'Drift', 'Models', 'Retrain
 // ─── Main component ─────────────────────────────────────────────────────────
 export default function MLAdminDashboard() {
   const navigate = useNavigate()
+  const toast = useToast()
   const [activeTab, setActiveTab] = useState('Overview')
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
 
   // Data state
-  const [dashboard, setDashboard]         = useState(null)
-  const [predictions, setPredictions]     = useState([])
-  const [feedback, setFeedback]           = useState(null)
-  const [driftReports, setDriftReports]   = useState([])
-  const [modelVersions, setModelVersions] = useState(null)
-  const [retrainRuns, setRetrainRuns]         = useState([])
+  const [dashboard, setDashboard]               = useState(null)
+  const [predictions, setPredictions]           = useState([])
+  const [feedback, setFeedback]                 = useState(null)
+  const [trainingSummary, setTrainingSummary]   = useState(null)
+  const [pendingFeedback, setPendingFeedback]   = useState([])
+  const [reviewLoading, setReviewLoading]       = useState(false)
+  const [driftReports, setDriftReports]         = useState([])
+  const [modelVersions, setModelVersions]       = useState(null)
+  const [globalFeatures, setGlobalFeatures]     = useState(null)
+  const [retrainRuns, setRetrainRuns]           = useState([])
   const [retrainRunsLoading, setRetrainRunsLoading] = useState(false)
   const retrainPollingRef = useRef(null)
 
@@ -81,10 +86,18 @@ export default function MLAdminDashboard() {
 
   // Action state
   const [actionLoading, setActionLoading] = useState('')
-  const [actionMsg, setActionMsg]         = useState(null)
   const [driftRunning, setDriftRunning]   = useState(false)
   const [driftLoading, setDriftLoading]   = useState(false)
   const [driftError, setDriftError]       = useState(null)
+
+  // Drift automation state
+  const [driftSettings, setDriftSettings]     = useState([])
+  const [driftAlerts, setDriftAlerts]         = useState([])
+  const [driftAlertsUnread, setDriftAlertsUnread] = useState(0)
+  const [driftHistory, setDriftHistory]       = useState([])
+  const [driftHistoryModel, setDriftHistoryModel] = useState('category')
+  const [settingsEditing, setSettingsEditing] = useState({}) // { [modelType]: { ...fields } }
+  const [settingsSaving, setSettingsSaving]   = useState('')  // modelType being saved
 
   // Auth guard
   useEffect(() => {
@@ -105,7 +118,7 @@ export default function MLAdminDashboard() {
       const data = await svc.getMLDashboard()
       setDashboard(data?.data || data)
     } catch (e) {
-      setError('Failed to load ML dashboard: ' + e.message)
+      toast.error('Failed to load ML dashboard: ' + e.message)
     } finally {
       setRefreshing(false)
       setLoading(false)
@@ -153,16 +166,60 @@ export default function MLAdminDashboard() {
   // Lazy tab loaders
   useEffect(() => {
     if (activeTab === 'Predictions' && predictions.length === 0) {
-      svc.getRecentPredictions(100).then(r => setPredictions(r?.data || [])).catch(() => {})
+      svc.getRecentPredictions(100)
+        .then(r => setPredictions(r?.data || []))
+        .catch(e => {
+          console.error('Failed to load predictions:', e)
+          toast.error('Failed to load predictions: ' + (e.message || 'Unknown error'))
+        })
     }
-    if (activeTab === 'Feedback' && !feedback) {
-      svc.getFeedback({ limit: 100 }).then(r => setFeedback(r?.data || r)).catch(() => {})
+    if (activeTab === 'Feedback') {
+      if (!feedback) {
+        svc.getFeedback({ limit: 100 })
+          .then(r => setFeedback(r?.data || r))
+          .catch(e => {
+            console.error('Failed to load feedback:', e)
+            toast.error('Failed to load feedback: ' + (e.message || 'Unknown error'))
+          })
+      }
+      if (!trainingSummary) {
+        svc.getTrainingSummary()
+          .then(r => setTrainingSummary(r?.data || r))
+          .catch(e => console.error('Failed to load training summary:', e))
+      }
+      svc.getPendingFeedback(100)
+        .then(r => setPendingFeedback(r?.data || []))
+        .catch(e => console.error('Failed to load pending feedback:', e))
     }
     if (activeTab === 'Drift') {
       loadDriftReports()
+      svc.getDriftSettings()
+        .then(r => {
+          const rows = r?.data || []
+          setDriftSettings(rows)
+          // Pre-populate editable copies
+          const edits = {}
+          rows.forEach(s => { edits[s.model_type] = { ...s } })
+          setSettingsEditing(edits)
+        })
+        .catch(() => {})
+      svc.getDriftAlerts({ acknowledged: false, limit: 20 })
+        .then(r => { setDriftAlerts(r?.data || []); setDriftAlertsUnread(r?.unread_count ?? 0) })
+        .catch(() => {})
+      svc.getDriftHistory({ modelType: driftHistoryModel, limit: 60 })
+        .then(r => setDriftHistory(r?.data || []))
+        .catch(() => {})
     }
     if (activeTab === 'Models' && !modelVersions) {
-      svc.getModelVersions().then(r => setModelVersions(r?.data || r)).catch(() => {})
+      svc.getModelVersions()
+        .then(r => setModelVersions(r?.data || r))
+        .catch(e => {
+          console.error('Failed to load model versions:', e)
+          toast.error('Failed to load model versions: ' + (e.message || 'Unknown error'))
+        })
+      svc.getGlobalTopFeatures()
+        .then(r => setGlobalFeatures(r?.data || r))
+        .catch(() => {}) // non-critical – silently omit if unavailable
     }
     if (activeTab === 'Retraining') {
       refreshRetrainRuns()
@@ -173,29 +230,70 @@ export default function MLAdminDashboard() {
 
   const handleRunDrift = async (modelType) => {
     setDriftRunning(true)
-    setActionMsg(null)
     try {
       const r = await svc.runDriftDetection(modelType, 30)
-      setActionMsg({ type: 'success', text: `Drift report for ${modelType}: drift ${r?.data?.drift_detected ? 'DETECTED' : 'none'}` })
+      toast.success(`Drift report for ${modelType}: drift ${r?.data?.drift_detected ? 'DETECTED' : 'none'}`)
     } catch (e) {
-      setActionMsg({ type: 'error', text: 'Drift detection failed: ' + e.message })
+      toast.error('Drift detection failed: ' + e.message)
     } finally {
       setDriftRunning(false)
       // Always refresh the list so existing reports remain visible
       loadDriftReports()
+      // Refresh alerts in case new one was created
+      svc.getDriftAlerts({ acknowledged: false, limit: 20 })
+        .then(r => { setDriftAlerts(r?.data || []); setDriftAlertsUnread(r?.unread_count ?? 0) })
+        .catch(() => {})
+      // Refresh history chart
+      svc.getDriftHistory({ modelType: driftHistoryModel, limit: 60 })
+        .then(r => setDriftHistory(r?.data || []))
+        .catch(() => {})
+    }
+  }
+
+  const handleAcknowledgeAlert = async (id) => {
+    try {
+      await svc.acknowledgeDriftAlert(id)
+      setDriftAlerts(prev => prev.filter(a => a.id !== id))
+      setDriftAlertsUnread(prev => Math.max(0, prev - 1))
+      toast.success('Alert acknowledged')
+    } catch (e) {
+      toast.error('Failed to acknowledge: ' + e.message)
+    }
+  }
+
+  const handleAcknowledgeAllAlerts = async () => {
+    try {
+      const r = await svc.acknowledgeAllDriftAlerts()
+      setDriftAlerts([])
+      setDriftAlertsUnread(0)
+      toast.success(`Acknowledged ${r?.acknowledged_count ?? 0} alert(s)`)
+    } catch (e) {
+      toast.error('Failed: ' + e.message)
+    }
+  }
+
+  const handleSaveDriftSettings = async (modelType) => {
+    setSettingsSaving(modelType)
+    try {
+      const { data } = await svc.updateDriftSettings(modelType, settingsEditing[modelType])
+      setDriftSettings(prev => prev.map(s => s.model_type === modelType ? data : s))
+      toast.success(`Drift settings saved for ${modelType}`)
+    } catch (e) {
+      toast.error('Save failed: ' + e.message)
+    } finally {
+      setSettingsSaving('')
     }
   }
 
   const handleRetrain = async (opts) => {
     setActionLoading('retrain')
-    setActionMsg(null)
     try {
       const r = await svc.triggerRetraining(opts)
-      setActionMsg({ type: 'success', text: `Retraining started. Run ID: ${r?.data?.run_id}` })
+      toast.success(`Retraining started. Run ID: ${r?.data?.run_id}`)
       // Immediately refresh run list so the new row appears, then polling takes over
       await refreshRetrainRuns()
     } catch (e) {
-      setActionMsg({ type: 'error', text: 'Retraining failed: ' + e.message })
+      toast.error('Retraining failed: ' + e.message)
     } finally {
       setActionLoading('')
     }
@@ -206,10 +304,15 @@ export default function MLAdminDashboard() {
     setActionLoading(`deploy-${version}`)
     try {
       await svc.deployModel(modelType, version)
-      setActionMsg({ type: 'success', text: `Deployed ${modelType} v${version}` })
-      svc.getModelVersions().then(r => setModelVersions(r?.data || r)).catch(() => {})
+      toast.success(`Deployed ${modelType} v${version}`)
+      svc.getModelVersions()
+        .then(r => setModelVersions(r?.data || r))
+        .catch(e => {
+          console.error('Failed to refresh model versions after deploy:', e)
+          // Don't show error to user since deploy succeeded - just log it
+        })
     } catch (e) {
-      setActionMsg({ type: 'error', text: 'Deploy failed: ' + e.message })
+      toast.error('Deploy failed: ' + e.message)
     } finally {
       setActionLoading('')
     }
@@ -220,10 +323,15 @@ export default function MLAdminDashboard() {
     setActionLoading(`rollback-${modelType}`)
     try {
       const r = await svc.rollbackModel(modelType)
-      setActionMsg({ type: 'success', text: r?.data?.message || 'Rollback complete' })
-      svc.getModelVersions().then(r => setModelVersions(r?.data || r)).catch(() => {})
+      toast.success(r?.data?.message || 'Rollback complete')
+      svc.getModelVersions()
+        .then(r => setModelVersions(r?.data || r))
+        .catch(e => {
+          console.error('Failed to refresh model versions after rollback:', e)
+          // Don't show error to user since rollback succeeded - just log it
+        })
     } catch (e) {
-      setActionMsg({ type: 'error', text: 'Rollback failed: ' + e.message })
+      toast.error('Rollback failed: ' + e.message)
     } finally {
       setActionLoading('')
     }
@@ -239,7 +347,52 @@ export default function MLAdminDashboard() {
       a.click()
       URL.revokeObjectURL(url)
     } catch (e) {
-      setActionMsg({ type: 'error', text: 'Export failed: ' + e.message })
+      toast.error('Export failed: ' + e.message)
+    }
+  }
+
+  // ── Feedback review handlers ──────────────────────────────────────────────
+
+  const handleApproveFeedback = async (id) => {
+    setReviewLoading(true)
+    try {
+      await svc.approveFeedback(id)
+      setPendingFeedback(prev => prev.filter(f => f.id !== id))
+      setTrainingSummary(null) // force refresh on next render
+      toast.success('Feedback approved for training')
+    } catch (e) {
+      toast.error('Approve failed: ' + e.message)
+    } finally {
+      setReviewLoading(false)
+    }
+  }
+
+  const handleRejectFeedback = async (id) => {
+    setReviewLoading(true)
+    try {
+      await svc.rejectFeedback(id)
+      setPendingFeedback(prev => prev.filter(f => f.id !== id))
+      setTrainingSummary(null)
+      toast.success('Feedback rejected from training')
+    } catch (e) {
+      toast.error('Reject failed: ' + e.message)
+    } finally {
+      setReviewLoading(false)
+    }
+  }
+
+  const handleBulkApprove = async () => {
+    if (!window.confirm(`Approve all ${pendingFeedback.length} pending feedback records for training?`)) return
+    setReviewLoading(true)
+    try {
+      const r = await svc.bulkApproveFeedback()
+      setPendingFeedback([])
+      setTrainingSummary(null)
+      toast.success(`Bulk approved ${r?.approved_count ?? 0} records`)
+    } catch (e) {
+      toast.error('Bulk approve failed: ' + e.message)
+    } finally {
+      setReviewLoading(false)
     }
   }
 
@@ -291,23 +444,6 @@ export default function MLAdminDashboard() {
             </button>
           </div>
         </div>
-
-        {/* Action message banner */}
-        {actionMsg && (
-          <div className={`mb-4 p-3 rounded-lg text-sm flex items-center justify-between
-            ${actionMsg.type === 'success' ? 'bg-green-950 text-green-300 border border-green-800'
-              : 'bg-red-950 text-red-300 border border-red-800'}`}>
-            <span>{actionMsg.text}</span>
-            <button onClick={() => setActionMsg(null)} className="ml-3 opacity-60 hover:opacity-100">X</button>
-          </div>
-        )}
-
-        {/* Error banner */}
-        {error && (
-          <div className="mb-4 p-3 rounded-lg text-sm bg-red-950 text-red-300 border border-red-800">
-            {error}
-          </div>
-        )}
 
         {/* ── Tabs ── */}
         <div className="flex gap-1 border-b border-gray-700 mb-6 overflow-x-auto">
@@ -583,7 +719,106 @@ export default function MLAdminDashboard() {
           <div className="space-y-4">
             {!feedback ? <Spinner /> : (
               <>
-                {/* Stats row */}
+                {/* ── Training Summary ── */}
+                {trainingSummary && (
+                  <>
+                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Training Feedback Summary</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <Card>
+                        <Metric label="Total Overrides" value={trainingSummary.totals?.category_overrides ?? 0} />
+                      </Card>
+                      <Card>
+                        <Metric
+                          label="Overall Override Rate"
+                          value={trainingSummary.totals?.overall_override_rate_pct != null
+                            ? `${trainingSummary.totals.overall_override_rate_pct}%` : '—'}
+                          color={parseFloat(trainingSummary.totals?.overall_override_rate_pct) < 15 ? 'green' : 'red'}
+                        />
+                      </Card>
+                      <Card>
+                        <Metric
+                          label="Pending Review"
+                          value={trainingSummary.pending_count ?? 0}
+                          color={trainingSummary.pending_count > 0 ? 'yellow' : 'green'}
+                        />
+                      </Card>
+                      <Card>
+                        <Metric label="Approved for Training" value={trainingSummary.totals?.approved_for_training ?? 0} color="green" />
+                      </Card>
+                    </div>
+
+                    {/* Override rate by category */}
+                    {trainingSummary.by_category?.length > 0 && (
+                      <Card title="Override Rate by Category">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-gray-500 border-b border-gray-700 text-left">
+                                <th className="py-2 pr-3">Category</th>
+                                <th className="py-2 pr-3">Overrides</th>
+                                <th className="py-2 pr-3">Override %</th>
+                                <th className="py-2 pr-3">Avg Confidence</th>
+                                <th className="py-2 pr-3">Pending</th>
+                                <th className="py-2">Approved</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {trainingSummary.by_category.map((row, i) => (
+                                <tr key={i} className="border-b border-gray-800">
+                                  <td className="py-1.5 pr-3 capitalize font-medium text-gray-200">{row.ai_category}</td>
+                                  <td className="py-1.5 pr-3">{row.total_overrides}</td>
+                                  <td className="py-1.5 pr-3">
+                                    <Badge color={parseFloat(row.category_override_pct) > 20 ? 'red' : 'green'}>
+                                      {row.category_override_pct}%
+                                    </Badge>
+                                  </td>
+                                  <td className="py-1.5 pr-3 text-gray-400">{Math.round(row.avg_confidence * 100)}%</td>
+                                  <td className="py-1.5 pr-3">
+                                    {row.pending_review > 0
+                                      ? <Badge color="yellow">{row.pending_review}</Badge>
+                                      : <span className="text-gray-500">—</span>}
+                                  </td>
+                                  <td className="py-1.5 text-green-400">{row.approved_for_training}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </Card>
+                    )}
+
+                    {/* Most corrected categories */}
+                    {trainingSummary.most_corrected?.length > 0 && (
+                      <Card title="Most Corrected Categories (AI said → Technician changed to)">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-gray-500 border-b border-gray-700 text-left">
+                                <th className="py-2 pr-3">AI Predicted</th>
+                                <th className="py-2 pr-3">→ Corrected To</th>
+                                <th className="py-2 pr-3">Count</th>
+                                <th className="py-2">% of Corrections</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {trainingSummary.most_corrected.map((row, i) => (
+                                <tr key={i} className="border-b border-gray-800">
+                                  <td className="py-1.5 pr-3 capitalize text-red-400">{row.original_cat}</td>
+                                  <td className="py-1.5 pr-3 capitalize text-green-400">{row.corrected_to}</td>
+                                  <td className="py-1.5 pr-3">{row.correction_count}</td>
+                                  <td className="py-1.5 text-gray-400">{row.pct_of_total}%</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </Card>
+                    )}
+                  </>
+                )}
+
+                {/* ── Stats row (existing) ── */}
+                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-2">All Feedback Stats</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <Card>
                     <Metric label="Total Feedback" value={feedback.stats?.total ?? 0} />
@@ -624,6 +859,72 @@ export default function MLAdminDashboard() {
                   </Card>
                 )}
 
+                {/* ── Pending review queue ── */}
+                <Card title={`Pending Review Queue ${pendingFeedback.length > 0 ? `(${pendingFeedback.length} awaiting)` : ''}`}>
+                  {pendingFeedback.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-4">No feedback records awaiting review.</p>
+                  ) : (
+                    <>
+                      <div className="flex justify-end mb-3">
+                        <button
+                          onClick={handleBulkApprove}
+                          disabled={reviewLoading}
+                          className="px-3 py-1.5 text-xs bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white rounded-lg transition-colors"
+                        >
+                          Approve All ({pendingFeedback.length})
+                        </button>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-gray-500 border-b border-gray-700 text-left">
+                              <th className="py-2 pr-3">Ticket</th>
+                              <th className="py-2 pr-3">AI Category</th>
+                              <th className="py-2 pr-3">→ New Category</th>
+                              <th className="py-2 pr-3">Conf.</th>
+                              <th className="py-2 pr-3">Reason</th>
+                              <th className="py-2 pr-3">Technician</th>
+                              <th className="py-2 pr-3">Date</th>
+                              <th className="py-2">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pendingFeedback.map((f) => (
+                              <tr key={f.id} className="border-b border-gray-800">
+                                <td className="py-1.5 pr-3 font-mono text-blue-400">{f.ticket_number}</td>
+                                <td className="py-1.5 pr-3 capitalize text-red-300">{f.ai_category || '—'}</td>
+                                <td className="py-1.5 pr-3 capitalize text-green-300">{f.user_category || '—'}</td>
+                                <td className="py-1.5 pr-3 text-gray-400">
+                                  {f.ai_confidence != null ? `${Math.round(f.ai_confidence * 100)}%` : '—'}
+                                </td>
+                                <td className="py-1.5 pr-3 italic text-gray-400 truncate max-w-[120px]">{f.override_reason || '—'}</td>
+                                <td className="py-1.5 pr-3 text-gray-300">{f.technician_name || '—'}</td>
+                                <td className="py-1.5 pr-3 text-gray-400">{f.created_at?.split('T')[0]}</td>
+                                <td className="py-1.5 flex gap-1">
+                                  <button
+                                    onClick={() => handleApproveFeedback(f.id)}
+                                    disabled={reviewLoading}
+                                    className="px-2 py-1 text-[10px] bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white rounded transition-colors"
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectFeedback(f.id)}
+                                    disabled={reviewLoading}
+                                    className="px-2 py-1 text-[10px] bg-red-800 hover:bg-red-700 disabled:opacity-50 text-white rounded transition-colors"
+                                  >
+                                    Reject
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+                </Card>
+
                 {/* Recent entries */}
                 <Card title="Recent Feedback">
                   <div className="overflow-x-auto">
@@ -634,6 +935,7 @@ export default function MLAdminDashboard() {
                           <th className="py-2 pr-3">AI Category</th>
                           <th className="py-2 pr-3">User Category</th>
                           <th className="py-2 pr-3">Overridden?</th>
+                          <th className="py-2 pr-3">Training Status</th>
                           <th className="py-2 pr-3">Reason</th>
                           <th className="py-2">Date</th>
                         </tr>
@@ -648,6 +950,11 @@ export default function MLAdminDashboard() {
                               {f.category_overridden ? <Badge color="yellow">Cat</Badge> : ''}
                               {f.priority_overridden ? <Badge color="yellow"> Pri</Badge> : ''}
                               {!f.category_overridden && !f.priority_overridden && <Badge color="green">Accepted</Badge>}
+                            </td>
+                            <td className="py-1.5 pr-3">
+                              {f.training_status === 'approved' && <Badge color="green">Approved</Badge>}
+                              {f.training_status === 'rejected' && <Badge color="red">Rejected</Badge>}
+                              {(f.training_status === 'pending' || !f.training_status) && <Badge color="yellow">Pending</Badge>}
                             </td>
                             <td className="py-1.5 pr-3 italic text-gray-400 truncate max-w-[150px]">{f.override_reason || '—'}</td>
                             <td className="py-1.5 text-gray-400">{f.created_at?.split('T')[0]}</td>
@@ -667,19 +974,136 @@ export default function MLAdminDashboard() {
         {/* ════════════════════════════════════════════════════════════════ */}
         {activeTab === 'Drift' && (
           <div className="space-y-4">
-            <div className="flex gap-3 flex-wrap">
-              {['category', 'priority'].map(mt => (
-                <button
-                  key={mt}
-                  onClick={() => handleRunDrift(mt)}
-                  disabled={driftRunning}
-                  className="px-4 py-2 text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg transition-colors"
-                >
-                  {driftRunning ? 'Running…' : `Run Drift (${mt})`}
-                </button>
-              ))}
+
+            {/* ── Manual run buttons ──── */}
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex gap-3 flex-wrap">
+                {['category', 'priority'].map(mt => (
+                  <button
+                    key={mt}
+                    onClick={() => handleRunDrift(mt)}
+                    disabled={driftRunning}
+                    className="px-4 py-2 text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg transition-colors"
+                  >
+                    {driftRunning ? 'Running…' : `Run Now (${mt})`}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500">
+                Drift is also checked automatically on the schedule configured below.
+              </p>
             </div>
 
+            {/* ── Unread alerts banner ──── */}
+            {driftAlertsUnread > 0 && (
+              <div className="bg-red-900/30 border border-red-700 rounded-xl p-3 flex items-center justify-between gap-3">
+                <p className="text-sm text-red-300">
+                  ⚠️ {driftAlertsUnread} unread drift alert{driftAlertsUnread !== 1 ? 's' : ''} require your attention.
+                </p>
+                <button
+                  onClick={handleAcknowledgeAllAlerts}
+                  className="text-xs px-3 py-1 bg-red-700 hover:bg-red-600 text-white rounded-lg transition-colors"
+                >
+                  Acknowledge All
+                </button>
+              </div>
+            )}
+
+            {/* ── Drift Alerts Panel ──── */}
+            {driftAlerts.length > 0 && (
+              <Card title={`Drift Alerts (${driftAlerts.length} unacknowledged)`}>
+                <div className="space-y-2">
+                  {driftAlerts.map(a => (
+                    <div key={a.id} className="flex items-start justify-between gap-3 bg-gray-700/40 rounded-lg p-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge color={a.severity === 'high' ? 'red' : a.severity === 'medium' ? 'yellow' : 'blue'}>
+                            {a.severity}
+                          </Badge>
+                          <span className="text-xs text-gray-400 capitalize">{a.model_type}</span>
+                          <span className="text-xs text-gray-500">{a.created_at?.split('T')[0]}</span>
+                          {a.retrain_triggered && (
+                            <Badge color={a.retrain_status === 'success' ? 'green' : a.retrain_status === 'failed' ? 'red' : 'blue'}>
+                              retrain: {a.retrain_status ?? 'in progress'}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-300 truncate">{a.message}</p>
+                        {a.chi2_statistic != null && (
+                          <p className="text-[10px] text-gray-500 mt-1">
+                            χ²={a.chi2_statistic} (p={a.chi2_p_value})
+                            {a.ks_statistic != null ? `  KS=${a.ks_statistic} (p=${a.ks_p_value})` : ''}
+                            &nbsp;&bull;&nbsp;{a.sample_size} samples
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => handleAcknowledgeAlert(a.id)}
+                        className="text-xs px-2 py-1 bg-gray-600 hover:bg-gray-500 text-gray-200 rounded transition-colors whitespace-nowrap"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
+            {/* ── Drift Metric History Chart ──── */}
+            {driftHistory.length > 0 && (
+              <Card title={`Drift Metric History – ${driftHistoryModel}`}>
+                <div className="flex gap-2 mb-3">
+                  {['category', 'priority'].map(mt => (
+                    <button
+                      key={mt}
+                      onClick={() => {
+                        setDriftHistoryModel(mt)
+                        svc.getDriftHistory({ modelType: mt, limit: 60 })
+                          .then(r => setDriftHistory(r?.data || []))
+                          .catch(() => {})
+                      }}
+                      className={`text-xs px-2 py-1 rounded-md transition-colors ${
+                        driftHistoryModel === mt
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      {mt}
+                    </button>
+                  ))}
+                </div>
+                {/* Simple SVG sparkline for chi2 p-values */}
+                <div className="overflow-x-auto">
+                  <div className="flex items-end gap-1" style={{ minWidth: `${driftHistory.length * 14}px`, height: '64px' }}>
+                    {driftHistory.map((r, i) => {
+                      // bar height: high p-value (no drift) = tall green, low p-value (drift) = short red
+                      const pVal = r.chi2_p_value ?? r.ks_p_value ?? 1
+                      const heightPct = Math.round(Math.min(pVal, 1) * 100)
+                      const isDrift = r.drift_detected
+                      return (
+                        <div
+                          key={i}
+                          title={`${r.report_date}  p=${pVal}  ${isDrift ? 'DRIFT' : 'OK'}`}
+                          className={`flex-shrink-0 w-3 rounded-sm ${
+                            isDrift ? 'bg-red-500' : 'bg-green-600'
+                          }`}
+                          style={{ height: `${Math.max(heightPct, 4)}%` }}
+                        />
+                      )
+                    })}
+                  </div>
+                </div>
+                <div className="flex justify-between text-[10px] text-gray-500 mt-1">
+                  <span>{driftHistory[0]?.report_date}</span>
+                  <span className="text-red-400">■ drift  </span>
+                  <span className="text-green-500">■ no drift</span>
+                  <span>{driftHistory[driftHistory.length - 1]?.report_date}</span>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-2">Bar height = p-value (higher p = less drift). Hover for details.</p>
+              </Card>
+            )}
+
+            {/* ── Recent drift reports list ──── */}
             {driftLoading ? (
               <Card><Spinner /></Card>
             ) : driftError ? (
@@ -689,76 +1113,203 @@ export default function MLAdminDashboard() {
             ) : driftReports.length === 0 ? (
               <Card>
                 <p className="text-sm text-gray-400 text-center py-4">
-                  No drift reports yet. Run a drift check above.
+                  No drift reports yet. Run a drift check above or wait for the scheduled job.
                 </p>
               </Card>
             ) : (
-              <div className="space-y-3">
-                {driftReports.map((r, i) => (
-                  <Card key={i}>
-                    <div className="flex items-start justify-between flex-wrap gap-3">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge color={r.drift_detected ? 'red' : 'green'}>
-                            {r.drift_detected ? 'Drift Detected' : 'No Drift'}
-                          </Badge>
-                          <span className="text-xs text-gray-400 capitalize">{r.model_type}</span>
-                          <span className="text-xs text-gray-500">{r.report_date}</span>
+              <Card title="Recent Drift Reports">
+                <div className="space-y-3">
+                  {driftReports.map((r, i) => (
+                    <div key={i} className="border border-gray-700 rounded-lg p-3">
+                      <div className="flex items-start justify-between flex-wrap gap-3">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge color={r.drift_detected ? 'red' : 'green'}>
+                              {r.drift_detected ? 'Drift Detected' : 'No Drift'}
+                            </Badge>
+                            {r.alert_sent && <Badge color="yellow">alert sent</Badge>}
+                            <span className="text-xs text-gray-400 capitalize">{r.model_type}</span>
+                            <span className="text-xs text-gray-500">{r.report_date}</span>
+                          </div>
+                          <p className="text-xs text-gray-400">{r.notes}</p>
                         </div>
-                        <p className="text-xs text-gray-400">{r.notes}</p>
-                      </div>
-                      <div className="flex gap-4 text-xs">
-                        {r.chi2_statistic != null && (
+                        <div className="flex gap-4 text-xs">
+                          {r.chi2_statistic != null && (
+                            <div className="text-center">
+                              <div className="font-mono font-bold text-gray-300">{r.chi2_statistic}</div>
+                              <div className="text-gray-500">χ² (p={r.chi2_p_value})</div>
+                            </div>
+                          )}
+                          {r.ks_statistic != null && (
+                            <div className="text-center">
+                              <div className="font-mono font-bold text-gray-300">{r.ks_statistic}</div>
+                              <div className="text-gray-500">KS (p={r.ks_p_value})</div>
+                            </div>
+                          )}
                           <div className="text-center">
-                            <div className="font-mono font-bold text-gray-300">{r.chi2_statistic}</div>
-                            <div className="text-gray-500">χ² (p={r.chi2_p_value})</div>
-                          </div>
-                        )}
-                        {r.ks_statistic != null && (
-                          <div className="text-center">
-                            <div className="font-mono font-bold text-gray-300">{r.ks_statistic}</div>
-                            <div className="text-gray-500">KS (p={r.ks_p_value})</div>
-                          </div>
-                        )}
-                        <div className="text-center">
                             <div className="font-mono font-bold text-gray-300">{r.sample_size}</div>
                             <div className="text-gray-500">samples</div>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Live distribution */}
-                    {r.distribution && Object.keys(r.distribution).length > 0 && (
-                      <div className="mt-3">
-                        <p className="text-[10px] text-gray-500 mb-1.5">Live distribution vs baseline:</p>
-                        <div className="space-y-1">
-                          {Object.entries(r.distribution).sort((a,b)=>b[1]-a[1]).map(([label, count]) => {
-                            const total = Object.values(r.distribution).reduce((s,v)=>s+v,0)
-                            const baseCount = r.baseline_dist?.[label] || 0
-                            const baseTotal = Object.values(r.baseline_dist||{}).reduce((s,v)=>s+v,0)
-                            return (
-                              <div key={label} className="flex items-center gap-2 text-xs">
-                                <span className="w-20 capitalize truncate text-gray-400">{label}</span>
-                                <div className="flex-1 flex items-center gap-1">
-                                  <div title="Live" className="h-2 bg-blue-500 rounded" style={{ width: `${Math.round((count/Math.max(total,1))*120)}px` }} />
-                                  {baseTotal > 0 && (
-                                    <div title="Baseline" className="h-2 bg-gray-600 rounded" style={{ width: `${Math.round((baseCount/Math.max(baseTotal,1))*120)}px` }} />
-                                  )}
+                      {/* Live distribution */}
+                      {r.distribution && Object.keys(r.distribution).length > 0 && (
+                        <div className="mt-3">
+                          <p className="text-[10px] text-gray-500 mb-1.5">Live distribution vs baseline:</p>
+                          <div className="space-y-1">
+                            {Object.entries(r.distribution).sort((a,b)=>b[1]-a[1]).map(([label, count]) => {
+                              const total = Object.values(r.distribution).reduce((s,v)=>s+v,0)
+                              const baseCount = r.baseline_dist?.[label] || 0
+                              const baseTotal = Object.values(r.baseline_dist||{}).reduce((s,v)=>s+v,0)
+                              return (
+                                <div key={label} className="flex items-center gap-2 text-xs">
+                                  <span className="w-20 capitalize truncate text-gray-400">{label}</span>
+                                  <div className="flex-1 flex items-center gap-1">
+                                    <div title="Live" className="h-2 bg-blue-500 rounded" style={{ width: `${Math.round((count/Math.max(total,1))*120)}px` }} />
+                                    {baseTotal > 0 && (
+                                      <div title="Baseline" className="h-2 bg-gray-600 rounded" style={{ width: `${Math.round((baseCount/Math.max(baseTotal,1))*120)}px` }} />
+                                    )}
+                                  </div>
+                                  <span className="text-gray-400 w-16">
+                                    {Math.round((count/Math.max(total,1))*100)}% live
+                                  </span>
                                 </div>
-                                <span className="text-gray-400 w-16">
-                                  {Math.round((count/Math.max(total,1))*100)}% live
-                                </span>
-                              </div>
-                            )
-                          })}
+                              )
+                            })}
+                          </div>
+                          <p className="text-[10px] text-gray-500 mt-1">■ Blue = live  ■ Gray = training baseline</p>
                         </div>
-                        <p className="text-[10px] text-gray-500 mt-1">■ Blue = live  ■ Gray = training baseline</p>
-                      </div>
-                    )}
-                  </Card>
-                ))}
-              </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </Card>
             )}
+
+            {/* ── Configurable Settings Panel ──── */}
+            <Card title="Drift Detection Settings">
+              {driftSettings.length === 0 ? (
+                <p className="text-xs text-gray-500">Settings not loaded yet. Open this tab to load them.</p>
+              ) : (
+                <div className="space-y-6">
+                  {driftSettings.map(s => {
+                    const edit = settingsEditing[s.model_type] || s
+                    const set  = (field, val) => setSettingsEditing(prev => ({
+                      ...prev,
+                      [s.model_type]: { ...(prev[s.model_type] || s), [field]: val }
+                    }))
+                    return (
+                      <div key={s.model_type} className="border border-gray-700 rounded-lg p-4 space-y-3">
+                        <h4 className="text-sm font-semibold text-gray-200 capitalize">{s.model_type} model</h4>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {/* P-value threshold */}
+                          <div>
+                            <label className="block text-[10px] text-gray-500 mb-1">P-value threshold</label>
+                            <input
+                              type="number" step="0.01" min="0.01" max="0.2"
+                              value={edit.p_value_threshold ?? 0.05}
+                              onChange={e => set('p_value_threshold', parseFloat(e.target.value))}
+                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                            />
+                          </div>
+                          {/* Window days */}
+                          <div>
+                            <label className="block text-[10px] text-gray-500 mb-1">Window (days)</label>
+                            <input
+                              type="number" step="1" min="7" max="365"
+                              value={edit.window_days ?? 30}
+                              onChange={e => set('window_days', parseInt(e.target.value, 10))}
+                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                            />
+                          </div>
+                          {/* Min sample size */}
+                          <div>
+                            <label className="block text-[10px] text-gray-500 mb-1">Min sample size</label>
+                            <input
+                              type="number" step="5" min="10"
+                              value={edit.min_sample_size ?? 30}
+                              onChange={e => set('min_sample_size', parseInt(e.target.value, 10))}
+                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                            />
+                          </div>
+                          {/* Cron expression */}
+                          <div className="sm:col-span-2">
+                            <label className="block text-[10px] text-gray-500 mb-1">CRON schedule (UTC)</label>
+                            <input
+                              type="text"
+                              value={edit.cron_expression ?? '0 2 * * *'}
+                              onChange={e => set('cron_expression', e.target.value)}
+                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500 font-mono"
+                              placeholder="0 2 * * *"
+                            />
+                            <p className="text-[9px] text-gray-600 mt-0.5">Default: 0 2 * * * = daily at 02:00 UTC</p>
+                          </div>
+                          {/* Schedule enabled */}
+                          <div className="flex items-center gap-2 pt-4">
+                            <input
+                              type="checkbox"
+                              id={`sched-${s.model_type}`}
+                              checked={!!edit.schedule_enabled}
+                              onChange={e => set('schedule_enabled', e.target.checked)}
+                              className="accent-blue-500"
+                            />
+                            <label htmlFor={`sched-${s.model_type}`} className="text-xs text-gray-300">Schedule enabled</label>
+                          </div>
+                        </div>
+
+                        <div className="border-t border-gray-700 pt-3">
+                          <p className="text-[10px] text-gray-500 mb-2">Auto-retraining when drift is detected</p>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id={`auto-retrain-${s.model_type}`}
+                                checked={!!edit.auto_retrain_enabled}
+                                onChange={e => set('auto_retrain_enabled', e.target.checked)}
+                                className="accent-purple-500"
+                              />
+                              <label htmlFor={`auto-retrain-${s.model_type}`} className="text-xs text-gray-300">Auto-retrain</label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id={`auto-deploy-${s.model_type}`}
+                                checked={!!edit.auto_deploy_on_retrain}
+                                onChange={e => set('auto_deploy_on_retrain', e.target.checked)}
+                                className="accent-green-500"
+                              />
+                              <label htmlFor={`auto-deploy-${s.model_type}`} className="text-xs text-gray-300">Auto-deploy if better</label>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-gray-500 mb-1">Min accuracy gain</label>
+                              <input
+                                type="number" step="0.01" min="0" max="0.5"
+                                value={edit.retrain_threshold ?? 0.02}
+                                onChange={e => set('retrain_threshold', parseFloat(e.target.value))}
+                                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => handleSaveDriftSettings(s.model_type)}
+                            disabled={settingsSaving === s.model_type}
+                            className="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors"
+                          >
+                            {settingsSaving === s.model_type ? 'Saving…' : 'Save Settings'}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </Card>
+
           </div>
         )}
 
@@ -868,6 +1419,49 @@ export default function MLAdminDashboard() {
                   </>
                 )}
               </>
+            )}
+
+            {/* ── Model Insights: Global Top Features ─────────────────── */}
+            {globalFeatures && (Object.values(globalFeatures).some(v => v?.length > 0)) && (
+              <Card title="Model Insights — Top Features Globally">
+                <p className="text-xs text-gray-500 mb-4">
+                  Most influential features across all predictions, derived from model feature importances.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {['category', 'priority'].map(mt => {
+                    const features = globalFeatures[mt]
+                    if (!features?.length) return null
+                    const maxScore = features[0]?.score || 1
+                    return (
+                      <div key={mt}>
+                        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                          {mt.charAt(0).toUpperCase() + mt.slice(1)} Model
+                        </h4>
+                        <div className="space-y-2">
+                          {features.slice(0, 10).map((f, i) => {
+                            const pct = Math.min(100, Math.round((f.score / maxScore) * 100))
+                            const color = pct >= 70 ? 'bg-blue-500' : pct >= 40 ? 'bg-blue-400' : 'bg-blue-300'
+                            return (
+                              <div key={i} className="flex items-center gap-2">
+                                <span className="text-xs text-gray-300 w-28 truncate font-mono" title={f.feature}>
+                                  {f.feature}
+                                </span>
+                                <div className="flex-1 bg-gray-700 rounded-full h-1.5">
+                                  <div
+                                    className={`h-1.5 rounded-full ${color} transition-all duration-300`}
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs text-gray-500 w-10 text-right">{pct}%</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </Card>
             )}
           </div>
         )}

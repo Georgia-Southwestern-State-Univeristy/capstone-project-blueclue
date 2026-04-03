@@ -1,0 +1,273 @@
+import { useState, useEffect, useCallback, useRef } from 'react'
+import BaseWidget from './BaseWidget'
+import { useToast } from '../hooks/useToast'
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+
+/**
+ * AuditHealthWidget
+ * Displays real-time health status of audit logging systems.
+ * Shows last entry timestamp and health indicators for each system.
+ * Auto-refreshes every 60 seconds.
+ * Management/admin only.
+ */
+function AuditHealthWidget() {
+  const [healthData, setHealthData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const toast = useToast()
+  const consecutiveFailuresRef = useRef(0)
+
+  const fetchHealth = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const token = localStorage.getItem('blueclue_token')
+      if (!token) {
+        throw new Error('Authentication token not found')
+      }
+
+      const response = await fetch(`${API_BASE_URL}/admin/audit-health`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        let backendMessage = ''
+        try {
+          const errorData = await response.json()
+          backendMessage = errorData?.message || ''
+        } catch {
+          backendMessage = ''
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(backendMessage || 'Unauthorized: management/admin access required')
+        }
+        throw new Error(backendMessage || `HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to fetch audit health')
+      }
+
+      consecutiveFailuresRef.current = 0
+      setHealthData(data)
+    } catch (err) {
+      consecutiveFailuresRef.current += 1
+      // Only log/toast on first failure to avoid console spam when backend is unavailable
+      if (consecutiveFailuresRef.current === 1) {
+        console.error('Audit health fetch error:', err)
+        setError(err.message)
+        toast.error(err.message)
+      } else {
+        setError(err.message)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [toast])
+
+  useEffect(() => {
+    fetchHealth()
+    
+    // Auto-refresh every 60 seconds; stop after 5 consecutive failures to avoid console spam
+    const intervalId = setInterval(() => {
+      if (consecutiveFailuresRef.current < 5) {
+        fetchHealth()
+      }
+    }, 60000)
+    
+    return () => clearInterval(intervalId)
+  }, [fetchHealth])
+
+  const handleRefresh = useCallback(async () => {
+    consecutiveFailuresRef.current = 0  // reset so polling resumes and errors are logged again
+    await fetchHealth()
+  }, [fetchHealth])
+
+  // Format log type name for display
+  const formatLogType = (logType) => {
+    if (!logType) return 'Unknown'
+    return logType
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
+  }
+
+  // Get icon for health status
+  const getHealthIcon = (isHealthy) => {
+    if (isHealthy === null || isHealthy === undefined) {
+      return (
+        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      )
+    }
+    return isHealthy 
+      ? (
+        <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      )
+      : (
+        <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      )
+  }
+
+  // Get status text color
+  const getStatusColor = (isHealthy) => {
+    if (isHealthy === null || isHealthy === undefined) {
+      return 'text-gray-400'
+    }
+    return isHealthy ? 'text-green-400' : 'text-red-400'
+  }
+
+  const renderContent = () => {
+    if (loading && !healthData) {
+      return (
+        <div className="flex items-center justify-center h-full py-12">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-3"></div>
+            <p className="text-gray-400 text-sm">Loading audit health...</p>
+          </div>
+        </div>
+      )
+    }
+
+    if (error && !healthData) {
+      return (
+        <div className="flex items-center justify-center h-full py-12">
+          <div className="text-center">
+            <p className="text-red-400 text-sm mb-2 flex items-center justify-center gap-1.5">
+              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              Error loading audit health
+            </p>
+            <p className="text-gray-500 text-xs max-w-xs mx-auto">{error}</p>
+            <button
+              onClick={handleRefresh}
+              className="mt-3 text-xs text-blue-400 hover:text-blue-300 underline"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    if (!healthData || !healthData.health || healthData.health.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-full py-12">
+          <p className="text-gray-500 text-sm">No audit health data available</p>
+        </div>
+      )
+    }
+
+    const { health, overall_healthy } = healthData
+
+    return (
+      <div className="space-y-4">
+        {/* Overall Status Card */}
+        <div className={`p-4 rounded-lg border ${
+          overall_healthy 
+            ? 'bg-green-900/20 border-green-500/30' 
+            : 'bg-red-900/20 border-red-500/30'
+        }`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {getHealthIcon(overall_healthy)}
+              <div>
+                <p className={`font-semibold ${getStatusColor(overall_healthy)}`}>
+                  {overall_healthy ? 'All Systems Healthy' : 'System Issues Detected'}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {overall_healthy 
+                    ? 'All audit systems are logging correctly' 
+                    : 'One or more audit systems need attention'}
+                </p>
+              </div>
+            </div>
+            {loading && (
+              <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+            )}
+          </div>
+        </div>
+
+        {/* Individual System Status Cards */}
+        <div className="space-y-2">
+          <p className="text-xs text-gray-400 uppercase font-semibold tracking-wide mb-3">
+            System Details
+          </p>
+          {health.map((system, index) => (
+            <div
+              key={system.log_type || index}
+              className="p-3 bg-gray-700/50 rounded-lg border border-gray-600 hover:bg-gray-700 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  {getHealthIcon(system.is_healthy)}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate">
+                      {formatLogType(system.log_type)}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {system.time_since_last_entry || 'No entries yet'}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0 ml-3">
+                  <p className="text-xs text-gray-500">
+                    {system.entry_count_24h !== null && system.entry_count_24h !== undefined
+                      ? `${system.entry_count_24h} entries`
+                      : 'No data'}
+                  </p>
+                  <p className={`text-xs font-medium mt-0.5 ${getStatusColor(system.is_healthy)}`}>
+                    {system.is_healthy === null || system.is_healthy === undefined
+                      ? 'No baseline'
+                      : system.is_healthy 
+                        ? 'Healthy' 
+                        : 'Unhealthy'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Last Updated Timestamp */}
+        <div className="text-center pt-2 border-t border-gray-700">
+          <p className="text-xs text-gray-500">
+            Auto-refreshes every 60 seconds
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <BaseWidget
+      title="Audit Logging Health"
+      subtitle="System monitoring status"
+      icon={
+        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+      }
+      onRefresh={handleRefresh}
+      className="h-full"
+    >
+      {renderContent()}
+    </BaseWidget>
+  )
+}
+
+export default AuditHealthWidget

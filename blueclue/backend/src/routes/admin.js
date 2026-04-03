@@ -14,8 +14,36 @@ import * as adminController from '../controllers/adminController.js';
 
 const router = express.Router();
 
-// All routes require authentication and admin role
+// All routes require authentication
 router.use(authenticateToken);
+
+// ==================== Audit Health (Management + Admin) ====================
+/**
+ * GET /api/admin/audit-health
+ * Get audit logging health status (login attempts, privilege audit, ticket history)
+ * Returns: { health: [...], overall_healthy: true/false }
+ * Accessible to: management, admin
+ */
+router.get('/audit-health', checkRole('management', 'admin'), adminController.getAuditLogHealth);
+
+// ==================== Technician Management (Management + Admin) ====================
+
+/**
+ * POST /api/admin/technicians
+ * Create a new technician account
+ * Body: { firstName, lastName, email, role }
+ * Accessible to: management, admin
+ */
+router.post('/technicians', checkRole('management', 'admin'), adminController.createTechnician);
+
+/**
+ * GET /api/admin/technicians
+ * Get list of all technicians/staff
+ * Accessible to: management, admin
+ */
+router.get('/technicians', checkRole('management', 'admin'), adminController.getTechnicians);
+
+// All remaining /api/admin routes require admin
 router.use(checkRole('admin'));
 
 // ==================== OUTBOUND Email Logs (Existing) ====================
@@ -112,5 +140,14 @@ router.get('/security-alerts', adminController.getSecurityAlerts);
  * Mark a security alert as resolved
  */
 router.post('/security-alerts/:id/resolve', adminController.resolveSecurityAlert);
+
+// ==================== Alert Rules ====================
+
+/**
+ * Alert Rules Management
+ * All alert rules routes are mounted at /api/admin/alert-rules
+ */
+import alertRulesRouter from './alertRules.js';
+router.use('/alert-rules', alertRulesRouter);
 
 export default router;

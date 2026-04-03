@@ -27,12 +27,10 @@ export function startUpdateRequestReminderJob(io) {
         try {
           // Create notification for the assigned technician
           const notification = await Notification.create({
-            userId: request.assigned_to,
+            user_id: request.assigned_to,
             type: 'update_request_reminder',
-            title: 'Update Request Reminder',
             message: `You have a pending update request for Ticket #${request.ticket_id} from ${request.requester_first_name} ${request.requester_last_name}. Deadline: ${new Date(request.deadline).toLocaleString()}`,
-            relatedEntityType: 'update_request',
-            relatedEntityId: request.id,
+            ticket_id: request.ticket_id,
             metadata: {
               ticketId: request.ticket_id,
               updateRequestId: request.id,

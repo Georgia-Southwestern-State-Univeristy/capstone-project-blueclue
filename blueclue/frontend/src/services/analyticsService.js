@@ -281,6 +281,17 @@ export const getCollaborationAnalytics = async (days = 30) => {
   return handleResponse(response);
 };
 
+/**
+ * Get all recent ticket activity (all change types) for the activity widget
+ * @param {number} limit - Max entries (default 50)
+ */
+export const getRecentTicketActivity = async (limit = 50) => {
+  const response = await fetch(`${API_BASE_URL}/analytics/recent-activity?limit=${limit}`, {
+    headers: getAuthHeaders()
+  });
+  return handleResponse(response);
+};
+
 export default {
   getResolutionTimeMetrics,
   getTicketVolumeMetrics,
@@ -297,5 +308,6 @@ export default {
   getCategoryBreakdown,
   getTechWorkload,
   getReopenAnalytics,
-  getCollaborationAnalytics
+  getCollaborationAnalytics,
+  getRecentTicketActivity
 };

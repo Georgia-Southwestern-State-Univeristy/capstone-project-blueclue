@@ -226,6 +226,23 @@ export const getTicketById = async (id) => {
 };
 
 /**
+ * Fetch an AI-predicted resolution time range for a ticket.
+ * @param {number|string} id - The ticket ID
+ * @returns {Promise<{estimated_hours:number, confidence_range:{lower_hours:number,upper_hours:number}, uncertainty_label:string, model_version:string}|null>}
+ */
+export const predictTicketResolutionTime = async (id) => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${id}/predict-resolution-time`, {
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch resolution time prediction');
+  } catch (error) {
+    console.error('Resolution time prediction error:', error);
+    return null;
+  }
+};
+
+/**
  * Get ticket activity history
  * @param {number|string} id - The ticket ID
  * @returns {Promise<Object>} Object with data array of history entries
@@ -393,6 +410,24 @@ export const bulkAssignTickets = async (ticketIds, technicianId, note = '') => {
   } catch (error) {
     console.error('Bulk assign tickets error:', error);
     const message = getUserFriendlyMessage(error, 'Failed to assign tickets. Please try again.');
+    throw new Error(message);
+  }
+};
+
+/**
+ * Get recent update history for the current user's tickets
+ * @param {number} limit - Max entries to return (default 50)
+ * @returns {Promise<Object>} Object with data array of update entries
+ */
+export const getMyTicketUpdates = async (limit = 50) => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/my-updates?limit=${limit}`, {
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch ticket updates');
+  } catch (error) {
+    console.error('Get ticket updates error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to load ticket updates. Please try again.');
     throw new Error(message);
   }
 };
@@ -638,6 +673,93 @@ export const reopenTicket = async (ticketId, reason) => {
   }
 };
 
+/**
+ * Override the AI-suggested category for a ticket.
+ * Recorded for retraining purposes.
+ * @param {number} ticketId
+ * @param {string} newCategory
+ * @param {string} [reason]
+ */
+export const overrideTicketCategory = async (ticketId, newCategory, reason = '') => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/override-category`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ new_category: newCategory, reason: reason || undefined }),
+    });
+    return await handleResponse(response, 'Failed to override category');
+  } catch (error) {
+    console.error('Override category error:', error);
+    const message = getUserFriendlyMessage(error, 'Failed to override category. Please try again.');
+    throw new Error(message);
+  }
+};
+
+// ── Ticket Chat API ──────────────────────────────────────────────────────────
+
+export const requestTicketChat = async (ticketId) => {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/chat/request`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return await handleResponse(response, 'Failed to request chat');
+};
+
+export const initiateTicketChat = async (ticketId) => {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/chat/initiate`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return await handleResponse(response, 'Failed to initiate chat');
+};
+
+export const getTicketChat = async (ticketId) => {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/chat`, {
+    headers: getAuthHeaders(),
+  });
+  return await handleResponse(response, 'Failed to get chat');
+};
+
+export const acceptTicketChat = async (ticketId, chatId) => {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/chat/${chatId}/accept`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return await handleResponse(response, 'Failed to accept chat');
+};
+
+export const declineTicketChat = async (ticketId, chatId) => {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/chat/${chatId}/decline`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return await handleResponse(response, 'Failed to decline chat');
+};
+
+export const closeTicketChat = async (ticketId, chatId) => {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/chat/${chatId}/close`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return await handleResponse(response, 'Failed to close chat');
+};
+
+export const getTicketChatMessages = async (ticketId, chatId) => {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/chat/${chatId}/messages`, {
+    headers: getAuthHeaders(),
+  });
+  return await handleResponse(response, 'Failed to get chat messages');
+};
+
+export const sendTicketChatMessage = async (ticketId, chatId, message) => {
+  const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/chat/${chatId}/messages`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ message }),
+  });
+  return await handleResponse(response, 'Failed to send message');
+};
+
 export default {
   createTicket,
   getAllTickets,
@@ -664,4 +786,14 @@ export default {
   getDeletedTickets,
   restoreTicket,
   reopenTicket,
+  overrideTicketCategory,
+  predictTicketResolutionTime,
+  requestTicketChat,
+  initiateTicketChat,
+  getTicketChat,
+  acceptTicketChat,
+  declineTicketChat,
+  closeTicketChat,
+  getTicketChatMessages,
+  sendTicketChatMessage,
 };

@@ -2,16 +2,26 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { getTicketById, updateTicketStatus, updateTicket, deleteTicket, getTechnicians, assignSingleTicket, reassignTicket, cancelTicket, reopenTicket } from '../services/ticketService'
+import { getTicketById, updateTicketStatus, updateTicket, deleteTicket, getTechnicians, assignSingleTicket, reassignTicket, cancelTicket, reopenTicket, overrideTicketCategory, requestTicketChat, initiateTicketChat, getTicketChat, predictTicketResolutionTime } from '../services/ticketService'
 import { getUserRole, getUser, getUserId } from '../services/authService'
 import TicketActivityLog from './TicketActivityLog'
 import CancelTicketModal from './CancelTicketModal'
 import TicketComments from './TicketComments'
+import TicketChatTab from './TicketChatTab'
 import AddCollaboratorModal from './AddCollaboratorModal'
 import RingForHelpModal from './RingForHelpModal'
 import RequestUpdateModal from './RequestUpdateModal'
 import { getCollaborators, addCollaborator, removeCollaborator } from '../services/collaboratorService'
 import { getUpdateRequests, handleExtensionRequest } from '../services/updateRequestService'
+import { formatDateTime as _fmtDateTime, formatTimeAgo as _fmtTimeAgo } from '../utils/dateFormatter'
+import RelativeTime from './RelativeTime'
+import ExplainabilityPanel from './ml/ExplainabilityPanel'
+
+/**
+ * Classifications below this threshold are flagged as "Low confidence".
+ * Matches the default in the AI service (can be overridden via environment config).
+ */
+const AI_CONFIDENCE_THRESHOLD = parseFloat(import.meta.env.VITE_AI_CONFIDENCE_THRESHOLD ?? 0.70);
 
 /**
  * TicketDetailView
@@ -20,11 +30,10 @@ import { getUpdateRequests, handleExtensionRequest } from '../services/updateReq
  * Supports close (X / Escape / backdrop), minimize (collapse to bottom bar),
  * and inline status updates.
  */
-function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
+function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimize, preserveState = false }) {
   const [ticket, setTicket] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [minimized, setMinimized] = useState(false)
   const [activeTab, setActiveTab] = useState('details')
   const [statusUpdating, setStatusUpdating] = useState(false)
   const [statusError, setStatusError] = useState(null)
@@ -62,6 +71,14 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   const [reopenLoading, setReopenLoading] = useState(false)
   const [reopenError, setReopenError] = useState(null)
 
+  // ─── AI category override state ───────────────────────────────
+  const [showOverrideDropdown, setShowOverrideDropdown] = useState(false)
+  const [pendingOverrideCategory, setPendingOverrideCategory] = useState('')
+  const [overrideReason, setOverrideReason] = useState('')
+  const [overrideLoading, setOverrideLoading] = useState(false)
+  const [overrideError, setOverrideError] = useState(null)
+  const [overrideSuccess, setOverrideSuccess] = useState(null)
+
   // ─── Collaboration state ─────────────────────────────────────
   const [showCollaboratorModal, setShowCollaboratorModal] = useState(false)
   const [collaborators, setCollaborators] = useState([])
@@ -78,11 +95,23 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
   // ─── Image Lightbox state ────────────────────────────────────
   const [lightboxImage, setLightboxImage] = useState(null)
 
+  // ─── AI Reasoning expandable ─────────────────────────────────
+  const [showAIReasoning, setShowAIReasoning] = useState(false)
+
+  // ─── Resolution time prediction ──────────────────────────────
+  const [timePrediction, setTimePrediction] = useState(null)
+  const [timePredictionLoading, setTimePredictionLoading] = useState(false)
+
+  // ─── Ticket Chat state ───────────────────────────────────────
+  const [ticketChat, setTicketChat] = useState(null)
+  const [chatRequesting, setChatRequesting] = useState(false)
+
   const modalRef = useRef(null)
   const assignRef = useRef(null)
   const statusDropdownRef = useRef(null)
   const previousOverflow = useRef('')
   const ticketCache = useRef(new Map())  // ticketId -> { data, fetchedAt }
+  const wasMinimized = useRef(false)
 
   // ─── Role-based visibility ─────────────────────────────────────
   const userRole = getUserRole()
@@ -134,6 +163,21 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
       const data = res.data || res
       ticketCache.current.set(ticketId, { data, fetchedAt: Date.now() })
       setTicket(data)
+
+      // Fetch ticket chat status
+      try {
+        const chatRes = await getTicketChat(ticketId)
+        setTicketChat(chatRes.data || null)
+      } catch { /* no chat */ }
+
+      // Fetch resolution time prediction for staff (non-blocking)
+      if (getUserRole() !== 'client') {
+        setTimePredictionLoading(true)
+        predictTicketResolutionTime(ticketId)
+          .then(pred => setTimePrediction(pred))
+          .catch(() => setTimePrediction(null))
+          .finally(() => setTimePredictionLoading(false))
+      }
     } catch (err) {
       if (!cached) setError(err.message || 'Failed to load ticket')
     } finally {
@@ -152,13 +196,19 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
 
   useEffect(() => {
     if (isOpen && ticketId) {
-      setMinimized(false)
+      // Skip resets when restoring from minimize — keep all form state intact
+      if (wasMinimized.current && preserveState) {
+        wasMinimized.current = false
+        return
+      }
       setActiveTab('details')
       setStatusError(null)
       setStatusSuccess(null)
       setIsEditing(false)
       setShowAssign(false)
       setShowStatusDropdown(false)
+      setTimePrediction(null)
+      setTimePredictionLoading(false)
       fetchTicket()
       if (canSeeInternals) {
         fetchCollaborators()
@@ -172,7 +222,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
 
   // ─── Body scroll lock ────────────────────────────────────────────
   useEffect(() => {
-    if (isOpen && !minimized) {
+    if (isOpen) {
       previousOverflow.current = document.body.style.overflow
       document.body.style.overflow = 'hidden'
     } else {
@@ -181,22 +231,18 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     return () => {
       document.body.style.overflow = previousOverflow.current || 'unset'
     }
-  }, [isOpen, minimized])
+  }, [isOpen])
 
   // ─── Keyboard: Escape closes ─────────────────────────────────────
   useEffect(() => {
     const handleKey = (e) => {
       if (e.key === 'Escape' && isOpen) {
-        if (minimized) {
-          onClose()
-        } else {
-          setMinimized(true)
-        }
+        onClose()
       }
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [isOpen, minimized, onClose])
+  }, [isOpen, onClose])
 
   // ─── Backdrop click ──────────────────────────────────────────────
   const handleBackdropClick = (e) => {
@@ -470,6 +516,31 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     }
   }
 
+  // ─── AI category override handler ────────────────────────────────
+  const handleOverrideCategory = async () => {
+    if (!pendingOverrideCategory || pendingOverrideCategory === ticket.category) {
+      setShowOverrideDropdown(false)
+      return
+    }
+    setOverrideLoading(true)
+    setOverrideError(null)
+    setOverrideSuccess(null)
+    try {
+      await overrideTicketCategory(ticketId, pendingOverrideCategory, overrideReason.trim())
+      setShowOverrideDropdown(false)
+      setPendingOverrideCategory('')
+      setOverrideReason('')
+      await fetchTicket(true)
+      if (onTicketUpdated) onTicketUpdated()
+      setOverrideSuccess(`Category updated to "${pendingOverrideCategory.replace(/_/g, ' ')}"`)
+      setTimeout(() => setOverrideSuccess(null), 4000)
+    } catch (err) {
+      setOverrideError(err.message || 'Failed to override category')
+    } finally {
+      setOverrideLoading(false)
+    }
+  }
+
   // ─── Fetch collaborators ─────────────────────────────────────────
   const fetchCollaborators = useCallback(async () => {
     if (!ticketId || !canSeeInternals) return
@@ -597,7 +668,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
       <h2>Description</h2>
       <div class="description">${(ticket.description || 'No description').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
       ${ticket.resolution ? `<h2>Resolution</h2><div class="description">${ticket.resolution.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>` : ''}
-      <div class="footer">Printed on ${new Date().toLocaleString()} &middot; BlueClue Ticketing System</div>
+      <div class="footer">Printed on ${_fmtDateTime(new Date())} &middot; BlueClue Ticketing System</div>
       </body></html>
     `
     printWindow.document.write(html)
@@ -634,28 +705,12 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '—'
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    })
+    return _fmtDateTime(dateStr, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
   }
 
   const formatTimeAgo = (dateStr) => {
     if (!dateStr) return ''
-    const now = new Date()
-    const d = new Date(dateStr)
-    const diffMs = now - d
-    const mins = Math.floor(diffMs / 60000)
-    if (mins < 1) return 'just now'
-    if (mins < 60) return `${mins}m ago`
-    const hrs = Math.floor(mins / 60)
-    if (hrs < 24) return `${hrs}h ago`
-    const days = Math.floor(hrs / 24)
-    return `${days}d ago`
+    return _fmtTimeAgo(dateStr)
   }
 
   const statusColorMap = {
@@ -685,50 +740,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
     reopened: ['in_progress', 'waiting_on_customer', 'resolved', 'closed'],
   }
 
-  if (!isOpen) return null
-
-  // ─── Minimized bar ───────────────────────────────────────────────
-  if (minimized) {
-    return createPortal(
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 border-t border-gray-700 shadow-2xl px-4 py-3 flex items-center justify-between">
-        <button
-          onClick={() => setMinimized(false)}
-          className="flex items-center gap-3 text-left flex-1 min-w-0"
-        >
-          <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 animate-pulse" />
-          <div className="min-w-0">
-            <p className="text-white text-sm font-medium truncate">
-              {ticket?.ticket_number || `Ticket #${ticketId}`}
-              {ticket?.subject && (
-                <span className="text-gray-400 ml-2 font-normal">— {ticket.subject}</span>
-              )}
-            </p>
-          </div>
-        </button>
-        <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-          <button
-            onClick={() => setMinimized(false)}
-            className="text-gray-400 hover:text-white p-1.5 rounded hover:bg-gray-800 transition-colors"
-            title="Expand"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-            </svg>
-          </button>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-red-400 p-1.5 rounded hover:bg-gray-800 transition-colors"
-            title="Close"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      </div>,
-      document.body
-    )
-  }
+  if (!isOpen && !preserveState) return null
 
   // ─── Full modal overlay ──────────────────────────────────────────
   return createPortal(
@@ -736,6 +748,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
       ref={modalRef}
       onClick={handleBackdropClick}
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-stretch md:items-center md:justify-center overflow-hidden md:p-6"
+      style={!isOpen && preserveState ? { display: 'none' } : undefined}
     >
       <div className="bg-gray-950 w-full max-w-6xl flex flex-col h-full md:h-auto md:max-h-full md:rounded-xl md:border md:border-gray-700 shadow-2xl">
         {/* ── Top bar ─────────────────────────────────────────────── */}
@@ -753,12 +766,12 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
           <div className="flex items-center gap-1 flex-shrink-0 ml-3">
             {/* Minimize */}
             <button
-              onClick={() => setMinimized(true)}
+              onClick={() => { wasMinimized.current = true; onMinimize?.({ ticketId, ticketNumber: ticket?.ticket_number, subject: ticket?.subject }) }}
               className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-gray-800 transition-colors"
               title="Minimize"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14" />
               </svg>
             </button>
             {/* Close */}
@@ -1206,6 +1219,58 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
               Print
             </button>
 
+            {/* Request Chat — client only, when ticket has assigned tech */}
+            {isClient && ticket?.assigned_to && (!ticketChat || ticketChat.status === 'declined' || ticketChat.status === 'closed') && (
+              <button
+                onClick={async () => {
+                  setChatRequesting(true)
+                  try {
+                    const res = await requestTicketChat(ticket.id)
+                    setTicketChat(res.data)
+                    setActiveTab('chat')
+                  } catch (err) {
+                    setStatusError(err.message)
+                  } finally {
+                    setChatRequesting(false)
+                  }
+                }}
+                disabled={chatRequesting}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800/70 text-emerald-200 hover:text-emerald-100 text-xs font-medium border border-emerald-700/50 hover:border-emerald-600 transition-colors disabled:opacity-50"
+                title="Request a private chat with the assigned technician"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                {chatRequesting ? 'Requesting...' : 'Request Chat'}
+              </button>
+            )}
+
+            {/* Initiate Conversation — tech only, when they are assigned and no active chat */}
+            {isTech && ticket?.assigned_to === currentUserId && (!ticketChat || ticketChat.status === 'declined' || ticketChat.status === 'closed') && (
+              <button
+                onClick={async () => {
+                  setChatRequesting(true)
+                  try {
+                    const res = await initiateTicketChat(ticket.id)
+                    setTicketChat(res.data)
+                    setActiveTab('chat')
+                  } catch (err) {
+                    setStatusError(err.message)
+                  } finally {
+                    setChatRequesting(false)
+                  }
+                }}
+                disabled={chatRequesting}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-900/60 hover:bg-emerald-800/70 text-emerald-200 hover:text-emerald-100 text-xs font-medium border border-emerald-700/50 hover:border-emerald-600 transition-colors disabled:opacity-50"
+                title="Start a private chat with the customer"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+                {chatRequesting ? 'Starting...' : 'Initiate Conversation'}
+              </button>
+            )}
+
             {/* Status feedback */}
             {statusSuccess && <span className="text-green-400 text-xs ml-2 animate-pulse">{statusSuccess}</span>}
             {statusError && <span className="text-red-400 text-xs ml-2">{statusError}</span>}
@@ -1339,16 +1404,108 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                 {/* Category */}
                 <div>
                   <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">Category</label>
-                  <span className="inline-block px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-200 capitalize">
-                    {ticket.category?.replace(/_/g, ' ') || '—'}
-                  </span>
-                  {canSeeAudit && ticket.ai_classified && (
-                    <span className="ml-2 text-xs text-gray-500">
-                      AI classified
-                      {ticket.ai_confidence != null && (
-                        <span className="text-gray-400"> ({Math.round(ticket.ai_confidence * 100)}%)</span>
-                      )}
+
+                  {/* Category badge + inline AI confidence (visible to all staff) */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`inline-block px-3 py-1.5 rounded-lg text-sm text-gray-200 capitalize border ${
+                      ticket.category_override ? 'bg-indigo-900/30 border-indigo-700' : 'bg-gray-800 border-gray-700'
+                    }`}>
+                      {ticket.category?.replace(/_/g, ' ') || '—'}
                     </span>
+
+                    {/* Confidence badge — visible to technicians & management */}
+                    {canSeeInternals && ticket.ai_classified && ticket.ai_confidence != null && (
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded border ${
+                        ticket.ai_confidence >= AI_CONFIDENCE_THRESHOLD
+                          ? 'text-green-400 bg-green-900/20 border-green-800'
+                          : 'text-amber-400 bg-amber-900/20 border-amber-700'
+                      }`}>
+                        {Math.round(ticket.ai_confidence * 100)}% confidence
+                      </span>
+                    )}
+
+                    {/* Overridden indicator */}
+                    {canSeeInternals && ticket.category_override && (
+                      <span className="text-xs text-indigo-400 bg-indigo-900/20 border border-indigo-800 px-2 py-0.5 rounded">
+                        Overridden
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Low-confidence warning — visible to all staff */}
+                  {canSeeInternals && ticket.ai_classified && ticket.ai_confidence != null &&
+                   ticket.ai_confidence < AI_CONFIDENCE_THRESHOLD && !ticket.category_override && (
+                    <div className="mt-2 flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-900/20 border border-amber-700/50">
+                      <svg className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                      </svg>
+                      <p className="text-amber-300 text-xs leading-relaxed">
+                        <span className="font-semibold">Low confidence</span> — please verify the AI-suggested category before proceeding.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Override success message */}
+                  {overrideSuccess && (
+                    <p className="mt-1.5 text-xs text-green-400">{overrideSuccess}</p>
+                  )}
+                  {overrideError && (
+                    <p className="mt-1.5 text-xs text-red-400">{overrideError}</p>
+                  )}
+
+                  {/* Override button — technicians & management */}
+                  {canSeeInternals && ticket.ai_classified && !showOverrideDropdown && (
+                    <button
+                      onClick={() => {
+                        setPendingOverrideCategory(ticket.category || '')
+                        setOverrideReason('')
+                        setOverrideError(null)
+                        setShowOverrideDropdown(true)
+                      }}
+                      className="mt-2 text-xs text-blue-400 hover:text-blue-300 underline underline-offset-2 transition-colors"
+                    >
+                      Override classification
+                    </button>
+                  )}
+
+                  {/* Override inline form */}
+                  {canSeeInternals && showOverrideDropdown && (
+                    <div className="mt-3 p-3 rounded-lg bg-gray-900 border border-gray-700 space-y-2">
+                      <label className="text-gray-400 text-xs font-medium uppercase tracking-wider block">
+                        Select correct category
+                      </label>
+                      <select
+                        value={pendingOverrideCategory}
+                        onChange={(e) => setPendingOverrideCategory(e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500 capitalize"
+                      >
+                        {['general', 'technical', 'billing', 'account', 'feature_request', 'hardware', 'software', 'network', 'login', 'other'].map((cat) => (
+                          <option key={cat} value={cat}>{cat.replace(/_/g, ' ')}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="Reason (optional)"
+                        value={overrideReason}
+                        onChange={(e) => setOverrideReason(e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleOverrideCategory}
+                          disabled={overrideLoading || pendingOverrideCategory === ticket.category}
+                          className="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs rounded font-medium transition-colors"
+                        >
+                          {overrideLoading ? 'Saving…' : 'Confirm override'}
+                        </button>
+                        <button
+                          onClick={() => setShowOverrideDropdown(false)}
+                          className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
 
@@ -1444,14 +1601,14 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                     <label className="text-gray-500 text-xs font-medium uppercase tracking-wider block">Created</label>
                     <p className="text-gray-300 text-sm mt-0.5">
                       {formatDate(ticket.created_at)}
-                      <span className="text-gray-600 ml-1 text-xs">({formatTimeAgo(ticket.created_at)})</span>
+                      <span className="text-gray-600 ml-1 text-xs">(<RelativeTime timestamp={ticket.created_at} />)</span>
                     </p>
                   </div>
                   <div>
                     <label className="text-gray-500 text-xs font-medium uppercase tracking-wider block">Last Updated</label>
                     <p className="text-gray-300 text-sm mt-0.5">
                       {formatDate(ticket.updated_at)}
-                      <span className="text-gray-600 ml-1 text-xs">({formatTimeAgo(ticket.updated_at)})</span>
+                      <span className="text-gray-600 ml-1 text-xs">(<RelativeTime timestamp={ticket.updated_at} />)</span>
                     </p>
                   </div>
                   {ticket.resolved_at && (
@@ -1505,6 +1662,44 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                   </>
                 )}
 
+                {/* Estimated Resolution Time — visible to all staff, hidden from clients */}
+                {canSeeInternals && !ticket.resolved_at && (
+                  <>
+                    <hr className="border-gray-800" />
+                    <div>
+                      <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                        Est. Resolution Time
+                      </label>
+                      {timePredictionLoading ? (
+                        <div className="flex items-center gap-1.5 text-gray-500 text-xs">
+                          <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                          </svg>
+                          <span>Calculating…</span>
+                        </div>
+                      ) : timePrediction ? (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <svg className="w-4 h-4 text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="text-white text-sm font-medium">
+                              {timePrediction.uncertainty_label ||
+                                `${Math.round(timePrediction.confidence_range?.lower_hours ?? timePrediction.estimated_hours * 0.7)} – ${Math.round(timePrediction.confidence_range?.upper_hours ?? timePrediction.estimated_hours * 1.3)} hours`}
+                            </span>
+                          </div>
+                          <p className="text-gray-600 text-xs leading-relaxed">
+                            AI estimate — actual time may vary based on complexity and workload.
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-gray-600 text-xs italic">Unavailable</p>
+                      )}
+                    </div>
+                  </>
+                )}
+
                 {/* Reopen count — hidden from clients */}
                 {canSeeInternals && ticket.reopen_count > 0 && (
                   <>
@@ -1535,6 +1730,9 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                   { id: 'details', label: 'Details' },
                   { id: 'comments', label: 'Comments' },
                   { id: 'activity', label: 'Activity' },
+                  ...(ticketChat && (ticketChat.status === 'pending' || ticketChat.status === 'accepted')
+                    ? [{ id: 'chat', label: 'Chat' }]
+                    : []),
                 ].map((tab) => (
                   <button
                     key={tab.id}
@@ -1581,7 +1779,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                       <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-500">
                         <span>Submitted by <span className="text-gray-400">{ticket.customer_name || '—'}</span></span>
                         <span>&middot;</span>
-                        <span>{formatTimeAgo(ticket.created_at)}</span>
+                        <RelativeTime timestamp={ticket.created_at} />
                       </div>
                     </div>
 
@@ -1607,12 +1805,12 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                                     </p>
                                     <p>
                                       <span className="text-gray-500">Current Deadline:</span>{' '}
-                                      {new Date(request.deadline).toLocaleString()}
+                                      {_fmtDateTime(request.deadline)}
                                     </p>
                                     <p>
                                       <span className="text-gray-500">Requested Deadline:</span>{' '}
                                       <span className="text-amber-400 font-medium">
-                                        {new Date(request.extension_deadline).toLocaleString()}
+                                        {_fmtDateTime(request.extension_deadline)}
                                       </span>
                                     </p>
                                     {request.reason && (
@@ -1842,33 +2040,58 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                       </div>
                     ) : null}
 
-                    {/* AI Classification Details - management only */}
-                    {canSeeAudit && ticket.ai_classified && (
+                    {/* AI Classification Details — visible to all technicians & management */}
+                    {canSeeInternals && ticket.ai_classified && (
                       <div>
                         <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">AI Classification</label>
-                        <div className="bg-gray-900 rounded-lg border border-gray-800 p-4 space-y-2">
-                          <div className="flex flex-wrap gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-500">Category: </span>
-                              <span className="text-gray-200 capitalize">{ticket.category?.replace(/_/g, ' ')}</span>
-                            </div>
+                        <div className={`rounded-lg border p-4 space-y-3 ${
+                          ticket.ai_confidence != null && ticket.ai_confidence < AI_CONFIDENCE_THRESHOLD && !ticket.category_override
+                            ? 'bg-amber-900/10 border-amber-700/50'
+                            : 'bg-gray-900 border-gray-800'
+                        }`}>
+
+                          {/* Category + confidence headline */}
+                          <div className="flex flex-wrap items-center gap-3">
+                            <span className="text-gray-200 text-sm font-medium capitalize">
+                              {ticket.category?.replace(/_/g, ' ')}
+                            </span>
                             {ticket.ai_confidence != null && (
-                              <div>
-                                <span className="text-gray-500">Confidence: </span>
-                                <span className={`font-medium ${
-                                  ticket.ai_confidence >= 0.8 ? 'text-green-400' :
-                                  ticket.ai_confidence >= 0.5 ? 'text-yellow-400' : 'text-red-400'
-                                }`}>
-                                  {Math.round(ticket.ai_confidence * 100)}%
-                                </span>
-                              </div>
+                              <span className={`text-sm font-semibold ${
+                                ticket.ai_confidence >= AI_CONFIDENCE_THRESHOLD ? 'text-green-400' :
+                                ticket.ai_confidence >= 0.5 ? 'text-yellow-400' : 'text-red-400'
+                              }`}>
+                                — {Math.round(ticket.ai_confidence * 100)}% confidence
+                              </span>
                             )}
-                            {ticket.ai_fallback_used && (
-                              <span className="text-amber-500 text-xs bg-amber-900/30 px-2 py-0.5 rounded">Fallback used</span>
+                            {ticket.category_override && (
+                              <span className="text-xs text-indigo-400 bg-indigo-900/30 border border-indigo-700 px-2 py-0.5 rounded">
+                                Manually overridden
+                              </span>
                             )}
                           </div>
+
+                          {/* Low-confidence callout */}
+                          {ticket.ai_confidence != null && ticket.ai_confidence < AI_CONFIDENCE_THRESHOLD && !ticket.category_override && (
+                            <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-900/20 border border-amber-700/50">
+                              <svg className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                              </svg>
+                              <p className="text-amber-300 text-xs leading-relaxed">
+                                <span className="font-semibold">Low confidence — please verify.</span> The AI is uncertain about this classification. Use the override option in the sidebar to correct it if needed.
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Meta row */}
+                          <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+                            {ticket.ai_fallback_used && (
+                              <span className="text-amber-500 bg-amber-900/30 px-2 py-0.5 rounded">Fallback used</span>
+                            )}
+                          </div>
+
+                          {/* Matched keywords */}
                           {ticket.ai_keywords_matched && Object.keys(ticket.ai_keywords_matched).length > 0 && (
-                            <div className="mt-2">
+                            <div>
                               <span className="text-gray-500 text-xs">Matched keywords: </span>
                               <div className="flex flex-wrap gap-1 mt-1">
                                 {(Array.isArray(ticket.ai_keywords_matched)
@@ -1885,6 +2108,43 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                         </div>
                       </div>
                     )}
+
+                    {/* AI Reasoning — expandable explainability for technicians & management */}
+                    {canSeeInternals && ticket.ai_classified && ticket.description && (
+                      <div className="border-t border-gray-800 pt-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowAIReasoning(v => !v)}
+                          className="w-full flex items-center justify-between gap-2 text-xs font-medium text-gray-400 hover:text-blue-400 transition-colors py-1"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <span>🧠</span>
+                            <span className="uppercase tracking-wider">AI Reasoning</span>
+                          </span>
+                          <span className="text-gray-500">
+                            {showAIReasoning ? '▲ Hide' : '▼ Why did the AI make this decision?'}
+                          </span>
+                        </button>
+                        {showAIReasoning && (
+                          <div className="mt-3 space-y-3">
+                            <ExplainabilityPanel
+                              text={ticket.description}
+                              prediction={ticket.category || ''}
+                              confidence={ticket.ai_confidence ?? 0}
+                              modelType="category"
+                              autoLoad
+                            />
+                            <ExplainabilityPanel
+                              text={ticket.description}
+                              prediction={ticket.ai_priority || ticket.priority || ''}
+                              confidence={ticket.ai_confidence ?? 0}
+                              modelType="priority"
+                              autoLoad
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1895,6 +2155,19 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated }) {
                 {activeTab === 'activity' && (
                   <div className="max-w-3xl">
                     <TicketActivityLog ticketId={ticket.id} isOpen={true} />
+                  </div>
+                )}
+
+                {activeTab === 'chat' && ticketChat && (
+                  <div className="h-full">
+                    <TicketChatTab
+                      ticketId={ticket.id}
+                      chat={ticketChat}
+                      onChatUpdate={(updated) => {
+                        setTicketChat(updated)
+                        if (!updated) setActiveTab('details')
+                      }}
+                    />
                   </div>
                 )}
               </div>

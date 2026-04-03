@@ -7,7 +7,7 @@ import {
 import LoadingSpinner from './LoadingSpinner';
 import NotificationCard from './NotificationCard';
 
-function NotificationDropdown({ isOpen, onClose, onNotificationUpdate, onTicketClick }) {
+function NotificationDropdown({ isOpen, onClose, onNotificationUpdate, onTicketClick, onDirectMessageClick }) {
   const [notifications, setNotifications] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -61,7 +61,7 @@ function NotificationDropdown({ isOpen, onClose, onNotificationUpdate, onTicketC
   if (!isOpen) return null;
 
   return (
-    <div className="absolute right-0 mt-2 w-96 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-50">
+    <div className="fixed right-2 left-2 sm:left-auto top-16 sm:absolute sm:right-0 sm:top-auto sm:mt-2 sm:w-96 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-50">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
         <h3 className="text-lg font-semibold text-white">Notifications</h3>
@@ -135,6 +135,15 @@ function NotificationDropdown({ isOpen, onClose, onNotificationUpdate, onTicketC
                 onTicketClick={(ticketId) => {
                   if (onTicketClick) onTicketClick(ticketId);
                   onClose();
+                }}
+                onDirectMessageClick={(senderId) => {
+                  if (onDirectMessageClick) onDirectMessageClick(senderId);
+                  onClose();
+                }}
+                onError={(message) => {
+                  setError(message);
+                  // Auto-clear error after 5 seconds
+                  setTimeout(() => setError(null), 5000);
                 }}
               />
             ))}

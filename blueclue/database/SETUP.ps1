@@ -361,7 +361,10 @@ $remainingMigrations = @(
     "migrations\034_add_ticket_attachments.sql",
     "migrations\035_add_ring_response_email_type.sql",
     "migrations\036_fix_chat_sender_and_notification_type.sql",
-    "migrations\037_reset_stale_handoff_claims.sql"
+    "migrations\037_reset_stale_handoff_claims.sql",
+    "migrations\038_add_login_audit_and_alerts.sql",
+    "migrations\039_add_article_chunks.sql",
+    "migrations\040_add_ticket_submission_image.sql"
 )
 
 $remainingApplied = 0

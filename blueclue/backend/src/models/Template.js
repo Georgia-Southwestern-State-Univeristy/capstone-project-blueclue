@@ -253,6 +253,69 @@ class Template {
     }
 
     /**
+     * Restore a template to a specific version
+     * @param {number} templateId - Template ID
+     * @param {number} version - Version number to restore
+     * @param {number} restoredBy - User ID performing the restore
+     * @returns {Promise<Object>} Restored template
+     */
+    static async restoreVersion(templateId, version, restoredBy) {
+        // Get the specific version data
+        const versionQuery = `
+            SELECT * FROM template_versions
+            WHERE template_id = $1 AND version = $2
+        `;
+        const versionResult = await pool.query(versionQuery, [templateId, version]);
+        
+        if (versionResult.rows.length === 0) {
+            throw new Error(`Version ${version} not found for template ${templateId}`);
+        }
+        
+        const versionData = versionResult.rows[0];
+        
+        // Update the template with the version data
+        // This will automatically create a new version via the trigger
+        const updateQuery = `
+            UPDATE ticket_templates
+            SET 
+                name = $1,
+                template_category = $2,
+                category = $3,
+                description = $4,
+                instructions = $5,
+                default_priority = $6,
+                pre_filled_subject = $7,
+                pre_filled_description = $8,
+                common_tags = $9,
+                field_requirements = $10,
+                field_mappings = $11,
+                custom_placeholders = $12,
+                updated_at = NOW()
+            WHERE id = $13
+            RETURNING *
+        `;
+        
+        const values = [
+            versionData.name,
+            versionData.template_category,
+            versionData.category,
+            versionData.description,
+            versionData.instructions,
+            versionData.default_priority,
+            versionData.pre_filled_subject,
+            versionData.pre_filled_description,
+            JSON.stringify(versionData.common_tags),
+            JSON.stringify(versionData.field_requirements),
+            JSON.stringify(versionData.field_mappings),
+            JSON.stringify(versionData.custom_placeholders),
+            templateId
+        ];
+        
+        const result = await pool.query(updateQuery, values);
+        return result.rows[0];
+    }
+
+    /**
      * Get template analytics
      * @returns {Promise<Array>} Analytics data
      */

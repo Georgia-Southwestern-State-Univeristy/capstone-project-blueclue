@@ -8,6 +8,7 @@ import { readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import pool from '../config/database.js';
+import EmailQueue from '../models/EmailQueue.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -30,6 +31,10 @@ const EMAIL_FROM = process.env.EMAIL_FROM || process.env.EMAIL_USER;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
+// Email queue mode - set to true to use async queue processing
+// Using a getter function to allow dynamic evaluation in tests
+const getUseEmailQueue = () => process.env.USE_EMAIL_QUEUE === 'true' || process.env.NODE_ENV === 'production';
+
 // Retry configuration
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000; // 2 seconds
@@ -48,6 +53,8 @@ let isConfigured = false;
 const initializeTransporter = () => {
     if (NODE_ENV === 'test') {
         console.log('📧 Email service: TEST MODE - Emails will be mocked');
+        // Create transporter even in test mode so mocked nodemailer is used
+        transporter = nodemailer.createTransport(EMAIL_CONFIG);
         isConfigured = true;
         return;
     }
@@ -151,28 +158,8 @@ const sendEmailWithRetry = async (mailOptions, retryCount = 0) => {
             );
         }
         
-        // TEST MODE: Return mock success
-        if (NODE_ENV === 'test') {
-            await logEmailAttempt(
-                mailOptions.to,
-                userId,
-                emailType,
-                mailOptions.subject,
-                'success',
-                'test-message-id',
-                null,
-                retryCount,
-                metadata
-            );
-            return {
-                success: true,
-                messageId: 'test-message-id',
-                mode: 'test'
-            };
-        }
-
         // DEV MODE or NOT CONFIGURED: Log to console instead of sending
-        if (NODE_ENV === 'development' || !isConfigured || !transporter) {
+        if ((NODE_ENV === 'development' && !transporter) || !isConfigured || !transporter) {
             console.log('\n📧 ===== EMAIL (DEV MODE) =====');
             console.log('From:', mailOptions.from);
             console.log('To:', mailOptions.to);
@@ -202,7 +189,7 @@ const sendEmailWithRetry = async (mailOptions, retryCount = 0) => {
             };
         }
 
-        // PRODUCTION MODE: Actually send email
+        // PRODUCTION/TEST MODE: Actually send email (or use mocked transporter in tests)
         const info = await transporter.sendMail(mailOptions);
         console.log('✅ Email sent successfully:', info.messageId);
         
@@ -222,7 +209,7 @@ const sendEmailWithRetry = async (mailOptions, retryCount = 0) => {
         return {
             success: true,
             messageId: info.messageId,
-            mode: 'production'
+            mode: NODE_ENV === 'test' ? 'test' : 'production'
         };
 
     } catch (error) {
@@ -262,13 +249,66 @@ const sendEmailWithRetry = async (mailOptions, retryCount = 0) => {
  * @param {string} emailType - Email type for logging (verification, welcome, etc.)
  * @param {number|null} userId - User ID for logging
  * @param {object} metadata - Additional metadata for logging
- * @returns {Promise<Object>} Send result
+ * @returns {Promise<Object>} Send result or queue entry
  */
 export const sendEmail = async (to, subject, html, text, emailType = 'unknown', userId = null, metadata = {}) => {
     if (!to || !subject || (!html && !text)) {
         throw new Error('Missing required email parameters: to, subject, and content are required');
     }
 
+    // If queue mode is enabled, queue the email instead of sending immediately
+    if (getUseEmailQueue()) {
+        try {
+            // Generate idempotency key if possible
+            let idempotencyKey = null;
+            if (metadata.ticket_id && emailType) {
+                idempotencyKey = `${emailType}-${metadata.ticket_id}-${userId || 'guest'}-${Date.now()}`;
+            }
+
+            const queueEntry = await EmailQueue.enqueue({
+                recipientEmail: to,
+                recipientUserId: userId,
+                subject,
+                bodyHtml: html,
+                bodyText: text,
+                emailType,
+                templateName: null,
+                metadata,
+                idempotencyKey
+            });
+
+            console.log(`📬 Email queued successfully (Queue ID: ${queueEntry.id})`);
+            
+            return {
+                success: true,
+                queued: true,
+                queueId: queueEntry.id,
+                mode: 'queue'
+            };
+        } catch (error) {
+            console.error('❌ Failed to queue email:', error.message);
+            // Fallback to direct send if queue fails
+            console.warn('⚠️  Falling back to direct email send...');
+            return sendEmailDirect(to, subject, html, text, emailType, userId, metadata);
+        }
+    }
+
+    // Direct send mode (development or queue disabled)
+    return sendEmailDirect(to, subject, html, text, emailType, userId, metadata);
+};
+
+/**
+ * Send email directly without queue (used by CRON job and fallback)
+ * @param {string} to - Recipient email address
+ * @param {string} subject - Email subject
+ * @param {string} html - HTML content
+ * @param {string} text - Plain text fallback
+ * @param {string} emailType - Email type for logging
+ * @param {number|null} userId - User ID for logging
+ * @param {object} metadata - Additional metadata for logging
+ * @returns {Promise<Object>} Send result
+ */
+export const sendEmailDirect = async (to, subject, html, text, emailType = 'unknown', userId = null, metadata = {}) => {
     const mailOptions = {
         from: `"BlueClue Support" <${EMAIL_FROM}>`,
         to,
@@ -597,6 +637,39 @@ export const isEmailServiceReady = () => {
 };
 
 /**
+ * Send technician invitation email with set-password link
+ * @param {string} email - Technician email
+ * @param {string} firstName - Technician first name
+ * @param {string} tempPassword - Temporary password for first login
+ * @param {string} role - Assigned role (technician, senior_technician, management)
+ * @param {number|null} userId - User ID for logging
+ */
+export const sendTechnicianInvitation = async (email, firstName, tempPassword, role, username, userId = null) => {
+    const loginUrl = `${FRONTEND_URL}/login`;
+    
+    // Format role for display
+    const roleDisplay = role.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    
+    return sendTemplateEmail(
+        email,
+        'technician-invitation',
+        {
+            subject: 'Welcome to BlueClue - Set Your Password',
+            firstName,
+            email,
+            username,
+            tempPassword,
+            role: roleDisplay,
+            loginUrl,
+            frontendUrl: FRONTEND_URL
+        },
+        'technician-invitation',
+        userId,
+        { role }
+    );
+};
+
+/**
  * Get email service status
  * @returns {Object} Status information
  */
@@ -619,8 +692,114 @@ export const reinitializeEmailService = () => {
     initializeTransporter();
 };
 
+// ============================================================================
+// EMAIL QUEUE PROCESSING
+// ============================================================================
+
+/**
+ * Process a single queued email
+ * @param {Object} queueEntry - Email queue entry from database
+ * @returns {Promise<Object>} Result of send attempt
+ */
+export const processQueuedEmail = async (queueEntry) => {
+    const { id, recipient_email, subject, body_html, body_text, email_type, recipient_user_id, metadata, attempts } = queueEntry;
+
+    console.log(`📤 Processing queued email (ID: ${id}, Attempt: ${attempts + 1}/3)`);
+
+    try {
+        // Mark as processing
+        await EmailQueue.markAsProcessing(id);
+
+        // Send the email directly
+        const result = await sendEmailDirect(
+            recipient_email,
+            subject,
+            body_html,
+            body_text,
+            email_type,
+            recipient_user_id,
+            typeof metadata === 'string' ? JSON.parse(metadata) : metadata
+        );
+
+        // Mark as completed
+        await EmailQueue.markAsCompleted(id, result.messageId);
+
+        return {
+            success: true,
+            queueId: id,
+            messageId: result.messageId
+        };
+
+    } catch (error) {
+        console.error(`❌ Failed to process queued email (ID: ${id}):`, error.message);
+
+        // Mark as failed (will schedule retry or dead letter)
+        await EmailQueue.markAsFailed(id, error, attempts);
+
+        return {
+            success: false,
+            queueId: id,
+            error: error.message,
+            willRetry: attempts + 1 < 3
+        };
+    }
+};
+
+/**
+ * Process batch of queued emails
+ * Called by CRON job
+ * @param {number} batchSize - Max number of emails to process
+ * @returns {Promise<Object>} Processing results
+ */
+export const processEmailQueue = async (batchSize = 10) => {
+    console.log(`🔄 Processing email queue (batch size: ${batchSize})...`);
+
+    try {
+        // Get emails ready for processing
+        const emails = await EmailQueue.getReadyForProcessing(batchSize);
+
+        if (emails.length === 0) {
+            console.log('   No emails in queue');
+            return {
+                success: true,
+                processed: 0,
+                succeeded: 0,
+                failed: 0
+            };
+        }
+
+        console.log(`   Found ${emails.length} email(s) to process`);
+
+        // Process each email
+        const results = await Promise.allSettled(
+            emails.map(email => processQueuedEmail(email))
+        );
+
+        // Count successes and failures
+        const succeeded = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+        const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)).length;
+
+        console.log(`✅ Email queue processing complete: ${succeeded} sent, ${failed} failed`);
+
+        return {
+            success: true,
+            processed: emails.length,
+            succeeded,
+            failed
+        };
+
+    } catch (error) {
+        console.error('❌ Email queue processing error:', error.message);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+};
+
 export default {
     sendEmail,
+    sendEmailDirect,
     sendTemplateEmail,
     sendWelcomeEmail,
     sendEmailCreatedWelcome,
@@ -631,7 +810,10 @@ export default {
     sendPasswordResetEmail,
     sendCommentNotificationToTech,
     sendCommentNotificationToClient,
+    sendTechnicianInvitation,
     isEmailServiceReady,
     getEmailServiceStatus,
-    reinitializeEmailService
+    reinitializeEmailService,
+    processQueuedEmail,
+    processEmailQueue
 };

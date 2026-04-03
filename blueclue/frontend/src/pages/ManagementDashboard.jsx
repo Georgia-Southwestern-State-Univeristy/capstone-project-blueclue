@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useToast } from '../hooks/useToast'
 import LoadingSpinner from '../components/LoadingSpinner'
-import Alert from '../components/Alert'
 import BaseWidget from '../components/BaseWidget'
 import DashboardGrid from '../components/DashboardGrid'
 import useDashboardLayout from '../hooks/useDashboardLayout'
@@ -15,17 +15,25 @@ import TicketControlWidget from '../components/TicketControlWidget'
 import TicketTimeline from '../components/TicketTimeline'
 import PendingRequestsWidget from '../components/PendingRequestsWidget'
 import DeletedTicketsWidget from '../components/DeletedTicketsWidget'
-import QuickActionsPanel from '../components/QuickActionsPanel'
 import TicketDetailView from '../components/TicketDetailView'
+import { useMinimizedTickets } from '../contexts/MinimizedTicketsContext'
 import UpdateRequestResponseTimeAnalytics from '../components/UpdateRequestResponseTimeAnalytics'
-import { getAllTickets, getCancellationStats } from '../services/ticketService'
+import AuditHealthWidget from '../components/AuditHealthWidget'
+import TicketTrendWidget from '../components/TicketTrendWidget'
+import TicketStatusWidget from '../components/TicketStatusWidget'
+import TechResponseTimeWidget from '../components/TechResponseTimeWidget'
+import CreateTicketWidget from '../components/CreateTicketWidget'
+import KnowledgeBaseWidget from '../components/KnowledgeBaseWidget'
+import RecentActivityWidget from '../components/RecentActivityWidget'
+import { getAllTickets, createTicket } from '../services/ticketService'
 import { useNotificationSocket } from '../hooks/useNotificationSocket'
+import { useAvailableWidgets } from '../hooks/useAvailableWidgets'
 import { buildGalleryItems, buildWidgetConfig } from '../widgets'
 
 // Default grid layouts for management dashboard widgets
 // 12-column grid, rowHeight=60px.  Height in px ≈ h×60 + (h-1)×16
 // Each item: { i: key, x, y, w, h, minW, minH }
-const LAYOUT_VERSION = 4 // bump to force stale localStorage reset
+const LAYOUT_VERSION = 5 // bump to force stale localStorage reset
 const DEFAULT_LAYOUTS = {
   lg: [
     { i: 'timeline',       x: 0,  y: 0,  w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
@@ -40,6 +48,7 @@ const DEFAULT_LAYOUTS = {
     { i: 'deletedTickets', x: 0,  y: 48, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
     { i: 'pendingRequests',x: 6,  y: 48, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 12, maxH: 14 },
     { i: 'responseTime',   x: 0,  y: 55, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'auditHealth',    x: 0,  y: 62, w: 12, h: 10, minW: 4,  minH: 6, maxW: 12, maxH: 16 },
   ],
   md: [
     { i: 'timeline',       x: 0,  y: 0,  w: 12, h: 8,  minW: 6,  minH: 6, maxW: 12, maxH: 16 },
@@ -54,6 +63,7 @@ const DEFAULT_LAYOUTS = {
     { i: 'deletedTickets', x: 0,  y: 62, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
     { i: 'pendingRequests',x: 0,  y: 69, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
     { i: 'responseTime',   x: 0,  y: 76, w: 12, h: 7,  minW: 4,  minH: 4, maxW: 12, maxH: 14 },
+    { i: 'auditHealth',    x: 0,  y: 83, w: 12, h: 10, minW: 4,  minH: 6, maxW: 12, maxH: 16 },
   ],
   sm: [
     { i: 'timeline',       x: 0,  y: 0,  w: 6,  h: 8,  minW: 3,  minH: 6, maxW: 6, maxH: 16 },
@@ -68,6 +78,7 @@ const DEFAULT_LAYOUTS = {
     { i: 'deletedTickets', x: 0,  y: 70, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
     { i: 'pendingRequests',x: 0,  y: 77, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
     { i: 'responseTime',   x: 0,  y: 84, w: 6,  h: 7,  minW: 3,  minH: 4, maxW: 6, maxH: 14 },
+    { i: 'auditHealth',    x: 0,  y: 91, w: 6,  h: 10, minW: 4,  minH: 6, maxW: 6, maxH: 16 },
   ],
 }
 
@@ -76,22 +87,31 @@ const MANAGEMENT_WIDGET_KEYS = [
   'timeline', 'ticketControl', 'assignedChart', 'categoriesChart',
   'overdue', 'escalations', 'todaysActions', 'topRequesters',
   'techPerformance', 'deletedTickets', 'pendingRequests', 'responseTime',
+  'auditHealth', 'ticketTrend', 'ticketStatus', 'techResponseTime', 'knowledgeBase',
+  'recentActivity',
 ]
-
-// Widget metadata for the gallery sidebar — derived from the widget registry
-const WIDGET_GALLERY_ITEMS = buildGalleryItems({ keys: MANAGEMENT_WIDGET_KEYS })
 
 /**
  * ManagementWidgetGrid
  * Renders all dashboard widgets inside a drag-and-drop grid.
  */
 function ManagementWidgetGrid({
-  tickets, filteredTickets, loading, fetchTickets,
+  tickets, filteredTickets, fetchTickets,
   assignmentFilter, setAssignmentFilter,
   widgetFilters, handleWidgetFilterChange,
   categoryFilter, setCategoryFilter,
   handleTicketClick, pendingRequestsRef,
+  onSubmitTicket, onMinimize,
 }) {
+  // Fetch widgets available to the current user based on their role
+  const { widgets: availableWidgets } = useAvailableWidgets(MANAGEMENT_WIDGET_KEYS);
+  
+  // Build gallery items from available widgets
+  const galleryItems = useMemo(() => {
+    const availableKeys = availableWidgets.map(w => w.key);
+    return buildGalleryItems({ keys: availableKeys });
+  }, [availableWidgets]);
+
   const {
     layouts,
     isEditMode,
@@ -115,7 +135,7 @@ function ManagementWidgetGrid({
       timeline: (
         <TicketTimeline tickets={tickets} onTicketClick={handleTicketClick} />
       ),
-      ticketControl: <TicketControlWidget tickets={tickets} onTicketUpdated={fetchTickets} />,
+      ticketControl: <TicketControlWidget tickets={tickets} onTicketUpdated={fetchTickets} onMinimize={onMinimize} />,
       assignedChart: (
         <UnassignedVsAssignedWidget
           tickets={tickets}
@@ -145,11 +165,18 @@ function ManagementWidgetGrid({
           <UpdateRequestResponseTimeAnalytics />
         </BaseWidget>
       ),
+      auditHealth: <AuditHealthWidget />,
+      ticketTrend: <TicketTrendWidget />,
+      ticketStatus: <TicketStatusWidget />,
+      techResponseTime: <TechResponseTimeWidget />,
+      knowledgeBase: <KnowledgeBaseWidget />,
+      recentActivity: <RecentActivityWidget />,
+      createTicket: <CreateTicketWidget onSubmit={onSubmitTicket} />,
     }
     return buildWidgetConfig(MANAGEMENT_WIDGET_KEYS, componentMap)
-  }, [tickets, loading, fetchTickets, assignmentFilter, setAssignmentFilter,
+  }, [tickets, fetchTickets, assignmentFilter, setAssignmentFilter,
       widgetFilters, handleWidgetFilterChange, categoryFilter, setCategoryFilter,
-      handleTicketClick, pendingRequestsRef])
+      handleTicketClick, pendingRequestsRef, onSubmitTicket])
 
   return (
     <>
@@ -227,7 +254,7 @@ function ManagementWidgetGrid({
         resetLayout={resetLayout}
         widgetConfig={widgetConfig}
         rowHeight={60}
-        galleryItems={WIDGET_GALLERY_ITEMS}
+        galleryItems={galleryItems}
         hiddenWidgets={hiddenWidgets}
         onAddWidget={addWidget}
         onRemoveWidget={removeWidget}
@@ -247,8 +274,8 @@ function ManagementWidgetGrid({
  */
 function ManagementDashboard() {
   // State management
+  const toast = useToast()
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
   const [tickets, setTickets] = useState([])
   const pendingRequestsRef = useRef(null)
 
@@ -266,16 +293,34 @@ function ManagementDashboard() {
   useNotificationSocket(handleNewNotification, null, handleTicketChange)
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const { minimize } = useMinimizedTickets()
+  const handleMinimize = (ticketData) => { minimize(ticketData); setIsDetailOpen(false) }
 
   const handleTicketClick = (ticketId) => {
     setSelectedTicketId(ticketId)
     setIsDetailOpen(true)
   }
+
+  // Handle ticket creation from the CreateTicketWidget
+  const handleSubmitTicket = async (formData) => {
+    try {
+      const response = await createTicket(formData)
+      const ticketId = response.ticket?.id || response.ticket?.ticket_id || response.data?.id || response.data?.ticket_id
+      toast.success(ticketId
+        ? `Ticket #${ticketId} created successfully!`
+        : 'Ticket submitted successfully!')
+      await fetchTickets()
+    } catch (error) {
+      console.error('Failed to create ticket:', error)
+      toast.error(error.message || 'Failed to submit ticket. Please try again.')
+      throw error
+    }
+  }
+
   const [assignmentFilter, setAssignmentFilter] = useState(null) // 'assigned' | 'unassigned' | null
   const [widgetFilters, setWidgetFilters] = useState({ priority: null, category: null, status: null })
   const [categoryFilter, setCategoryFilter] = useState(null) // selected category key or null
   const [includeCancelled, setIncludeCancelled] = useState(false)
-  const [cancellationData, setCancellationData] = useState(null)
 
   const handleWidgetFilterChange = useCallback((key, value) => {
     setWidgetFilters((prev) => ({ ...prev, [key]: value }))
@@ -292,38 +337,26 @@ function ManagementDashboard() {
     cancellationRate: 0
   })
 
-  const fetchTickets = async () => {
+  const fetchTickets = useCallback(async () => {
     // Only show full loading spinner on initial load
     if (tickets.length === 0) setLoading(true)
-    setError(null)
     try {
       const response = await getAllTickets()
       setTickets(response.data || [])
     } catch (err) {
-      setError(err.message || 'Failed to load tickets')
+      toast.error(err.message || 'Failed to load tickets')
       console.error('Error fetching tickets:', err)
     } finally {
       setLoading(false)
     }
-  }
+  }, [tickets.length, toast])
   // Keep ref pointing at latest fetchTickets so socket callback is always current
   _ticketFetchRef.current = fetchTickets
-
-  // Fetch cancellation stats from backend
-  const fetchCancellationStats = async () => {
-    try {
-      const response = await getCancellationStats('30d')
-      setCancellationData(response.data || null)
-    } catch (err) {
-      console.error('Error fetching cancellation stats:', err)
-    }
-  }
 
   // Fetch tickets on component mount
   useEffect(() => {
     fetchTickets()
-    fetchCancellationStats()
-  }, [])
+  }, [fetchTickets])
 
   // Check for ticket to auto-open from Ring for Help
   useEffect(() => {
@@ -346,8 +379,8 @@ function ManagementDashboard() {
     const unassignedTickets = activeTickets.length - assignedTickets
     
     const overdueTickets = activeTickets.filter(t => {
-      if (!t.due_date) return false
-      const dueDate = new Date(t.due_date)
+      if (!t.resolution_due_at) return false
+      const dueDate = new Date(t.resolution_due_at)
       return dueDate < now && t.status !== 'resolved' && t.status !== 'closed'
     }).length
 
@@ -422,17 +455,6 @@ function ManagementDashboard() {
         </p>
       </div>
 
-      {/* Error Alert */}
-      {error && (
-        <div className="mb-6">
-          <Alert 
-            type="error" 
-            message={error}
-            onClose={() => setError(null)}
-          />
-        </div>
-      )}
-
       {/* Include Cancelled Toggle + Summary Statistics Grid */}
       <div className="flex items-center justify-end mb-3">
         <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -488,14 +510,10 @@ function ManagementDashboard() {
       </div>
 
       {/* Main Content - Charts and Widgets */}
-      {/* Quick Actions - Floating right-side panel */}
-      <QuickActionsPanel />
-
       {/* Draggable Widget Grid */}
       <ManagementWidgetGrid
         tickets={tickets}
         filteredTickets={filteredTickets}
-        loading={loading}
         fetchTickets={fetchTickets}
         assignmentFilter={assignmentFilter}
         setAssignmentFilter={setAssignmentFilter}
@@ -505,6 +523,8 @@ function ManagementDashboard() {
         setCategoryFilter={setCategoryFilter}
         handleTicketClick={handleTicketClick}
         pendingRequestsRef={pendingRequestsRef}
+        onSubmitTicket={handleSubmitTicket}
+        onMinimize={handleMinimize}
       />
 
       {/* Ticket Detail View Modal */}
@@ -513,6 +533,7 @@ function ManagementDashboard() {
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         onTicketUpdated={fetchTickets}
+        onMinimize={handleMinimize}
       />
     </div>
   )

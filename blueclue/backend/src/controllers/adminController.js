@@ -5,38 +5,39 @@
  */
 
 import * as adminService from '../services/adminService.js';
+import pool from '../config/database.js';
+import bcrypt from 'bcrypt';
+import crypto from 'crypto';
+import { sendTechnicianInvitation } from '../services/emailService.js';
+import { 
+    BadRequestError, 
+  NotFoundError,
+  InternalServerError,
+  ConflictError
+} from '../middleware/errorHandler.js';
 
 /**
  * GET /api/admin/email-logs
  * Get paginated list of email logs with filtering
  */
 export const getEmailLogs = async (req, res) => {
-  try {
-    const options = {
-      page: parseInt(req.query.page) || 1,
-      limit: parseInt(req.query.limit) || 50,
-      status: req.query.status,
-      isBlocked: req.query.isBlocked === 'true' ? true : req.query.isBlocked === 'false' ? false : undefined,
-      isSpam: req.query.isSpam === 'true' ? true : req.query.isSpam === 'false' ? false : undefined,
-      senderEmail: req.query.senderEmail,
-      startDate: req.query.startDate,
-      endDate: req.query.endDate
-    };
+  const options = {
+    page: parseInt(req.query.page) || 1,
+    limit: parseInt(req.query.limit) || 50,
+    status: req.query.status,
+    isBlocked: req.query.isBlocked === 'true' ? true : req.query.isBlocked === 'false' ? false : undefined,
+    isSpam: req.query.isSpam === 'true' ? true : req.query.isSpam === 'false' ? false : undefined,
+    senderEmail: req.query.senderEmail,
+    startDate: req.query.startDate,
+    endDate: req.query.endDate
+  };
 
-    const result = await adminService.getEmailLogs(options);
+  const result = await adminService.getEmailLogs(options);
 
-    res.json({
-      status: 'success',
-      data: result
-    });
-  } catch (error) {
-    console.error('Error fetching email logs:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch email logs',
-      error: error.message
-    });
-  }
+  res.json({
+    status: 'success',
+    data: result
+  });
 };
 
 /**
@@ -44,38 +45,18 @@ export const getEmailLogs = async (req, res) => {
  * Get full details of a specific email log
  */
 export const getEmailLogDetails = async (req, res) => {
-  try {
-    const { id } = req.params;
+  const { id } = req.params;
 
-    if (!id || isNaN(id)) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid email log ID'
-      });
-    }
-
-    const emailLog = await adminService.getEmailLogDetails(parseInt(id));
-
-    res.json({
-      status: 'success',
-      data: emailLog
-    });
-  } catch (error) {
-    console.error('Error fetching email log details:', error);
-
-    if (error.message.includes('not found')) {
-      return res.status(404).json({
-        status: 'error',
-        message: error.message
-      });
-    }
-
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch email log details',
-      error: error.message
-    });
+  if (!id || isNaN(id)) {
+    throw new BadRequestError('Invalid email log ID');
   }
+
+  const emailLog = await adminService.getEmailLogDetails(parseInt(id));
+
+  res.json({
+    status: 'success',
+    data: emailLog
+  });
 };
 
 /**
@@ -83,40 +64,20 @@ export const getEmailLogDetails = async (req, res) => {
  * Retry creating ticket from a failed email parse
  */
 export const retryFailedParse = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const overrides = req.body.overrides || {};
+  const { id } = req.params;
+  const overrides = req.body.overrides || {};
 
-    if (!id || isNaN(id)) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid email log ID'
-      });
-    }
-
-    const result = await adminService.retryFailedParse(parseInt(id), overrides);
-
-    res.json({
-      status: 'success',
-      data: result,
-      message: `Ticket #${result.ticket_number} created successfully from email log #${id}`
-    });
-  } catch (error) {
-    console.error('Error retrying failed parse:', error);
-
-    if (error.message.includes('not found') || error.message.includes('already has ticket')) {
-      return res.status(400).json({
-        status: 'error',
-        message: error.message
-      });
-    }
-
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to retry email parse',
-      error: error.message
-    });
+  if (!id || isNaN(id)) {
+    throw new BadRequestError('Invalid email log ID');
   }
+
+  const result = await adminService.retryFailedParse(parseInt(id), overrides);
+
+  res.json({
+    status: 'success',
+    data: result,
+    message: `Ticket #${result.ticket_number} created successfully from email log #${id}`
+  });
 };
 
 /**
@@ -124,23 +85,14 @@ export const retryFailedParse = async (req, res) => {
  * Get dashboard statistics
  */
 export const getDashboardStats = async (req, res) => {
-  try {
-    const days = parseInt(req.query.days) || 7;
+  const days = parseInt(req.query.days) || 7;
 
-    const stats = await adminService.getDashboardStats(days);
+  const stats = await adminService.getDashboardStats(days);
 
-    res.json({
-      status: 'success',
-      data: stats
-    });
-  } catch (error) {
-    console.error('Error fetching dashboard stats:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch dashboard statistics',
-      error: error.message
-    });
-  }
+  res.json({
+    status: 'success',
+    data: stats
+  });
 };
 
 /**
@@ -148,24 +100,15 @@ export const getDashboardStats = async (req, res) => {
  * Get all allowlisted domains
  */
 export const getAllowlist = async (req, res) => {
-  try {
-    const activeOnly = req.query.activeOnly !== 'false'; // Default true
+  const activeOnly = req.query.activeOnly !== 'false'; // Default true
 
-    const allowlist = await adminService.getAllowlist(activeOnly);
+  const allowlist = await adminService.getAllowlist(activeOnly);
 
-    res.json({
-      status: 'success',
-      data: allowlist,
-      count: allowlist.length
-    });
-  } catch (error) {
-    console.error('Error fetching allowlist:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch allowlist',
-      error: error.message
-    });
-  }
+  res.json({
+    status: 'success',
+    data: allowlist,
+    count: allowlist.length
+  });
 };
 
 /**
@@ -173,32 +116,20 @@ export const getAllowlist = async (req, res) => {
  * Add domain to allowlist
  */
 export const addToAllowlist = async (req, res) => {
-  try {
-    const { domain, reason } = req.body;
-    const addedBy = req.user?.email || req.user?.username || 'admin'; // From auth middleware
+  const { domain, reason } = req.body;
+  const addedBy = req.user?.email || req.user?.username || 'admin'; // From auth middleware
 
-    if (!domain) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Domain is required'
-      });
-    }
-
-    const entry = await adminService.addToAllowlist(domain, reason || 'Manually added', addedBy);
-
-    res.status(201).json({
-      status: 'success',
-      data: entry,
-      message: `Domain '${domain}' added to allowlist`
-    });
-  } catch (error) {
-    console.error('Error adding to allowlist:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to add domain to allowlist',
-      error: error.message
-    });
+  if (!domain) {
+    throw new BadRequestError('Domain is required');
   }
+
+  const entry = await adminService.addToAllowlist(domain, reason || 'Manually added', addedBy);
+
+  res.status(201).json({
+    status: 'success',
+    data: entry,
+    message: `Domain '${domain}' added to allowlist`
+  });
 };
 
 /**
@@ -206,37 +137,22 @@ export const addToAllowlist = async (req, res) => {
  * Remove domain from allowlist
  */
 export const removeFromAllowlist = async (req, res) => {
-  try {
-    const { domain } = req.params;
+  const { domain } = req.params;
 
-    if (!domain) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Domain is required'
-      });
-    }
-
-    const success = await adminService.removeFromAllowlist(domain);
-
-    if (!success) {
-      return res.status(404).json({
-        status: 'error',
-        message: `Domain '${domain}' not found in allowlist`
-      });
-    }
-
-    res.json({
-      status: 'success',
-      message: `Domain '${domain}' removed from allowlist`
-    });
-  } catch (error) {
-    console.error('Error removing from allowlist:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to remove domain from allowlist',
-      error: error.message
-    });
+  if (!domain) {
+    throw new BadRequestError('Domain is required');
   }
+
+  const success = await adminService.removeFromAllowlist(domain);
+
+  if (!success) {
+    throw new NotFoundError(`Domain '${domain}' not found in allowlist`);
+  }
+
+  res.json({
+    status: 'success',
+    message: `Domain '${domain}' removed from allowlist`
+  });
 };
 
 /**
@@ -244,23 +160,14 @@ export const removeFromAllowlist = async (req, res) => {
  * Get all system settings
  */
 export const getSystemSettings = async (req, res) => {
-  try {
-    const publicOnly = req.query.public === 'true';
+  const publicOnly = req.query.public === 'true';
 
-    const settings = await adminService.getSystemSettings(publicOnly);
+  const settings = await adminService.getSystemSettings(publicOnly);
 
-    res.json({
-      status: 'success',
-      data: settings
-    });
-  } catch (error) {
-    console.error('Error fetching system settings:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch system settings',
-      error: error.message
-    });
-  }
+  res.json({
+    status: 'success',
+    data: settings
+  });
 };
 
 /**
@@ -268,48 +175,25 @@ export const getSystemSettings = async (req, res) => {
  * Update a specific system setting
  */
 export const updateSystemSetting = async (req, res) => {
-  try {
-    const { key } = req.params;
-    const { value } = req.body;
-    const updatedBy = req.user?.email || req.user?.username || 'admin';
+  const { key } = req.params;
+  const { value } = req.body;
+  const updatedBy = req.user?.email || req.user?.username || 'admin';
 
-    if (!key) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Setting key is required'
-      });
-    }
-
-    if (value === undefined) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Setting value is required'
-      });
-    }
-
-    const setting = await adminService.updateSystemSetting(key, value, updatedBy);
-
-    res.json({
-      status: 'success',
-      data: setting,
-      message: `Setting '${key}' updated successfully`
-    });
-  } catch (error) {
-    console.error('Error updating system setting:', error);
-
-    if (error.message.includes('not found')) {
-      return res.status(404).json({
-        status: 'error',
-        message: error.message
-      });
-    }
-
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to update system setting',
-      error: error.message
-    });
+  if (!key) {
+    throw new BadRequestError('Setting key is required');
   }
+
+  if (value === undefined) {
+    throw new BadRequestError('Setting value is required');
+  }
+
+  const setting = await adminService.updateSystemSetting(key, value, updatedBy);
+
+  res.json({
+    status: 'success',
+    data: setting,
+    message: `Setting '${key}' updated successfully`
+  });
 };
 
 /**
@@ -317,25 +201,16 @@ export const updateSystemSetting = async (req, res) => {
  * Get security alerts from spam protection
  */
 export const getSecurityAlerts = async (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit) || 50;
-    const unresolvedOnly = req.query.unresolvedOnly === 'true';
+  const limit = parseInt(req.query.limit) || 50;
+  const unresolvedOnly = req.query.unresolvedOnly === 'true';
 
-    const alerts = await adminService.getSecurityAlerts(limit, unresolvedOnly);
+  const alerts = await adminService.getSecurityAlerts(limit, unresolvedOnly);
 
-    res.json({
-      status: 'success',
-      data: alerts,
-      count: alerts.length
-    });
-  } catch (error) {
-    console.error('Error fetching security alerts:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to fetch security alerts',
-      error: error.message
-    });
-  }
+  res.json({
+    status: 'success',
+    data: alerts,
+    count: alerts.length
+  });
 };
 
 /**
@@ -343,40 +218,182 @@ export const getSecurityAlerts = async (req, res) => {
  * Mark a security alert as resolved
  */
 export const resolveSecurityAlert = async (req, res) => {
+  const { id } = req.params;
+  const resolvedBy = req.user?.email || req.user?.username || 'admin';
+
+  if (!id || isNaN(id)) {
+    throw new BadRequestError('Invalid alert ID');
+  }
+
+  const alert = await adminService.resolveSecurityAlert(parseInt(id), resolvedBy);
+
+  res.json({
+    status: 'success',
+    data: alert,
+    message: `Security alert #${id} resolved`
+  });
+};
+
+/**
+ * GET /api/admin/audit-health
+ * Get audit logging health status
+ */
+export const getAuditLogHealth = async (req, res) => {
   try {
-    const { id } = req.params;
-    const resolvedBy = req.user?.email || req.user?.username || 'admin';
+    // Update health status first
+    await pool.query('SELECT update_audit_log_health()');
 
-    if (!id || isNaN(id)) {
-      return res.status(400).json({
-        status: 'error',
-        message: 'Invalid alert ID'
-      });
-    }
+    // Retrieve current health status
+    const result = await pool.query(
+      `SELECT 
+        log_type,
+        last_entry_at,
+        entry_count_24h,
+        is_healthy,
+        last_check_at,
+        notes
+       FROM audit_log_health
+       ORDER BY log_type ASC`
+    );
 
-    const alert = await adminService.resolveSecurityAlert(parseInt(id), resolvedBy);
+    // Calculate time since last entry for each log type
+    const healthData = result.rows.map(row => {
+      let timeSinceLastEntry = null;
+      if (row.last_entry_at) {
+        const diffMs = Date.now() - new Date(row.last_entry_at).getTime();
+        const minutes = Math.floor(diffMs / 60000);
+        const hours = Math.floor(minutes / 60);
+        const days = Math.floor(hours / 24);
+
+        if (days > 0) {
+          timeSinceLastEntry = `${days}d ${hours % 24}h ago`;
+        } else if (hours > 0) {
+          timeSinceLastEntry = `${hours}h ${minutes % 60}m ago`;
+        } else {
+          timeSinceLastEntry = `${minutes}m ago`;
+        }
+      }
+
+      return {
+        ...row,
+        time_since_last_entry: timeSinceLastEntry
+      };
+    });
 
     res.json({
-      status: 'success',
-      data: alert,
-      message: `Security alert #${id} resolved`
+      success: true,
+      health: healthData,
+      overall_healthy: healthData.every(h => h.is_healthy)
     });
   } catch (error) {
-    console.error('Error resolving security alert:', error);
-
-    if (error.message.includes('not found')) {
-      return res.status(404).json({
-        status: 'error',
-        message: error.message
-      });
-    }
-
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to resolve security alert',
-      error: error.message
-    });
+    console.error('Error fetching audit log health:', error);
+    throw new InternalServerError('Failed to fetch audit log health');
   }
+};
+
+/**
+ * POST /api/admin/technicians
+ * Create a new technician account
+ * Body: { firstName, lastName, email, role }
+ */
+export const createTechnician = async (req, res) => {
+  const { firstName, lastName, email, role } = req.body;
+
+  // Validate required fields
+  if (!firstName || !lastName || !email || !role) {
+    throw new BadRequestError('All fields are required: firstName, lastName, email, role');
+  }
+
+  // Validate role
+  const validRoles = ['technician', 'senior_technician', 'management'];
+  if (!validRoles.includes(role)) {
+    throw new BadRequestError(`Invalid role. Must be one of: ${validRoles.join(', ')}`);
+  }
+
+  // Validate email format
+  const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+  if (!emailRegex.test(email)) {
+    throw new BadRequestError('Invalid email format');
+  }
+
+  // Check if email already exists
+  const existingUser = await pool.query(
+    'SELECT id FROM users WHERE email = $1',
+    [email]
+  );
+
+  if (existingUser.rows.length > 0) {
+    throw new ConflictError('An account with this email already exists');
+  }
+
+  // Generate temporary password (12 characters, alphanumeric)
+  const tempPassword = crypto.randomBytes(8).toString('base64').slice(0, 12).replace(/[+/=]/g, 'x');
+
+  // Hash the temporary password
+  const SALT_ROUNDS = 10;
+  const passwordHash = await bcrypt.hash(tempPassword, SALT_ROUNDS);
+
+  // Generate username from name and random suffix
+  const baseUsername = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`;
+  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+  const username = `${baseUsername}${randomSuffix}`;
+
+  // Create the technician account
+  const result = await pool.query(
+    `INSERT INTO users (
+      email, password_hash, first_name, last_name, username, role,
+      is_active, force_password_change, email_verified
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    RETURNING id, email, first_name, last_name, username, role, created_at`,
+    [email, passwordHash, firstName, lastName, username, role, true, true, true]
+  );
+
+  const newUser = result.rows[0];
+
+  // Send invitation email with temporary password
+  try {
+    await sendTechnicianInvitation(email, firstName, tempPassword, role, username, newUser.id);
+    console.log(`✅ Technician invitation email sent to ${email}`);
+  } catch (emailError) {
+    console.error('❌ Failed to send technician invitation email:', emailError);
+    // Don't fail the request if email fails - account is still created
+  }
+
+  res.status(201).json({
+    status: 'success',
+    message: `Technician account created successfully for ${firstName} ${lastName}`,
+    data: {
+      id: newUser.id,
+      email: newUser.email,
+      firstName: newUser.first_name,
+      lastName: newUser.last_name,
+      username: newUser.username,
+      role: newUser.role,
+      createdAt: newUser.created_at,
+      emailSent: true
+    }
+  });
+};
+
+/**
+ * GET /api/admin/technicians
+ * Get list of all technicians/staff
+ */
+export const getTechnicians = async (req, res) => {
+  const result = await pool.query(
+    `SELECT 
+      id, email, first_name, last_name, username, role, 
+      is_active, created_at, last_login
+     FROM users
+     WHERE role IN ('technician', 'senior_technician', 'management', 'admin')
+     ORDER BY created_at DESC`
+  );
+
+  res.json({
+    status: 'success',
+    data: result.rows,
+    count: result.rows.length
+  });
 };
 
 export default {
@@ -390,5 +407,8 @@ export default {
   getSystemSettings,
   updateSystemSetting,
   getSecurityAlerts,
-  resolveSecurityAlert
+  resolveSecurityAlert,
+  getAuditLogHealth,
+  createTechnician,
+  getTechnicians
 };

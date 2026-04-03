@@ -1,4 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { ToastProvider } from './contexts/ToastContext'
+import { MinimizedTicketsProvider } from './contexts/MinimizedTicketsContext'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import VerifyEmail from './pages/VerifyEmail'
@@ -7,7 +9,6 @@ import Welcome from './pages/Welcome'
 import ClientDashboard from './pages/ClientDashboard'
 import TechnicianDashboard from './pages/TechnicianDashboard'
 import ManagementDashboard from './pages/ManagementDashboard'
-import MyAssignedTickets from './pages/MyAssignedTickets'
 import AnalyticsDashboard from './pages/AnalyticsDashboard'
 import KnowledgeBaseManagement from './pages/KnowledgeBaseManagement'
 import FAQ from './pages/FAQ'
@@ -16,12 +17,18 @@ import FAQSearch from './pages/FAQSearch'
 import TemplateManager from './pages/TemplateManager'
 import MLAdminDashboard from './pages/MLAdminDashboard'
 import ChatAnalyticsDashboard from './pages/ChatAnalyticsDashboard'
+import TechnicianManagement from './pages/TechnicianManagement'
+import AccountDirectory from './pages/AccountDirectory'
 import Navbar from './components/Navbar'
 import ProtectedRoute from './components/ProtectedRoute'
+import usePageTitle from './hooks/usePageTitle'
+import GlobalMinimizedBar from './components/GlobalMinimizedBar'
 
-function App() {
+function AppRoutes() {
+  usePageTitle()
+
   return (
-    <BrowserRouter>
+    <>
       <Navbar />
       <Routes>
         <Route path="/" element={<Login />} />
@@ -57,11 +64,6 @@ function App() {
             <AnalyticsDashboard />
           </ProtectedRoute>
         } />
-        <Route path="/my-tickets" element={
-          <ProtectedRoute allowedRoles={['technician', 'senior_technician', 'management', 'admin']}>
-            <MyAssignedTickets />
-          </ProtectedRoute>
-        } />
         <Route path="/knowledge-base" element={
           <ProtectedRoute allowedRoles={['technician', 'senior_technician', 'management', 'admin']}>
             <KnowledgeBaseManagement />
@@ -70,6 +72,11 @@ function App() {
         <Route path="/template-manager" element={
           <ProtectedRoute allowedRoles={['management', 'admin']}>
             <TemplateManager />
+          </ProtectedRoute>
+        } />
+        <Route path="/technician-management" element={
+          <ProtectedRoute allowedRoles={['management', 'admin']}>
+            <TechnicianManagement />
           </ProtectedRoute>
         } />
         <Route path="/ml-admin" element={
@@ -82,7 +89,25 @@ function App() {
             <ChatAnalyticsDashboard />
           </ProtectedRoute>
         } />
+        <Route path="/directory" element={
+          <ProtectedRoute allowedRoles={['technician', 'senior_technician', 'management', 'admin']}>
+            <AccountDirectory />
+          </ProtectedRoute>
+        } />
       </Routes>
+      <GlobalMinimizedBar />
+    </>
+  )
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <ToastProvider>
+        <MinimizedTicketsProvider>
+          <AppRoutes />
+        </MinimizedTicketsProvider>
+      </ToastProvider>
     </BrowserRouter>
   )
 }

@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import LoadingSpinner from './LoadingSpinner'
-import TemplateSelector from './TemplateSelector'
+import TicketTemplateSelector from './TicketTemplateSelector'
 import { recordTemplateUsage } from '../services/templateService'
 import { suggestArticles } from '../services/chatService'
 import ArticleSuggestionCard from './ArticleSuggestionCard'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { useToast } from '../hooks/useToast'
 
 const SUGGESTION_WORD_THRESHOLD = 20
 const SUGGESTION_DEBOUNCE_MS    = 1200
@@ -20,7 +22,7 @@ const DESCRIPTION_MAX = 2000
 const MAX_IMAGES = 5
 const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024 // 5 MB
 
-function TicketForm({ onSubmit }) {
+function TicketForm({ onSubmit, formId }) {
   // Form data state
   const [formData, setFormData] = useState({
     title: '',
@@ -34,8 +36,12 @@ function TicketForm({ onSubmit }) {
   // Loading state
   const [isLoading, setIsLoading] = useState(false)
 
-  // Error state
-  const [error, setError] = useState(null)
+  // Confirmation modal state
+  const [showConfirm, setShowConfirm] = useState(false)
+  const pendingSubmit = useRef(null)
+
+  // Toast notifications
+  const toast = useToast()
 
   // Validation errors state
   const [validationErrors, setValidationErrors] = useState({
@@ -64,6 +70,9 @@ function TicketForm({ onSubmit }) {
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false)
   const suggestionTimerRef = useRef(null)
 
+  // Key to reset the template selector on form reset
+  const [templateSelectorKey, setTemplateSelectorKey] = useState(0)
+
   // Description display mode: 'edit' | 'preview'
   const [descriptionMode, setDescriptionMode] = useState('edit')
 
@@ -82,8 +91,8 @@ function TicketForm({ onSubmit }) {
       title: false,
       description: false
     })
-    setError(null)
     setAppliedTemplate(null) // Clear template tracking
+    setTemplateSelectorKey(k => k + 1) // Reset the selector component
     setImages([])           // Clear image attachments
     setImageError('')
     setDescriptionMode('edit')
@@ -312,8 +321,14 @@ function TicketForm({ onSubmit }) {
       return // Don't submit if validation fails
     }
 
+    // Show confirmation modal
+    setShowConfirm(true)
+  }
+
+  // Actually submit after confirmation
+  const confirmSubmit = async () => {
+    setShowConfirm(false)
     setIsLoading(true)
-    setError(null)
 
     try {
       // Prepare submission data, including template info if applicable
@@ -341,9 +356,9 @@ function TicketForm({ onSubmit }) {
       // Reset form after successful submission
       resetForm()
     } catch (err) {
-      // Only set local error if no onSubmit handler (parent handles the error display)
+      // Only show toast if no onSubmit handler (parent handles the error display)
       if (!onSubmit) {
-        setError(err.message || 'An error occurred while submitting the ticket')
+        toast.error(err.message || 'An error occurred while submitting the ticket')
       }
     } finally {
       setIsLoading(false)
@@ -351,52 +366,18 @@ function TicketForm({ onSubmit }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Error display */}
-      {error && (
-        <div 
-          role="alert"
-          className="bg-red-950 border border-red-700 text-red-300 px-4 py-3 rounded-lg"
-        >
-          {error}
-        </div>
-      )}
-      
+    <form id={formId} onSubmit={handleSubmit} className="space-y-6">
       {/* Template Selector */}
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-1">
           Quick Start
         </label>
-        <TemplateSelector
-          onTemplateSelect={handleTemplateSelect}
+        <TicketTemplateSelector
+          key={templateSelectorKey}
+          onTemplateApplied={handleTemplateSelect}
+          onTemplateClear={clearTemplate}
           disabled={isLoading}
         />
-        {appliedTemplate && (
-          <div className="mt-2 p-3 bg-blue-900/30 border border-blue-700 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span className="text-sm text-blue-300">
-                  Template applied: <span className="font-medium">{appliedTemplate.name}</span>
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={clearTemplate}
-                className="text-blue-400 hover:text-blue-300 text-sm"
-              >
-                Clear
-              </button>
-            </div>
-            {appliedTemplate.instructions && (
-              <p className="mt-2 text-xs text-gray-400 border-t border-blue-800 pt-2">
-                <span className="font-medium text-gray-300">Instructions:</span> {appliedTemplate.instructions}
-              </p>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Title field */}
@@ -641,7 +622,8 @@ function TicketForm({ onSubmit }) {
           htmlFor="priority"
           className="block text-sm font-medium text-gray-300 mb-1"
         >
-          Priority <span className="text-gray-500 text-xs">(optional - AI will suggest if not selected)</span>
+          Priority <span className="text-gray-500 text-xs">(please select priority below)</span>
+          <span className="block text-gray-500 text-xs mt-0.5">Optional, if not selected AI will determine for you</span>
         </label>
         <select
           id="priority"
@@ -698,6 +680,36 @@ function TicketForm({ onSubmit }) {
           'Submit Ticket'
         )}
       </button>
+
+      {/* Confirmation modal */}
+      {showConfirm && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4 text-center">
+            <svg className="w-12 h-12 text-blue-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h3 className="text-lg font-semibold text-white mb-2">Submit this ticket?</h3>
+            <p className="text-sm text-gray-400 mb-6">Are you sure you want to submit this ticket? This action cannot be undone.</p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowConfirm(false)}
+                className="px-5 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmSubmit}
+                className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-lg transition-colors"
+              >
+                Yes, Submit
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </form>
   )
 }

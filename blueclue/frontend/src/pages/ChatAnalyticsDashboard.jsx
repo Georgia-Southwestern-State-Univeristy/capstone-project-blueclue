@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getChatAnalytics, getChatKnowledgeGaps } from '../services/chatService'
-
+import { useToast } from '../hooks/useToast'
+import { formatDate as _fmtDate } from '../utils/dateFormatter'
 // ─── Tiny SVG bar chart ─────────────────────────────────────────────────────
 function BarChart({ data = [], valueKey = 'count', labelKey = 'label', color = '#3b82f6', height = 120 }) {
   if (!data.length) return <p className="text-gray-500 text-sm text-center py-6">No data</p>
@@ -162,21 +163,20 @@ export default function ChatAnalyticsDashboard() {
   const [period, setPeriod] = useState('30d')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const toast = useToast()
   const [gapData, setGapData] = useState(null)
   const [gapLoading, setGapLoading] = useState(true)
 
   const load = useCallback(async (p) => {
     setLoading(true)
     setGapLoading(true)
-    setError(null)
     try {
       const [result, gaps] = await Promise.allSettled([
         getChatAnalytics(p),
         getChatKnowledgeGaps(20),
       ])
       if (result.status === 'fulfilled') setData(result.value)
-      else setError(result.reason?.message || 'Failed to load analytics')
+      else toast.error(result.reason?.message || 'Failed to load analytics')
       if (gaps.status === 'fulfilled') setGapData(gaps.value)
     } finally {
       setLoading(false)
@@ -235,11 +235,6 @@ export default function ChatAnalyticsDashboard() {
           </div>
         </div>
 
-        {error && (
-          <div className="bg-red-900/40 border border-red-700 rounded-xl p-4 mb-6 text-red-300">
-            {error}
-          </div>
-        )}
 
         {loading ? (
           <div className="flex items-center justify-center h-64 text-gray-400">Loading…</div>
@@ -452,7 +447,7 @@ export default function ChatAnalyticsDashboard() {
                           <td className="text-right px-3 text-yellow-400">{gap.low_confidence_count}</td>
                           <td className="text-right px-3 text-red-400">{gap.thumbs_down_count}</td>
                           <td className="pl-3 text-gray-500 text-xs">
-                            {gap.first_seen ? new Date(gap.first_seen).toLocaleDateString() : '—'}
+                            {gap.first_seen ? _fmtDate(gap.first_seen) : '—'}
                           </td>
                         </tr>
                       ))}

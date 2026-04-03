@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import LoadingSpinner from '../components/LoadingSpinner'
-import Alert from '../components/Alert'
 import { LineChart, BarChart, StackedBarChart, Heatmap, MetricCard } from '../components/analytics'
 import DonutChart from '../components/DonutChart'
 import * as analyticsService from '../services/analyticsService'
 import TicketDetailView from '../components/TicketDetailView'
+import { useMinimizedTickets } from '../contexts/MinimizedTicketsContext'
+import { useToast } from '../hooks/useToast'
 
 /**
  * Analytics Dashboard
@@ -17,7 +18,7 @@ function AnalyticsDashboard() {
   // User info
   const [userRole, setUserRole] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const toast = useToast()
   
   // Date range state
   const [datePreset, setDatePreset] = useState('month')
@@ -41,6 +42,8 @@ function AnalyticsDashboard() {
   // Ticket detail state
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const { minimize } = useMinimizedTickets()
+  const handleMinimize = (ticketData) => { minimize(ticketData); setIsDetailOpen(false) }
 
   // Check user authentication and role
   useEffect(() => {
@@ -66,7 +69,6 @@ function AnalyticsDashboard() {
   // Fetch dashboard data
   const fetchData = useCallback(async () => {
     setLoading(true)
-    setError(null)
     
     try {
       const params = showCustomRange 
@@ -76,7 +78,7 @@ function AnalyticsDashboard() {
       const response = await analyticsService.getDashboardSummary(params)
       setDashboardData(response.data)
     } catch (err) {
-      setError(err.message || 'Failed to load analytics data')
+      toast.error(err.message || 'Failed to load analytics data')
       console.error('Analytics fetch error:', err)
     } finally {
       setLoading(false)
@@ -156,7 +158,7 @@ function AnalyticsDashboard() {
       }
       await analyticsService.downloadAnalytics(params)
     } catch (err) {
-      setError(err.message || 'Export failed')
+      toast.error(err.message || 'Export failed')
     } finally {
       setExporting(false)
     }
@@ -301,11 +303,6 @@ function AnalyticsDashboard() {
         )}
       </div>
 
-      {/* Error Display */}
-      {error && (
-        <Alert type="error" message={error} onClose={() => setError(null)} />
-      )}
-
       {/* Tab Navigation */}
       <div className="flex flex-wrap gap-2 border-b border-gray-800 mb-6">
         {tabs.map(tab => (
@@ -374,6 +371,10 @@ function AnalyticsDashboard() {
             <SLATab 
               data={dashboardData.sla}
               onDrillDown={handleDrillDown}
+              onTicketClick={(ticket) => {
+                setSelectedTicketId(ticket.id);
+                setIsDetailOpen(true);
+              }}
             />
           )}
         </>
@@ -395,11 +396,11 @@ function AnalyticsDashboard() {
         />
       )}
 
-      {/* Ticket Detail View Modal */}
       <TicketDetailView
         ticketId={selectedTicketId}
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
+        onMinimize={handleMinimize}
       />
     </div>
   )
@@ -631,30 +632,29 @@ function TicketVolumeTab({ data, onDrillDown }) {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Volume Trend */}
-        <LineChart
-          data={data.trend || []}
-          xKey="date"
-          yKey="created"
-          yKey2="resolved_same_day"
-          title="Daily Volume Trend"
-          color="#3b82f6"
-          color2="#10b981"
-          formatX={formatDate}
-          yLabel="Created"
-          y2Label="Same-day Resolved"
-        />
+      {/* Daily Volume Trend - Full Width */}
+      <LineChart
+        data={data.trend || []}
+        xKey="date"
+        yKey="created"
+        yKey2="resolved_same_day"
+        title="Daily Volume Trend"
+        color="#3b82f6"
+        color2="#10b981"
+        height={280}
+        formatX={formatDate}
+        yLabel="Created"
+        y2Label="Same-day Resolved"
+      />
 
-        {/* Month over Month */}
-        <BarChart
-          data={data.month_over_month || []}
-          xKey="month"
-          yKey="count"
-          title="Month over Month"
-          formatValue={(v) => v}
-        />
-      </div>
+      {/* Month over Month */}
+      <BarChart
+        data={data.month_over_month || []}
+        xKey="month"
+        yKey="count"
+        title="Month over Month"
+        formatValue={(v) => v}
+      />
 
       {/* Heatmap */}
       <Heatmap
@@ -899,7 +899,7 @@ function CategoriesTab({ data, onDrillDown }) {
   )
 }
 
-function SLATab({ data, onDrillDown }) {
+function SLATab({ data, onDrillDown, onTicketClick }) {
   if (!data) return null
 
   return (
@@ -1003,7 +1003,7 @@ function SLATab({ data, onDrillDown }) {
               </thead>
               <tbody className="divide-y divide-gray-800">
                 {data.current_breaches.slice(0, 10).map((ticket, index) => (
-                  <tr key={index} className="hover:bg-gray-800/50">
+                  <tr key={index} className="hover:bg-gray-800/50 cursor-pointer" onClick={() => onTicketClick?.(ticket)}>
                     <td className="px-4 py-3 text-sm text-blue-400 font-mono">{ticket.ticket_number}</td>
                     <td className="px-4 py-3 text-sm text-white truncate max-w-xs">{ticket.subject}</td>
                     <td className="px-4 py-3 text-center">
@@ -1142,10 +1142,10 @@ function DrillDownModal({ filter, tickets, loading, pagination, onClose, onLoadM
 }
 
 // Helper function for date formatting
+import { formatDate as _fmtDate } from '../utils/dateFormatter'
 function formatDate(dateStr) {
   if (!dateStr) return ''
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return _fmtDate(dateStr, { month: 'short', day: 'numeric' })
 }
 
 export default AnalyticsDashboard

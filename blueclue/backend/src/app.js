@@ -29,14 +29,27 @@ import commentRoutes from './routes/commentRoutes.js';
 import ringRoutes from './routes/ring.js';
 import updateRequestRoutes from './routes/updateRequestRoutes.js';
 import dashboardLayoutRoutes from './routes/dashboardLayouts.js';
+import widgetRoutes from './routes/widgets.js';
 import knowledgeBaseRoutes from './routes/knowledgeBase.js';
 import templateRoutes from './routes/templates.js';
 import themeRoutes from './routes/themes.js';
 import chatRoutes from './routes/chat.js';
 import mlAdminRoutes from './routes/mlAdmin.js';
+import requestLogsRoutes from './routes/requestLogs.js';
+import searchHistoryRoutes from './routes/searchHistory.js';
+import messageRoutes from './routes/messages.js';
+import ticketChatRoutes from './routes/ticketChat.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 import { startUpdateRequestReminderJob } from './jobs/updateRequestReminders.js';
 import { startChatQualityJob } from './jobs/chatQualityJob.js';
+import { errorHandler, notFoundHandler, InternalServerError } from './middleware/errorHandler.js';
+import { startAlertDetectionJob } from './jobs/alertDetectionJob.js';
+import { startEmailQueueJob } from './jobs/emailQueueJob.js';
+import { startMessageCleanupJob } from './jobs/messageCleanupJob.js';
+import { startTicketChatCleanupJob } from './jobs/ticketChatCleanupJob.js';
+import { startDriftMonitorJob } from './jobs/driftMonitorJob.js';
+import { requestLogger } from './middleware/requestLogger.js';
+import { runHealthChecks } from './services/healthCheckService.js';
 
 dotenv.config();
 
@@ -57,13 +70,18 @@ initializeSocketHandlers(io);
 // Start scheduled jobs
 startUpdateRequestReminderJob(io);
 startChatQualityJob();
+startAlertDetectionJob();
+startEmailQueueJob();
+startMessageCleanupJob();
+startTicketChatCleanupJob();
+startDriftMonitorJob();  // Daily drift detection + automated alerting
 
 // Make io accessible to routes/controllers
 app.set('io', io);
 app.locals.io = io;
 
 // Middleware
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({
     origin: (origin, callback) => {
         const allowed = (process.env.FRONTEND_URL || 'http://localhost:5173').split(',').map(u => u.trim());
@@ -81,11 +99,15 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' })); // For parsing Mailgun webhook form data
 app.use(cookieParser());
 
+// Request logging middleware (must be after body parsers, before routes)
+app.use(requestLogger);
+
 // ── Static file serving (chat uploads) ──────────────────────────────────────
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
 const uploadsDir = path.resolve(__dirname, '../../uploads');
 fs.mkdirSync(path.join(uploadsDir, 'chat'), { recursive: true });
+fs.mkdirSync(path.join(uploadsDir, 'dm'), { recursive: true });
 app.use('/uploads', express.static(uploadsDir, { maxAge: '7d' }));
 
 // API Routes
@@ -105,11 +127,16 @@ app.use('/api/assignment-requests', assignmentRequestRoutes);
 app.use('/api', ringRoutes); // Ring for Help routes
 app.use('/api', updateRequestRoutes); // Ticket Update Request routes
 app.use('/api/dashboard-layouts', dashboardLayoutRoutes); // Dashboard layout persistence
+app.use('/api/widgets', widgetRoutes); // Widget RBAC and validation
 app.use('/api/knowledge-base', knowledgeBaseRoutes); // Knowledge base management
 app.use('/api/templates', templateRoutes); // Ticket templates
+app.use('/api/admin/analytics/requests', requestLogsRoutes); // Request logs analytics (admin-only)
 app.use('/api/themes', themeRoutes); // User theme preferences
 app.use('/api/chat', chatRoutes); // Chat bot routes
 app.use('/api/ml-admin', mlAdminRoutes); // ML Admin – monitoring, explainability, versioning
+app.use('/api/search-history', searchHistoryRoutes); // User search history
+app.use('/api/messages', messageRoutes); // Direct messages between users
+app.use('/api/tickets', ticketChatRoutes); // Ticket chat between client and tech
 app.use('/api/dev', devRoutes);
 app.use('/api/admin', adminRoutes);
 
@@ -118,12 +145,49 @@ app.get('/', (req, res) => {
     res.send('Welcome to BlueClue Backend!');
 });
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-    res.status(200).json({
-        status: "OK",
-        message: "BlueClue API is running"
-    });
+/**
+ * Comprehensive Health Check Endpoint
+ * ====================================
+ * Checks all critical dependencies:
+ * - PostgreSQL database
+ * - AI/ML service
+ * - Email service (Mailgun/SMTP)
+ * - In-memory cache
+ * 
+ * Returns structured health status with latency metrics.
+ * Responds within 2 seconds even if dependencies are slow.
+ * 
+ * Response format:
+ * {
+ *   status: "ok" | "degraded" | "down",
+ *   timestamp: ISO 8601 timestamp,
+ *   total_latency_ms: number,
+ *   checks: {
+ *     database: { status: "ok", latency_ms: number },
+ *     ai_service: { status: "ok", latency_ms: number },
+ *     email: { status: "ok", latency_ms: number },
+ *     cache: { status: "ok", latency_ms: number }
+ *   }
+ * }
+ */
+app.get('/api/health', async (req, res) => {
+    try {
+        const healthStatus = await runHealthChecks();
+        
+        // Return appropriate HTTP status code based on overall health
+        const statusCode = healthStatus.status === 'ok' ? 200 : 
+                          healthStatus.status === 'degraded' ? 200 : 503;
+        
+        res.status(statusCode).json(healthStatus);
+    } catch (error) {
+        // Unexpected error in health check
+        res.status(503).json({
+            status: 'down',
+            timestamp: new Date().toISOString(),
+            error: 'Health check failed',
+            message: error.message
+        });
+    }
 });
 
 // Database test endpoint
@@ -152,13 +216,15 @@ app.get('/api/test-db', async (req, res) => {
         });
     } catch (err) {
         console.error('Database test error:', err);
-        res.status(500).json({
-            status: 'error',
-            message: 'Database connection failed',
-            error: err.message
-        });
+        throw new InternalServerError('Database connection failed');
     }
 });
+
+// 404 Handler - must be after all other routes
+app.use(notFoundHandler);
+
+// Error Handler - must be the last middleware
+app.use(errorHandler);
 
 httpServer.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);

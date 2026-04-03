@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
-import Alert from '../components/Alert'
 import TemplateFormModal from '../components/TemplateFormModal'
 import TemplatePreviewModal from '../components/TemplatePreviewModal'
+import TemplateVersionHistoryModal from '../components/TemplateVersionHistoryModal'
+import { useToast } from '../hooks/useToast'
 import {
     getAllTemplates,
     deleteTemplate,
@@ -10,16 +11,19 @@ import {
     exportTemplate,
     importTemplate,
     getTemplateAnalytics,
+    getTemplateVersions,
+    restoreTemplateVersion,
     TEMPLATE_CATEGORIES,
     PRIORITY_OPTIONS
 } from '../services/templateService'
 
 function TemplateManager() {
+    const toast = useToast()
+    
     // State management
     const [templates, setTemplates] = useState([])
     const [analytics, setAnalytics] = useState(null)
     const [isLoading, setIsLoading] = useState(true)
-    const [alert, setAlert] = useState(null)
     
     // Filters
     const [categoryFilter, setCategoryFilter] = useState('all')
@@ -29,7 +33,9 @@ function TemplateManager() {
     // Modals
     const [isFormModalOpen, setIsFormModalOpen] = useState(false)
     const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
+    const [isVersionHistoryModalOpen, setIsVersionHistoryModalOpen] = useState(false)
     const [selectedTemplate, setSelectedTemplate] = useState(null)
+    const [templateVersions, setTemplateVersions] = useState([])
     const [editMode, setEditMode] = useState(false)
     
     // Fetch templates and analytics
@@ -44,10 +50,7 @@ function TemplateManager() {
             setAnalytics(analyticsData)
         } catch (error) {
             console.error('Failed to fetch data:', error)
-            setAlert({
-                type: 'error',
-                message: 'Failed to load templates. Please try again.'
-            })
+            toast.error('Failed to load templates. Please try again.')
         } finally {
             setIsLoading(false)
         }
@@ -101,19 +104,38 @@ function TemplateManager() {
         setIsPreviewModalOpen(true)
     }
     
+    const handleViewVersionHistory = async (template) => {
+        try {
+            setSelectedTemplate(template)
+            const versions = await getTemplateVersions(template.id)
+            setTemplateVersions(versions)
+            setIsVersionHistoryModalOpen(true)
+        } catch (error) {
+            toast.error(error.message || 'Failed to load version history')
+        }
+    }
+    
+    const handleRestoreVersion = async (versionNumber) => {
+        try {
+            await restoreTemplateVersion(selectedTemplate.id, versionNumber, 'Restored from version history')
+            toast.success(`Template restored to version ${versionNumber} successfully`)
+            // Refresh data to show updated template
+            await fetchData()
+            // Reload version history to show the new restore version
+            const updatedVersions = await getTemplateVersions(selectedTemplate.id)
+            setTemplateVersions(updatedVersions)
+        } catch (error) {
+            throw error // Re-throw to let modal handle it
+        }
+    }
+    
     const handleToggleStatus = async (template) => {
         try {
             await toggleTemplateStatus(template.id)
-            setAlert({
-                type: 'success',
-                message: `Template "${template.name}" ${template.is_active ? 'deactivated' : 'activated'} successfully`
-            })
+            toast.success(`Template "${template.name}" ${template.is_active ? 'deactivated' : 'activated'} successfully`)
             fetchData()
         } catch (error) {
-            setAlert({
-                type: 'error',
-                message: error.message || 'Failed to update template status'
-            })
+            toast.error(error.message || 'Failed to update template status')
         }
     }
     
@@ -124,16 +146,10 @@ function TemplateManager() {
         
         try {
             await deleteTemplate(template.id)
-            setAlert({
-                type: 'success',
-                message: `Template "${template.name}" deleted successfully`
-            })
+            toast.success(`Template "${template.name}" deleted successfully`)
             fetchData()
         } catch (error) {
-            setAlert({
-                type: 'error',
-                message: error.message || 'Failed to delete template'
-            })
+            toast.error(error.message || 'Failed to delete template')
         }
     }
     
@@ -150,15 +166,9 @@ function TemplateManager() {
             document.body.removeChild(a)
             URL.revokeObjectURL(url)
             
-            setAlert({
-                type: 'success',
-                message: `Template "${template.name}" exported successfully`
-            })
+            toast.success(`Template "${template.name}" exported successfully`)
         } catch (error) {
-            setAlert({
-                type: 'error',
-                message: error.message || 'Failed to export template'
-            })
+            toast.error(error.message || 'Failed to export template')
         }
     }
     
@@ -175,16 +185,10 @@ function TemplateManager() {
                 const text = await file.text()
                 const templateData = JSON.parse(text)
                 await importTemplate(templateData)
-                setAlert({
-                    type: 'success',
-                    message: 'Template imported successfully'
-                })
+                toast.success('Template imported successfully')
                 fetchData()
             } catch (error) {
-                setAlert({
-                    type: 'error',
-                    message: error.message || 'Failed to import template. Please check the file format.'
-                })
+                toast.error(error.message || 'Failed to import template. Please check the file format.')
             }
         }
         
@@ -193,10 +197,7 @@ function TemplateManager() {
     
     const handleFormSuccess = () => {
         setIsFormModalOpen(false)
-        setAlert({
-            type: 'success',
-            message: editMode ? 'Template updated successfully' : 'Template created successfully'
-        })
+        toast.success(editMode ? 'Template updated successfully' : 'Template created successfully')
         fetchData()
     }
     
@@ -267,13 +268,6 @@ function TemplateManager() {
                     </button>
                 </div>
             </div>
-            
-            {/* Alert */}
-            {alert && (
-                <div className="mb-6">
-                    <Alert type={alert.type} message={alert.message} onClose={() => setAlert(null)} />
-                </div>
-            )}
             
             {/* Analytics Summary */}
             {analytics && (
@@ -423,6 +417,15 @@ function TemplateManager() {
                                                 </svg>
                                             </button>
                                             <button
+                                                onClick={() => handleViewVersionHistory(template)}
+                                                className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                                                title="Version History"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                            </button>
+                                            <button
                                                 onClick={() => handleEditTemplate(template)}
                                                 className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
                                                 title="Edit"
@@ -472,6 +475,15 @@ function TemplateManager() {
                 isOpen={isPreviewModalOpen}
                 onClose={() => setIsPreviewModalOpen(false)}
                 template={selectedTemplate}
+            />
+            
+            {/* Template Version History Modal */}
+            <TemplateVersionHistoryModal
+                isOpen={isVersionHistoryModalOpen}
+                onClose={() => setIsVersionHistoryModalOpen(false)}
+                template={selectedTemplate}
+                versions={templateVersions}
+                onRestore={handleRestoreVersion}
             />
           </div>
         </div>

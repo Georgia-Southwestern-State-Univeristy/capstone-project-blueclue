@@ -270,6 +270,58 @@ class ExplainabilityEngine:
         self._cache.set(text, self.model_type, result)
         return result
 
+    def get_global_top_features(self, top_n: int = 10) -> Optional[List[Dict[str, Any]]]:
+        """
+        Return model-level top features by global importance (not per-prediction).
+        Uses ``feature_importances_`` (tree models) or mean absolute ``coef_``
+        (linear models).  Returns ``None`` if the model exposes neither.
+        """
+        from datetime import datetime
+
+        try:
+            # Build a dummy ticket just to get the feature shape / names
+            dummy_ticket = {
+                "description": "dummy ticket text",
+                "subject": "",
+                "created_at": datetime.now().isoformat(),
+            }
+            features = self.feature_extractor.transform([dummy_ticket])
+            names = self._get_feature_names(features)
+
+            if hasattr(self.model, "feature_importances_"):
+                importances = self.model.feature_importances_
+                scored = sorted(
+                    zip(names, importances.tolist()),
+                    key=lambda x: x[1],
+                    reverse=True,
+                )
+                return [
+                    {"feature": name, "score": round(float(score), 4)}
+                    for name, score in scored
+                    if score > 1e-5 and re.match(r"^[a-z][a-z_ ]{1,}$", name)
+                ][:top_n]
+
+            if hasattr(self.model, "coef_"):
+                import numpy as _np
+                coef = self.model.coef_
+                avg = _np.abs(coef).mean(axis=0) if coef.ndim > 1 else _np.abs(coef[0])
+                if len(names) == len(avg):
+                    scored = sorted(
+                        zip(names, avg.tolist()),
+                        key=lambda x: x[1],
+                        reverse=True,
+                    )
+                    return [
+                        {"feature": name, "score": round(float(score), 4)}
+                        for name, score in scored
+                        if score > 1e-5 and re.match(r"^[a-z][a-z_ ]{1,}$", name)
+                    ][:top_n]
+
+        except Exception as exc:
+            logger.warning("get_global_top_features failed: %s", exc)
+
+        return None
+
     # ---- internal -------------------------------------------------------- #
 
     def _explain_internal(
@@ -345,10 +397,14 @@ class ExplainabilityEngine:
             else:
                 vals = shap_values[0]
 
+            # Ensure vals is a flat 1-D array of Python scalars so that
+            # abs() and sorted() work correctly regardless of SHAP version.
+            vals = np.asarray(vals).flatten()
+
             # Pair feature names with absolute SHAP values, sort descending
             scored = sorted(
                 zip(feature_names, vals),
-                key=lambda x: abs(x[1]),
+                key=lambda x: float(abs(x[1])),
                 reverse=True,
             )
 
@@ -374,9 +430,11 @@ class ExplainabilityEngine:
 
         except Exception as exc:
             logger.warning("SHAP explanation failed, falling back: %s", exc)
-            return self._feature_importance_explanation(
-                features, feature_names, "", prediction, confidence, top_n
-            )
+            if hasattr(self.model, "feature_importances_"):
+                return self._feature_importance_explanation(
+                    features, feature_names, "", prediction, confidence, top_n
+                )
+            return self._keyword_fallback("", prediction, confidence)
 
     def _feature_importance_explanation(
         self,

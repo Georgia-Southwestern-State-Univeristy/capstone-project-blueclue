@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getTicketHistory } from '../services/ticketService'
+import { formatDateTime } from '../utils/dateFormatter'
+import RelativeTime from './RelativeTime'
 
 /**
  * TicketActivityLog
@@ -33,14 +35,7 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
 
   if (!isOpen) return null
 
-  // Format timestamp to display
-  const formatTime = (dateStr) => {
-    const d = new Date(dateStr)
-    return d.toLocaleDateString('en-US', {
-      month: 'short', day: 'numeric', year: 'numeric',
-      hour: 'numeric', minute: '2-digit', hour12: true
-    })
-  }
+  // (timeline timestamps rendered by <RelativeTime> component)
 
   // Get icon + color for each change type
   const getChangeTypeInfo = (changeType) => {
@@ -232,9 +227,9 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
         return (
           <span>
             {'Status changed from '}
-            <span className="text-gray-300">{entry.old_value?.replace(/_/g, ' ')}</span>
+            <span className="text-gray-300">{entry.old_value?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
             {' to '}
-            <span className="text-green-300 font-medium">{entry.new_value?.replace(/_/g, ' ')}</span>
+            <span className="text-green-300 font-medium">{entry.new_value?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
           </span>
         )
       case 'ticket_cancelled': {
@@ -303,7 +298,7 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
         const reqDetails = entry.change_details || {}
         const requestedBy = reqDetails.requested_by_name || entry.changed_by_name || 'Manager'
         const assignedName = reqDetails.assigned_to_name || 'Technician'
-        const deadline = reqDetails.deadline ? new Date(reqDetails.deadline).toLocaleString('en-US', {
+        const deadline = reqDetails.deadline ? formatDateTime(reqDetails.deadline, {
           month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
         }) : 'N/A'
         const message = reqDetails.message
@@ -359,7 +354,7 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
               <>
                 <br />
                 <span className="text-gray-400">Est. Completion: </span>
-                <span className="text-gray-200">{new Date(estimatedCompletion).toLocaleString('en-US', {
+                <span className="text-gray-200">{formatDateTime(estimatedCompletion, {
                   month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
                 })}</span>
               </>
@@ -438,7 +433,7 @@ function TicketActivityLog({ ticketId, isOpen = true }) {
                 <span className={`text-xs font-semibold uppercase tracking-wide ${info.color}`}>
                   {info.label}
                 </span>
-                <span className="text-xs text-gray-500">{formatTime(entry.created_at)}</span>
+                <RelativeTime timestamp={entry.created_at} className="text-xs text-gray-500" />
               </div>
               <div className="text-sm text-gray-300">
                 {getDescription(entry)}

@@ -2,6 +2,7 @@
 import Ticket from '../models/Ticket.js';
 import AIClassification from '../models/AIClassification.js';
 import PriorityOverride from '../models/PriorityOverride.js';
+import MLFeedback from '../models/MLFeedback.js';
 import AIConfiguration from '../models/AIConfiguration.js';
 import UserPrivilege from '../models/UserPrivilege.js';
 import CategoryAccess from '../models/CategoryAccess.js';
@@ -13,6 +14,12 @@ import { calculateFinalPriority, explainPriorityDecision } from '../services/pri
 import pool from '../config/database.js';
 import { sendTicketConfirmation, sendTicketStatusUpdate, sendTicketAssignment } from '../services/emailService.js';
 import { emitNotificationToUser, emitUnreadCountToUser, broadcastNotification } from '../services/socketService.js';
+import { 
+    BadRequestError, 
+    NotFoundError,
+    ForbiddenError,
+    ConflictError 
+} from '../middleware/errorHandler.js';
 
 // Helper function to check if user is a technician (any level)
 const isTechnician = (role) => {
@@ -106,77 +113,68 @@ const autoDenyPendingRequests = async (ticketId, reviewerId, reason, io, exclude
  * POST /api/tickets
  */
 export const createTicket = async (req, res) => {
+    const { subject, description, customer_id, priority, category, attachments = [] } = req.body;
+
+    // Validation
+    if (!subject || subject.trim() === '') {
+        throw new BadRequestError('Subject is required');
+    }
+
+    if (!description || description.trim() === '') {
+        throw new BadRequestError('Description is required');
+    }
+
+    // Require customer_id (authenticated users only)
+    if (!customer_id) {
+        throw new BadRequestError('Customer ID is required. Please log in to create a ticket.');
+    }
+
+    // Combine subject and description for AI classification
+    const ticketText = `${subject.trim()}. ${description.trim()}`;
+
+    // Get AI classification with fallback to manual or default values
+    const aiResult = await classifyTicketWithFallback(ticketText, {
+        category: category || 'general',
+        priority: priority || 'low'
+    });
+
+    // Store user-selected priority (if provided)
+    const userPriority = priority || null;
+    
+    // Store AI-predicted priority (if AI was successful)
+    const aiPriority = aiResult.aiClassified ? aiResult.priority : null;
+
+    // Use AI classification for category if not provided by user
+    const finalCategory = category || aiResult.category;
+    
+    // Get AI configuration for priority calculation
+    const priorityConfig = await AIConfiguration.getPriorityWeights();
+    
+    // Calculate final priority using weighted algorithm
+    const priorityCalculation = calculateFinalPriority({
+        userPriority,
+        aiPriority: aiPriority || 'low',
+        aiConfidence: aiResult.confidence || 0,
+        config: priorityConfig
+    });
+
+    const finalPriority = priorityCalculation.finalPriority;
+    const priorityExplanation = explainPriorityDecision(
+        priorityCalculation, 
+        userPriority, 
+        aiPriority
+    );
+
+    // Validate attachments (array of { dataUrl, name, size })
+    const sanitizedAttachments = Array.isArray(attachments)
+        ? attachments.slice(0, 5).map(a => ({
+            name: String(a.name || '').slice(0, 255),
+            size: Number(a.size) || 0,
+            dataUrl: String(a.dataUrl || '')
+          }))
+        : [];
+
     try {
-        const { subject, description, customer_id, priority, category, attachments = [] } = req.body;
-
-        // Validation
-        if (!subject || subject.trim() === '') {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Subject is required'
-            });
-        }
-
-        if (!description || description.trim() === '') {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Description is required'
-            });
-        }
-
-        // Require customer_id (authenticated users only)
-        if (!customer_id) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Customer ID is required. Please log in to create a ticket.'
-            });
-        }
-
-        // Combine subject and description for AI classification
-        const ticketText = `${subject.trim()}. ${description.trim()}`;
-
-        // Get AI classification with fallback to manual or default values
-        const aiResult = await classifyTicketWithFallback(ticketText, {
-            category: category || 'general',
-            priority: priority || 'low'
-        });
-
-        // Store user-selected priority (if provided)
-        const userPriority = priority || null;
-        
-        // Store AI-predicted priority (if AI was successful)
-        const aiPriority = aiResult.aiClassified ? aiResult.priority : null;
-
-        // Use AI classification for category if not provided by user
-        const finalCategory = category || aiResult.category;
-        
-        // Get AI configuration for priority calculation
-        const priorityConfig = await AIConfiguration.getPriorityWeights();
-        
-        // Calculate final priority using weighted algorithm
-        const priorityCalculation = calculateFinalPriority({
-            userPriority,
-            aiPriority: aiPriority || 'low',
-            aiConfidence: aiResult.confidence || 0,
-            config: priorityConfig
-        });
-
-        const finalPriority = priorityCalculation.finalPriority;
-        const priorityExplanation = explainPriorityDecision(
-            priorityCalculation, 
-            userPriority, 
-            aiPriority
-        );
-
-        // Validate attachments (array of { dataUrl, name, size })
-        const sanitizedAttachments = Array.isArray(attachments)
-            ? attachments.slice(0, 5).map(a => ({
-                name: String(a.name || '').slice(0, 255),
-                size: Number(a.size) || 0,
-                dataUrl: String(a.dataUrl || '')
-              }))
-            : [];
-
         // Create ticket with AI classification metadata and priority tracking
         const ticket = await Ticket.create({
             subject: subject.trim(),
@@ -291,22 +289,11 @@ export const createTicket = async (req, res) => {
         } catch (_) { /* non-fatal */ }
 
         res.status(201).json(response);
-
     } catch (error) {
-        console.error('Create ticket error:', error);
-        
         if (error.code === '23503') {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Invalid user ID or category'
-            });
+            throw new BadRequestError('Invalid user ID or category');
         }
-
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to create ticket',
-            error: error.message
-        });
+        throw error; // Re-throw for error handler
     }
 };
 
@@ -317,8 +304,7 @@ export const createTicket = async (req, res) => {
  * For technicians/admins: returns tickets based on category access
  */
 export const getAllTickets = async (req, res) => {
-    try {
-        let tickets;
+    let tickets;
         
         // Check if user is authenticated and is a customer or guest
         if (req.user && req.user.role === 'customer') {
@@ -376,20 +362,11 @@ export const getAllTickets = async (req, res) => {
             tickets = [];
         }
 
-        res.status(200).json({
-            status: 'success',
-            count: tickets.length,
-            data: tickets
-        });
-
-    } catch (error) {
-        console.error('Get all tickets error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve tickets',
-            error: error.message
-        });
-    }
+    res.status(200).json({
+        status: 'success',
+        count: tickets.length,
+        data: tickets
+    });
 };
 
 /**
@@ -399,13 +376,9 @@ export const getAllTickets = async (req, res) => {
  * For admins: returns all tickets
  */
 export const getMyAssignedTickets = async (req, res) => {
-    try {
-        if (!req.user) {
-            return res.status(401).json({
-                status: 'error',
-                message: 'Authentication required'
-            });
-        }
+    if (!req.user) {
+        throw new UnauthorizedError('Authentication required');
+    }
 
         let tickets;
 
@@ -467,10 +440,7 @@ export const getMyAssignedTickets = async (req, res) => {
             tickets = await Ticket.getAll();
         } else {
             // Other roles cannot access this endpoint
-            return res.status(403).json({
-                status: 'error',
-                message: 'Access denied. Only technicians and admins can view assigned tickets.'
-            });
+            throw new ForbiddenError('Access denied. Only technicians and admins can view assigned tickets.');
         }
 
         res.status(200).json({
@@ -478,15 +448,6 @@ export const getMyAssignedTickets = async (req, res) => {
             count: tickets.length,
             data: tickets
         });
-
-    } catch (error) {
-        console.error('Get assigned tickets error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve assigned tickets',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -494,24 +455,17 @@ export const getMyAssignedTickets = async (req, res) => {
  * GET /api/tickets/:id
  */
 export const getTicketById = async (req, res) => {
-    try {
-        const { id } = req.params;
+    const { id } = req.params;
 
-        if (isNaN(id)) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Invalid ticket ID'
-            });
-        }
+    if (isNaN(id)) {
+        throw new BadRequestError('Invalid ticket ID');
+    }
 
-        const ticket = await Ticket.getById(parseInt(id));
+    const ticket = await Ticket.getById(parseInt(id));
 
-        if (!ticket) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Ticket not found'
-            });
-        }
+    if (!ticket) {
+        throw new NotFoundError('Ticket not found');
+    }
 
         // Check category access for technicians
         if (req.user && isTechnician(req.user.role)) {
@@ -527,36 +481,21 @@ export const getTicketById = async (req, res) => {
                     const hasAccess = await CategoryAccess.hasAccess(req.user.id, categoryId, 'view');
                     
                     if (!hasAccess) {
-                        return res.status(403).json({
-                            status: 'error',
-                            message: 'Access denied. No permission to view this category.'
-                        });
+                        throw new ForbiddenError('Access denied. No permission to view this category.');
                     }
                 }
             }
         }
         
-        // Customers can only view their own tickets
-        if (req.user && req.user.role === 'customer' && ticket.customer_id !== req.user.id) {
-            return res.status(403).json({
-                status: 'error',
-                message: 'Access denied. You can only view your own tickets.'
-            });
-        }
-
-        res.status(200).json({
-            status: 'success',
-            data: ticket
-        });
-
-    } catch (error) {
-        console.error('Get ticket by ID error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve ticket',
-            error: error.message
-        });
+    // Customers can only view their own tickets
+    if (req.user && req.user.role === 'customer' && ticket.customer_id !== req.user.id) {
+        throw new ForbiddenError('Access denied. You can only view your own tickets.');
     }
+
+    res.status(200).json({
+        status: 'success',
+        data: ticket
+    });
 };
 
 /**
@@ -564,49 +503,33 @@ export const getTicketById = async (req, res) => {
  * PUT /api/tickets/:id
  */
 export const updateTicket = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const updates = req.body;
+    const { id } = req.params;
+    const updates = req.body;
 
-        if (isNaN(id)) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Invalid ticket ID'
-            });
-        }
+    if (isNaN(id)) {
+        throw new BadRequestError('Invalid ticket ID');
+    }
 
-        if (Object.keys(updates).length === 0) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'No fields to update'
-            });
-        }
+    if (Object.keys(updates).length === 0) {
+        throw new BadRequestError('No fields to update');
+    }
 
-        if (updates.subject !== undefined && updates.subject.trim() === '') {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Subject cannot be empty'
-            });
-        }
+    if (updates.subject !== undefined && updates.subject.trim() === '') {
+        throw new BadRequestError('Subject cannot be empty');
+    }
 
-        if (updates.description !== undefined && updates.description.trim() === '') {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Description cannot be empty'
-            });
-        }
+    if (updates.description !== undefined && updates.description.trim() === '') {
+        throw new BadRequestError('Description cannot be empty');
+    }
 
-        if (updates.subject) updates.subject = updates.subject.trim();
-        if (updates.description) updates.description = updates.description.trim();
+    if (updates.subject) updates.subject = updates.subject.trim();
+    if (updates.description) updates.description = updates.description.trim();
 
-        // Get existing ticket for permission checks
-        const existingTicket = await Ticket.getById(parseInt(id));
-        if (!existingTicket) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Ticket not found'
-            });
-        }
+    // Get existing ticket for permission checks
+    const existingTicket = await Ticket.getById(parseInt(id));
+    if (!existingTicket) {
+        throw new NotFoundError('Ticket not found');
+    }
 
         // ─── Role-based field filtering ─────────────────────────────
         if (req.user) {
@@ -619,42 +542,27 @@ export const updateTicket = async (req, res) => {
             } else if (role === 'customer') {
                 // Clients can only edit their own tickets
                 if (existingTicket.customer_id !== userId) {
-                    return res.status(403).json({
-                        status: 'error',
-                        message: 'Access denied. You can only edit your own tickets.'
-                    });
+                    throw new ForbiddenError('Access denied. You can only edit your own tickets.');
                 }
                 // Clients can only edit open or waiting_on_customer tickets
                 if (!['open', 'waiting_on_customer'].includes(existingTicket.status)) {
-                    return res.status(403).json({
-                        status: 'error',
-                        message: 'Access denied. You can only edit tickets that are open or pending.'
-                    });
+                    throw new ForbiddenError('Access denied. You can only edit tickets that are open or pending.');
                 }
                 // Clients can only change description and category
                 const clientAllowed = ['description', 'category'];
                 const disallowed = Object.keys(updates).filter(k => !clientAllowed.includes(k));
                 if (disallowed.length > 0) {
-                    return res.status(403).json({
-                        status: 'error',
-                        message: `Access denied. You do not have permission to change: ${disallowed.join(', ')}`
-                    });
+                    throw new ForbiddenError(`Access denied. You do not have permission to change: ${disallowed.join(', ')}`);
                 }
             } else if (isTechnician(role)) {
                 // Techs can only edit tickets assigned to them (unless they have CAN_EDIT_ANY_TICKET)
                 const canEditAny = await UserPrivilege.hasPrivilege(userId, 'CAN_EDIT_ANY_TICKET');
                 if (!canEditAny && existingTicket.assigned_to !== userId) {
-                    return res.status(403).json({
-                        status: 'error',
-                        message: 'Access denied. You can only edit tickets assigned to you.'
-                    });
+                    throw new ForbiddenError('Access denied. You can only edit tickets assigned to you.');
                 }
                 // Techs cannot edit closed or cancelled tickets
                 if (['closed', 'cancelled'].includes(existingTicket.status)) {
-                    return res.status(403).json({
-                        status: 'error',
-                        message: 'Access denied. Closed or cancelled tickets cannot be edited.'
-                    });
+                    throw new ForbiddenError('Access denied. Closed or cancelled tickets cannot be edited.');
                 }
                 // Techs can change: description, status, priority, resolution
                 const techAllowed = ['description', 'status', 'priority', 'resolution'];
@@ -663,10 +571,7 @@ export const updateTicket = async (req, res) => {
                     // Allow category only if tech has category access privilege
                     const onlyCategory = disallowed.every(k => k === 'category');
                     if (!onlyCategory) {
-                        return res.status(403).json({
-                            status: 'error',
-                            message: `Access denied. You do not have permission to change: ${disallowed.join(', ')}`
-                        });
+                        throw new ForbiddenError(`Access denied. You do not have permission to change: ${disallowed.join(', ')}`);
                     }
                 }
             }
@@ -679,10 +584,7 @@ export const updateTicket = async (req, res) => {
             if (req.user.role !== 'admin' && req.user.role !== 'management') {
                 const canAssign = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_ASSIGN_TICKETS');
                 if (!canAssign) {
-                    return res.status(403).json({
-                        status: 'error',
-                        message: 'Access denied. You do not have permission to assign tickets.'
-                    });
+                    throw new ForbiddenError('Access denied. You do not have permission to assign tickets.');
                 }
             }
         }
@@ -701,10 +603,7 @@ export const updateTicket = async (req, res) => {
                     const hasAccess = await CategoryAccess.hasAccess(req.user.id, categoryId, 'edit');
                     
                     if (!hasAccess) {
-                        return res.status(403).json({
-                            status: 'error',
-                            message: 'Access denied. No permission to edit tickets in this category.'
-                        });
+                        throw new ForbiddenError('Access denied. No permission to edit tickets in this category.');
                     }
                 }
             }
@@ -714,10 +613,7 @@ export const updateTicket = async (req, res) => {
         if (updates.status && updates.status !== existingTicket.status) {
             const allowedTransitions = VALID_TRANSITIONS[existingTicket.status];
             if (!allowedTransitions || !allowedTransitions.includes(updates.status)) {
-                return res.status(400).json({
-                    status: 'error',
-                    message: `Invalid status transition from '${existingTicket.status}' to '${updates.status}'`
-                });
+                throw new BadRequestError(`Invalid status transition from '${existingTicket.status}' to '${updates.status}'`);
             }
         }
 
@@ -737,13 +633,17 @@ export const updateTicket = async (req, res) => {
         const priorityChangeReason = updates.priority_change_reason;
         delete updates.priority_change_reason;
 
-        const ticket = await Ticket.update(parseInt(id), updates);
+        let ticket;
+        try {
+            ticket = await Ticket.update(parseInt(id), updates);
+        } catch (dbErr) {
+            if (dbErr.code === '23503') throw new BadRequestError('Invalid category');
+            if (dbErr.message === 'No valid fields to update') throw new BadRequestError(dbErr.message);
+            throw dbErr;
+        }
 
         if (!ticket) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Ticket not found'
-            });
+            throw new NotFoundError('Ticket not found');
         }
 
         // ─── Audit logging: log each changed field to ticket_history ────────
@@ -973,35 +873,11 @@ export const updateTicket = async (req, res) => {
             }
         }
 
-        res.status(200).json({
-            status: 'success',
-            message: 'Ticket updated successfully',
-            data: ticket
-        });
-
-    } catch (error) {
-        console.error('Update ticket error:', error);
-
-        if (error.code === '23503') {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Invalid category'
-            });
-        }
-
-        if (error.message === 'No valid fields to update') {
-            return res.status(400).json({
-                status: 'error',
-                message: error.message
-            });
-        }
-
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to update ticket',
-            error: error.message
-        });
-    }
+    res.status(200).json({
+        status: 'success',
+        message: 'Ticket updated successfully',
+        data: ticket
+    });
 };
 
 /**
@@ -1009,25 +885,18 @@ export const updateTicket = async (req, res) => {
  * DELETE /api/tickets/:id
  */
 export const deleteTicket = async (req, res) => {
-    try {
-        const { id } = req.params;
+    const { id } = req.params;
 
-        if (isNaN(id)) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Invalid ticket ID'
-            });
-        }
+    if (isNaN(id)) {
+        throw new BadRequestError('Invalid ticket ID');
+    }
 
-        const deletedBy = req.user ? req.user.id : null;
-        const ticket = await Ticket.delete(parseInt(id), deletedBy);
+    const deletedBy = req.user ? req.user.id : null;
+    const ticket = await Ticket.delete(parseInt(id), deletedBy);
 
-        if (!ticket) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Ticket not found or already deleted'
-            });
-        }
+    if (!ticket) {
+        throw new NotFoundError('Ticket not found or already deleted');
+    }
 
         // Log the deletion in ticket history
         try {
@@ -1045,20 +914,11 @@ export const deleteTicket = async (req, res) => {
             console.error('Failed to log ticket deletion:', historyErr);
         }
 
-        res.status(200).json({
-            status: 'success',
-            message: 'Ticket deleted successfully',
-            data: ticket
-        });
-
-    } catch (error) {
-        console.error('Delete ticket error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to delete ticket',
-            error: error.message
-        });
-    }
+    res.status(200).json({
+        status: 'success',
+        message: 'Ticket deleted successfully',
+        data: ticket
+    });
 };
 
 /**
@@ -1066,24 +926,17 @@ export const deleteTicket = async (req, res) => {
  * PATCH /api/tickets/:id/restore
  */
 export const restoreTicket = async (req, res) => {
-    try {
-        const { id } = req.params;
+    const { id } = req.params;
 
-        if (isNaN(id)) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Invalid ticket ID'
-            });
-        }
+    if (isNaN(id)) {
+        throw new BadRequestError('Invalid ticket ID');
+    }
 
-        const ticket = await Ticket.restore(parseInt(id));
+    const ticket = await Ticket.restore(parseInt(id));
 
-        if (!ticket) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Ticket not found or not deleted'
-            });
-        }
+    if (!ticket) {
+        throw new NotFoundError('Ticket not found or not deleted');
+    }
 
         // Log the restoration in ticket history
         try {
@@ -1101,20 +954,11 @@ export const restoreTicket = async (req, res) => {
             console.error('Failed to log ticket restoration:', historyErr);
         }
 
-        res.status(200).json({
-            status: 'success',
-            message: 'Ticket restored successfully',
-            data: ticket
-        });
-
-    } catch (error) {
-        console.error('Restore ticket error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to restore ticket',
-            error: error.message
-        });
-    }
+    res.status(200).json({
+        status: 'success',
+        message: 'Ticket restored successfully',
+        data: ticket
+    });
 };
 
 /**
@@ -1122,23 +966,13 @@ export const restoreTicket = async (req, res) => {
  * GET /api/tickets/deleted
  */
 export const getDeletedTickets = async (req, res) => {
-    try {
-        const tickets = await Ticket.getDeleted();
+    const tickets = await Ticket.getDeleted();
 
-        res.status(200).json({
-            status: 'success',
-            count: tickets.length,
-            data: tickets
-        });
-
-    } catch (error) {
-        console.error('Get deleted tickets error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve deleted tickets',
-            error: error.message
-        });
-    }
+    res.status(200).json({
+        status: 'success',
+        count: tickets.length,
+        data: tickets
+    });
 };
 
 /**
@@ -1146,52 +980,39 @@ export const getDeletedTickets = async (req, res) => {
  * POST /api/tickets/bulk-assign
  */
 export const bulkAssignTickets = async (req, res) => {
-    try {
-        const { ticket_ids, technician_id, note } = req.body;
-        const io = req.app.get('io');
+    const { ticket_ids, technician_id, note } = req.body;
+    const io = req.app.get('io');
 
-        // Validation
-        if (!ticket_ids || !Array.isArray(ticket_ids) || ticket_ids.length === 0) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'ticket_ids must be a non-empty array'
-            });
+    // Validation
+    if (!ticket_ids || !Array.isArray(ticket_ids) || ticket_ids.length === 0) {
+        throw new BadRequestError('ticket_ids must be a non-empty array');
+    }
+
+    if (!technician_id) {
+        throw new BadRequestError('technician_id is required');
+    }
+
+    // Verify technician exists and is active
+    const techResult = await pool.query(
+        `SELECT id, first_name, last_name, email, role, email_notifications
+         FROM users WHERE id = $1 AND role IN ('technician', 'senior_technician') AND is_active = true`,
+        [technician_id]
+    );
+
+    if (techResult.rows.length === 0) {
+        throw new BadRequestError('Invalid technician. User does not exist or is not an active technician.');
+    }
+
+    const technician = techResult.rows[0];
+    const techName = `${technician.first_name} ${technician.last_name}`;
+
+    // Check permission: management and admin can bulk-assign
+    if (req.user && !['management', 'admin'].includes(req.user.role)) {
+        const canAssign = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_ASSIGN_TICKETS');
+        if (!canAssign) {
+            throw new ForbiddenError('Access denied. You do not have permission to assign tickets.');
         }
-
-        if (!technician_id) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'technician_id is required'
-            });
-        }
-
-        // Verify technician exists and is active
-        const techResult = await pool.query(
-            `SELECT id, first_name, last_name, email, role, email_notifications
-             FROM users WHERE id = $1 AND role IN ('technician', 'senior_technician') AND is_active = true`,
-            [technician_id]
-        );
-
-        if (techResult.rows.length === 0) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Invalid technician. User does not exist or is not an active technician.'
-            });
-        }
-
-        const technician = techResult.rows[0];
-        const techName = `${technician.first_name} ${technician.last_name}`;
-
-        // Check permission: management and admin can bulk-assign
-        if (req.user && !['management', 'admin'].includes(req.user.role)) {
-            const canAssign = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_ASSIGN_TICKETS');
-            if (!canAssign) {
-                return res.status(403).json({
-                    status: 'error',
-                    message: 'Access denied. You do not have permission to assign tickets.'
-                });
-            }
-        }
+    }
 
         // Validate technician has category access for each ticket
         const ticketsResult = await pool.query(
@@ -1213,10 +1034,7 @@ export const bulkAssignTickets = async (req, res) => {
                 }
             }
             if (deniedCategories.length > 0) {
-                return res.status(403).json({
-                    status: 'error',
-                    message: `Technician does not have access to categories: ${deniedCategories.join(', ')}`
-                });
+                throw new ForbiddenError(`Technician does not have access to categories: ${deniedCategories.join(', ')}`);
             }
         }
 
@@ -1331,15 +1149,6 @@ export const bulkAssignTickets = async (req, res) => {
                 ticket_ids: updateResult.rows.map(t => t.id)
             }
         });
-
-    } catch (error) {
-        console.error('Bulk assign tickets error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to assign tickets',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -1347,67 +1156,61 @@ export const bulkAssignTickets = async (req, res) => {
  * POST /api/tickets/:id/assign
  */
 export const assignTicket = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { technician_id, note } = req.body;
+    const { id } = req.params;
+    const { technician_id, note } = req.body;
 
-        if (isNaN(id)) {
-            return res.status(400).json({ status: 'error', message: 'Invalid ticket ID' });
+    if (isNaN(id)) {
+        throw new BadRequestError('Invalid ticket ID');
+    }
+
+    if (!technician_id) {
+        throw new BadRequestError('technician_id is required');
+    }
+
+    // Check assigner privileges
+    if (req.user && !['management', 'admin'].includes(req.user.role)) {
+        const canAssign = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_ASSIGN_TICKETS');
+        if (!canAssign) {
+            throw new ForbiddenError('Access denied. You do not have permission to assign tickets.');
         }
+    }
 
-        if (!technician_id) {
-            return res.status(400).json({ status: 'error', message: 'technician_id is required' });
+    // Get the ticket
+    const ticket = await Ticket.getById(parseInt(id));
+    if (!ticket) {
+        throw new NotFoundError('Ticket not found');
+    }
+
+    // Check if already assigned (suggest reassign instead)
+    if (ticket.assigned_to) {
+        throw new ConflictError('Ticket is already assigned. Use PATCH /api/tickets/:id/reassign to reassign.', {
+            current_assignee: ticket.assigned_to_name
+        });
+    }
+
+    // Verify technician exists and is active
+    const techResult = await pool.query(
+        `SELECT id, first_name, last_name, email, role, email_notifications
+         FROM users WHERE id = $1 AND role IN ('technician', 'senior_technician') AND is_active = true`,
+        [technician_id]
+    );
+    if (techResult.rows.length === 0) {
+        throw new BadRequestError('Invalid technician. User does not exist or is not an active technician.');
+    }
+
+    const technician = techResult.rows[0];
+    const techName = `${technician.first_name} ${technician.last_name}`;
+
+    // Validate technician has access to this ticket's category
+    const categoryQuery = `SELECT id FROM categories WHERE name = $1`;
+    const categoryResult = await pool.query(categoryQuery, [ticket.category]);
+    if (categoryResult.rows.length > 0) {
+        const categoryId = categoryResult.rows[0].id;
+        const hasAccess = await CategoryAccess.hasAccess(technician_id, categoryId, 'view');
+        if (!hasAccess) {
+            throw new ForbiddenError(`Technician does not have access to the '${ticket.category}' category.`);
         }
-
-        // Check assigner privileges
-        if (req.user && !['management', 'admin'].includes(req.user.role)) {
-            const canAssign = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_ASSIGN_TICKETS');
-            if (!canAssign) {
-                return res.status(403).json({ status: 'error', message: 'Access denied. You do not have permission to assign tickets.' });
-            }
-        }
-
-        // Get the ticket
-        const ticket = await Ticket.getById(parseInt(id));
-        if (!ticket) {
-            return res.status(404).json({ status: 'error', message: 'Ticket not found' });
-        }
-
-        // Check if already assigned (suggest reassign instead)
-        if (ticket.assigned_to) {
-            return res.status(409).json({
-                status: 'error',
-                message: 'Ticket is already assigned. Use PATCH /api/tickets/:id/reassign to reassign.',
-                current_assignee: ticket.assigned_to_name
-            });
-        }
-
-        // Verify technician exists and is active
-        const techResult = await pool.query(
-            `SELECT id, first_name, last_name, email, role, email_notifications
-             FROM users WHERE id = $1 AND role IN ('technician', 'senior_technician') AND is_active = true`,
-            [technician_id]
-        );
-        if (techResult.rows.length === 0) {
-            return res.status(400).json({ status: 'error', message: 'Invalid technician. User does not exist or is not an active technician.' });
-        }
-
-        const technician = techResult.rows[0];
-        const techName = `${technician.first_name} ${technician.last_name}`;
-
-        // Validate technician has access to this ticket's category
-        const categoryQuery = `SELECT id FROM categories WHERE name = $1`;
-        const categoryResult = await pool.query(categoryQuery, [ticket.category]);
-        if (categoryResult.rows.length > 0) {
-            const categoryId = categoryResult.rows[0].id;
-            const hasAccess = await CategoryAccess.hasAccess(technician_id, categoryId, 'view');
-            if (!hasAccess) {
-                return res.status(403).json({
-                    status: 'error',
-                    message: `Technician does not have access to the '${ticket.category}' category.`
-                });
-            }
-        }
+    }
 
         // Assign the ticket
         const updatedTicket = await Ticket.update(parseInt(id), {
@@ -1528,11 +1331,6 @@ export const assignTicket = async (req, res) => {
                 assigned_by: req.user ? req.user.id : null
             }
         });
-
-    } catch (error) {
-        console.error('Assign ticket error:', error);
-        res.status(500).json({ status: 'error', message: 'Failed to assign ticket', error: error.message });
-    }
 };
 
 /**
@@ -1540,71 +1338,64 @@ export const assignTicket = async (req, res) => {
  * PATCH /api/tickets/:id/reassign
  */
 export const reassignTicket = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { technician_id, note } = req.body;
+    const { id } = req.params;
+    const { technician_id, note } = req.body;
 
-        if (isNaN(id)) {
-            return res.status(400).json({ status: 'error', message: 'Invalid ticket ID' });
-        }
+    if (isNaN(id)) {
+        throw new BadRequestError('Invalid ticket ID');
+    }
 
-        if (!technician_id) {
-            return res.status(400).json({ status: 'error', message: 'technician_id is required' });
-        }
+    if (!technician_id) {
+        throw new BadRequestError('technician_id is required');
+    }
 
-        // Check assigner privileges
-        if (req.user && !['management', 'admin'].includes(req.user.role)) {
-            const canAssign = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_ASSIGN_TICKETS');
-            if (!canAssign) {
-                return res.status(403).json({ status: 'error', message: 'Access denied. You do not have permission to reassign tickets.' });
-            }
+    // Check assigner privileges
+    if (req.user && !['management', 'admin'].includes(req.user.role)) {
+        const canAssign = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_ASSIGN_TICKETS');
+        if (!canAssign) {
+            throw new ForbiddenError('Access denied. You do not have permission to reassign tickets.');
         }
+    }
 
-        // Get the ticket
-        const ticket = await Ticket.getById(parseInt(id));
-        if (!ticket) {
-            return res.status(404).json({ status: 'error', message: 'Ticket not found' });
-        }
+    // Get the ticket
+    const ticket = await Ticket.getById(parseInt(id));
+    if (!ticket) {
+        throw new NotFoundError('Ticket not found');
+    }
 
         // Store previous assignee info for response
         const previousAssignee = ticket.assigned_to
             ? { id: ticket.assigned_to, name: ticket.assigned_to_name }
             : null;
 
-        // Verify new technician exists and is active
-        const techResult = await pool.query(
-            `SELECT id, first_name, last_name, email, role, email_notifications
-             FROM users WHERE id = $1 AND role IN ('technician', 'senior_technician') AND is_active = true`,
-            [technician_id]
-        );
-        if (techResult.rows.length === 0) {
-            return res.status(400).json({ status: 'error', message: 'Invalid technician. User does not exist or is not an active technician.' });
-        }
+    // Verify new technician exists and is active
+    const techResult = await pool.query(
+        `SELECT id, first_name, last_name, email, role, email_notifications
+         FROM users WHERE id = $1 AND role IN ('technician', 'senior_technician') AND is_active = true`,
+        [technician_id]
+    );
+    if (techResult.rows.length === 0) {
+        throw new BadRequestError('Invalid technician. User does not exist or is not an active technician.');
+    }
 
-        const technician = techResult.rows[0];
-        const techName = `${technician.first_name} ${technician.last_name}`;
+    const technician = techResult.rows[0];
+    const techName = `${technician.first_name} ${technician.last_name}`;
 
-        // Cannot reassign to the same person
-        if (ticket.assigned_to === technician_id) {
-            return res.status(400).json({
-                status: 'error',
-                message: `Ticket is already assigned to ${techName}.`
-            });
-        }
+    // Cannot reassign to the same person
+    if (ticket.assigned_to === technician_id) {
+        throw new ConflictError(`Ticket is already assigned to ${techName}.`);
+    }
 
-        // Validate technician has access to this ticket's category
-        const categoryQuery = `SELECT id FROM categories WHERE name = $1`;
-        const categoryResult = await pool.query(categoryQuery, [ticket.category]);
-        if (categoryResult.rows.length > 0) {
-            const categoryId = categoryResult.rows[0].id;
-            const hasAccess = await CategoryAccess.hasAccess(technician_id, categoryId, 'view');
-            if (!hasAccess) {
-                return res.status(403).json({
-                    status: 'error',
-                    message: `Technician does not have access to the '${ticket.category}' category.`
-                });
-            }
+    // Validate technician has access to this ticket's category
+    const categoryQuery = `SELECT id FROM categories WHERE name = $1`;
+    const categoryResult = await pool.query(categoryQuery, [ticket.category]);
+    if (categoryResult.rows.length > 0) {
+        const categoryId = categoryResult.rows[0].id;
+        const hasAccess = await CategoryAccess.hasAccess(technician_id, categoryId, 'view');
+        if (!hasAccess) {
+            throw new ForbiddenError(`Technician does not have access to the '${ticket.category}' category.`);
         }
+    }
 
         // Reassign the ticket
         const updatedTicket = await Ticket.update(parseInt(id), {
@@ -1726,11 +1517,6 @@ export const reassignTicket = async (req, res) => {
                 reassigned_by: req.user ? req.user.id : null
             }
         });
-
-    } catch (error) {
-        console.error('Reassign ticket error:', error);
-        res.status(500).json({ status: 'error', message: 'Failed to reassign ticket', error: error.message });
-    }
 };
 
 /**
@@ -1738,31 +1524,25 @@ export const reassignTicket = async (req, res) => {
  * GET /api/tickets/:id/history
  */
 export const getTicketHistory = async (req, res) => {
-    try {
-        const { id } = req.params;
+    const { id } = req.params;
 
-        if (isNaN(id)) {
-            return res.status(400).json({ status: 'error', message: 'Invalid ticket ID' });
-        }
+    if (isNaN(id)) {
+        throw new BadRequestError('Invalid ticket ID');
+    }
 
-        // Verify ticket exists
-        const ticket = await Ticket.getById(parseInt(id));
-        if (!ticket) {
-            return res.status(404).json({ status: 'error', message: 'Ticket not found' });
-        }
+    // Verify ticket exists
+    const ticket = await Ticket.getById(parseInt(id));
+    if (!ticket) {
+        throw new NotFoundError('Ticket not found');
+    }
 
         const history = await TicketHistory.getByTicketId(parseInt(id));
 
-        res.status(200).json({
-            status: 'success',
-            count: history.length,
-            data: history
-        });
-
-    } catch (error) {
-        console.error('Get ticket history error:', error);
-        res.status(500).json({ status: 'error', message: 'Failed to get ticket history', error: error.message });
-    }
+    res.status(200).json({
+        status: 'success',
+        count: history.length,
+        data: history
+    });
 };
 
 /**
@@ -1770,85 +1550,63 @@ export const getTicketHistory = async (req, res) => {
  * PATCH /api/tickets/:id/status
  */
 export const updateTicketStatus = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { status } = req.body;
+    const { id } = req.params;
+    const { status } = req.body;
 
-        // Validate ticket ID
-        if (isNaN(id)) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Invalid ticket ID'
-            });
-        }
+    // Validate ticket ID
+    if (isNaN(id)) {
+        throw new BadRequestError('Invalid ticket ID');
+    }
 
-        // Validate status is provided
-        if (!status) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Status is required'
-            });
-        }
+    // Validate status is provided
+    if (!status) {
+        throw new BadRequestError('Status is required');
+    }
 
-        // Validate status is a valid value
-        if (!VALID_STATUSES.includes(status)) {
-            return res.status(400).json({
-                status: 'error',
-                message: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
-                validStatuses: VALID_STATUSES
-            });
-        }
+    // Validate status is a valid value
+    if (!VALID_STATUSES.includes(status)) {
+        throw new BadRequestError(`Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`, {
+            validStatuses: VALID_STATUSES
+        });
+    }
 
-        // Check if ticket exists
-        const existingTicket = await Ticket.getById(parseInt(id));
-        if (!existingTicket) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Ticket not found'
-            });
-        }
+    // Check if ticket exists
+    const existingTicket = await Ticket.getById(parseInt(id));
+    if (!existingTicket) {
+        throw new NotFoundError('Ticket not found');
+    }
 
-        // Check if status is actually changing
-        if (existingTicket.status === status) {
-            return res.status(400).json({
-                status: 'error',
-                message: `Ticket is already in '${status}' status`
-            });
-        }
+    // Check if status is actually changing
+    if (existingTicket.status === status) {
+        throw new BadRequestError(`Ticket is already in '${status}' status`);
+    }
 
-        // Validate status transition
-        const currentStatus = existingTicket.status;
-        const allowedTransitions = VALID_TRANSITIONS[currentStatus];
+    // Validate status transition
+    const currentStatus = existingTicket.status;
+    const allowedTransitions = VALID_TRANSITIONS[currentStatus];
 
-        // Guard: if current status is not in our map (e.g. legacy data), treat as no allowed transitions
-        if (!allowedTransitions) {
-            return res.status(400).json({
-                status: 'error',
-                message: `Ticket has unrecognized status '${currentStatus}'. Cannot transition.`,
-                currentStatus: currentStatus
-            });
-        }
-        
-        if (!allowedTransitions.includes(status)) {
-            return res.status(400).json({
-                status: 'error',
-                message: `Invalid status transition from '${currentStatus}' to '${status}'`,
-                currentStatus: currentStatus,
-                requestedStatus: status,
-                allowedTransitions: allowedTransitions
-            });
-        }
+    // Guard: if current status is not in our map (e.g. legacy data), treat as no allowed transitions
+    if (!allowedTransitions) {
+        throw new BadRequestError(`Ticket has unrecognized status '${currentStatus}'. Cannot transition.`, {
+            currentStatus: currentStatus
+        });
+    }
+    
+    if (!allowedTransitions.includes(status)) {
+        throw new BadRequestError(`Invalid status transition from '${currentStatus}' to '${status}'`, {
+            currentStatus: currentStatus,
+            requestedStatus: status,
+            allowedTransitions: allowedTransitions
+        });
+    }
 
-        // Reopening a cancelled ticket requires management or admin role
-        if (currentStatus === 'cancelled' && status === 'open') {
-            const userRole = req.user?.role;
-            if (!['management', 'admin'].includes(userRole)) {
-                return res.status(403).json({
-                    status: 'error',
-                    message: 'Only management or admin can reopen cancelled tickets'
-                });
-            }
+    // Reopening a cancelled ticket requires management or admin role
+    if (currentStatus === 'cancelled' && status === 'open') {
+        const userRole = req.user?.role;
+        if (!['management', 'admin'].includes(userRole)) {
+            throw new ForbiddenError('Only management or admin can reopen cancelled tickets');
         }
+    }
 
         // Prepare update data
         const updateData = { status };
@@ -1940,15 +1698,6 @@ export const updateTicketStatus = async (req, res) => {
             previousStatus: existingTicket.status,
             newStatus: status
         });
-
-    } catch (error) {
-        console.error('Update ticket status error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to update ticket status',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -1957,20 +1706,13 @@ export const updateTicketStatus = async (req, res) => {
  * GET /api/tickets/available
  */
 export const getAvailableTickets = async (req, res) => {
-    try {
-        if (!req.user) {
-            return res.status(401).json({
-                status: 'error',
-                message: 'Authentication required'
-            });
-        }
+    if (!req.user) {
+        throw new UnauthorizedError('Authentication required');
+    }
 
-        if (!isTechnician(req.user.role) && req.user.role !== 'admin') {
-            return res.status(403).json({
-                status: 'error',
-                message: 'Access denied. Only technicians and admins can view available tickets.'
-            });
-        }
+    if (!isTechnician(req.user.role) && req.user.role !== 'admin') {
+        throw new ForbiddenError('Access denied. Only technicians and admins can view available tickets.');
+    }
 
         let categoryFilter = '';
         let queryParams = [];
@@ -2024,20 +1766,11 @@ export const getAvailableTickets = async (req, res) => {
 
         const result = await pool.query(ticketsQuery, queryParams);
 
-        res.status(200).json({
-            status: 'success',
-            count: result.rows.length,
-            data: result.rows
-        });
-
-    } catch (error) {
-        console.error('Get available tickets error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to retrieve available tickets',
-            error: error.message
-        });
-    }
+    res.status(200).json({
+        status: 'success',
+        count: result.rows.length,
+        data: result.rows
+    });
 };
 
 /**
@@ -2046,79 +1779,57 @@ export const getAvailableTickets = async (req, res) => {
  * POST /api/tickets/:id/request-assignment
  */
 export const requestTicketAssignment = async (req, res) => {
-    try {
-        if (!req.user) {
-            return res.status(401).json({
-                status: 'error',
-                message: 'Authentication required'
-            });
-        }
+    if (!req.user) {
+        throw new UnauthorizedError('Authentication required');
+    }
 
-        if (!isTechnician(req.user.role)) {
-            return res.status(403).json({
-                status: 'error',
-                message: 'Access denied. Only technicians can request ticket assignments.'
-            });
-        }
+    if (!isTechnician(req.user.role)) {
+        throw new ForbiddenError('Access denied. Only technicians can request ticket assignments.');
+    }
 
-        const { id } = req.params;
-        const { note } = req.body;
+    const { id } = req.params;
+    const { note } = req.body;
 
-        // Fetch the ticket
-        const ticket = await Ticket.getById(id);
-        if (!ticket) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Ticket not found'
-            });
-        }
+    // Fetch the ticket
+    const ticket = await Ticket.getById(id);
+    if (!ticket) {
+        throw new NotFoundError('Ticket not found');
+    }
 
-        // Ensure the ticket is unassigned
-        if (ticket.assigned_to) {
-            return res.status(409).json({
-                status: 'error',
-                message: 'This ticket is already assigned to another technician.'
-            });
-        }
+    // Ensure the ticket is unassigned
+    if (ticket.assigned_to) {
+        throw new ConflictError('This ticket is already assigned to another technician.');
+    }
 
-        // Ensure the ticket is not closed/cancelled/resolved
-        if (['closed', 'cancelled', 'resolved'].includes(ticket.status)) {
-            return res.status(400).json({
-                status: 'error',
-                message: `Cannot request assignment for a ticket with status: ${ticket.status}`
-            });
-        }
+    // Ensure the ticket is not closed/cancelled/resolved
+    if (['closed', 'cancelled', 'resolved'].includes(ticket.status)) {
+        throw new BadRequestError(`Cannot request assignment for a ticket with status: ${ticket.status}`);
+    }
 
-        // Check if technician has access to this ticket's category
-        const canViewAll = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_VIEW_ALL_TICKETS');
-        if (!canViewAll) {
-            const categoryQuery = `SELECT id FROM categories WHERE name = $1`;
-            const categoryResult = await pool.query(categoryQuery, [ticket.category]);
+    // Check if technician has access to this ticket's category
+    const canViewAll = await UserPrivilege.hasPrivilege(req.user.id, 'CAN_VIEW_ALL_TICKETS');
+    if (!canViewAll) {
+        const categoryQuery = `SELECT id FROM categories WHERE name = $1`;
+        const categoryResult = await pool.query(categoryQuery, [ticket.category]);
 
-            if (categoryResult.rows.length > 0) {
-                const categoryId = categoryResult.rows[0].id;
-                const hasAccess = await CategoryAccess.hasAccess(req.user.id, categoryId, 'view');
-                if (!hasAccess) {
-                    return res.status(403).json({
-                        status: 'error',
-                        message: 'You do not have access to tickets in this category.'
-                    });
-                }
+        if (categoryResult.rows.length > 0) {
+            const categoryId = categoryResult.rows[0].id;
+            const hasAccess = await CategoryAccess.hasAccess(req.user.id, categoryId, 'view');
+            if (!hasAccess) {
+                throw new ForbiddenError('You do not have access to tickets in this category.');
             }
         }
+    }
 
-        // Check for an existing pending request from this technician for this ticket
-        const existingCheck = await pool.query(
-            `SELECT id FROM ticket_assignment_requests
-             WHERE ticket_id = $1 AND requested_by = $2 AND status = 'pending'`,
-            [id, req.user.id]
-        );
-        if (existingCheck.rows.length > 0) {
-            return res.status(409).json({
-                status: 'error',
-                message: 'You already have a pending request for this ticket.'
-            });
-        }
+    // Check for an existing pending request from this technician for this ticket
+    const existingCheck = await pool.query(
+        `SELECT id FROM ticket_assignment_requests
+         WHERE ticket_id = $1 AND requested_by = $2 AND status = 'pending'`,
+        [id, req.user.id]
+    );
+    if (existingCheck.rows.length > 0) {
+        throw new ConflictError('You already have a pending request for this ticket.');
+    }
 
         // Insert a pending assignment request
         const insertQuery = `
@@ -2171,15 +1882,6 @@ export const requestTicketAssignment = async (req, res) => {
             message: 'Assignment request submitted. Awaiting management approval.',
             data: request
         });
-
-    } catch (error) {
-        console.error('Request ticket assignment error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to request ticket assignment',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -2188,50 +1890,43 @@ export const requestTicketAssignment = async (req, res) => {
  * Allows the ticket owner to cancel their own ticket with a reason.
  */
 export const cancelTicket = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { reason, details } = req.body;
+    const { id } = req.params;
+    const { reason, details } = req.body;
 
-        if (isNaN(id)) {
-            return res.status(400).json({ status: 'error', message: 'Invalid ticket ID' });
-        }
+    if (isNaN(id)) {
+        throw new BadRequestError('Invalid ticket ID');
+    }
 
-        if (!reason) {
-            return res.status(400).json({ status: 'error', message: 'Cancellation reason is required' });
-        }
+    if (!reason) {
+        throw new BadRequestError('Cancellation reason is required');
+    }
 
-        const existingTicket = await Ticket.getById(parseInt(id));
-        if (!existingTicket) {
-            return res.status(404).json({ status: 'error', message: 'Ticket not found' });
-        }
+    const existingTicket = await Ticket.getById(parseInt(id));
+    if (!existingTicket) {
+        throw new NotFoundError('Ticket not found');
+    }
 
-        // Determine user identity and role
-        const userId = req.user?.id || req.user?.userId;
-        const userRole = req.user?.role;
-        const isStaff = ['technician', 'senior_technician', 'management', 'admin'].includes(userRole);
-        const isOwner = existingTicket.customer_id === userId;
+    // Determine user identity and role
+    const userId = req.user?.id || req.user?.userId;
+    const userRole = req.user?.role;
+    const isStaff = ['technician', 'senior_technician', 'management', 'admin'].includes(userRole);
+    const isOwner = existingTicket.customer_id === userId;
 
-        // Only the ticket owner or staff can cancel
-        if (!isOwner && !isStaff) {
-            return res.status(403).json({ status: 'error', message: 'You can only cancel your own tickets' });
-        }
+    // Only the ticket owner or staff can cancel
+    if (!isOwner && !isStaff) {
+        throw new ForbiddenError('You can only cancel your own tickets');
+    }
 
-        // Cannot cancel already closed or cancelled tickets
-        if (existingTicket.status === 'closed' || existingTicket.status === 'cancelled') {
-            return res.status(400).json({
-                status: 'error',
-                message: `Cannot cancel a ticket that is already ${existingTicket.status}`
-            });
-        }
+    // Cannot cancel already closed or cancelled tickets
+    if (existingTicket.status === 'closed' || existingTicket.status === 'cancelled') {
+        throw new BadRequestError(`Cannot cancel a ticket that is already ${existingTicket.status}`);
+    }
 
-        // Clients can only cancel tickets that are open or waiting_on_customer (pending)
-        const clientCancellableStatuses = ['open', 'waiting_on_customer'];
-        if (!isStaff && !clientCancellableStatuses.includes(existingTicket.status)) {
-            return res.status(403).json({
-                status: 'error',
-                message: 'You can only cancel tickets that are open or pending. Assigned or in-progress tickets cannot be cancelled by clients.'
-            });
-        }
+    // Clients can only cancel tickets that are open or waiting_on_customer (pending)
+    const clientCancellableStatuses = ['open', 'waiting_on_customer'];
+    if (!isStaff && !clientCancellableStatuses.includes(existingTicket.status)) {
+        throw new ForbiddenError('You can only cancel tickets that are open or pending. Assigned or in-progress tickets cannot be cancelled by clients.');
+    }
 
         // Build resolution text from reason + optional details
         const resolutionText = details
@@ -2335,15 +2030,6 @@ export const cancelTicket = async (req, res) => {
             message: 'Ticket cancelled successfully',
             data: updatedTicket
         });
-
-    } catch (error) {
-        console.error('Cancel ticket error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to cancel ticket',
-            error: error.message
-        });
-    }
 };
 
 /**
@@ -2351,57 +2037,41 @@ export const cancelTicket = async (req, res) => {
  * POST /api/tickets/:id/reopen
  */
 export const reopenTicket = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { reason } = req.body;
+    const { id } = req.params;
+    const { reason } = req.body;
 
-        // Validate ticket ID
-        if (isNaN(id)) {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Invalid ticket ID'
-            });
-        }
+    // Validate ticket ID
+    if (isNaN(id)) {
+        throw new BadRequestError('Invalid ticket ID');
+    }
 
-        // Validate reason is provided
-        if (!reason || reason.trim() === '') {
-            return res.status(400).json({
-                status: 'error',
-                message: 'Reason for reopening is required'
-            });
-        }
+    // Validate reason is provided
+    if (!reason || reason.trim() === '') {
+        throw new BadRequestError('Reason for reopening is required');
+    }
 
-        const ticketId = parseInt(id);
+    const ticketId = parseInt(id);
 
-        // Get the ticket to check permissions
-        const ticket = await Ticket.getById(ticketId);
-        if (!ticket) {
-            return res.status(404).json({
-                status: 'error',
-                message: 'Ticket not found'
-            });
-        }
+    // Get the ticket to check permissions
+    const ticket = await Ticket.getById(ticketId);
+    if (!ticket) {
+        throw new NotFoundError('Ticket not found');
+    }
 
-        // Authorization: Only ticket requester or management can reopen
-        const isRequester = req.user && req.user.id === ticket.customer_id;
-        const isManagement = req.user && ['management', 'admin'].includes(req.user.role);
+    // Authorization: Only ticket requester or management can reopen
+    const isRequester = req.user && req.user.id === ticket.customer_id;
+    const isManagement = req.user && ['management', 'admin'].includes(req.user.role);
 
-        if (!isRequester && !isManagement) {
-            return res.status(403).json({
-                status: 'error',
-                message: 'Only the ticket requester or management can reopen this ticket'
-            });
-        }
+    if (!isRequester && !isManagement) {
+        throw new ForbiddenError('Only the ticket requester or management can reopen this ticket');
+    }
 
-        // Attempt to reopen the ticket
-        const result = await Ticket.reopen(ticketId, reason);
+    // Attempt to reopen the ticket
+    const result = await Ticket.reopen(ticketId, reason);
 
-        if (!result.success) {
-            return res.status(400).json({
-                status: 'error',
-                message: result.error
-            });
-        }
+    if (!result.success) {
+        throw new BadRequestError(result.error);
+    }
 
         const { ticket: reopenedTicket, reassigned, previousTech } = result;
 
@@ -2552,14 +2222,137 @@ export const reopenTicket = async (req, res) => {
                 reopenCount: reopenedTicket.reopen_count
             }
         });
+};
 
-    } catch (error) {
-        console.error('Reopen ticket error:', error);
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to reopen ticket',
-            error: error.message
+/**
+ * Override the AI-suggested category for a ticket.
+ * Logs the override for future retraining purposes.
+ * PATCH /api/tickets/:id/override-category
+ * Body: { new_category: string, reason?: string }
+ */
+export const overrideCategory = async (req, res) => {
+    const { id } = req.params;
+    const { new_category, reason } = req.body;
+
+    if (isNaN(id)) {
+        throw new BadRequestError('Invalid ticket ID');
+    }
+
+    if (!new_category || new_category.trim() === '') {
+        throw new BadRequestError('new_category is required');
+    }
+
+    const ticket = await Ticket.getById(parseInt(id));
+    if (!ticket) {
+        throw new NotFoundError('Ticket not found');
+    }
+
+    // Only technicians and management may override categories
+    if (!req.user || !isTechnician(req.user.role)) {
+        throw new ForbiddenError('Only technicians and management may override AI classifications');
+    }
+
+    const oldCategory = ticket.category;
+    const newCategory = new_category.trim().toLowerCase();
+
+    if (oldCategory === newCategory) {
+        return res.status(200).json({
+            status: 'success',
+            message: 'Category unchanged',
+            data: ticket
         });
     }
+
+    // 1. Update the ticket category + mark as overridden
+    const updatedTicket = await pool.query(
+        `UPDATE tickets
+         SET category = $1,
+             category_override = TRUE,
+             category_overridden_at = NOW(),
+             category_overridden_by = $2,
+             updated_at = NOW()
+         WHERE id = $3
+         RETURNING *`,
+        [newCategory, req.user.id, parseInt(id)]
+    );
+
+    // 2. Log into category_overrides for retraining audit trail
+    await pool.query(
+        `INSERT INTO category_overrides
+             (ticket_id, overridden_by, original_category, new_category, ai_confidence, override_reason)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+            parseInt(id),
+            req.user.id,
+            oldCategory,
+            newCategory,
+            ticket.ai_confidence ?? null,
+            reason || null
+        ]
+    );
+
+    // 3. Write ml_prediction_feedback record for model retraining pipeline
+    try {
+        // Find the latest ai_classification for this ticket to reference
+        const classRow = await pool.query(
+            `SELECT id FROM ai_classifications WHERE ticket_id = $1 ORDER BY created_at DESC LIMIT 1`,
+            [parseInt(id)]
+        );
+        await MLFeedback.create({
+            ticket_id:           parseInt(id),
+            classification_id:   classRow.rows[0]?.id ?? null,
+            ai_category:         oldCategory,
+            ai_priority:         ticket.ai_priority ?? null,
+            ai_confidence:       ticket.ai_confidence ?? null,
+            user_category:       newCategory,
+            user_priority:       null,
+            category_overridden: true,
+            priority_overridden: false,
+            override_reason:     reason || null,
+            user_id:             req.user.id,
+        });
+    } catch (fbErr) {
+        // Non-fatal – log but don't fail the override
+        console.error('Failed to write ML feedback record:', fbErr.message);
+    }
+
+    // 4. Log in ticket history so it appears in the activity timeline
+    try {
+        const techName = `${req.user.first_name || ''} ${req.user.last_name || ''}`.trim() || 'Technician';
+        await TicketHistory.log(
+            parseInt(id),
+            req.user.id,
+            'category_change',
+            'category',
+            oldCategory,
+            newCategory,
+            reason || null,
+            {
+                action: 'ai_category_override',
+                overridden_by_name: techName,
+                ai_confidence: ticket.ai_confidence,
+                ticket_number: ticket.ticket_number
+            }
+        );
+    } catch (histErr) {
+        console.error('Failed to log category override history:', histErr.message);
+    }
+
+    // 4. Emit real-time update
+    try {
+        const io = req.app.locals.io;
+        if (io) {
+            io.emit('ticket_updated', {
+                ticket_id: parseInt(id),
+                category: newCategory
+            });
+        }
+    } catch (_) { /* non-fatal */ }
+
+    res.status(200).json({
+        status: 'success',
+        message: `Category overridden from "${oldCategory}" to "${newCategory}"`,
+        data: updatedTicket.rows[0]
+    });
 };
 

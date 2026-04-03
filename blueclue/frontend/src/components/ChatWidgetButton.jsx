@@ -5,12 +5,12 @@ export default function ChatWidgetButton({ onClick, unreadCount = 0, hasNewMessa
   return (
     <button
       onClick={onClick}
-      className="relative w-10 h-10 flex items-center justify-center rounded-full bg-gray-800 hover:bg-gray-700 transition-colors"
+      className="fixed bottom-6 right-6 z-50 w-14 h-14 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-600/30 transition-colors"
       aria-label={`Chat${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
       title="BlueClue Assistant"
     >
       {/* Chat bubble icon */}
-      <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path
           strokeLinecap="round"
           strokeLinejoin="round"

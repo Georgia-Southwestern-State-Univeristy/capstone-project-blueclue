@@ -4,6 +4,12 @@
 // Validates incoming webhooks to prevent spam and forgery
 
 import crypto from 'crypto';
+import {
+    AppError,
+    BadRequestError,
+    ForbiddenError,
+    InternalServerError
+} from './errorHandler.js';
 
 /**
  * Validate Mailgun webhook signature
@@ -16,34 +22,34 @@ import crypto from 'crypto';
  * @see https://documentation.mailgun.com/en/latest/user_manual.html#securing-webhooks
  */
 export const validateMailgunSignature = (req, res, next) => {
-    // Skip validation in development if signing key not configured
-    if (process.env.NODE_ENV === 'development' && !process.env.MAILGUN_WEBHOOK_SIGNING_KEY) {
-        console.warn('⚠️  Mailgun signature validation SKIPPED (development mode, no signing key configured)');
-        return next();
-    }
-
     const signingKey = process.env.MAILGUN_WEBHOOK_SIGNING_KEY;
 
     if (!signingKey) {
         console.error('❌ MAILGUN_WEBHOOK_SIGNING_KEY not configured');
-        return res.status(500).json({
-            status: 'error',
-            message: 'Webhook signing key not configured'
-        });
+        return next(new InternalServerError('Webhook signing key not configured'));
     }
 
     try {
         // Mailgun sends signature data in the body
-        const timestamp = req.body.timestamp;
-        const token = req.body.token;
-        const signature = req.body.signature;
+        // Support both JSON format (new) and form-urlencoded (legacy)
+        let timestamp, token, signature;
+        
+        if (req.body.signature && typeof req.body.signature === 'object') {
+            // JSON format: signature is nested object
+            timestamp = req.body.signature.timestamp;
+            token = req.body.signature.token;
+            signature = req.body.signature.signature;
+        } else {
+            // Form-urlencoded format: flat structure
+            timestamp = req.body.timestamp;
+            token = req.body.token;
+            signature = req.body.signature;
+        }
 
         if (!timestamp || !token || !signature) {
             console.error('❌ Missing signature fields in webhook');
-            return res.status(401).json({
-                status: 'error',
-                message: 'Invalid webhook signature format'
-            });
+            console.error('   Body structure:', JSON.stringify(req.body, null, 2).substring(0, 500));
+            return next(new ForbiddenError('Invalid webhook signature format'));
         }
 
         // Verify signature using HMAC-SHA256
@@ -57,22 +63,22 @@ export const validateMailgunSignature = (req, res, next) => {
             console.error('❌ Invalid webhook signature');
             console.error(`   Expected: ${calculatedSignature}`);
             console.error(`   Received: ${signature}`);
-            return res.status(401).json({
-                status: 'error',
-                message: 'Invalid webhook signature'
-            });
+            return next(new ForbiddenError('Invalid webhook signature'));
         }
 
         // Check timestamp to prevent replay attacks (allow 5 minute window)
+        const parsedTimestamp = parseInt(timestamp);
+        if (isNaN(parsedTimestamp)) {
+            console.error('❌ Invalid timestamp format');
+            return next(new ForbiddenError('Invalid webhook timestamp format'));
+        }
+
         const currentTimestamp = Math.floor(Date.now() / 1000);
-        const timestampAge = currentTimestamp - parseInt(timestamp);
+        const timestampAge = currentTimestamp - parsedTimestamp;
         
         if (timestampAge > 300) { // 5 minutes
             console.error(`❌ Webhook timestamp too old: ${timestampAge}s`);
-            return res.status(401).json({
-                status: 'error',
-                message: 'Webhook timestamp expired'
-            });
+            return next(new ForbiddenError('Webhook timestamp expired'));
         }
 
         console.log('✅ Mailgun webhook signature validated');
@@ -80,10 +86,7 @@ export const validateMailgunSignature = (req, res, next) => {
 
     } catch (error) {
         console.error('❌ Signature validation error:', error);
-        return res.status(500).json({
-            status: 'error',
-            message: 'Failed to validate webhook signature'
-        });
+        return next(new InternalServerError('Failed to validate webhook signature'));
     }
 };
 
@@ -103,10 +106,7 @@ export const validateWebhookRequest = (req, res, next) => {
     // Check if body exists
     if (!req.body || Object.keys(req.body).length === 0) {
         console.error('❌ Empty webhook body');
-        return res.status(400).json({
-            status: 'error',
-            message: 'Webhook body is required'
-        });
+        return next(new BadRequestError('Webhook body is required'));
     }
 
     next();
@@ -140,10 +140,7 @@ export const rateLimitWebhook = (req, res, next) => {
             
             if (requestData.count > maxRequests) {
                 console.warn(`⚠️  Rate limit exceeded for ${sender}`);
-                return res.status(429).json({
-                    status: 'error',
-                    message: 'Too many requests'
-                });
+                return next(new AppError('Too many requests', 429));
             }
         } else {
             requestCounts.set(sender, { count: 1, timestamp: now });

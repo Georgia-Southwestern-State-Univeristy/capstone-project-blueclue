@@ -1,6 +1,7 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from 'react'
 import { getRecentAssignmentActivity } from '../services/ticketService'
 import RefreshButton from './RefreshButton'
+import { formatDate as _fmtDate, formatTime as _fmtTime, formatTimeAgo as _fmtTimeAgo } from '../utils/dateFormatter'
 
 /**
  * Hourly timeline bar chart showing ticket submissions over the last 3 days,
@@ -108,7 +109,7 @@ function TicketTimeline({ tickets = [], onTicketClick = null }) {
     const labels = []
     let lastDay = null
     buckets.forEach((b, i) => {
-      const day = b.hourStart.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+      const day = _fmtDate(b.hourStart, { weekday: 'short', month: 'short', day: 'numeric' })
       if (day !== lastDay) {
         labels.push({ index: i, label: day })
         lastDay = day
@@ -126,13 +127,16 @@ function TicketTimeline({ tickets = [], onTicketClick = null }) {
   }, [buckets])
 
   const formatHour = (date) => {
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true })
+    return _fmtTime(date, { hour: 'numeric', hour12: true })
   }
 
   return (
     <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-sm p-4 h-full flex flex-col overflow-visible">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h3 className="text-base font-semibold text-white">Ticket Timeline</h3>
+        <div>
+          <h3 className="text-base font-semibold text-white">Ticket Timeline</h3>
+          <p className="text-xs text-gray-400">View your ticket activity over the last 3 days</p>
+        </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
             <span className="flex items-center gap-1">
@@ -163,6 +167,17 @@ function TicketTimeline({ tickets = [], onTicketClick = null }) {
         className="flex-1 flex flex-col justify-end min-h-0 overflow-x-visible overflow-y-visible pt-16 pr-8 scrollbar-hide md:scrollbar-default"
         style={{ WebkitOverflowScrolling: 'touch', position: 'relative', zIndex: 1 }}
       >
+        {/* Empty state when no activity exists */}
+        {total === 0 && totalAssignments === 0 && totalUpdates === 0 && totalCancellations === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center z-[2] pointer-events-none">
+            <svg className="w-10 h-10 text-gray-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            <p className="text-gray-400 text-sm font-medium">No activity yet</p>
+            <p className="text-gray-500 text-xs mt-0.5">Submit a ticket and your timeline will appear here</p>
+          </div>
+        )}
         <div className="flex items-end gap-1 h-36 md:min-w-0">
           {buckets.map((bucket, i) => {
             const totalHeight = bucket.count + bucket.assignCount + bucket.updateCount + bucket.cancelCount
@@ -239,7 +254,7 @@ function TicketTimeline({ tickets = [], onTicketClick = null }) {
                   >
                     <p className="font-medium">{formatHour(bucket.hourStart)}</p>
                     <p className="text-gray-400">
-                      {bucket.hourStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {_fmtDate(bucket.hourStart, { month: 'short', day: 'numeric' })}
                     </p>
                     <p className="text-blue-400">{bucket.count} {bucket.count === 1 ? 'submission' : 'submissions'}</p>
                     <p className="text-emerald-400">{bucket.assignCount} {bucket.assignCount === 1 ? 'assignment' : 'assignments'}</p>
@@ -506,7 +521,7 @@ function formatRelativeTime(dateStr) {
   if (diffMin < 60) return `${diffMin}m ago`
   if (diffHr < 24) return `${diffHr}h ago`
   if (diffDay < 7) return `${diffDay}d ago`
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return _fmtDate(d, { month: 'short', day: 'numeric' })
 }
 
 export default TicketTimeline

@@ -1,4 +1,89 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { formatDate as _fmtDate } from '../utils/dateFormatter'
+
+/**
+ * SaveLayoutButton – inline button with popover input for naming and saving layouts.
+ */
+function SaveLayoutButton({ onSave }) {
+  const [showInput, setShowInput] = useState(false)
+  const [name, setName] = useState('')
+  const [saved, setSaved] = useState(false)
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    if (showInput && inputRef.current) inputRef.current.focus()
+  }, [showInput])
+
+  const handleSave = () => {
+    if (!name.trim()) return
+    const success = onSave?.(name.trim())
+    if (success !== false) {
+      setSaved(true)
+      setTimeout(() => { setSaved(false); setShowInput(false); setName('') }, 1200)
+    }
+  }
+
+  if (saved) {
+    return (
+      <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg
+                        bg-green-600/20 border border-green-500/40 text-green-400">
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+        Saved!
+      </span>
+    )
+  }
+
+  if (showInput) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <input
+          ref={inputRef}
+          type="text"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') { setShowInput(false); setName('') } }}
+          placeholder="Layout name..."
+          maxLength={30}
+          className="px-2.5 py-1 text-xs rounded-lg bg-gray-800 border border-gray-600 text-white
+                     placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500/30 w-36"
+        />
+        <button
+          onClick={handleSave}
+          disabled={!name.trim()}
+          className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-green-600 hover:bg-green-500
+                     text-white border border-green-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Save
+        </button>
+        <button
+          onClick={() => { setShowInput(false); setName('') }}
+          className="p-1.5 text-xs rounded-lg text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => setShowInput(true)}
+      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg
+                 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white
+                 border border-gray-600 transition-colors"
+    >
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+      </svg>
+      Save Layout
+    </button>
+  )
+}
 
 /**
  * WidgetGallery – sidebar displaying available widgets with visual previews.
@@ -19,6 +104,26 @@ const PREVIEW_PATTERNS = {
   deletedTickets: 'list-restore',     // Searchable list with restore buttons
   pendingRequests:'list-pending',     // Action cards with approve/deny buttons
   responseTime:   'stat-cards',       // Stat cards with KPI metrics
+  createTicket:   'form-create',      // Ticket creation form with input fields
+  ticketTrend:    'chart-trend',      // Dual-line trend chart (opened vs resolved)
+  ticketStatus:   'chart-hbar',       // Horizontal bar chart with status breakdown
+  techResponseTime:'clock-bars',       // Clock icon + horizontal bars (response times)
+  knowledgeBase:'kb-search',            // Book icon + search bar + article list
+  chatBot:'chat-bubbles',                // Chat bubble icon + message bubbles + input
+  recentActivity:'activity-feed',          // Clock icon + activity log rows
+  ticketUpdates:'activity-list',            // Filter tabs + update entries with change-type icons
+  // Technician widgets
+  statusDonut:    'chart-donut',      // Donut chart (status distribution)
+  priorityPie:    'chart-pie',        // Pie chart (priority distribution)
+  ticketQueue:    'card-grid',        // Ticket queue card grid
+  availableTickets:'card-grid',       // Available tickets card grid
+  myAssignedTickets:'card-grid',      // My assigned tickets card grid
+  ringRequests:   'list-pending',     // Ring-for-help request list
+  chatPanel:      'list-pending',     // Chat handoff request list
+  // Client & admin widgets
+  clientTickets:  'data-table',       // Client ticket list table
+  auditHealth:    'list-pending',     // Audit health monitoring
+  quickActions:   'list-actions',     // Quick action shortcut panel
 }
 
 /** Tiny SVG preview matching the widget type */
@@ -356,6 +461,235 @@ function WidgetPreview({ pattern }) {
             <rect x="96" y="48" width="14" height="6" rx="1" fill="#f59e0b" opacity="0.15" />
           </>
         )}
+        {p === 'form-create' && (
+          /* Ticket creation form — labels, input fields, and submit button */
+          <>
+            {/* Title / Subject field */}
+            <rect x="8" y="5" width="18" height="3" rx="1" fill="#374151" opacity="0.5" />
+            <rect x="8" y="10" width="104" height="7" rx="2" stroke="#374151" strokeWidth="0.6" fill="#374151" fillOpacity="0.1" />
+            <rect x="11" y="12" width="40" height="3" rx="1" fill="#374151" opacity="0.25" />
+            {/* Description textarea */}
+            <rect x="8" y="21" width="24" height="3" rx="1" fill="#374151" opacity="0.5" />
+            <rect x="8" y="26" width="104" height="14" rx="2" stroke="#374151" strokeWidth="0.6" fill="#374151" fillOpacity="0.1" />
+            <rect x="11" y="29" width="60" height="2.5" rx="1" fill="#374151" opacity="0.2" />
+            <rect x="11" y="33" width="45" height="2.5" rx="1" fill="#374151" opacity="0.15" />
+            {/* Priority & Category dropdowns */}
+            <rect x="8" y="44" width="48" height="7" rx="2" stroke="#374151" strokeWidth="0.6" fill="#374151" fillOpacity="0.1" />
+            <rect x="12" y="46" width="20" height="3" rx="1" fill="#f59e0b" opacity="0.35" />
+            <rect x="64" y="44" width="48" height="7" rx="2" stroke="#374151" strokeWidth="0.6" fill="#374151" fillOpacity="0.1" />
+            <rect x="68" y="46" width="22" height="3" rx="1" fill="#3b82f6" opacity="0.35" />
+            {/* Submit button */}
+            <rect x="78" y="54" width="34" height="6" rx="2" fill="#22c55e" opacity="0.5" />
+            <rect x="86" y="55.5" width="18" height="3" rx="1" fill="#ffffff" opacity="0.3" />
+          </>
+        )}
+        {p === 'chart-trend' && (
+          /* Dual-line chart — opened (orange) vs resolved (green) trend lines */
+          <>
+            {/* Grid lines */}
+            <line x1="8" y1="12" x2="112" y2="12" stroke="#374151" strokeWidth="0.3" />
+            <line x1="8" y1="24" x2="112" y2="24" stroke="#374151" strokeWidth="0.3" />
+            <line x1="8" y1="36" x2="112" y2="36" stroke="#374151" strokeWidth="0.3" />
+            <line x1="8" y1="48" x2="112" y2="48" stroke="#374151" strokeWidth="0.3" />
+            {/* Opened area fill */}
+            <path d="M8,38 L22,30 L36,34 L50,22 L64,26 L78,18 L92,24 L106,14 L112,16 L112,48 L8,48 Z"
+              fill="#f97316" fillOpacity="0.12" />
+            {/* Resolved area fill */}
+            <path d="M8,44 L22,40 L36,38 L50,32 L64,28 L78,24 L92,20 L106,18 L112,16 L112,48 L8,48 Z"
+              fill="#22c55e" fillOpacity="0.12" />
+            {/* Opened line */}
+            <polyline points="8,38 22,30 36,34 50,22 64,26 78,18 92,24 106,14"
+              fill="none" stroke="#f97316" strokeWidth="1.2" strokeLinejoin="round" />
+            {/* Resolved line */}
+            <polyline points="8,44 22,40 36,38 50,32 64,28 78,24 92,20 106,18"
+              fill="none" stroke="#22c55e" strokeWidth="1.2" strokeLinejoin="round" />
+            {/* Dots on opened line */}
+            <circle cx="8" cy="38" r="1.5" fill="#f97316" />
+            <circle cx="36" cy="34" r="1.5" fill="#f97316" />
+            <circle cx="64" cy="26" r="1.5" fill="#f97316" />
+            <circle cx="92" cy="24" r="1.5" fill="#f97316" />
+            {/* Dots on resolved line */}
+            <circle cx="8" cy="44" r="1.5" fill="#22c55e" />
+            <circle cx="36" cy="38" r="1.5" fill="#22c55e" />
+            <circle cx="64" cy="28" r="1.5" fill="#22c55e" />
+            <circle cx="92" cy="20" r="1.5" fill="#22c55e" />
+            {/* Legend */}
+            <rect x="8" y="3" width="6" height="3" rx="1" fill="#f97316" opacity="0.7" />
+            <rect x="16" y="3.5" width="14" height="2" rx="0.5" fill="#374151" opacity="0.4" />
+            <rect x="36" y="3" width="6" height="3" rx="1" fill="#22c55e" opacity="0.7" />
+            <rect x="44" y="3.5" width="16" height="2" rx="0.5" fill="#374151" opacity="0.4" />
+            {/* X-axis labels */}
+            <rect x="8" y="52" width="10" height="2.5" rx="0.5" fill="#374151" opacity="0.3" />
+            <rect x="50" y="52" width="10" height="2.5" rx="0.5" fill="#374151" opacity="0.3" />
+            <rect x="98" y="52" width="10" height="2.5" rx="0.5" fill="#374151" opacity="0.3" />
+          </>
+        )}
+
+        {p === 'chart-hbar' && (
+          /* Horizontal bar chart — status breakdown */
+          <>
+            {/* Labels */}
+            <rect x="4" y="8"  width="22" height="3" rx="1" fill="#374151" opacity="0.4" />
+            <rect x="4" y="18" width="18" height="3" rx="1" fill="#374151" opacity="0.4" />
+            <rect x="4" y="28" width="26" height="3" rx="1" fill="#374151" opacity="0.4" />
+            <rect x="4" y="38" width="20" height="3" rx="1" fill="#374151" opacity="0.4" />
+            <rect x="4" y="48" width="16" height="3" rx="1" fill="#374151" opacity="0.4" />
+            {/* Background tracks */}
+            <rect x="34" y="7"  width="80" height="5" rx="2" fill="#1f2937" />
+            <rect x="34" y="17" width="80" height="5" rx="2" fill="#1f2937" />
+            <rect x="34" y="27" width="80" height="5" rx="2" fill="#1f2937" />
+            <rect x="34" y="37" width="80" height="5" rx="2" fill="#1f2937" />
+            <rect x="34" y="47" width="80" height="5" rx="2" fill="#1f2937" />
+            {/* Filled bars */}
+            <rect x="34" y="7"  width="60" height="5" rx="2" fill="#3b82f6" opacity="0.7" />
+            <rect x="34" y="17" width="45" height="5" rx="2" fill="#f97316" opacity="0.7" />
+            <rect x="34" y="27" width="30" height="5" rx="2" fill="#22c55e" opacity="0.7" />
+            <rect x="34" y="37" width="18" height="5" rx="2" fill="#6b7280" opacity="0.7" />
+            <rect x="34" y="47" width="10" height="5" rx="2" fill="#ef4444" opacity="0.7" />
+          </>
+        )}
+
+        {p === 'clock-bars' && (
+          /* Clock icon + horizontal bars — per-tech response times */
+          <>
+            {/* Small clock icon */}
+            <circle cx="12" cy="12" r="7" stroke="#60a5fa" strokeWidth="1" fill="none" opacity="0.6" />
+            <line x1="12" y1="12" x2="12" y2="8" stroke="#60a5fa" strokeWidth="1" opacity="0.7" />
+            <line x1="12" y1="12" x2="15" y2="12" stroke="#60a5fa" strokeWidth="1" opacity="0.7" />
+            {/* Search bar placeholder */}
+            <rect x="24" y="6" width="40" height="5" rx="2" fill="#374151" opacity="0.3" />
+            <rect x="25" y="7.5" width="4" height="2" rx="0.5" fill="#6b7280" opacity="0.4" />
+            {/* Name labels */}
+            <rect x="4" y="24" width="20" height="3" rx="1" fill="#374151" opacity="0.4" />
+            <rect x="4" y="33" width="16" height="3" rx="1" fill="#374151" opacity="0.4" />
+            <rect x="4" y="42" width="22" height="3" rx="1" fill="#374151" opacity="0.4" />
+            <rect x="4" y="51" width="18" height="3" rx="1" fill="#374151" opacity="0.4" />
+            {/* Background tracks */}
+            <rect x="30" y="23" width="82" height="5" rx="2" fill="#1f2937" />
+            <rect x="30" y="32" width="82" height="5" rx="2" fill="#1f2937" />
+            <rect x="30" y="41" width="82" height="5" rx="2" fill="#1f2937" />
+            <rect x="30" y="50" width="82" height="5" rx="2" fill="#1f2937" />
+            {/* Filled bars — green (fast) to red (slow) */}
+            <rect x="30" y="23" width="20" height="5" rx="2" fill="#22c55e" opacity="0.7" />
+            <rect x="30" y="32" width="40" height="5" rx="2" fill="#eab308" opacity="0.7" />
+            <rect x="30" y="41" width="55" height="5" rx="2" fill="#eab308" opacity="0.7" />
+            <rect x="30" y="50" width="72" height="5" rx="2" fill="#ef4444" opacity="0.7" />
+          </>
+        )}
+        {p === 'chat-bubbles' && (
+          /* Chat bubble icon + message bubbles + input — chat assistant */
+          <>
+            {/* Chat bubble icon */}
+            <path d="M8 4 C4 4 2 7 2 10 C2 13 4 16 8 16 L8 18 L11 16 L16 16 C20 16 22 13 22 10 C22 7 20 4 16 4 Z" stroke="#60a5fa" strokeWidth="1" fill="none" opacity="0.6" />
+            <circle cx="9" cy="10" r="1" fill="#60a5fa" opacity="0.5" />
+            <circle cx="13" cy="10" r="1" fill="#60a5fa" opacity="0.5" />
+            <circle cx="17" cy="10" r="1" fill="#60a5fa" opacity="0.5" />
+            {/* Bot message bubble */}
+            <rect x="4" y="24" width="55" height="8" rx="4" fill="#1f2937" opacity="0.6" />
+            <rect x="8" y="26.5" width="32" height="2" rx="1" fill="#6b7280" opacity="0.4" />
+            <rect x="8" y="29.5" width="20" height="2" rx="1" fill="#6b7280" opacity="0.3" />
+            {/* User message bubble */}
+            <rect x="50" y="36" width="62" height="7" rx="3.5" fill="#2563eb" opacity="0.5" />
+            <rect x="55" y="38.5" width="28" height="2" rx="1" fill="#93c5fd" opacity="0.4" />
+            {/* Bot reply bubble */}
+            <rect x="4" y="47" width="65" height="8" rx="4" fill="#1f2937" opacity="0.6" />
+            <rect x="8" y="49.5" width="38" height="2" rx="1" fill="#6b7280" opacity="0.4" />
+            <rect x="8" y="52.5" width="25" height="2" rx="1" fill="#6b7280" opacity="0.3" />
+            {/* Input bar */}
+            <rect x="4" y="59" width="110" height="6" rx="3" fill="#374151" opacity="0.4" />
+            <rect x="8" y="61" width="20" height="2" rx="1" fill="#6b7280" opacity="0.3" />
+          </>
+        )}
+        {p === 'activity-feed' && (
+          /* Clock icon + activity log rows — recent ticket activity */
+          <>
+            {/* Clock icon */}
+            <circle cx="12" cy="10" r="7" stroke="#60a5fa" strokeWidth="1" fill="none" opacity="0.6" />
+            <line x1="12" y1="6" x2="12" y2="10" stroke="#60a5fa" strokeWidth="1" opacity="0.5" />
+            <line x1="12" y1="10" x2="15" y2="12" stroke="#60a5fa" strokeWidth="1" opacity="0.5" />
+            {/* Activity rows */}
+            <rect x="4" y="22" width="110" height="7" rx="2" fill="#1f2937" opacity="0.5" />
+            <circle cx="9" cy="25.5" r="2" fill="#facc15" opacity="0.5" />
+            <rect x="14" y="23.5" width="16" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="33" y="23.5" width="30" height="2" rx="1" fill="#6b7280" opacity="0.3" />
+            <rect x="90" y="23.5" width="18" height="2" rx="1" fill="#6b7280" opacity="0.2" />
+            <rect x="4" y="32" width="110" height="7" rx="2" fill="#1f2937" opacity="0.5" />
+            <circle cx="9" cy="35.5" r="2" fill="#22c55e" opacity="0.5" />
+            <rect x="14" y="33.5" width="18" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="35" y="33.5" width="25" height="2" rx="1" fill="#6b7280" opacity="0.3" />
+            <rect x="90" y="33.5" width="14" height="2" rx="1" fill="#6b7280" opacity="0.2" />
+            <rect x="4" y="42" width="110" height="7" rx="2" fill="#1f2937" opacity="0.5" />
+            <circle cx="9" cy="45.5" r="2" fill="#f97316" opacity="0.5" />
+            <rect x="14" y="43.5" width="14" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="31" y="43.5" width="35" height="2" rx="1" fill="#6b7280" opacity="0.3" />
+            <rect x="90" y="43.5" width="16" height="2" rx="1" fill="#6b7280" opacity="0.2" />
+            <rect x="4" y="52" width="110" height="7" rx="2" fill="#1f2937" opacity="0.5" />
+            <circle cx="9" cy="55.5" r="2" fill="#ef4444" opacity="0.5" />
+            <rect x="14" y="53.5" width="20" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="37" y="53.5" width="28" height="2" rx="1" fill="#6b7280" opacity="0.3" />
+            <rect x="90" y="53.5" width="12" height="2" rx="1" fill="#6b7280" opacity="0.2" />
+          </>
+        )}
+        {p === 'activity-list' && (
+          /* Filter tabs + update log entries — client ticket update log */
+          <>
+            {/* Filter tab bar */}
+            <rect x="4" y="3" width="16" height="5" rx="2" fill="#3b82f6" opacity="0.6" />
+            <rect x="23" y="3" width="20" height="5" rx="2" fill="#374151" opacity="0.4" />
+            <rect x="46" y="3" width="22" height="5" rx="2" fill="#374151" opacity="0.4" />
+            {/* Row 1 — status change (green) */}
+            <rect x="4" y="12" width="112" height="9" rx="2" fill="#1f2937" opacity="0.5" />
+            <rect x="8" y="14" width="5" height="5" rx="1" fill="#22c55e" opacity="0.5" />
+            <rect x="16" y="14" width="14" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="33" y="14" width="12" height="2" rx="1" fill="#22c55e" opacity="0.4" />
+            <rect x="16" y="17.5" width="40" height="1.5" rx="0.5" fill="#6b7280" opacity="0.3" />
+            <rect x="96" y="14.5" width="16" height="2" rx="1" fill="#6b7280" opacity="0.2" />
+            {/* Row 2 — priority change (yellow) */}
+            <rect x="4" y="24" width="112" height="9" rx="2" fill="#1f2937" opacity="0.5" />
+            <rect x="8" y="26" width="5" height="5" rx="1" fill="#facc15" opacity="0.5" />
+            <rect x="16" y="26" width="16" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="35" y="26" width="16" height="2" rx="1" fill="#facc15" opacity="0.4" />
+            <rect x="16" y="29.5" width="35" height="1.5" rx="0.5" fill="#6b7280" opacity="0.3" />
+            <rect x="96" y="26.5" width="12" height="2" rx="1" fill="#6b7280" opacity="0.2" />
+            {/* Row 3 — assignment (blue) */}
+            <rect x="4" y="36" width="112" height="9" rx="2" fill="#1f2937" opacity="0.5" />
+            <rect x="8" y="38" width="5" height="5" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="16" y="38" width="12" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="31" y="38" width="18" height="2" rx="1" fill="#60a5fa" opacity="0.4" />
+            <rect x="16" y="41.5" width="45" height="1.5" rx="0.5" fill="#6b7280" opacity="0.3" />
+            <rect x="96" y="38.5" width="14" height="2" rx="1" fill="#6b7280" opacity="0.2" />
+            {/* Row 4 — comment (purple) */}
+            <rect x="4" y="48" width="112" height="9" rx="2" fill="#1f2937" opacity="0.5" />
+            <rect x="8" y="50" width="5" height="5" rx="1" fill="#a78bfa" opacity="0.5" />
+            <rect x="16" y="50" width="18" height="2" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="37" y="50" width="14" height="2" rx="1" fill="#a78bfa" opacity="0.4" />
+            <rect x="16" y="53.5" width="38" height="1.5" rx="0.5" fill="#6b7280" opacity="0.3" />
+            <rect x="96" y="50.5" width="16" height="2" rx="1" fill="#6b7280" opacity="0.2" />
+          </>
+        )}
+        {p === 'kb-search' && (
+          /* Book icon + search bar + article list — knowledge base quick access */
+          <>
+            {/* Book icon */}
+            <path d="M8 4 L8 18 Q14 16 20 18 L20 4 Q14 6 8 4 Z" stroke="#60a5fa" strokeWidth="1" fill="none" opacity="0.6" />
+            <line x1="14" y1="5" x2="14" y2="17" stroke="#60a5fa" strokeWidth="0.8" opacity="0.5" />
+            {/* Search bar */}
+            <rect x="4" y="22" width="110" height="7" rx="3" fill="#374151" opacity="0.4" />
+            <circle cx="11" cy="25.5" r="2.5" stroke="#6b7280" strokeWidth="0.8" fill="none" opacity="0.5" />
+            <line x1="13" y1="27.5" x2="15" y2="29" stroke="#6b7280" strokeWidth="0.8" opacity="0.5" />
+            <rect x="18" y="24" width="24" height="2.5" rx="1" fill="#6b7280" opacity="0.3" />
+            {/* Article list items */}
+            <rect x="4" y="34" width="110" height="8" rx="2" fill="#1f2937" opacity="0.5" />
+            <rect x="8" y="36" width="40" height="2.5" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="8" y="39.5" width="60" height="1.5" rx="0.5" fill="#6b7280" opacity="0.3" />
+            <rect x="4" y="45" width="110" height="8" rx="2" fill="#1f2937" opacity="0.5" />
+            <rect x="8" y="47" width="50" height="2.5" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="8" y="50.5" width="55" height="1.5" rx="0.5" fill="#6b7280" opacity="0.3" />
+            <rect x="4" y="56" width="110" height="8" rx="2" fill="#1f2937" opacity="0.5" />
+            <rect x="8" y="58" width="35" height="2.5" rx="1" fill="#60a5fa" opacity="0.5" />
+            <rect x="8" y="61.5" width="48" height="1.5" rx="0.5" fill="#6b7280" opacity="0.3" />
+          </>
+        )}
       </svg>
     </div>
   )
@@ -371,6 +705,10 @@ export default function WidgetGallery({
   onLoadLayout,
   onDeleteLayout,
   onRenameLayout,
+  isEditMode = false,
+  toggleEditMode,
+  onSaveLayout,
+  resetLayout,
 }) {
   const [activeTab, setActiveTab] = useState('widgets') // 'widgets' | 'saved'
   const [renamingId, setRenamingId] = useState(null)
@@ -389,8 +727,62 @@ export default function WidgetGallery({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
           </svg>
-          Widget Gallery
+          Manage Layout
         </h3>
+
+        {/* Edit / Lock Layout toggle */}
+        {toggleEditMode && (
+          <button
+            onClick={toggleEditMode}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg
+                       border transition-colors ${
+                         isEditMode
+                           ? 'bg-blue-600 hover:bg-blue-700 border-blue-500 text-white'
+                           : 'bg-gray-700 hover:bg-gray-600 border-gray-600 text-gray-300 hover:text-white'
+                       }`}
+          >
+            {isEditMode ? (
+              <>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                Lock Layout
+              </>
+            ) : (
+              <>
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Edit Layout
+              </>
+            )}
+          </button>
+        )}
+
+        {/* Save & Reset (only in edit mode) */}
+        {isEditMode && (
+          <>
+            <SaveLayoutButton onSave={onSaveLayout} />
+            <button
+              onClick={resetLayout}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg
+                         bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white
+                         border border-gray-600 transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Reset Layout
+            </button>
+            <span className="hidden sm:flex items-center gap-2 text-[10px] text-gray-500 select-none">
+              <kbd className="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-400 font-mono">Esc</kbd> exit
+              <kbd className="px-1.5 py-0.5 rounded bg-gray-800 border border-gray-700 text-gray-400 font-mono">Del</kbd> remove
+            </span>
+          </>
+        )}
 
         {/* Inline tab buttons */}
         <div className="flex border border-gray-700/60 rounded-lg overflow-hidden">
@@ -436,37 +828,35 @@ export default function WidgetGallery({
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M19 9l-7 7-7-7" />
+                d="M5 15l7-7 7 7" />
             </svg>
           </button>
         )}
       </div>
 
-      {/* ── Widgets Tab (horizontal scroll) ─────────────────── */}
+      {/* ── Widgets Tab (vertical scroll grid) ─────────────── */}
       {activeTab === 'widgets' && (
-      <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden overscroll-contain px-3 py-2"
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-3 py-2"
            style={{ scrollbarWidth: 'thin', scrollbarColor: '#4b5563 transparent' }}>
-        <div className="flex gap-3 h-full items-start">
-          {/* Available widgets */}
-          {available.length > 0 && available.map((widget) => (
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+          {/* Available (unplaced) widgets first */}
+          {available.map((widget) => (
             <div
               key={widget.key}
-              draggable
+              draggable={isEditMode}
               unselectable="on"
               onDragStart={(e) => {
+                if (!isEditMode) { e.preventDefault(); return }
                 e.dataTransfer.setData('text/plain', widget.key)
                 e.dataTransfer.effectAllowed = 'copy'
                 onDragStartWidget?.(widget.key)
               }}
-              className="group relative bg-gray-800/80 hover:bg-gray-750/90 border border-gray-700
-                         hover:border-blue-500/50 rounded-lg overflow-hidden shrink-0
-                         cursor-grab active:cursor-grabbing
-                         transition-all duration-150 hover:shadow-lg hover:shadow-blue-500/5"
-              style={{ width: '200px' }}
+              className={`group relative bg-gray-800/80 hover:bg-gray-750/90 border border-gray-700
+                         hover:border-blue-500/50 rounded-lg overflow-hidden
+                         transition-all duration-150 hover:shadow-lg hover:shadow-blue-500/5
+                         ${isEditMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-default opacity-60'}`}
             >
-              {/* Visual preview */}
               <WidgetPreview pattern={PREVIEW_PATTERNS[widget.key]} />
-              {/* Info bar */}
               <div className="p-2">
                 <h4 className="text-[11px] font-semibold text-white truncate leading-tight">
                   {widget.label}
@@ -475,47 +865,35 @@ export default function WidgetGallery({
                   {widget.description}
                 </p>
               </div>
-              {/* Drag hint border */}
               <div className="absolute inset-0 rounded-lg border-2 border-dashed border-blue-400/0
                              group-hover:border-blue-400/20 transition-colors pointer-events-none" />
             </div>
           ))}
 
-          {/* Already placed widgets (compact chips) */}
-          {placed.length > 0 && (
-            <div className="shrink-0 flex flex-col gap-1.5 min-w-[140px] pt-1">
-              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-1">
-                On Dashboard ({placed.length})
-              </p>
-              {placed.map((widget) => (
-                <div
-                  key={widget.key}
-                  className="bg-gray-800/30 border border-gray-700/40 rounded-md px-2 py-1 opacity-50"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-gray-400 truncate flex-1">{widget.label}</span>
-                    <svg className="w-2.5 h-2.5 text-green-500/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* All placed message */}
-          {available.length === 0 && (
-            <div className="flex items-center gap-3 py-2 px-4">
-              <svg className="w-8 h-8 text-green-500/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div>
-                <p className="text-xs text-gray-400 font-medium">All widgets placed!</p>
-                <p className="text-[10px] text-gray-500 mt-0.5">Remove widgets from the dashboard to see them here</p>
+          {/* Already placed widgets — grayed out with overlay */}
+          {placed.map((widget) => (
+            <div
+              key={widget.key}
+              className="relative bg-gray-800/40 border border-gray-700/30 rounded-lg overflow-hidden
+                         opacity-40 pointer-events-none select-none"
+            >
+              <WidgetPreview pattern={PREVIEW_PATTERNS[widget.key]} />
+              <div className="p-2">
+                <h4 className="text-[11px] font-semibold text-gray-500 truncate leading-tight">
+                  {widget.label}
+                </h4>
+                <p className="text-[10px] text-gray-600 mt-0.5 leading-relaxed line-clamp-2">
+                  {widget.description}
+                </p>
+              </div>
+              {/* "Widget already placed" overlay */}
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-900/60 rounded-lg">
+                <span className="text-[10px] font-semibold text-gray-400 bg-gray-800/80 px-2 py-1 rounded-md border border-gray-700/50">
+                  Widget already placed
+                </span>
               </div>
             </div>
-          )}
+          ))}
         </div>
       </div>
       )}
@@ -577,7 +955,7 @@ export default function WidgetGallery({
                           {entry.name}
                         </h4>
                         <p className="text-[9px] text-gray-500 mt-0.5 pl-[18px]">
-                          {new Date(entry.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {_fmtDate(entry.createdAt)}
                           {entry.hidden?.length > 0 && ` · ${allWidgets.length - entry.hidden.length} widgets`}
                         </p>
                       </div>

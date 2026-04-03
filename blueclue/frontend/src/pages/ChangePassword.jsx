@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { changePassword as changePasswordService } from '../services/authService'
 import logo from '../assets/EditedBlueClueLogo.png'
+import { useToast } from '../hooks/useToast'
 
 function ChangePassword() {
   const navigate = useNavigate()
@@ -14,9 +15,9 @@ function ChangePassword() {
     newPassword: '',
     confirmPassword: ''
   })
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [passwordStrength, setPasswordStrength] = useState('')
+  const toast = useToast()
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -24,7 +25,6 @@ function ChangePassword() {
       ...formData,
       [name]: value
     })
-    setError('')
 
     // Check password strength for new password
     if (name === 'newPassword') {
@@ -48,21 +48,20 @@ function ChangePassword() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setError('')
 
     // Validation
     if (formData.newPassword !== formData.confirmPassword) {
-      setError('New passwords do not match.')
+      toast.error('New passwords do not match.')
       return
     }
 
     if (formData.newPassword.length < 8) {
-      setError('New password must be at least 8 characters long.')
+      toast.error('New password must be at least 8 characters long.')
       return
     }
 
-    if (formData.newPassword === formData.currentPassword && !firstLogin) {
-      setError('New password must be different from current password.')
+    if (!firstLogin && formData.currentPassword === formData.newPassword) {
+      toast.error('New password must be different from current password.')
       return
     }
 
@@ -80,7 +79,7 @@ function ChangePassword() {
       })
 
     } catch (err) {
-      setError(err.message || 'Password change failed. Please try again.')
+      toast.error(err.message || 'Password change failed. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -140,12 +139,6 @@ function ChangePassword() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Error Alert */}
-            {error && (
-              <div className="bg-red-900/20 border border-red-500 text-red-400 px-4 py-3 rounded-lg">
-                {error}
-              </div>
-            )}
 
             {/* Current Password (only if not first login) */}
             {!firstLogin && (

@@ -25,13 +25,15 @@ class TicketClassifier:
         # Format: {keyword: (weight, subcategory)}
         self.category_keywords = {
             "hardware": {
-                # Computers & Laptops (weight 3.0)
-                "laptop": (3.0, "computer"),
+                # Computers & Laptops
+                "laptop": (4.0, "computer"),   # raised: unambiguous hardware
                 "computer": (3.0, "computer"),
                 "desktop": (3.0, "computer"),
                 "pc": (2.5, "computer"),
                 "workstation": (2.5, "computer"),
                 "machine": (1.5, "computer"),
+                # Servers (physical server hardware in IT context)
+                "server": (3.5, "server"),
                 
                 # Displays (weight 3.0)
                 "screen": (3.0, "display"),
@@ -43,15 +45,22 @@ class TicketClassifier:
                 "black screen": (3.0, "display"),
                 "no display": (3.0, "display"),
                 
-                # Input Devices (weight 2.5)
+                # Input Devices (weight raised: mouse/keyboard are unambiguous hardware)
                 "keyboard": (2.5, "peripheral"),
-                "mouse": (2.5, "peripheral"),
+                "mouse": (4.0, "peripheral"),
                 "trackpad": (2.5, "peripheral"),
                 "touchpad": (2.5, "peripheral"),
                 "keys stuck": (3.0, "peripheral"),
                 "mouse not working": (3.5, "peripheral"),
-                "wireless mouse": (2.5, "peripheral"),
+                "wireless mouse": (4.0, "peripheral"),
                 "usb keyboard": (2.5, "peripheral"),
+                "wireless receiver": (3.0, "peripheral"),
+                "receiver": (2.0, "peripheral"),
+                # Peripheral-specific disconnect — high weight to beat network scoring
+                "mouse disconnecting": (5.0, "peripheral"),
+                "mouse keeps disconnecting": (6.0, "peripheral"),
+                "keyboard disconnecting": (5.0, "peripheral"),
+                "keyboard keeps disconnecting": (6.0, "peripheral"),
                 
                 # Printers & Scanners (weight 3.0)
                 "printer": (3.0, "printer"),
@@ -73,6 +82,8 @@ class TicketClassifier:
                 "won't boot": (3.0, "power"),
                 "power adapter": (2.5, "power"),
                 "dead battery": (3.0, "power"),
+                "battery is dead": (3.5, "power"),
+                "battery dead": (3.0, "power"),
                 "not charging": (3.0, "power"),
                 
                 # Connectivity & Ports (weight 2.0)
@@ -278,6 +289,7 @@ class TicketClassifier:
                 # Account Access (weight 3.5)
                 "locked out": (4.5, "account"),
                 "account locked": (4.5, "account"),
+                "account is locked": (4.5, "account"),   # handles "my account is locked"
                 "account disabled": (4.0, "account"),
                 "access denied": (3.5, "account"),
                 "can't access": (3.5, "account"),
@@ -336,12 +348,16 @@ class TicketClassifier:
                 "paper jam", "won't print", "not charging", "black screen",
                 "no display", "keys stuck", "mouse not working", "dual monitor",
                 "docking station", "usb port", "power adapter", "water damage",
-                "physical damage"
+                "physical damage", "wireless receiver", "battery is dead",
+                "battery dead", "spilled", "liquid damage", "server down",
+                "server is down", "server has been down",
             ],
             "software": [
                 "blue screen", "won't open", "can't open", "not responding",
                 "won't start", "error message", "error code", "slow performance",
-                "running slow", "office 365", "windows update", "system update"
+                "running slow", "office 365", "windows update", "system update",
+                "printer software", "printer driver", "software install",
+                "driver install", "software won't install",
             ],
             "network": [
                 "slow internet", "can't connect", "won't connect", "no internet",
@@ -355,7 +371,8 @@ class TicketClassifier:
             "login": [
                 "can't login", "can't log in", "unable to login", "cannot login",
                 "forgot password", "reset password", "change password", "locked out",
-                "account locked", "access denied", "can't access", "no access",
+                "account locked", "account is locked", "access denied",
+                "can't access", "no access",
                 "email account", "email login", "can't access email", "wrong password",
                 "incorrect password", "password expired", "login failed",
                 "two-factor", "multi-factor", "verification code"
@@ -376,22 +393,89 @@ class TicketClassifier:
                 "right now": (5.0, "urgency"),
                 "as soon as possible": (5.0, "urgency"),
                 
-                # Business impact (weight 4.5)
+                # Business impact
                 "production": (5.0, "business_impact"),
                 "down": (4.5, "business_impact"),
                 "can't work": (5.0, "business_impact"),
                 "cannot work": (5.0, "business_impact"),
-                "blocking": (4.5, "business_impact"),
+                "no one can work": (5.0, "business_impact"),
+                "blocking": (2.5, "business_impact"),   # reduced: too generic alone
+                "blocking my work": (5.0, "business_impact"),
+                "blocking the team": (5.0, "business_impact"),
                 "blocker": (4.5, "business_impact"),
                 "system down": (5.0, "business_impact"),
                 "server down": (5.0, "business_impact"),
                 
-                # Severity (weight 4.0)
-                "broken": (4.0, "severity"),
+                # Severity ("broken" alone is MEDIUM; escalate with modifier keywords)
                 "not working at all": (4.5, "severity"),
                 "completely broken": (5.0, "severity"),
                 "major issue": (4.0, "severity"),
                 "serious problem": (4.0, "severity"),
+                # Account / access lockouts
+                "locked out": (5.0, "account_lockout"),
+                "account locked": (5.0, "account_lockout"),
+                "account is locked": (5.0, "account_lockout"),
+                # Credential failures
+                "password expired": (4.5, "expired"),
+                "credentials expired": (4.5, "expired"),
+                # Application unresponsiveness
+                "not responding": (4.0, "unresponsive"),
+                "won't respond": (4.0, "unresponsive"),
+                # Update / system failures
+                "update failed": (4.0, "failure"),
+                "failed to update": (4.0, "failure"),
+                "system won't restart": (4.5, "failure"),
+                # Repeated crash loop (raised 7.0 to beat MEDIUM issue+keeps combos)
+                "keeps crashing": (7.0, "crash_loop"),
+                "keeps restarting": (7.0, "crash_loop"),
+                # Remote access completely down (high weight to beat MEDIUM combos)
+                "remote access not working": (8.0, "remote"),
+                "remote access down": (7.0, "remote"),
+                # MFA / 2FA broken (blocks all access) — broad coverage
+                "mfa not working": (4.5, "mfa"),
+                "2fa not working": (4.5, "mfa"),
+                "authenticator not working": (4.5, "mfa"),
+                "authentication stopped working": (4.5, "mfa"),
+                "multi-factor": (4.0, "mfa"),
+                "two-factor": (4.0, "mfa"),
+                "verification code": (3.5, "mfa"),
+                # Liquid / physical damage — device largely unusable
+                "spilled": (4.5, "damage"),
+                "liquid damage": (5.0, "damage"),
+                "water damage": (5.0, "damage"),
+                # Battery completely dead — device unusable without power
+                "battery is dead": (4.0, "power"),
+                "battery dead": (3.5, "power"),
+                "battery not charging": (4.5, "power"),
+                "not charging": (4.0, "power"),
+                # Email send/receive failure — work-blocking
+                "won't send": (4.5, "email_failure"),
+                "emails won't send": (5.0, "email_failure"),
+                "won't send or receive": (5.0, "email_failure"),
+                # VPN instability
+                "keeps dropping": (4.5, "vpn"),
+                "drops every": (4.0, "vpn"),
+                # Business blocking — team / group impact
+                "blocking my team": (5.0, "business_impact"),
+                "blocking my whole team": (5.0, "business_impact"),
+                "blocking everyone": (5.0, "business_impact"),
+                "blocking all": (4.5, "business_impact"),
+                # Right-away urgency phrasing
+                "right away": (4.5, "urgency"),
+                "need it now": (4.5, "urgency"),
+                # Deadline-driven urgency
+                "presentation in": (4.0, "deadline"),
+                "meeting in": (4.0, "deadline"),
+                "in 30 minutes": (5.0, "deadline"),
+                "in an hour": (4.5, "deadline"),
+                "deadline today": (5.0, "deadline"),
+                "deadline this": (4.5, "deadline"),
+                "have a deadline": (4.0, "deadline"),
+                "has a deadline": (4.0, "deadline"),
+                "won't turn on at all": (5.0, "power"),
+                "doesn't turn on": (4.5, "power"),
+                "computer won't turn on": (5.0, "power"),
+                "won't start at all": (5.0, "power"),
             },
             
             "medium": {
@@ -408,15 +492,36 @@ class TicketClassifier:
                 "unable": (3.0, "functionality"),
                 "won't": (3.0, "functionality"),
                 "doesn't work": (3.5, "functionality"),
+                "don't work": (3.0, "functionality"),
+                "wont": (2.5, "functionality"),   # terse spelling without apostrophe
+                "cant": (2.5, "functionality"),   # terse spelling
+                # Device failure
+                "broken": (3.0, "failure"),    # moved from HIGH; escalate with modifiers
+                "broke": (3.0, "failure"),
+                "won't turn on": (4.0, "power"),  # device can't start — MEDIUM not HIGH
+                "defective": (3.0, "failure"),
+                # Display issues
+                "flickering": (3.0, "display"),
+                "flickering badly": (3.5, "display"),
+                # Access issues
+                "forgot": (3.0, "access"),
+                "frozen": (3.0, "freeze"),
+                "freezes": (3.0, "freeze"),
+                "freeze": (3.0, "freeze"),
+                # Access / permissions
+                "access denied": (3.5, "access"),
+                "permissions": (2.5, "access"),
+                "permission denied": (3.5, "access"),
+                # Network availability
+                "no internet": (3.5, "network"),
+                "no internet access": (4.0, "network"),
                 
-                # Moderate urgency (weight 2.5)
-                "need": (2.5, "urgency"),
-                "help": (2.0, "urgency"),
+                # Moderate urgency (kept very low — too generic on their own)
                 "soon": (3.0, "urgency"),
                 "today": (3.5, "urgency"),
                 
-                # Frequency/persistence (weight 3.0)
-                "keeps": (3.0, "frequency"),
+                # Frequency/persistence — use specific HIGH phrases to avoid
+                # false MEDIUM from "keeps" alone + another word
                 "repeatedly": (3.0, "frequency"),
                 "constantly": (3.5, "frequency"),
                 "always": (3.0, "frequency"),
@@ -429,21 +534,49 @@ class TicketClassifier:
                 "wondering": (2.0, "inquiry"),
                 "curious": (1.5, "inquiry"),
                 "interested": (1.5, "inquiry"),
-                
-                # Flexible timing (weight 2.0)
-                "when you get a chance": (3.0, "timing"),
-                "when possible": (2.5, "timing"),
+
+                # Flexible timing — explicit low-urgency signals override other keywords
+                "when you get a chance": (4.5, "timing"),
+                "when possible": (3.5, "timing"),
                 "sometime": (2.5, "timing"),
                 "eventually": (2.5, "timing"),
                 "no rush": (3.0, "timing"),
                 "not urgent": (3.5, "timing"),
-                
+
                 # General/informational (weight 1.5)
                 "general": (2.0, "general"),
                 "policy": (2.0, "general"),
                 "policies": (2.0, "general"),
                 "information": (1.5, "general"),
                 "guidance": (1.5, "general"),
+
+                # Performance / cosmetic issues (slow/buffers don't block work)
+                "slow": (3.0, "performance"),
+                "running slow": (3.0, "performance"),
+                "buffering": (3.0, "performance"),
+                "lagging": (2.5, "performance"),
+                "optimize": (2.5, "performance"),
+                "optimizing": (2.5, "performance"),
+                "optimization": (2.0, "performance"),
+                "performance issue": (3.0, "performance"),
+                "running slowly": (3.0, "performance"),
+
+                # False-urgency prevention — requests that use urgent words but
+                # describe trivially non-blocking asks (equipment, inquiries, schedules).
+                # Weighted >= 5.5 so they neutralise a single "urgent"/"asap" signal.
+                "can i get a new": (5.5, "false_urgency"),  # "ASAP: can I get a new mouse"
+                "can we get a new": (5.5, "false_urgency"),
+                "get a new mouse": (5.5, "false_urgency"),
+                "get a new keyboard": (5.5, "false_urgency"),
+                "get a new monitor": (5.5, "false_urgency"),
+                "a bit old": (5.0, "false_urgency"),         # "mine is a bit old"
+                "mine is old": (5.0, "false_urgency"),
+                "choosing between": (5.5, "false_urgency"),  # purchasing inquiry
+                "which model": (4.5, "false_urgency"),
+                "when is the next": (5.5, "false_urgency"),  # scheduling inquiry
+                "training session": (4.5, "training"),
+                "it training": (4.5, "training"),
+                "next training": (5.0, "training"),
             }
         }
         
@@ -625,6 +758,9 @@ class TicketClassifier:
             Tuple of (priority, keywords_matched, confidence)
         """
         original_lower = text.lower()
+        # Also check abbreviation-expanded text so terse inputs like
+        # "pc wont turn on" and "cant log in" score correctly.
+        processed_text = self.preprocess_text(text)
         
         priority_scores = {
             "high": 0.0,
@@ -640,7 +776,7 @@ class TicketClassifier:
         # Calculate weighted scores for each priority level
         for priority, keywords_dict in self.priority_keywords.items():
             for keyword, (weight, context) in keywords_dict.items():
-                if keyword in original_lower:
+                if keyword in original_lower or keyword in processed_text:
                     priority_scores[priority] += weight
                     matched_keywords[priority].append(keyword)
         
@@ -671,7 +807,8 @@ class TicketClassifier:
             # Certain phrases indicate MEDIUM priority (actual work-blocking issues)
             medium_default_indicators = [
                 "not working", "doesn't work", "won't work", "can't access",
-                "unable to", "failed to", "keeps failing", "constantly", "repeatedly"
+                "unable to", "failed to", "keeps failing", "constantly", "repeatedly",
+                "don't work", "wont", "cant",
             ]
             
             # Check for medium indicators - must be phrases, not just "error"
@@ -691,13 +828,17 @@ class TicketClassifier:
         
         return best_priority, matched_keywords[best_priority], confidence
     
-    def classify(self, ticket_text: str) -> Dict:
+    def classify(self, ticket_text: str, subject: str = None) -> Dict:
         """
         Classify a ticket's category and priority with enhanced features.
-        
+
         Args:
             ticket_text: The ticket description text
-            
+            subject: Optional subject / title line.  When provided its keywords
+                     are counted twice (2x weighting) relative to the body,
+                     reflecting the fact that agents deliberately choose precise
+                     subject lines.
+
         Returns:
             Dictionary with classification results including:
             - category: Primary category
@@ -707,13 +848,21 @@ class TicketClassifier:
             - all_categories: List of all matching categories with scores
             - keywords_matched: Keywords that triggered the classification
             - fallback_used: Whether fallback classification was used
+            - subject_used: Whether a subject line was provided
         """
+        # Build combined text: prepend the subject twice so its keywords are
+        # weighted 2x versus the description body.
+        if subject and subject.strip():
+            combined_text = f"{subject} {subject} {ticket_text}"
+        else:
+            combined_text = ticket_text
+
         # Classify category with multi-category support
         category, cat_confidence, fallback_used, cat_keywords, subcategory, all_categories = \
-            self.classify_category(ticket_text)
-        
+            self.classify_category(combined_text)
+
         # Classify priority with category context based on content only
-        priority, pri_keywords, pri_confidence = self.classify_priority(ticket_text, category)
+        priority, pri_keywords, pri_confidence = self.classify_priority(combined_text, category)
         
         # Calculate overall confidence (weighted average)
         overall_confidence = (cat_confidence * 0.6 + pri_confidence * 0.4)
@@ -735,7 +884,8 @@ class TicketClassifier:
             "keywords_matched": {
                 "category": cat_keywords,
                 "priority": pri_keywords
-            }
+            },
+            "subject_used": bool(subject and subject.strip()),
         }
-        
+
         return result
