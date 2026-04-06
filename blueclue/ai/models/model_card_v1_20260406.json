@@ -1,0 +1,37 @@
+{
+  "model_name": "Logistic Regression",
+  "model_key": "logistic",
+  "version": "v1_20260406",
+  "training_date": "2026-04-06T09:31:13.467393",
+  "training_samples": 2298,
+  "test_samples": 500,
+  "categories": [
+    "account",
+    "billing",
+    "feature_request",
+    "hardware",
+    "login",
+    "network",
+    "other",
+    "software"
+  ],
+  "n_features": 3059,
+  "metrics": {
+    "accuracy": 0.768,
+    "f1_macro": 0.753529651772183,
+    "f1_weighted": 0.7463431445092413,
+    "precision_macro": 0.7664674275066901,
+    "recall_macro": 0.7772461866414361
+  },
+  "inference_time_ms": 0.08111000061035156,
+  "hyperparameters": {
+    "C": 1.0,
+    "class_weight": "balanced"
+  },
+  "random_seed": 42,
+  "notes": [
+    "Trained on synthetic data (2298 samples)",
+    "Classes are balanced via oversampling",
+    "Model type: Logistic Regression"
+  ]
+}

@@ -209,14 +209,23 @@ class PriorityFeatureExtractor:
         """Extract numerical metadata features."""
         features = []
         
-        # AI confidence
-        features.append(float(ticket.get('ai_confidence', 0.5)))
+        # AI confidence (handle empty strings from CSV)
+        try:
+            ai_conf = ticket.get('ai_confidence', 0.5)
+            features.append(float(ai_conf) if ai_conf not in ('', None) else 0.5)
+        except (ValueError, TypeError):
+            features.append(0.5)
         
-        # User history
-        features.append(float(ticket.get('user_previous_tickets', 0)))
+        # User history (handle string values from CSV)
+        try:
+            prev = ticket.get('user_previous_tickets', 0)
+            features.append(float(prev) if prev not in ('', None) else 0.0)
+        except (ValueError, TypeError):
+            features.append(0.0)
         
-        # Priority override indicator
-        features.append(1.0 if ticket.get('priority_overridden', False) else 0.0)
+        # Priority override indicator (True/False may be strings from CSV)
+        po_raw = ticket.get('priority_overridden', False)
+        features.append(1.0 if str(po_raw).lower() in ('true', '1', 'yes') else 0.0)
         
         # Text length features
         text = self._extract_text(ticket)
