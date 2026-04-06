@@ -1,59 +1,59 @@
 # BlueClue Ticket Data - Exploratory Data Analysis Report
 
-**Generated:** 2026-02-27T15:48:05.083226
+**Generated:** 2026-04-06T09:28:55.103754
 
 ## 1. Dataset Overview
 
-- **Total Records:** 1921
+- **Total Records:** 3288
 - **Unique Categories:** 8
 - **Unique Priorities:** 4
-- **Date Range:** 2025-02-27T11:48:58.562192 to 2026-02-27T14:59:58.515935
-- **Records with Resolution:** 1524
-- **AI Classified Records:** 1619
+- **Date Range:** 2025-03-20T05:03:07.010990 to 2026-03-31T15:54:29.697860
+- **Records with Resolution:** 2591
+- **AI Classified Records:** 3288
 
 ## 2. Key Insights
 
-- ✓ Good dataset size (1921 records) for initial ML training.
-- ⚠ Category classes are imbalanced (ratio: 3.3:1). Consider oversampling or weighted training.
+- ✓ Good dataset size (3288 records) for initial ML training.
+- ✓ Category classes are reasonably balanced.
 - ✓ Data quality score is good (100.0/100).
 
 ## 3. Category Distribution
 
-- **Class Balance Status:** imbalanced
-- **Imbalance Ratio:** 3.27:1
+- **Class Balance Status:** balanced
+- **Imbalance Ratio:** 1.71:1
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| software | 392 | 20.41% |
-| network | 345 | 17.96% |
-| hardware | 291 | 15.15% |
-| login | 278 | 14.47% |
-| other | 194 | 10.1% |
-| billing | 154 | 8.02% |
-| account | 147 | 7.65% |
-| feature_request | 120 | 6.25% |
+| feature_request | 509 | 15.48% |
+| software | 504 | 15.33% |
+| network | 439 | 13.35% |
+| account | 400 | 12.17% |
+| billing | 390 | 11.86% |
+| hardware | 381 | 11.59% |
+| login | 368 | 11.19% |
+| other | 297 | 9.03% |
 
 ![Category Distribution](visualizations/category_distribution.png)
 
 ## 4. Priority Distribution
 
-- **Critical Tickets:** 6.45%
-- **High Priority (Critical + High):** 31.86%
+- **Critical Tickets:** 10.13%
+- **High Priority (Critical + High):** 36.34%
 
 | Priority | Count | Percentage |
 |----------|-------|------------|
-| low | 714 | 37.17% |
-| medium | 595 | 30.97% |
-| high | 488 | 25.4% |
-| critical | 124 | 6.45% |
+| low | 1129 | 34.34% |
+| medium | 964 | 29.32% |
+| high | 862 | 26.22% |
+| critical | 333 | 10.13% |
 
 ![Priority Distribution](visualizations/priority_distribution.png)
 
 ## 5. Text Analysis
 
 ### Description Statistics
-- **Average Length:** 152.3 characters
-- **Average Word Count:** 26.03 words
+- **Average Length:** 157.09 characters
+- **Average Word Count:** 26.93 words
 - **Min/Max Length:** 40 / 320
 - **Empty Descriptions:** 0
 
@@ -61,11 +61,11 @@
 
 ## 6. Temporal Patterns
 
-- **Business Hours Tickets:** 39.35%
-- **After Hours Tickets:** 60.65%
-- **Weekday vs Weekend:** 72.83% / 27.17%
-- **Peak Hour:** 14:00
-- **Peak Day:** Monday
+- **Business Hours Tickets:** 38.26%
+- **After Hours Tickets:** 61.74%
+- **Weekday vs Weekend:** 71.68% / 28.32%
+- **Peak Hour:** 10:00
+- **Peak Day:** Friday
 
 ![Temporal Patterns](visualizations/temporal_patterns.png)
 
@@ -79,16 +79,15 @@
 - Missing Descriptions: 0
 - Missing Subjects: 0
 - Short Descriptions (<20 chars): 0
-- Potential Duplicates: 1043
+- Potential Duplicates: 1987
 - Invalid Categories: 0
 - Invalid Priorities: 0
 
 ### Summary
-- Potential duplicates detected: 1043 (54.3%)
+- Potential duplicates detected: 1987 (60.4%)
 
 ## 8. Recommendations for ML Training
 
-1. **Balance Classes:** Use oversampling (SMOTE) or class weights during training
 5. **Feature Engineering:** Utilize temporal features (hour, day) as they show patterns
 6. **Cross-Validation:** Use stratified k-fold CV due to class imbalance
 

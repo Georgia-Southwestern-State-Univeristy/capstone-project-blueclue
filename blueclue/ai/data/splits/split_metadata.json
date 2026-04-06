@@ -11,9 +11,9 @@
     "test": 0.15
   },
   "actual_ratios": {
-    "train": 0.698905,
-    "validation": 0.149027,
-    "test": 0.152068
+    "train": 0.698905109489051,
+    "validation": 0.14902676399026765,
+    "test": 0.15206812652068127
   },
   "train_distribution": {
     "network": 307,
@@ -44,11 +44,5 @@
     "network": 67,
     "feature_request": 77,
     "hardware": 58
-  },
-  "train_priority_distribution": {
-    "low": 798,
-    "high": 597,
-    "medium": 671,
-    "critical": 232
   }
 }
