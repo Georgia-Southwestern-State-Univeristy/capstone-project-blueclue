@@ -1237,9 +1237,12 @@ async def _classify_combined_impl(req: ClassifyRequest) -> CombinedResponse:
 
     # --- Category confidence hybrid: if ML is uncertain, let the keyword
     #     classifier override when it has a stronger signal.
+    # Use explicit threshold comparison rather than the low_confidence flag so
+    # the behaviour is environment-independent (Railway may have a different
+    # CONFIDENCE_THRESHOLD env var than docker-compose).
     if (
         keyword_classifier is not None
-        and cat_result.get("low_confidence", False)
+        and cat_result["confidence"] < CONFIDENCE_THRESHOLD
     ):
         try:
             kw_result = keyword_classifier.classify(

@@ -265,6 +265,25 @@ class TicketClassifier:
                 "can't connect to vpn": (4.0, "vpn"),
                 "vpn not working": (4.0, "vpn"),
                 
+                # Building / campus-wide outages — very high weight so these
+                # always beat credential/auth vocabulary from other categories.
+                "no link lights": (9.0, "outage"),
+                "link lights": (7.0, "outage"),
+                "connectivity is down": (9.0, "outage"),
+                "all connectivity": (8.0, "outage"),
+                "network is down": (9.0, "outage"),
+                "network down": (7.0, "outage"),
+                "internet is down": (8.0, "outage"),
+                "entire building": (6.0, "outage"),
+                "whole building": (6.0, "outage"),
+                "entire floor": (5.5, "outage"),
+                "employees unable": (5.0, "outage"),
+                "employees are unable": (6.0, "outage"),
+                "multiple employees": (4.5, "outage"),
+                "all employees": (5.0, "outage"),
+                "nobody can connect": (7.0, "outage"),
+                "no one can connect": (7.0, "outage"),
+
                 # Network Hardware (weight 2.5)
                 "router": (3.0, "hardware"),
                 "modem": (3.0, "hardware"),
@@ -421,6 +440,13 @@ class TicketClassifier:
                 "wi-fi network", "wifi network", "secure network",
                 "network authentication", "wifi authentication", "wi-fi authentication",
                 "unable to connect", "failed to connect", "failing to connect",
+                # Building / campus-wide outages
+                "no link lights", "connectivity is down", "all connectivity",
+                "network is down", "network down", "internet is down",
+                "entire building", "whole building", "entire floor",
+                "employees unable", "employees are unable",
+                "multiple employees", "all employees",
+                "nobody can connect", "no one can connect",
                 "network share", "shared folder", "share folder", "public share",
                 "public folder", "file share", "shared drive", "mapped drive",
                 "network drive", "folder access", "drive access"
@@ -455,13 +481,30 @@ class TicketClassifier:
                 "down": (4.5, "business_impact"),
                 "can't work": (5.0, "business_impact"),
                 "cannot work": (5.0, "business_impact"),
+                "unable to work": (5.0, "business_impact"),
+                "are unable to work": (6.0, "business_impact"),
+                "employees unable to work": (8.0, "business_impact"),
+                "employees are unable to work": (8.0, "business_impact"),
                 "no one can work": (5.0, "business_impact"),
+                "nobody can work": (5.0, "business_impact"),
+                # Multi-person outage escalation
+                "multiple employees": (5.0, "business_impact"),
+                "all employees": (5.0, "business_impact"),
+                "entire team": (5.0, "business_impact"),
+                "entire department": (5.5, "business_impact"),
+                "entire building": (6.0, "business_impact"),
+                "whole building": (6.0, "business_impact"),
+                "whole floor": (5.5, "business_impact"),
+                "approximately": (3.0, "business_impact"),  # "approximately 70 employees"
                 "blocking": (2.5, "business_impact"),   # reduced: too generic alone
                 "blocking my work": (5.0, "business_impact"),
                 "blocking the team": (5.0, "business_impact"),
                 "blocker": (4.5, "business_impact"),
                 "system down": (5.0, "business_impact"),
                 "server down": (5.0, "business_impact"),
+                "network down": (6.0, "business_impact"),
+                "connectivity down": (6.0, "business_impact"),
+                "no link lights": (7.0, "business_impact"),  # physical outage indicator
                 
                 # Severity ("broken" alone is MEDIUM; escalate with modifier keywords)
                 "not working at all": (4.5, "severity"),
