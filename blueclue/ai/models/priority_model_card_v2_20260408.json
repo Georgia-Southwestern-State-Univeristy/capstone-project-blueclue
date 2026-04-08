@@ -1,0 +1,38 @@
+{
+  "model_name": "Support Vector Machine",
+  "model_key": "svm",
+  "version": "v1_20260408",
+  "task": "priority_classification",
+  "training_date": "2026-04-08T15:08:33.576477",
+  "training_samples": 2298,
+  "test_samples": 500,
+  "priorities": [
+    "low",
+    "medium",
+    "high",
+    "critical"
+  ],
+  "n_features": 2021,
+  "metrics": {
+    "accuracy": 0.758,
+    "f1_macro": 0.6862050976212826,
+    "f1_weighted": 0.7508904397251218,
+    "precision_macro": 0.7005210341717131,
+    "recall_macro": 0.6809166592388759,
+    "false_high_rate": 0.1143,
+    "false_high_count": 36,
+    "false_high_denominator": 315
+  },
+  "inference_time_ms": 1.9429755210876465,
+  "hyperparameters": {
+    "C": 1.0,
+    "class_weight": "balanced",
+    "kernel": "linear"
+  },
+  "random_seed": 42,
+  "notes": [
+    "Trained on 2298 samples",
+    "Handles imbalanced priority classes",
+    "Model type: Support Vector Machine"
+  ]
+}

@@ -799,11 +799,12 @@ def main():
     elif args.model:
         trainer.train_model(args.model, tune=args.tune, use_small_grid=args.quick or not args.tune)
     else:
-        # Default: train recommended models
-        print("\nTraining recommended models (baseline + logistic + random_forest)...")
+        # Default: train recommended models — LR + RF + SVM; pick best
+        print("\nTraining recommended models (baseline + logistic + random_forest + svm)...")
         trainer.train_model('dummy', tune=False)
         trainer.train_model('logistic', tune=args.tune, use_small_grid=True)
         trainer.train_model('random_forest', tune=args.tune, use_small_grid=True)
+        trainer.train_model('svm', tune=args.tune, use_small_grid=True)
         print(trainer.compare_models())
     
     # Evaluate best model on test set

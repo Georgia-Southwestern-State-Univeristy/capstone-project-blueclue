@@ -1,0 +1,38 @@
+{
+  "model_name": "Support Vector Machine",
+  "model_key": "svm",
+  "version": "v1_20260408",
+  "training_date": "2026-04-08T15:07:10.521362",
+  "training_samples": 2298,
+  "test_samples": 500,
+  "categories": [
+    "account",
+    "billing",
+    "feature_request",
+    "hardware",
+    "login",
+    "network",
+    "other",
+    "software"
+  ],
+  "n_features": 3059,
+  "metrics": {
+    "accuracy": 0.782,
+    "f1_macro": 0.7648351149491233,
+    "f1_weighted": 0.7595273853452613,
+    "precision_macro": 0.7827519313973332,
+    "recall_macro": 0.7891781471414854
+  },
+  "inference_time_ms": 3.564786911010742,
+  "hyperparameters": {
+    "C": 1.0,
+    "class_weight": "balanced",
+    "kernel": "linear"
+  },
+  "random_seed": 42,
+  "notes": [
+    "Trained on synthetic data (2298 samples)",
+    "Classes are balanced via oversampling",
+    "Model type: Support Vector Machine"
+  ]
+}
