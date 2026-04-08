@@ -196,11 +196,12 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
 
   useEffect(() => {
     if (isOpen && ticketId) {
-      // Skip resets when restoring from minimize — keep all form state intact
-      if (wasMinimized.current && preserveState) {
+      // Skip resets when restoring the SAME ticket from minimize — keep all form state intact
+      if (wasMinimized.current && preserveState && ticket && ticket.id === ticketId) {
         wasMinimized.current = false
         return
       }
+      wasMinimized.current = false
       setActiveTab('details')
       setStatusError(null)
       setStatusSuccess(null)
