@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BlueClue — ML to AI Connection</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      background: #f4f6f9; color: #1e2533;
+      padding: 30px 20px 50px; min-height: 100vh;
+    }
+    .title-area { text-align: center; margin-bottom: 32px; }
+    .title-area h1 { font-size: 1.5rem; font-weight: 800; color: #1e2533; margin-bottom: 6px; }
+    .title-area p { font-size: 0.78rem; color: #6b7a99; }
+
+    .diagram-wrap { max-width: 1360px; margin: 0 auto; overflow-x: auto; }
+    .diagram { display: flex; flex-direction: row; align-items: flex-start; gap: 0; min-width: 860px; }
+    .col { display: flex; flex-direction: column; gap: 0; flex: 1; min-width: 0; }
+
+    .ha {
+      display: flex; align-items: center; justify-content: center;
+      padding-top: 56px; flex-shrink: 0; width: 34px;
+      flex-direction: column; gap: 4px;
+    }
+    .ha::after { content: '▶'; font-size: 0.75rem; color: #6b7a99; }
+    .ha-lbl { font-size: 0.56rem; color: #6b7a99; text-align: center; white-space: nowrap; margin-top: 3px; }
+
+    .fa { display: flex; justify-content: center; align-items: center; height: 26px; position: relative; }
+    .fa::before {
+      content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 2px; height: 100%; background: #b0bcd4;
+    }
+    .fa::after {
+      content: '▼'; font-size: 0.6rem; color: #6b7a99;
+      background: #f4f6f9; padding: 0 4px; position: relative; z-index: 1;
+    }
+
+    .layer { border-radius: 12px; overflow: hidden; border: 2px solid transparent; }
+    .lhd { padding: 9px 14px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.4px; }
+    .lbd { padding: 13px 14px; }
+
+    /* ML — purple */
+    .ml { background: #ecdff8; border-color: #9b59b6; }
+    .ml .lhd { background: #e0cdf5; color: #6c3483; border-bottom: 1px solid #d0b8ef; }
+
+    /* BRIDGE (FastAPI) — blue */
+    .bridge { background: #daeeff; border-color: #4a90d9; }
+    .bridge .lhd { background: #c2e0f8; color: #1a5fa8; border-bottom: 1px solid #a8d0ef; }
+
+    /* AI / RAG — teal */
+    .ai { background: #d0f0ea; border-color: #17a589; }
+    .ai .lhd { background: #b8e8df; color: #0e6655; border-bottom: 1px solid #a0d8ce; }
+
+    /* Feature Eng — orange */
+    .feat-box { background: #fdecd5; border: 2px solid #e67e22; border-radius: 12px; overflow: hidden; }
+    .feat-box .lhd { background: #fad9b0; color: #a04000; border-bottom: 1px solid #f5c690; }
+
+    /* Models — amber */
+    .models-box { background: #fef5d5; border: 2px solid #d4ac0d; border-radius: 12px; overflow: hidden; }
+    .models-box .lhd { background: #f9e79f; color: #7d6608; border-bottom: 1px solid #e8d07a; }
+
+    /* Training — pink */
+    .train-box { background: #fddde6; border: 2px solid #e74c6f; border-radius: 12px; overflow: hidden; }
+    .train-box .lhd { background: #fac8d5; color: #a0233f; border-bottom: 1px solid #f5b0c5; }
+
+    /* DB — green */
+    .db-box { background: #d5f5e3; border: 2px solid #27ae60; border-radius: 12px; overflow: hidden; }
+    .db-box .lhd { background: #b8eacb; color: #1a6b3a; border-bottom: 1px solid #a0d8b5; }
+
+    /* ENTRY node */
+    .node {
+      background: #fde8e8; border: 2px solid #e05c5c;
+      border-radius: 10px; padding: 12px 16px; text-align: center;
+    }
+    .node .nl { font-size: 0.85rem; font-weight: 700; color: #c0392b; }
+    .node .ns { font-size: 0.65rem; color: #e05c5c; margin-top: 4px; }
+
+    .item {
+      background: #fff; border-radius: 7px; padding: 8px 10px; margin-bottom: 7px;
+      border-left: 3px solid #ccc;
+    }
+    .item:last-child { margin-bottom: 0; }
+    .item .in { font-size: 0.65rem; font-weight: 700; margin-bottom: 3px; }
+    .item .id { font-size: 0.58rem; line-height: 1.5; }
+
+    .item.purple { border-left-color: #9b59b6; }
+    .item.purple .in { color: #6c3483; }
+    .item.purple .id { color: #7d6190; }
+
+    .item.blue { border-left-color: #4a90d9; }
+    .item.blue .in { color: #1a5fa8; }
+    .item.blue .id { color: #4a7fb5; }
+
+    .item.teal { border-left-color: #17a589; }
+    .item.teal .in { color: #0e6655; }
+    .item.teal .id { color: #1a8a72; }
+
+    .item.amber { border-left-color: #d4ac0d; }
+    .item.amber .in { color: #7d6608; }
+    .item.amber .id { color: #9a7d0a; }
+
+    .item.orange { border-left-color: #e67e22; }
+    .item.orange .in { color: #a04000; }
+    .item.orange .id { color: #935116; }
+
+    .item.red { border-left-color: #e74c6f; }
+    .item.red .in { color: #a0233f; }
+    .item.red .id { color: #c0476a; }
+
+    .item.green { border-left-color: #27ae60; }
+    .item.green .in { color: #1a6b3a; }
+    .item.green .id { color: #1e8449; }
+
+    .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+
+    /* flow connector label inside a box */
+    .conn-row {
+      display: flex; align-items: flex-start; gap: 8px;
+      background: #fff; border-radius: 7px; padding: 8px 10px; margin-bottom: 7px;
+      border-left: 3px solid #4a90d9;
+    }
+    .conn-row:last-child { margin-bottom: 0; }
+    .arrow-glyph { color: #4a90d9; font-weight: 900; font-size: 0.8rem; flex-shrink: 0; }
+    .conn-body .in { font-size: 0.65rem; font-weight: 700; color: #1a5fa8; margin-bottom: 3px; }
+    .conn-body .id { font-size: 0.58rem; color: #4a7fb5; line-height: 1.5; }
+
+    .pills { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+    .pill {
+      background: #fff; border-radius: 5px; padding: 3px 9px;
+      font-size: 0.6rem; font-weight: 700; font-family: 'Consolas', monospace;
+    }
+    .pill.purple { border: 1px solid #9b59b6; color: #6c3483; }
+    .pill.teal   { border: 1px solid #17a589; color: #0e6655; }
+    .pill.blue   { border: 1px solid #4a90d9; color: #1a5fa8; }
+  </style>
+</head>
+<body>
+
+<div class="title-area">
+  <h1>ML to AI — Internal Connection</h1>
+  <p>How the Machine Learning classification pipeline connects to the RAG / LLM AI pipeline within the FastAPI service</p>
+</div>
+
+<div class="diagram-wrap">
+<div class="diagram">
+
+  <!-- ===== TRACK 1: ML PIPELINE ===== -->
+  <div class="col">
+
+    <div class="node">
+      <div class="nl">Incoming Ticket Request</div>
+      <div class="ns">POST /classify  ·  POST /chat  (both hit same service)</div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer ml">
+      <div class="lhd">Classification Layer · src/classifier.py + src/ml_classifier.py</div>
+      <div class="lbd">
+        <div class="item purple"><div class="in">TicketClassifier (keyword + spaCy)</div><div class="id">Named entity recognition · weighted rules<br>Produces baseline category + priority</div></div>
+        <div class="item purple"><div class="in">MLCategoryClassifier (RF / SVM)</div><div class="id">sklearn pipeline · softmax confidence scores<br>conf >= 0.60 → overrides keyword classifier</div></div>
+        <div class="item purple"><div class="in">PriorityModel</div><div class="id">Separate multi-class model<br>Returns Low / Medium / High / Critical</div></div>
+        <div class="item purple"><div class="in">ResolutionTimeRegressor</div><div class="id">Random Forest / GBT / Ridge / SVR ensemble<br>Predicts estimated_hours float</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="feat-box">
+      <div class="lhd">Feature Engineering · ml/feature_extractor.py</div>
+      <div class="lbd">
+        <div class="item orange"><div class="in">Preprocessor</div><div class="id">Tokenisation · lowercase · spaCy lemmatise<br>Stop-word removal · punctuation stripping</div></div>
+        <div class="item orange"><div class="in">TF-IDF vectoriser (5 000 features, 1-2 gram)</div><div class="id">Fitted on ticket training corpus<br>Shared across category + priority models</div></div>
+        <div class="item orange"><div class="in">Urgency signals</div><div class="id">Keyword flags: "urgent", "down", "crash", "critical"<br>Appended as boolean feature columns</div></div>
+        <div class="item orange"><div class="in">Metadata features</div><div class="id">Ticket length · caps ratio · punctuation density<br>IT-term frequency · entity counts</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="models-box">
+      <div class="lhd">Model Artefacts · models/</div>
+      <div class="lbd">
+        <div class="g2">
+          <div class="item amber"><div class="in">category_model.pkl</div><div class="id">8-class RF / SVM · v3</div></div>
+          <div class="item amber"><div class="in">priority_model.pkl</div><div class="id">4-class pipeline</div></div>
+          <div class="item amber"><div class="in">time_model.pkl</div><div class="id">Regression model</div></div>
+          <div class="item amber"><div class="in">feature_extractor.pkl</div><div class="id">Fitted TF-IDF + scalers</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="train-box">
+      <div class="lhd">Training Pipeline · ml/ + scripts/</div>
+      <div class="lbd">
+        <div class="item red"><div class="in">DataLoader + DataSplitter</div><div class="id">Stratified 70/15/15 splits · per-class validation</div></div>
+        <div class="item red"><div class="in">SyntheticGenerator + DataAugmenter</div><div class="id">Oversamples rare categories · paraphrase variants</div></div>
+        <div class="item red"><div class="in">ModelRegistry</div><div class="id">Versioned .pkl saves · hot-reload without restart<br>model_card JSON logged per version</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ML -> BRIDGE arrow -->
+  <div class="ha"><div class="ha-lbl">internal<br>function<br>call</div></div>
+
+  <!-- ===== TRACK 2: FASTAPI BRIDGE ===== -->
+  <div class="col">
+
+    <div class="layer bridge">
+      <div class="lhd">FastAPI Orchestration · app.py</div>
+      <div class="lbd">
+        <div class="item blue"><div class="in">POST /classify (combined endpoint)</div><div class="id">Calls ML classifier first<br>Returns category + priority + estimated_hours</div></div>
+        <div class="item blue"><div class="in">POST /chat (chat endpoint)</div><div class="id">Injects ML category into RAG context<br>ML result enriches LLM system prompt</div></div>
+        <div class="item blue"><div class="in">LRU cache · SHA-256 key</div><div class="id">1 024-entry cache · TTL 1 h<br>Cache keyed by message + category context</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer bridge">
+      <div class="lhd">ML Feeds AI — Shared Signals</div>
+      <div class="lbd">
+        <div class="conn-row">
+          <span class="arrow-glyph">ML</span>
+          <div class="conn-body"><div class="in">Category injected into RAG filter</div><div class="id">ML-assigned category used to pre-filter<br>knowledge_base_articles by category column<br>Narrows vector search to relevant KB section</div></div>
+        </div>
+        <div class="conn-row">
+          <span class="arrow-glyph">ML</span>
+          <div class="conn-body"><div class="in">Classification in LLM system prompt</div><div class="id">RAG prompt builder receives: category, priority,<br>confidence from ML output<br>LLM response is tailored to category context</div></div>
+        </div>
+        <div class="conn-row">
+          <span class="arrow-glyph">ML</span>
+          <div class="conn-body"><div class="in">Low-confidence ML triggers richer RAG</div><div class="id">conf &lt; 0.60: RAG step uses wider KB search scope<br>conf >= 0.60: narrow category-scoped search</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer bridge">
+      <div class="lhd">Observability + Quality — app.py</div>
+      <div class="lbd">
+        <div class="item blue"><div class="in">GET /metrics</div><div class="id">Exposes ML accuracy, RAG query counts,<br>LLM token usage, cache hit rate</div></div>
+        <div class="item blue"><div class="in">GET /models/info</div><div class="id">Reports currently loaded model versions<br>for both ML and LLM components</div></div>
+        <div class="item blue"><div class="in">DriftDetector (ml/)</div><div class="id">Monitors input distribution shift<br>Alert if category drift detected</div></div>
+        <div class="item blue"><div class="in">Explainability (SHAP)</div><div class="id">Feature importance scores available<br>Surfaced in /classify response (optional)</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="db-box">
+      <div class="lhd">PostgreSQL — Shared Data Layer</div>
+      <div class="lbd">
+        <div class="item green"><div class="in">ai_classifications table</div><div class="id">Written by ML pipeline (category, priority, confidence)<br>Read by RAG for richer context assembly</div></div>
+        <div class="item green"><div class="in">knowledge_base_articles.category</div><div class="id">ML category used as pre-filter before pgvector search<br>Reduces irrelevant KB article retrieval</div></div>
+        <div class="item green"><div class="in">knowledge_base_articles.embedding</div><div class="id">Cosine-search on ada-002 / MiniLM embeddings<br>Scoped to ML-determined category</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- BRIDGE -> AI arrow -->
+  <div class="ha"><div class="ha-lbl">enriched<br>context</div></div>
+
+  <!-- ===== TRACK 3: AI PIPELINE ===== -->
+  <div class="col">
+
+    <div class="layer ai">
+      <div class="lhd">RAG Pipeline · src/rag_pipeline.py</div>
+      <div class="lbd">
+        <div class="item teal"><div class="in">Step 1 — Embed query</div><div class="id">ada-002 (1536-dim) · MiniLM fallback (384-dim)<br>Encodes user message into vector</div></div>
+        <div class="item teal"><div class="in">Step 2 — Category-scoped vector search</div><div class="id">WHERE category = [ML category]<br>ORDER BY embedding &lt;=&gt; query_vector LIMIT k<br>Cosine similarity via pgvector ivfflat index</div></div>
+        <div class="item teal"><div class="in">Step 3 — Prompt Builder</div><div class="id">System prompt includes ML result block:<br>  category, priority, confidence, estimated_hours<br>KB article snippets appended as grounded context<br>Conversation history (last N turns) included</div></div>
+        <div class="item teal"><div class="in">Step 4 — LLM Completion</div><div class="id">gpt-3.5-turbo / gpt-4o-mini<br>Max retries 2 · token usage logged<br>Cost tracked per call</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer ai">
+      <div class="lhd">How AI Uses ML Output</div>
+      <div class="lbd">
+        <div class="item teal"><div class="in">Category-aware KB retrieval</div><div class="id">ML category narrows KB search<br>"Hardware" ticket only searches hardware articles</div></div>
+        <div class="item teal"><div class="in">Priority context in response</div><div class="id">LLM told ticket priority is "Critical"<br>Response tone and urgency shaped accordingly</div></div>
+        <div class="item teal"><div class="in">Resolution time reference</div><div class="id">LLM can reference estimated_hours in reply<br>"This typically takes about X hours to resolve"</div></div>
+        <div class="item teal"><div class="in">Confidence-gated depth</div><div class="id">Low ML confidence → broader KB search<br>High confidence → focused, category-specific answer</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer ai">
+      <div class="lhd">LLM Service · src/llm_service.py</div>
+      <div class="lbd">
+        <div class="item teal"><div class="in">LLMService class</div><div class="id">Manages OpenAI client · retry logic · cost tracking</div></div>
+        <div class="item teal"><div class="in">embed(text)</div><div class="id">ada-002 embedding · cached internally<br>Falls back to MiniLM sentence-transformers</div></div>
+        <div class="item teal"><div class="in">complete(prompt)</div><div class="id">Calls gpt-3.5-turbo or gpt-4o-mini<br>Returns response + token usage + cost_usd</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer ai">
+      <div class="lhd">AI Response — Enriched by ML</div>
+      <div class="lbd">
+        <div class="item teal"><div class="in">Final JSON response</div><div class="id">Response is category-grounded and priority-aware<br>KB references filtered to relevant KB section</div></div>
+        <div class="pills">
+          <span class="pill teal">response</span>
+          <span class="pill teal">kb_references</span>
+          <span class="pill purple">category (from ML)</span>
+          <span class="pill purple">confidence (from ML)</span>
+          <span class="pill blue">tokens_used</span>
+          <span class="pill blue">cost_usd</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BlueClue — ML / AI Architecture</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #f4f6f9;
+      color: #1e2533;
+      padding: 30px 20px 50px;
+      min-height: 100vh;
+    }
+
+    .title-area { text-align: center; margin-bottom: 32px; }
+    .title-area h1 {
+      font-size: 1.6rem; font-weight: 800; margin-bottom: 8px;
+      color: #1e2533;
+      letter-spacing: -0.5px;
+    }
+    .title-area p { font-size: 0.78rem; color: #6b7a99; letter-spacing: 0.3px; }
+
+    .diagram-wrap { max-width: 1400px; margin: 0 auto; overflow-x: auto; }
+    .diagram { display: flex; flex-direction: row; align-items: flex-start; gap: 0; min-width: 900px; }
+
+    /* Column */
+    .col { display: flex; flex-direction: column; gap: 0; flex: 1; min-width: 0; }
+
+    /* Horizontal arrow between columns */
+    .ha {
+      display: flex; align-items: center; justify-content: center;
+      padding-top: 60px; flex-shrink: 0; width: 32px;
+    }
+    .ha::after {
+      content: '▶'; font-size: 0.75rem; color: #6b7a99;
+    }
+
+    /* Flow arrow within a column */
+    .fa { display: flex; justify-content: center; align-items: center; height: 26px; position: relative; }
+    .fa::before {
+      content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 2px; height: 100%; background: #b0bcd4;
+    }
+    .fa::after {
+      content: '▼'; font-size: 0.6rem; color: #6b7a99;
+      background: #f4f6f9; padding: 0 4px; position: relative; z-index: 1;
+    }
+
+    /* Entry */
+    .entry {
+      background: #fde8e8;
+      border: 2px solid #e05c5c;
+      border-radius: 10px;
+      padding: 14px 44px;
+      text-align: center;
+    }
+    .entry .elabel { font-size: 1rem; font-weight: 700; color: #c0392b; }
+    .entry .emethods { font-size: 0.7rem; color: #e05c5c; margin-top: 4px; letter-spacing: 0.5px; }
+
+    /* Generic layer */
+    .layer { border-radius: 12px; overflow: hidden; border: 2px solid transparent; }
+    .lhd {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 16px; font-size: 0.72rem; font-weight: 700;
+      letter-spacing: 0.8px;
+    }
+    .lbd { padding: 14px 16px; }
+
+    /* ── Layer colours ── */
+    /* API  → blue */
+    .api { background: #daeeff; border-color: #4a90d9; }
+    .api .lhd { background: #c2e0f8; color: #1a5fa8; border-bottom: 1px solid #a8d0ef; }
+    /* Classification → purple */
+    .clf { background: #ecdff8; border-color: #9b59b6; }
+    .clf .lhd { background: #e0cdf5; color: #6c3483; border-bottom: 1px solid #d0b8ef; }
+    /* Feature Eng → orange */
+    .feat { background: #fdecd5; border-color: #e67e22; }
+    .feat .lhd { background: #fad9b0; color: #a04000; border-bottom: 1px solid #f5c690; }
+    /* Model Ops → green */
+    .mops-zone { background: #d5f5e3; border: 2px solid #27ae60; border-radius: 12px; overflow: hidden; }
+    /* Training → pink/red */
+    .train { background: #fddde6; border-color: #e74c6f; }
+    .train .lhd { background: #fac8d5; color: #a0233f; border-bottom: 1px solid #f5afc0; }
+    /* Models (artefacts) → amber */
+    .models { background: #fef5d5; border: 2px solid #d4ac0d; border-radius: 12px; overflow: hidden; }
+    /* RAG → teal */
+    .rag { background: #d0f0ea; border-color: #17a589; }
+    .rag .lhd { background: #b8e8df; color: #0e6655; border-bottom: 1px solid #a0d8ce; }
+
+    /* ── Inner boxes share white bg with layer border accent ── */
+    .ep {
+      background: #fff; border: 1px solid #4a90d9;
+      border-radius: 8px; padding: 8px 6px; text-align: center;
+    }
+    .ep .ep-path { font-size: 0.62rem; font-weight: 700; color: #1a5fa8; font-family: 'Consolas', monospace; line-height: 1.5; }
+    .ep .ep-desc { font-size: 0.56rem; color: #5b8ab5; margin-top: 3px; }
+
+    .api-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+    .api-infra { display: flex; gap: 6px; flex-wrap: wrap; }
+    .api-chip {
+      flex: 1; background: #fff; border: 1px solid #4a90d9;
+      border-radius: 7px; padding: 7px 10px;
+    }
+    .api-chip .ac-n { font-size: 0.64rem; font-weight: 700; color: #1a5fa8; }
+    .api-chip .ac-d { font-size: 0.58rem; color: #5b8ab5; margin-top: 3px; line-height: 1.4; }
+
+    /* Classification internals */
+    .clf-zone { border: 1px solid #c7a8e8; border-radius: 10px; background: #f6effe; overflow: hidden; }
+    .clf-zone-hd {
+      background: #e4d0f5; border-bottom: 1px solid #c7a8e8;
+      padding: 7px 12px; font-size: 0.6rem; font-weight: 700;
+      letter-spacing: 0.8px; text-transform: uppercase; color: #6c3483;
+    }
+    .clf-zone-body { display: grid; grid-template-columns: 1fr; }
+    .clf-col { padding: 10px 12px; }
+    .clf-col + .clf-col { border-top: 1px solid #dcc8f0; }
+    .clf-col-hd { font-size: 0.6rem; font-weight: 700; color: #6c3483; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px solid #dcc8f0; }
+    .ci2 {
+      background: #fff; border: 1px solid #9b59b6; border-radius: 6px;
+      padding: 7px 9px; margin-bottom: 6px;
+    }
+    .ci2:last-child { margin-bottom: 0; }
+    .ci2 .n { font-size: 0.64rem; font-weight: 700; color: #6c3483; }
+    .ci2 .d { font-size: 0.57rem; color: #7d6190; margin-top: 3px; line-height: 1.45; }
+    .ens-node {
+      background: #fff; border: 2px solid #9b59b6; border-radius: 8px;
+      padding: 10px 9px; text-align: center;
+    }
+    .ens-node .ens-lbl { font-size: 0.67rem; font-weight: 800; color: #6c3483; }
+    .ens-node .ens-rule { font-size: 0.57rem; color: #7d6190; margin-top: 5px; line-height: 1.5; }
+
+    /* Feature engineering internals */
+    .feat-grid { display: grid; grid-template-columns: 1fr; gap: 7px; }
+    .fi {
+      background: #fff; border: 1px solid #e67e22;
+      border-left: 3px solid #e67e22; border-radius: 6px; padding: 8px 10px;
+    }
+    .fi .fn { font-size: 0.65rem; font-weight: 700; color: #a04000; }
+    .fi .fd { font-size: 0.57rem; color: #935116; margin-top: 4px; line-height: 1.5; }
+
+    /* Model Ops internals */
+    .mops-hd {
+      background: #b8eacb; padding: 9px 16px; border-bottom: 1px solid #a0d8b5;
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.8px; color: #1a6b3a;
+    }
+    .mops-body { display: grid; grid-template-columns: 1fr; }
+    .mops-col { padding: 10px 12px; }
+    .mops-col + .mops-col { border-top: 1px solid #a8dfc0; }
+    .mops-col-hd { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px solid #a8dfc0; color: #1a6b3a; }
+    .mops-item {
+      background: #fff; border: 1px solid #27ae60; border-radius: 6px;
+      padding: 7px 9px; margin-bottom: 5px;
+    }
+    .mops-item:last-child { margin-bottom: 0; }
+    .mops-item .mn { font-size: 0.63rem; font-weight: 700; color: #1a6b3a; }
+    .mops-item .md { font-size: 0.57rem; color: #1e8449; margin-top: 3px; line-height: 1.45; }
+
+    /* Training internals */
+    .train-flow { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; align-items: start; }
+    .tr-step {
+      background: #fff; border: 1px solid #e74c6f;
+      border-top: 3px solid #e74c6f; border-radius: 8px; padding: 9px 8px;
+    }
+    .tr-step .ts-n { font-size: 0.64rem; font-weight: 700; color: #a0233f; margin-bottom: 5px; }
+    .tr-step .ts-d { font-size: 0.57rem; color: #c0476a; line-height: 1.5; }
+    .tr-step .ts-d span { display: block; }
+    .tr-step .ts-d span::before { content: '· '; color: #e74c6f; }
+
+    /* Model artefacts */
+    .models-hd { background: #f9e79f; padding: 10px 16px; font-size: 0.72rem; font-weight: 700; color: #7d6608; border-bottom: 1px solid #e8d07a; }
+    .models-bd { padding: 14px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .model-card {
+      background: #fff; border: 1px solid #d4ac0d;
+      border-top: 2px solid #d4ac0d; border-radius: 8px; padding: 9px 10px;
+    }
+    .model-card .mc-n { font-size: 0.65rem; font-weight: 700; color: #7d6608; font-family: 'Consolas', monospace; }
+    .model-card .mc-d { font-size: 0.57rem; color: #9a7d0a; margin-top: 4px; line-height: 1.5; }
+    .model-card .mc-algo { display: inline-block; margin-top: 6px; background: #fef9e7; border: 1px solid #d4ac0d; border-radius: 4px; padding: 2px 7px; font-size: 0.58rem; color: #9a7d0a; font-family: 'Consolas', monospace; }
+
+    /* RAG internals */
+    .rag-flow { display: flex; flex-direction: column; gap: 0; }
+    .rag-step { padding: 10px 12px; display: flex; align-items: flex-start; gap: 10px; position: relative; }
+    .rag-step + .rag-step { border-top: 1px solid #a0d8ce; }
+    .rag-step .rs-num { font-size: 1rem; flex-shrink: 0; }
+    .rag-step .rs-icon { font-size: 1.2rem; margin-bottom: 6px; }
+    .rag-step .rs-n { font-size: 0.65rem; font-weight: 700; color: #0e6655; }
+    .rag-step .rs-d { font-size: 0.57rem; color: #1a8a72; margin-top: 4px; line-height: 1.45; }
+
+    /* DB Config */
+    .dbcfg {
+      background: #daeeff; border: 2px solid #4a90d9;
+      border-radius: 10px; padding: 12px 16px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .dc { flex: 1; }
+    .dc .dt { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #1a5fa8; margin-bottom: 4px; }
+    .dc .dv { font-size: 0.68rem; color: #2471a3; line-height: 1.6; }
+    .ddiv { height: 1px; width: 100%; background: #a8d0ef; }
+
+    /* Bottom grid */
+    .bot { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    .ext-box { border-radius: 10px; padding: 12px 16px; text-align: center; }
+    .ext-be { background: #daeeff; border: 2px solid #4a90d9; }
+    .ext-be .el { font-size: 0.75rem; font-weight: 700; color: #1a5fa8; margin-bottom: 4px; }
+    .ext-be .es { font-size: 0.63rem; color: #2471a3; }
+    .ext-be .ew { font-size: 0.6rem; color: #4a90d9; margin-top: 6px; border-top: 1px solid #a8d0ef; padding-top: 6px; }
+    .ext-llm { background: #d5f5e3; border: 2px solid #27ae60; }
+    .ext-llm .el { font-size: 0.75rem; font-weight: 700; color: #1a6b3a; margin-bottom: 4px; }
+    .ext-llm .es { font-size: 0.63rem; color: #1e8449; line-height: 1.5; }
+  </style>
+</head>
+<body>
+
+<div class="title-area">
+  <h1>BlueClue — ML / AI Architecture</h1>
+  <p>FastAPI · scikit-learn · RAG Pipeline · OpenAI / MiniLM · pgvector · Python 3.11</p>
+</div>
+
+<div class="diagram-wrap">
+<div class="diagram">
+
+  <!-- ═══════════ TRACK 1: Inference Path ═══════════ -->
+  <div class="col">
+
+    <div class="entry">
+      <div class="elabel">Incoming Inference Request</div>
+      <div class="emethods">POST /classify · /predict · /chat</div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer api">
+      <div class="lhd">FastAPI Inference Service · app.py · Port 5000</div>
+      <div class="lbd">
+        <div class="api-grid">
+          <div class="ep"><div class="ep-path">POST /classify/category</div><div class="ep-desc">Category prediction</div></div>
+          <div class="ep"><div class="ep-path">POST /classify/priority</div><div class="ep-desc">Priority prediction</div></div>
+          <div class="ep"><div class="ep-path">POST /predict/resolution_time</div><div class="ep-desc">Time estimate</div></div>
+          <div class="ep"><div class="ep-path">POST /classify</div><div class="ep-desc">Combined (compat.)</div></div>
+          <div class="ep"><div class="ep-path">POST /chat</div><div class="ep-desc">RAG chatbot</div></div>
+          <div class="ep"><div class="ep-path">GET /health · /metrics</div><div class="ep-desc">Observability</div></div>
+        </div>
+        <div class="api-infra">
+          <div class="api-chip"><div class="ac-n">LRU Cache</div><div class="ac-d">1 024 entries · TTL 1 h</div></div>
+          <div class="api-chip"><div class="ac-n">GET /models/info</div><div class="ac-d">Versions · accuracy · thresholds</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer clf">
+      <div class="lhd">Classification Layer · src/</div>
+      <div class="lbd">
+        <div class="clf-zone">
+          <div class="clf-zone-hd">Ensemble · confidence threshold: 0.60</div>
+          <div class="clf-zone-body">
+            <div class="clf-col">
+              <div class="clf-col-hd">Keyword Classifier</div>
+              <div class="ci2"><div class="n">TicketClassifier</div><div class="d">Weighted keyword rules · spaCy NLP · multi-label scoring</div></div>
+              <div class="ci2"><div class="n">Priority Classifier</div><div class="d">Urgency keywords · heuristic rule engine</div></div>
+            </div>
+            <div class="clf-col">
+              <div class="clf-col-hd">ML Classifier</div>
+              <div class="ci2"><div class="n">MLCategoryClassifier</div><div class="d">Random Forest / SVM · ml_classifier.py</div></div>
+              <div class="ci2"><div class="n">Priority Model</div><div class="d">sklearn pipeline · train_priority_model.py</div></div>
+              <div class="ci2"><div class="n">Time Regressor</div><div class="d">RF / GBT / Ridge / SVR · train_time_model.py</div></div>
+            </div>
+            <div class="clf-col">
+              <div class="clf-col-hd">Ensemble Decision</div>
+              <div class="ens-node">
+                <div class="ens-lbl">Fallback Logic</div>
+                <div class="ens-rule">ML conf ≥ 0.60 → ML result<br>ML conf &lt; 0.60 → keyword</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer feat">
+      <div class="lhd">Feature Engineering · ml/</div>
+      <div class="lbd">
+        <div class="feat-grid">
+          <div class="fi"><div class="fn">Preprocessor</div><div class="fd">Tokenise · lowercase · stop-word removal · lemmatisation (spaCy)</div></div>
+          <div class="fi"><div class="fn">TF-IDF Vectoriser</div><div class="fd">5 000 features · 1–2 grams · min_df 2 · max_df 0.95</div></div>
+          <div class="fi"><div class="fn">Text Statistics</div><div class="fd">Character length · word count · sentence count · punctuation density</div></div>
+          <div class="fi"><div class="fn">Urgency Signals</div><div class="fd">Critical / High / Technical keyword flags · urgency score · IT-term presence</div></div>
+          <div class="fi"><div class="fn">Metadata Features</div><div class="fd">Time-of-day · day-of-week · user ticket history · ai_classified flag</div></div>
+          <div class="fi"><div class="fn">TimeFeatureExtractor</div><div class="fd">Category encoding · priority encoding · regression feature vector</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /col 1 -->
+
+  <div class="ha"></div>
+
+  <!-- ═══════════ TRACK 2: Model Path ═══════════ -->
+  <div class="col">
+
+    <div class="mops-zone">
+      <div class="mops-hd">Model Operations · src/</div>
+      <div class="mops-body">
+        <div class="mops-col">
+          <div class="mops-col-hd">ModelRegistry · model_registry.py</div>
+          <div class="mops-item"><div class="mn">load()</div><div class="md">Loads .pkl artefacts from models/ at startup</div></div>
+          <div class="mops-item"><div class="mn">hot_reload()</div><div class="md">Swaps model in-place without restart</div></div>
+          <div class="mops-item"><div class="mn">get_info()</div><div class="md">Version, accuracy, thresholds from model card JSON</div></div>
+        </div>
+        <div class="mops-col">
+          <div class="mops-col-hd">DriftDetector · drift_detector.py</div>
+          <div class="mops-item"><div class="mn">monitor_features()</div><div class="md">Tracks input feature distribution over time</div></div>
+          <div class="mops-item"><div class="mn">detect_drift()</div><div class="md">KS-test / PSI against training distribution</div></div>
+          <div class="mops-item"><div class="mn">alert()</div><div class="md">Raises warning when drift threshold exceeded</div></div>
+        </div>
+        <div class="mops-col">
+          <div class="mops-col-hd">Explainability · explainability.py</div>
+          <div class="mops-item"><div class="mn">shap_values()</div><div class="md">Per-prediction SHAP feature importances</div></div>
+          <div class="mops-item"><div class="mn">top_features()</div><div class="md">Global feature importance ranking</div></div>
+          <div class="mops-item"><div class="mn">explain_prediction()</div><div class="md">Human-readable reasoning for each classification</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="models">
+      <div class="models-hd">Model Artefacts · models/ · Versioned .pkl + JSON</div>
+      <div class="models-bd">
+        <div class="model-card"><div class="mc-n">category_model.pkl</div><div class="mc-d">Category classifier · 8 classes · v3</div><div class="mc-algo">Random Forest | SVM</div></div>
+        <div class="model-card"><div class="mc-n">priority_model.pkl</div><div class="mc-d">Priority classifier · Low / Med / High / Critical</div><div class="mc-algo">RandomForest | LogisticRegression</div></div>
+        <div class="model-card"><div class="mc-n">time_model.pkl</div><div class="mc-d">Resolution-time regressor · output in hours</div><div class="mc-algo">GBT | Ridge | SVR | RF</div></div>
+        <div class="model-card"><div class="mc-n">feature_extractor.pkl</div><div class="mc-d">Fitted TF-IDF vectoriser + scalers</div><div class="mc-algo">joblib · sklearn Pipeline</div></div>
+        <div class="model-card"><div class="mc-n">model_card_v*.json</div><div class="mc-d">Version history · accuracy / F1 / RMSE</div><div class="mc-algo">JSON · model_registry.py</div></div>
+        <div class="model-card"><div class="mc-n">data/features/</div><div class="mc-d">Pre-computed feature matrices (.npy / .pkl)</div><div class="mc-algo">numpy · joblib</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer train">
+      <div class="lhd">Offline Training Pipeline · ml/ + src/</div>
+      <div class="lbd">
+        <div class="train-flow">
+          <div class="tr-step">
+            <div class="ts-n">1. Data Ingestion</div>
+            <div class="ts-d">
+              <span>DataLoader (data_loader.py)</span>
+              <span>Raw CSV / DB tickets</span>
+              <span>EDA (eda.py)</span>
+              <span>DataExporter export</span>
+            </div>
+          </div>
+          <div class="tr-step">
+            <div class="ts-n">2. Augmentation</div>
+            <div class="ts-d">
+              <span>SyntheticDataGenerator</span>
+              <span>Minority class oversampling</span>
+              <span>Template-based generation</span>
+              <span>85 % AI-classified flag</span>
+            </div>
+          </div>
+          <div class="tr-step">
+            <div class="ts-n">3. Splitting</div>
+            <div class="ts-d">
+              <span>DataSplitter</span>
+              <span>Stratified train / val / test</span>
+              <span>Reproducible seed</span>
+              <span>Class-balanced folds</span>
+            </div>
+          </div>
+          <div class="tr-step">
+            <div class="ts-n">4. Training</div>
+            <div class="ts-d">
+              <span>train_category_model.py</span>
+              <span>train_priority_model.py</span>
+              <span>train_time_model.py</span>
+              <span>GridSearchCV tuning</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /col 2 -->
+
+  <div class="ha"></div>
+
+  <!-- ═══════════ TRACK 3: RAG + External ═══════════ -->
+  <div class="col">
+
+    <div class="layer rag">
+      <div class="lhd">RAG Chatbot Pipeline · rag_pipeline.py + llm_service.py</div>
+      <div class="lbd">
+        <div class="rag-flow">
+          <div class="rag-step">
+            <div class="rs-num">1.</div>
+            <div><div class="rs-n">Embed Query</div><div class="rs-d">OpenAI ada-002 or MiniLM fallback · 1 536-dim vector</div></div>
+          </div>
+          <div class="rag-step">
+            <div class="rs-num">2.</div>
+            <div><div class="rs-n">Vector Search</div><div class="rs-d">pgvector cosine similarity · Top-k KB articles · PostgreSQL query</div></div>
+          </div>
+          <div class="rag-step">
+            <div class="rs-num">3.</div>
+            <div><div class="rs-n">Prompt Build</div><div class="rs-d">Grounded system prompt · Retrieved context + history · Token budget</div></div>
+          </div>
+          <div class="rag-step">
+            <div class="rs-num">4.</div>
+            <div><div class="rs-n">LLM Completion</div><div class="rs-d">gpt-3.5-turbo / gpt-4o-mini · Retry (max 2) · Cost tracking</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="dbcfg">
+      <div class="dc">
+        <div class="dt">PostgreSQL + pgvector · Port 5432</div>
+        <div class="dv">tickets · knowledge_base_articles · chat_messages · ai_classifications</div>
+      </div>
+      <div class="ddiv"></div>
+      <div class="dc">
+        <div class="dt">External AI APIs</div>
+        <div class="dv">OpenAI — ada-002 · gpt-3.5-turbo · gpt-4o-mini · MiniLM local fallback</div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="bot">
+      <div class="ext-box ext-be">
+        <div class="el">Backend Service Consumer</div>
+        <div class="es">Node.js / Express · HTTP POST to :5000<br>aiService.js · 5 s timeout · classifyTicket()</div>
+        <div class="ew">↕ JSON · confidence + category + priority + estimated_hours</div>
+      </div>
+      <div class="ext-box ext-llm">
+        <div class="el">LLM Cost Tracking</div>
+        <div class="es">
+          gpt-3.5-turbo $0.001 / 1K in · $0.002 / 1K out<br>
+          gpt-4o-mini $0.00015 / 1K in · $0.0006 / 1K out<br>
+          ada-002 embedding $0.0001 / 1K tokens
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /col 3 -->
+
+</div><!-- /diagram -->
+</div><!-- /diagram-wrap -->
+</body>
+</html>

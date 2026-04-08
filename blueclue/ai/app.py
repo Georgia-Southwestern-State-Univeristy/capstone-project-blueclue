@@ -44,6 +44,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(BASE_DIR, "src"))
 sys.path.insert(0, BASE_DIR)
 
+# Keyword-based classifier (lower-priority fallback when ML confidence is low)
+try:
+    from src.classifier import TicketClassifier as _TicketClassifier
+except ImportError:
+    _TicketClassifier = None
+
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
@@ -595,6 +601,13 @@ def _rule_based_classify(text: str) -> Dict[str, Any]:
 models = ModelManager()
 cache = TTLCache(max_size=CACHE_MAX_SIZE, ttl_seconds=CACHE_TTL_SECONDS)
 START_TIME = time.time()
+
+# Shared keyword-rule classifier used as a low-confidence safety net
+try:
+    keyword_classifier = _TicketClassifier(use_spacy=False) if _TicketClassifier else None
+except Exception as _kc_err:
+    logger.warning("TicketClassifier init failed (hybrid fallback disabled): %s", _kc_err)
+    keyword_classifier = None
 
 
 # --------------------------------------------------------------------------- #
@@ -1221,6 +1234,34 @@ async def _classify_combined_impl(req: ClassifyRequest) -> CombinedResponse:
                       "low_confidence": True}
         fallback_used = True
     model_versions["category"] = cat_result["model_version"]
+
+    # --- Category confidence hybrid: if ML is uncertain, let the keyword
+    #     classifier override when it has a stronger signal.
+    if (
+        keyword_classifier is not None
+        and cat_result.get("low_confidence", False)
+    ):
+        try:
+            kw_result = keyword_classifier.classify(
+                req.text, subject=req.subject
+            )
+            kw_cat_conf = float(kw_result.get("confidence", 0))
+            ml_cat_conf = float(cat_result["confidence"])
+            # Keyword wins when its score beats the ML model's probability AND
+            # the keyword classifier did NOT fall back to "other" as a vague guess.
+            if kw_cat_conf >= ml_cat_conf and not kw_result.get("fallback_used", True):
+                logger.debug(
+                    "Keyword hybrid: cat '%s'@%.2f overrides ML '%s'@%.2f",
+                    kw_result["category"], kw_cat_conf,
+                    cat_result["category"], ml_cat_conf,
+                )
+                cat_result["category"]    = kw_result["category"]
+                cat_result["confidence"]  = kw_cat_conf
+                cat_result["low_confidence"] = kw_cat_conf < CONFIDENCE_THRESHOLD
+                cat_result["model_version"]  = "keyword-hybrid"
+                fallback_used = True
+        except Exception as _kw_exc:
+            logger.debug("Keyword hybrid failed (non-fatal): %s", _kw_exc)
 
     # --- Priority ---
     try:

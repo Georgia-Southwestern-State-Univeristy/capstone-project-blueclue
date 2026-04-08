@@ -142,29 +142,41 @@ class PriorityFeatureExtractor:
     - Urgency indicators from text
     """
     
-    # Urgency keywords by priority level
+    # Urgency keywords by priority level — broader coverage for better feature separation
     URGENCY_KEYWORDS = {
         'critical': [
-            'urgent', 'emergency', 'critical', 'immediately', 'asap', 'down',
-            'outage', 'security breach', 'data loss', 'cannot work', 'blocked',
-            'production', 'all users', 'company-wide', 'server down'
+            'urgent', 'emergency', 'critical', 'immediately', 'asap', 'right now',
+            'as soon as possible', 'down', 'outage', 'security breach', 'data loss',
+            'cannot work', 'no one can work', 'blocked', 'blocking',
+            'production', 'all users', 'company-wide', 'server down', 'system down',
+            'locked out', 'account locked', 'mfa not working', '2fa not working',
+            'authenticator not working', 'nothing works', 'completely down'
         ],
         'high': [
-            'important', 'priority', 'soon', 'deadline', 'presentation',
-            'meeting', 'client', 'manager', 'cannot access', 'failing',
-            'spreading', 'multiple', 'affecting team', 'broken'
+            'important', 'priority', 'soon', 'quickly', 'deadline', 'presentation',
+            'meeting', 'client', 'manager', 'cannot access', 'failing', 'failed',
+            'spreading', 'multiple users', 'affecting team', 'broken', 'not working',
+            'error', 'crash', 'crashing', 'keeps crashing', 'keeps restarting',
+            'not responding', 'password expired', 'update failed', 'stuck',
+            'remote access not working', 'help needed', 'stops working',
+            'shuts off', 'turns off', 'shutting down', 'freezing', 'frozen',
+            'boots to black', 'no bootable', 'bootable device'
         ],
         'medium': [
-            'issue', 'problem', 'help', 'please', 'when possible',
-            'slow', 'intermittent', 'sometimes', 'error'
+            'issue', 'problem', 'help', 'please', 'when possible', 'when you can',
+            'slow', 'intermittent', 'sometimes', 'occasionally', 'error',
+            'not connecting', 'struggling', 'having trouble', 'difficulty',
+            'not sure', 'seems like', 'think there is', 'may be'
         ],
         'low': [
             'question', 'wondering', 'curious', 'eventually', 'no rush',
-            'minor', 'cosmetic', 'nice to have', 'feedback', 'suggestion'
+            'minor', 'cosmetic', 'nice to have', 'feedback', 'suggestion',
+            'inquiry', 'just wondering', 'when convenient', 'not urgent',
+            'low priority', 'whenever', 'sometime', 'policy', 'information'
         ]
     }
     
-    def __init__(self, max_tfidf_features: int = 1000):
+    def __init__(self, max_tfidf_features: int = 2000):
         """
         Initialize the feature extractor.
         
@@ -174,8 +186,8 @@ class PriorityFeatureExtractor:
         self.max_tfidf_features = max_tfidf_features
         self.tfidf = TfidfVectorizer(
             max_features=max_tfidf_features,
-            ngram_range=(1, 2),
-            min_df=2,
+            ngram_range=(1, 3),
+            min_df=1,
             max_df=0.95,
             stop_words='english'
         )
@@ -389,7 +401,7 @@ class PriorityModelTrainer:
         self.random_seed = random_seed
         np.random.seed(random_seed)
         
-        self.feature_extractor = PriorityFeatureExtractor(max_tfidf_features=1000)
+        self.feature_extractor = PriorityFeatureExtractor(max_tfidf_features=2000)
         self.results = {}
         self.best_model = None
         self.best_model_name = None
@@ -944,10 +956,11 @@ def main():
     elif args.model:
         trainer.train_model(args.model, tune=args.tune, use_small_grid=args.quick or not args.tune)
     else:
-        print("\nTraining recommended models...")
+        print("\nTraining recommended models (baseline + logistic + random_forest + svm)...")
         trainer.train_model('dummy', tune=False)
         trainer.train_model('logistic', tune=args.tune, use_small_grid=True)
         trainer.train_model('random_forest', tune=args.tune, use_small_grid=True)
+        trainer.train_model('svm', tune=args.tune, use_small_grid=True)
         print(trainer.compare_models())
     
     if trainer.best_model:

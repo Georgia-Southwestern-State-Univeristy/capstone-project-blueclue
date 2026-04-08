@@ -1,0 +1,94 @@
+AI COMPONENT (RAG / LLM) — TALKING POINTS & SPEAKER NOTES
+===========================================================
+The AI service is a RAG-powered chat assistant 
+that answers IT support questions using the internal knowledge base. 
+When a user sends a message, it converts the text into a vector, 
+searches for the most relevant KB articles using pgvector, builds a
+ grounded prompt from those results, and sends it to an OpenAI LLM (gpt-3.5-turbo or gpt-4o-mini) 
+ to generate a response. 
+ Answers are returned with source article references so users can read further.
+ If OpenAI is unavailable, it falls back to a local MiniLM model and keeps running.
+
+
+Answers user chat questions using knowledge base articles and conversation history
+-----------------------------------------------------------------------------------
+The AI component powers the chat assistant inside BlueClue. When a user types a question,
+the system doesn't just throw it at a language model and hope for the best. It first
+searches the internal knowledge base for articles that are actually relevant to that
+question, then gives those articles to the LLM as context. The result is an answer that
+is grounded in real documentation rather than a generic AI response.
+
+
+4-step RAG pipeline: embed query -> vector search KB -> build grounded prompt -> LLM completion
+------------------------------------------------------------------------------------------------
+RAG stands for Retrieval-Augmented Generation. The pipeline has four steps every time a
+message comes in:
+  1. The user's message is converted into a vector (a list of numbers that captures its
+     meaning) using an embedding model.
+  2. That vector is compared against every article in the knowledge base using cosine
+     similarity — articles that are semantically closest to the question float to the top.
+  3. The top results are inserted into a structured prompt alongside the conversation
+     history, so the LLM has both context and memory.
+  4. The LLM generates a response based on that grounded prompt rather than its general
+     training data alone.
+
+
+pgvector cosine similarity search narrows KB to the most relevant articles
+---------------------------------------------------------------------------
+The knowledge base articles are stored in PostgreSQL with a pgvector extension. Each
+article has a pre-computed embedding stored in a vector column. When a query comes in,
+we do a single SQL query that sorts articles by cosine distance to the query vector and
+returns the top k most relevant ones. This is fast, runs inside the database, and means
+the LLM only ever sees articles that are genuinely related to what the user asked.
+
+
+OpenAI ada-002 for embeddings, gpt-3.5-turbo / gpt-4o-mini for responses
+--------------------------------------------------------------------------
+We use OpenAI's text-embedding-ada-002 model to turn both the user's question and the
+KB articles into vectors — these have 1,536 dimensions. For the actual chat response we
+use gpt-3.5-turbo as the default and gpt-4o-mini for more complex queries. Both are
+accessed through the OpenAI API and are configurable without code changes.
+
+
+Local MiniLM (sentence-transformers) as offline fallback if OpenAI is unavailable
+-----------------------------------------------------------------------------------
+If the OpenAI API is unreachable — network issue, outage, rate limit — the system
+automatically falls back to a locally running sentence-transformers MiniLM model for
+embeddings. It produces 384-dimensional vectors instead of 1,536, so the quality is
+slightly lower, but the pipeline keeps working entirely offline. This was a deliberate
+resilience decision so the chat assistant doesn't go completely dark during an API issue.
+
+
+Max 2 retries on LLM calls, cost tracked per request
+------------------------------------------------------
+Every call to the OpenAI API is wrapped in retry logic with a maximum of 2 attempts
+before giving up. Token usage is logged on every successful call, and the estimated
+cost in USD is calculated and stored alongside the response. This gives us visibility
+into how much the AI feature is costing as usage scales, and lets us optimize if needed.
+
+
+Backend falls back to a generic reply if AI service is down — chat never breaks
+--------------------------------------------------------------------------------
+The Node.js backend sends chat messages to the FastAPI AI service with a timeout. If the
+AI service is down or too slow, the backend catches the error and returns a polite
+fallback message to the user. The user's message is still saved to the database so
+nothing is lost. The goal is that a support agent can still use the chat feature even
+if the AI portion is temporarily unavailable.
+
+
+Responses pushed to the frontend via Socket.IO — no page refresh needed
+------------------------------------------------------------------------
+Once the backend receives the AI response and saves it to the database, it immediately
+broadcasts it to the user's browser over a Socket.IO connection. The chat interface
+updates in real time without the user having to refresh the page or poll for new
+messages. This gives the experience of a modern chat app rather than a traditional
+request-response form.
+
+
+KB article references returned alongside every answer
+------------------------------------------------------
+The RAG pipeline doesn't just use KB articles silently — it also returns the titles and
+links of the articles it pulled as references, which are displayed in the chat UI below
+the response. This lets users click through to read the full documentation themselves,
+and it gives transparency into where the AI's answer came from rather than presenting
+it as authoritative with no source.
