@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BlueClue — ML: Backend & Frontend Connection</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      background: #f4f6f9; color: #1e2533;
+      padding: 30px 20px 50px; min-height: 100vh;
+    }
+    .title-area { text-align: center; margin-bottom: 32px; }
+    .title-area h1 { font-size: 1.5rem; font-weight: 800; color: #1e2533; margin-bottom: 6px; }
+    .title-area p { font-size: 0.78rem; color: #6b7a99; }
+
+    .diagram-wrap { max-width: 1360px; margin: 0 auto; overflow-x: auto; }
+    .diagram { display: flex; flex-direction: row; align-items: flex-start; gap: 0; min-width: 860px; }
+
+    .col { display: flex; flex-direction: column; gap: 0; flex: 1; min-width: 0; }
+
+    .ha {
+      display: flex; align-items: center; justify-content: center;
+      padding-top: 56px; flex-shrink: 0; width: 34px;
+      flex-direction: column; gap: 4px;
+    }
+    .ha::after { content: '▶'; font-size: 0.75rem; color: #6b7a99; }
+
+    .fa { display: flex; justify-content: center; align-items: center; height: 26px; position: relative; }
+    .fa::before {
+      content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 2px; height: 100%; background: #b0bcd4;
+    }
+    .fa::after {
+      content: '▼'; font-size: 0.6rem; color: #6b7a99;
+      background: #f4f6f9; padding: 0 4px; position: relative; z-index: 1;
+    }
+
+    /* Shared box pieces */
+    .layer { border-radius: 12px; overflow: hidden; border: 2px solid transparent; }
+    .lhd { padding: 9px 14px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.4px; }
+    .lbd { padding: 13px 14px; }
+
+    /* ----- FRONTEND — blue ----- */
+    .fe  { background: #daeeff; border-color: #4a90d9; }
+    .fe .lhd  { background: #c2e0f8; color: #1a5fa8; border-bottom: 1px solid #a8d0ef; }
+
+    /* ----- BACKEND — green ----- */
+    .be  { background: #d5f5e3; border-color: #27ae60; }
+    .be .lhd  { background: #b8eacb; color: #1a6b3a; border-bottom: 1px solid #a0d8b5; }
+
+    /* ----- ML SERVICE — purple ----- */
+    .ml  { background: #ecdff8; border-color: #9b59b6; }
+    .ml .lhd  { background: #e0cdf5; color: #6c3483; border-bottom: 1px solid #d0b8ef; }
+
+    /* ----- MODELS — amber ----- */
+    .models-box { background: #fef5d5; border: 2px solid #d4ac0d; border-radius: 12px; overflow: hidden; }
+    .models-box .lhd { background: #f9e79f; color: #7d6608; border-bottom: 1px solid #e8d07a; }
+
+    /* ----- FEATURE ENG — orange ----- */
+    .feat-box { background: #fdecd5; border: 2px solid #e67e22; border-radius: 12px; overflow: hidden; }
+    .feat-box .lhd { background: #fad9b0; color: #a04000; border-bottom: 1px solid #f5c690; }
+
+    /* ----- DB — teal ----- */
+    .db-box { background: #d0f0ea; border: 2px solid #17a589; border-radius: 12px; overflow: hidden; }
+    .db-box .lhd { background: #b8e8df; color: #0e6655; border-bottom: 1px solid #a0d8ce; }
+
+    /* ----- ENTRY / TERMINAL nodes ----- */
+    .node {
+      background: #fde8e8; border: 2px solid #e05c5c;
+      border-radius: 10px; padding: 12px 16px; text-align: center;
+    }
+    .node.green { background: #d5f5e3; border-color: #27ae60; }
+    .node .nl { font-size: 0.85rem; font-weight: 700; color: #c0392b; }
+    .node.green .nl { color: #1a6b3a; }
+    .node .ns { font-size: 0.65rem; color: #e05c5c; margin-top: 4px; }
+    .node.green .ns { color: #1e8449; }
+
+    /* Generic inner item */
+    .item {
+      background: #fff; border-radius: 7px; padding: 8px 10px; margin-bottom: 7px;
+      border-left: 3px solid #ccc;
+    }
+    .item:last-child { margin-bottom: 0; }
+    .item .in { font-size: 0.65rem; font-weight: 700; margin-bottom: 3px; }
+    .item .id { font-size: 0.58rem; line-height: 1.5; }
+
+    /* colour variants */
+    .item.blue  { border-left-color: #4a90d9; }
+    .item.blue .in { color: #1a5fa8; }
+    .item.blue .id { color: #4a7fb5; }
+
+    .item.green { border-left-color: #27ae60; }
+    .item.green .in { color: #1a6b3a; }
+    .item.green .id { color: #1e8449; }
+
+    .item.purple { border-left-color: #9b59b6; }
+    .item.purple .in { color: #6c3483; }
+    .item.purple .id { color: #7d6190; }
+
+    .item.amber { border-left-color: #d4ac0d; }
+    .item.amber .in { color: #7d6608; }
+    .item.amber .id { color: #9a7d0a; }
+
+    .item.orange { border-left-color: #e67e22; }
+    .item.orange .in { color: #a04000; }
+    .item.orange .id { color: #935116; }
+
+    .item.teal { border-left-color: #17a589; }
+    .item.teal .in { color: #0e6655; }
+    .item.teal .id { color: #1a8a72; }
+
+    .item.red { border-left-color: #e74c6f; }
+    .item.red .in { color: #a0233f; }
+    .item.red .id { color: #c0476a; }
+
+    /* grid helpers */
+    .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 7px; }
+
+    /* response pill row */
+    .pills { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+    .pill {
+      background: #fff; border: 1px solid #27ae60; border-radius: 5px;
+      padding: 3px 9px; font-size: 0.6rem; font-weight: 700; color: #1a6b3a;
+      font-family: 'Consolas', monospace;
+    }
+    .pill.blue { border-color: #4a90d9; color: #1a5fa8; }
+    .pill.purple { border-color: #9b59b6; color: #6c3483; }
+    .pill.amber { border-color: #d4ac0d; color: #7d6608; }
+
+    /* ha label */
+    .ha-lbl { font-size: 0.56rem; color: #6b7a99; text-align: center; white-space: nowrap; margin-top: 3px; }
+  </style>
+</head>
+<body>
+
+<div class="title-area">
+  <h1>ML — Backend &amp; Frontend Connection</h1>
+  <p>How the Machine Learning service integrates with the Node.js backend and React frontend</p>
+</div>
+
+<div class="diagram-wrap">
+<div class="diagram">
+
+  <!-- ===== TRACK 1: FRONTEND ===== -->
+  <div class="col">
+
+    <div class="node">
+      <div class="nl">Frontend</div>
+      <div class="ns">React + Vite · Port 5173</div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer fe">
+      <div class="lhd">Ticket Submission</div>
+      <div class="lbd">
+        <div class="item blue"><div class="in">TicketForm component</div><div class="id">User types subject + description<br>POST /api/tickets on submit</div></div>
+        <div class="item blue"><div class="in">No ML call from frontend</div><div class="id">Frontend sends raw text to backend<br>Backend calls ML, returns enriched ticket</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer fe">
+      <div class="lhd">ML Results Displayed</div>
+      <div class="lbd">
+        <div class="item blue"><div class="in">TicketDetail / TicketList</div><div class="id">Renders category label from ML response<br>Renders priority badge (Low / Med / High / Critical)<br>Renders estimated resolution time</div></div>
+        <div class="item blue"><div class="in">Analytics Dashboard</div><div class="id">Category breakdown chart (ML-assigned)<br>Priority distribution chart<br>Avg resolution time by category</div></div>
+        <div class="item blue"><div class="in">AI Confidence Indicator</div><div class="id">Shows confidence score alongside classification<br>Low-confidence tickets flagged for agent review</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="node green">
+      <div class="nl">ML-Enriched Ticket Displayed</div>
+      <div class="ns">category · priority · estimated_hours · confidence</div>
+    </div>
+
+  </div>
+
+  <!-- arrow: FE -> BE -->
+  <div class="ha"><div class="ha-lbl">HTTP<br>REST</div></div>
+
+  <!-- ===== TRACK 2: BACKEND ===== -->
+  <div class="col">
+
+    <div class="layer be">
+      <div class="lhd">Route — POST /api/tickets · tickets.js</div>
+      <div class="lbd">
+        <div class="item green"><div class="in">authenticateToken middleware</div><div class="id">JWT validated before ticket creation</div></div>
+        <div class="item green"><div class="in">ticketController.create()</div><div class="id">Receives subject + description from frontend<br>Calls aiService.classifyTicket()</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer be">
+      <div class="lhd">aiService.js · src/services/</div>
+      <div class="lbd">
+        <div class="item green"><div class="in">classifyTicket(text, subject)</div><div class="id">HTTP POST to ML service :5000/classify<br>5 s timeout · fallback on failure</div></div>
+        <div class="item green"><div class="in">checkHealth()</div><div class="id">GET :5000/health · used at server startup</div></div>
+        <div class="item green"><div class="in">Error handling</div><div class="id">If ML service down → ticket saved with<br>category = "uncategorized", priority = "medium"</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer be">
+      <div class="lhd">Ticket.js model · ai_classifications table</div>
+      <div class="lbd">
+        <div class="item green"><div class="in">Ticket.create()</div><div class="id">Saves ticket with ML-assigned category + priority</div></div>
+        <div class="item green"><div class="in">ai_classifications insert</div><div class="id">Logs raw ML response: category, priority,<br>confidence, estimated_hours, model_version</div></div>
+        <div class="item green"><div class="in">ticket_history log</div><div class="id">Records "AI classified" event with agent actor</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer be">
+      <div class="lhd">Response to Frontend</div>
+      <div class="lbd">
+        <div class="item green"><div class="in">JSON response body</div><div class="id">Returns complete ticket object with ML fields</div></div>
+        <div class="pills">
+          <span class="pill">category</span>
+          <span class="pill">priority</span>
+          <span class="pill">estimated_hours</span>
+          <span class="pill">confidence</span>
+          <span class="pill">model_version</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- arrow: BE -> ML -->
+  <div class="ha"><div class="ha-lbl">HTTP<br>POST<br>:5000</div></div>
+
+  <!-- ===== TRACK 3: ML SERVICE ===== -->
+  <div class="col">
+
+    <div class="layer ml">
+      <div class="lhd">FastAPI ML Service · app.py · Port 5000</div>
+      <div class="lbd">
+        <div class="g2">
+          <div class="item purple"><div class="in">POST /classify</div><div class="id">Combined endpoint<br>(backward compat.)</div></div>
+          <div class="item purple"><div class="in">POST /classify/category</div><div class="id">Category only</div></div>
+          <div class="item purple"><div class="in">POST /classify/priority</div><div class="id">Priority only</div></div>
+          <div class="item purple"><div class="in">POST /predict/resolution_time</div><div class="id">Hours estimate</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer ml">
+      <div class="lhd">Ensemble Classification · src/</div>
+      <div class="lbd">
+        <div class="item purple"><div class="in">TicketClassifier (keyword + spaCy)</div><div class="id">Weighted keyword rules · heuristic priority<br>Always runs as baseline</div></div>
+        <div class="item purple"><div class="in">MLCategoryClassifier (Random Forest / SVM)</div><div class="id">sklearn pipeline · confidence score output</div></div>
+        <div class="item purple"><div class="in">Ensemble decision</div><div class="id">ML conf >= 0.60 → use ML<br>ML conf &lt; 0.60 → fallback to keyword</div></div>
+        <div class="item purple"><div class="in">Time Regressor (RF / GBT / Ridge / SVR)</div><div class="id">Resolution hours estimate from category + priority</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="feat-box">
+      <div class="lhd">Feature Engineering · ml/</div>
+      <div class="lbd">
+        <div class="item orange"><div class="in">Preprocessor</div><div class="id">Tokenise · lowercase · stop-word removal · spaCy lemmatise</div></div>
+        <div class="item orange"><div class="in">FeatureExtractor</div><div class="id">TF-IDF 5 000 features · urgency signals · metadata · IT-term flags</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="models-box">
+      <div class="lhd">Model Artefacts · models/</div>
+      <div class="lbd">
+        <div class="g2">
+          <div class="item amber"><div class="in">category_model.pkl</div><div class="id">8-class RF / SVM · v3</div></div>
+          <div class="item amber"><div class="in">priority_model.pkl</div><div class="id">4-class priority pipeline</div></div>
+          <div class="item amber"><div class="in">time_model.pkl</div><div class="id">Regression · GBT / Ridge</div></div>
+          <div class="item amber"><div class="in">feature_extractor.pkl</div><div class="id">Fitted TF-IDF + scalers</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="db-box">
+      <div class="lhd">PostgreSQL · ai_classifications</div>
+      <div class="lbd">
+        <div class="item teal"><div class="in">ai_classifications table</div><div class="id">ticket_id · category · priority · confidence<br>estimated_hours · model_version · created_at</div></div>
+        <div class="item teal"><div class="in">tickets table (ML fields)</div><div class="id">category · priority columns updated by ML result<br>Read by analytics endpoints</div></div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+</div>
+
+</body>
+</html>

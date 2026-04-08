@@ -1,0 +1,75 @@
+ML COMPONENT — TALKING POINTS & SPEAKER NOTES
+==============================================
+
+
+Auto-classifies tickets by category, priority, and estimated resolution time
+-----------------------------------------------------------------------------
+When a ticket comes in, the ML service immediately reads the subject and description
+and outputs three things: what category it belongs to (like Hardware, Network, Software
+— 8 total), how urgent it is, and roughly how many hours it should take to resolve.
+This happens automatically before any agent even sees the ticket.
+
+
+Keyword rules + ML model compete — highest confidence wins (threshold: 0.60)
+------------------------------------------------------------------------------
+Two classifiers run on every ticket. The first is a rule-based system that looks for
+known IT keywords using spaCy NLP. The second is a trained ML model (Random Forest or
+SVM). If the ML model returns a confidence score of 0.60 or higher, its answer is used.
+If it's less sure than that, we trust the rule engine instead. This hybrid approach
+means we get ML accuracy on clear-cut tickets and reliable fallback on edge cases.
+
+
+Text converted to 5,000 TF-IDF features + urgency signals
+----------------------------------------------------------
+The raw ticket text gets converted into numbers the model can understand. TF-IDF scores
+how important each word is relative to the whole training set — we keep the top 5,000.
+On top of that we add boolean flags for urgency words like "down", "crash", or
+"critical", plus things like ticket length and how many all-caps words it has. Together
+these paint a detailed numeric picture of the ticket.
+
+
+3 trained models: category, priority, resolution time
+------------------------------------------------------
+These are three completely separate trained models rather than one. The category model
+picks from 8 classes. The priority model outputs Low / Medium / High / Critical. The
+time model is a regressor that outputs a float representing expected hours to resolve.
+Each one is optimized independently for its specific task. RadomForest, LogisticRegression, Regression
+
+
+Versioned .pkl files, hot-reloadable
+--------------------------------------
+The trained models are saved as .pkl files with version numbers, alongside a JSON model
+card that records accuracy, F1 score, and other metrics for that version. If we retrain
+and deploy a new version, the service can load it without restarting — it swaps the
+model in memory on the fly.
+
+
+1-hour cache — no re-running duplicate tickets
+------------------------------------------------
+If the exact same ticket text comes in more than once (common in help desks where users
+resubmit), the service returns the cached result instantly rather than running the full
+pipeline again. The cache holds 1,024 entries and each entry expires after an hour.
+
+
+Backend falls back gracefully if ML service is down
+-----------------------------------------------------
+The Node.js backend wraps every call to the ML service with a 5-second timeout. If the
+ML service doesn't respond in time — or is down entirely — the ticket still gets
+created, just with "uncategorized" and "medium" as defaults. Users never see an error
+because of an ML outage.
+
+
+70/15/15 stratified split, synthetic data for rare categories
+-------------------------------------------------------------
+Training data is split 70% train, 15% validation, 15% test, and the split is stratified
+so every category is proportionally represented in each set. For categories that don't
+have many real examples, a synthetic data generator creates additional training samples
+so the model doesn't learn to ignore them.
+
+
+GridSearchCV tuning before each version is saved
+-------------------------------------------------
+Before a model version gets saved and deployed, it goes through GridSearchCV — an
+automated process that tries many combinations of hyperparameters and picks the best one
+based on cross-validated performance. This ensures each new version is genuinely better,
+not just different.

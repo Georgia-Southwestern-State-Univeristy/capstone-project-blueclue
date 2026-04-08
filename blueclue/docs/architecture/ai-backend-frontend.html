@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BlueClue — AI (RAG): Backend & Frontend Connection</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      background: #f4f6f9; color: #1e2533;
+      padding: 30px 20px 50px; min-height: 100vh;
+    }
+    .title-area { text-align: center; margin-bottom: 32px; }
+    .title-area h1 { font-size: 1.5rem; font-weight: 800; color: #1e2533; margin-bottom: 6px; }
+    .title-area p { font-size: 0.78rem; color: #6b7a99; }
+
+    .diagram-wrap { max-width: 1360px; margin: 0 auto; overflow-x: auto; }
+    .diagram { display: flex; flex-direction: row; align-items: flex-start; gap: 0; min-width: 860px; }
+    .col { display: flex; flex-direction: column; gap: 0; flex: 1; min-width: 0; }
+
+    .ha {
+      display: flex; align-items: center; justify-content: center;
+      padding-top: 56px; flex-shrink: 0; width: 34px;
+      flex-direction: column; gap: 4px;
+    }
+    .ha::after { content: '▶'; font-size: 0.75rem; color: #6b7a99; }
+
+    .fa { display: flex; justify-content: center; align-items: center; height: 26px; position: relative; }
+    .fa::before {
+      content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 2px; height: 100%; background: #b0bcd4;
+    }
+    .fa::after {
+      content: '▼'; font-size: 0.6rem; color: #6b7a99;
+      background: #f4f6f9; padding: 0 4px; position: relative; z-index: 1;
+    }
+
+    .layer { border-radius: 12px; overflow: hidden; border: 2px solid transparent; }
+    .lhd { padding: 9px 14px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.4px; }
+    .lbd { padding: 13px 14px; }
+
+    /* FRONTEND — blue */
+    .fe { background: #daeeff; border-color: #4a90d9; }
+    .fe .lhd { background: #c2e0f8; color: #1a5fa8; border-bottom: 1px solid #a8d0ef; }
+
+    /* BACKEND — green */
+    .be { background: #d5f5e3; border-color: #27ae60; }
+    .be .lhd { background: #b8eacb; color: #1a6b3a; border-bottom: 1px solid #a0d8b5; }
+
+    /* AI / RAG — teal */
+    .ai { background: #d0f0ea; border-color: #17a589; }
+    .ai .lhd { background: #b8e8df; color: #0e6655; border-bottom: 1px solid #a0d8ce; }
+
+    /* DB — amber */
+    .db-box { background: #fef5d5; border: 2px solid #d4ac0d; border-radius: 12px; overflow: hidden; }
+    .db-box .lhd { background: #f9e79f; color: #7d6608; border-bottom: 1px solid #e8d07a; }
+
+    /* EXTERNAL LLM — pink */
+    .ext-box { background: #fddde6; border: 2px solid #e74c6f; border-radius: 12px; overflow: hidden; }
+    .ext-box .lhd { background: #fac8d5; color: #a0233f; border-bottom: 1px solid #f5b0c5; }
+
+    /* ENTRY node */
+    .node {
+      background: #fde8e8; border: 2px solid #e05c5c;
+      border-radius: 10px; padding: 12px 16px; text-align: center;
+    }
+    .node.green { background: #d5f5e3; border-color: #27ae60; }
+    .node .nl { font-size: 0.85rem; font-weight: 700; color: #c0392b; }
+    .node.green .nl { color: #1a6b3a; }
+    .node .ns { font-size: 0.65rem; color: #e05c5c; margin-top: 4px; }
+    .node.green .ns { color: #1e8449; }
+
+    .item {
+      background: #fff; border-radius: 7px; padding: 8px 10px; margin-bottom: 7px;
+      border-left: 3px solid #ccc;
+    }
+    .item:last-child { margin-bottom: 0; }
+    .item .in { font-size: 0.65rem; font-weight: 700; margin-bottom: 3px; }
+    .item .id { font-size: 0.58rem; line-height: 1.5; }
+
+    .item.blue   { border-left-color: #4a90d9; }
+    .item.blue .in  { color: #1a5fa8; }
+    .item.blue .id  { color: #4a7fb5; }
+
+    .item.green  { border-left-color: #27ae60; }
+    .item.green .in { color: #1a6b3a; }
+    .item.green .id { color: #1e8449; }
+
+    .item.teal   { border-left-color: #17a589; }
+    .item.teal .in  { color: #0e6655; }
+    .item.teal .id  { color: #1a8a72; }
+
+    .item.amber  { border-left-color: #d4ac0d; }
+    .item.amber .in { color: #7d6608; }
+    .item.amber .id { color: #9a7d0a; }
+
+    .item.red    { border-left-color: #e74c6f; }
+    .item.red .in   { color: #a0233f; }
+    .item.red .id   { color: #c0476a; }
+
+    .item.purple { border-left-color: #9b59b6; }
+    .item.purple .in { color: #6c3483; }
+    .item.purple .id { color: #7d6190; }
+
+    /* step badge */
+    .step-badge {
+      display: inline-block; background: #0e6655; color: #fff;
+      border-radius: 50%; width: 16px; height: 16px; font-size: 0.6rem;
+      font-weight: 800; text-align: center; line-height: 16px; margin-right: 5px; flex-shrink: 0;
+    }
+    .step-row { display: flex; align-items: flex-start; margin-bottom: 7px; }
+    .step-row:last-child { margin-bottom: 0; }
+    .step-body { flex: 1; }
+    .step-body .in { font-size: 0.65rem; font-weight: 700; color: #0e6655; margin-bottom: 3px; }
+    .step-body .id { font-size: 0.58rem; color: #1a8a72; line-height: 1.5; }
+
+    .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+
+    .pills { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+    .pill {
+      background: #fff; border: 1px solid #27ae60; border-radius: 5px;
+      padding: 3px 9px; font-size: 0.6rem; font-weight: 700; color: #1a6b3a;
+      font-family: 'Consolas', monospace;
+    }
+    .pill.blue   { border-color: #4a90d9; color: #1a5fa8; }
+    .pill.teal   { border-color: #17a589; color: #0e6655; }
+    .pill.red    { border-color: #e74c6f; color: #a0233f; }
+
+    .ha-lbl { font-size: 0.56rem; color: #6b7a99; text-align: center; white-space: nowrap; margin-top: 3px; }
+  </style>
+</head>
+<body>
+
+<div class="title-area">
+  <h1>AI (RAG) — Backend &amp; Frontend Connection</h1>
+  <p>How the RAG / LLM AI service integrates with the Node.js backend and React frontend · OpenAI · pgvector</p>
+</div>
+
+<div class="diagram-wrap">
+<div class="diagram">
+
+  <!-- ===== TRACK 1: FRONTEND ===== -->
+  <div class="col">
+
+    <div class="node">
+      <div class="nl">Frontend</div>
+      <div class="ns">React + Vite · Port 5173</div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer fe">
+      <div class="lhd">Chat Widget · ChatInterface component</div>
+      <div class="lbd">
+        <div class="item blue"><div class="in">User sends a message</div><div class="id">POST /api/chat with { message, conversation_id }<br>JWT auth header attached</div></div>
+        <div class="item blue"><div class="in">Message history display</div><div class="id">GET /api/chat/:id/history<br>Paginated conversation thread</div></div>
+        <div class="item blue"><div class="in">Socket.IO listener</div><div class="id">Subscribes to "chat:new_message" event<br>Real-time push from socketService</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer fe">
+      <div class="lhd">AI Response Rendered</div>
+      <div class="lbd">
+        <div class="item blue"><div class="in">AI message bubble</div><div class="id">Displays LLM-generated response text<br>Timestamps + model indicator label</div></div>
+        <div class="item blue"><div class="in">Knowledge-base references</div><div class="id">Linked KB article titles from RAG context<br>Clickable → opens article detail</div></div>
+        <div class="item blue"><div class="in">Feedback buttons</div><div class="id">Thumbs-up / thumbs-down posted to<br>POST /api/chat/:id/feedback</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="node green">
+      <div class="nl">Real-time AI Response Delivered</div>
+      <div class="ns">response · kb_references · conversation_id</div>
+    </div>
+
+  </div>
+
+  <!-- FE -> BE arrow -->
+  <div class="ha"><div class="ha-lbl">HTTP<br>REST &amp;<br>Socket</div></div>
+
+  <!-- ===== TRACK 2: BACKEND ===== -->
+  <div class="col">
+
+    <div class="layer be">
+      <div class="lhd">Routes · chat.js / api/chat</div>
+      <div class="lbd">
+        <div class="item green"><div class="in">POST /api/chat</div><div class="id">authenticateToken → chatController.sendMessage()</div></div>
+        <div class="item green"><div class="in">GET /api/chat/:id/history</div><div class="id">chatController.getHistory() · paginated</div></div>
+        <div class="item green"><div class="in">POST /api/chat/:id/feedback</div><div class="id">chatController.submitFeedback()</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer be">
+      <div class="lhd">chatController.js · src/controllers/</div>
+      <div class="lbd">
+        <div class="item green"><div class="in">sendMessage()</div><div class="id">Validates input · resolves or creates conversation<br>Calls chatService.processChatMessage()</div></div>
+        <div class="item green"><div class="in">getHistory()</div><div class="id">Retrieves chat_messages for conversation<br>Formats for frontend pagination</div></div>
+        <div class="item green"><div class="in">submitFeedback()</div><div class="id">Updates message rating in chat_messages table</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer be">
+      <div class="lhd">chatService.js · src/services/</div>
+      <div class="lbd">
+        <div class="item green"><div class="in">processChatMessage()</div><div class="id">Orchestrates the full chat flow</div></div>
+        <div class="item green"><div class="in">generateResponse()</div><div class="id">HTTP POST to AI service :5000/chat<br>Passes message + conversation history</div></div>
+        <div class="item green"><div class="in">recognizeIntent()</div><div class="id">Basic intent detection before AI call<br>Routes simple queries vs complex ones</div></div>
+        <div class="item green"><div class="in">Error / fallback</div><div class="id">If AI service down → generic fallback reply<br>Still saves user message to DB</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer be">
+      <div class="lhd">Persistence + Real-time Broadcast</div>
+      <div class="lbd">
+        <div class="item green"><div class="in">ChatConversation model</div><div class="id">Upsert conversation record (user_id, ticket_id)</div></div>
+        <div class="item green"><div class="in">ChatMessage model</div><div class="id">Insert user message · insert AI response<br>Columns: role, content, kb_references, rating</div></div>
+        <div class="item green"><div class="in">socketService.js broadcastUpdate()</div><div class="id">Emits "chat:new_message" to room<br>Frontend socket listener receives in real-time</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- BE -> AI arrow -->
+  <div class="ha"><div class="ha-lbl">HTTP<br>POST<br>:5000</div></div>
+
+  <!-- ===== TRACK 3: AI SERVICE ===== -->
+  <div class="col">
+
+    <div class="layer ai">
+      <div class="lhd">FastAPI AI Service · app.py · Port 5000</div>
+      <div class="lbd">
+        <div class="item teal"><div class="in">POST /chat</div><div class="id">Main chat endpoint · accepts message + history + context<br>LRU cache for repeated identical queries</div></div>
+        <div class="item teal"><div class="in">GET /health</div><div class="id">Reports LLM connectivity + pgvector status</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer ai">
+      <div class="lhd">RAG Pipeline · src/rag_pipeline.py</div>
+      <div class="lbd">
+        <div class="step-row">
+          <span class="step-badge">1</span>
+          <div class="step-body"><div class="in">Embed Query</div><div class="id">ada-002 (1536-dim) · MiniLM fallback (384-dim)<br>Normalise + encode user message</div></div>
+        </div>
+        <div class="step-row">
+          <span class="step-badge">2</span>
+          <div class="step-body"><div class="in">Vector Search — pgvector</div><div class="id">Cosine similarity on knowledge_base_articles.embedding<br>Top-k retrieval · relevance score filter</div></div>
+        </div>
+        <div class="step-row">
+          <span class="step-badge">3</span>
+          <div class="step-body"><div class="in">Prompt Builder</div><div class="id">Grounded context from KB articles<br>Conversation history (last N turns)<br>Role: system + user + assistant chain</div></div>
+        </div>
+        <div class="step-row">
+          <span class="step-badge">4</span>
+          <div class="step-body"><div class="in">LLM Completion</div><div class="id">gpt-3.5-turbo / gpt-4o-mini · max retries 2<br>Cost tracked per call · response streamed</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="db-box">
+      <div class="lhd">PostgreSQL · pgvector Extension</div>
+      <div class="lbd">
+        <div class="item amber"><div class="in">knowledge_base_articles table</div><div class="id">id · title · content · category · embedding<br>Searched via ivfflat cosine index</div></div>
+        <div class="item amber"><div class="in">chat_conversations table</div><div class="id">id · user_id · ticket_id · created_at</div></div>
+        <div class="item amber"><div class="in">chat_messages table</div><div class="id">id · conversation_id · role · content<br>kb_references (jsonb) · rating · created_at</div></div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="ext-box">
+      <div class="lhd">External — OpenAI API</div>
+      <div class="lbd">
+        <div class="g2">
+          <div class="item red"><div class="in">text-embedding-ada-002</div><div class="id">Query + KB article<br>embeddings</div></div>
+          <div class="item red"><div class="in">gpt-3.5-turbo</div><div class="id">Primary LLM<br>completion model</div></div>
+          <div class="item red"><div class="in">gpt-4o-mini</div><div class="id">Upgraded model<br>for complex queries</div></div>
+          <div class="item red"><div class="in">sentence-transformers MiniLM</div><div class="id">Local fallback<br>embeddings (offline)</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fa"></div>
+
+    <div class="layer ai">
+      <div class="lhd">Response to Backend</div>
+      <div class="lbd">
+        <div class="item teal"><div class="in">Structured JSON response</div><div class="id">AI reply text · KB article refs · tokens used · model name</div></div>
+        <div class="pills">
+          <span class="pill teal">response</span>
+          <span class="pill teal">kb_references</span>
+          <span class="pill teal">tokens_used</span>
+          <span class="pill teal">model</span>
+          <span class="pill teal">cost_usd</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+</div>
+
+</body>
+</html>
