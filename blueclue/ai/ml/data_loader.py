@@ -145,8 +145,14 @@ class DataLoader:
         self._splits = None
     
     def get_raw_data(self) -> List[Dict]:
-        """Load raw ticket data."""
-        for filename in ['tickets.json', 'synthetic_tickets.json']:
+        """Load raw ticket data.
+
+        Priority order:
+          1. synthetic_tickets_merged.json  – combined original + augmented data
+          2. tickets.json                   – legacy name
+          3. synthetic_tickets.json         – original synthetic-only data
+        """
+        for filename in ['synthetic_tickets_merged.json', 'tickets.json', 'synthetic_tickets.json']:
             path = os.path.join(self.raw_dir, filename)
             if os.path.exists(path):
                 return load_tickets(path)
