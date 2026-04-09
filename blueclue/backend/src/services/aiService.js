@@ -375,8 +375,8 @@ export const classifyTicketWithFallback = async (text, fallbackValues = {}) => {
             fallbackUsed: classification.fallback_used || false,
             modelVersions: classification.model_versions || {},
             lowConfidence: classification.low_confidence || false,
-            category_keywords: [],   // ML models don't use keyword matching
-            priority_keywords: [],
+            category_keywords: (classification.category_top_features || []).map(f => f.feature).filter(Boolean),
+            priority_keywords: (classification.priority_top_features || []).map(f => f.feature).filter(Boolean),
         };
     } catch (error) {
         console.warn('[aiService] ML classification failed, using fallback:', error.message);

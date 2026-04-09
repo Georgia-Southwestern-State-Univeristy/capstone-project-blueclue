@@ -1277,12 +1277,17 @@ async def _classify_combined_impl(req: ClassifyRequest) -> CombinedResponse:
             logger.debug("Keyword hybrid failed (non-fatal): %s", _kw_exc)
 
     # --- Priority ---
+    # Forward the category model's confidence so the priority model sees the
+    # same ai_confidence it was trained on (instead of the 0.5 default).
+    priority_metadata = dict(req.metadata or {})
+    priority_metadata["ai_confidence"] = cat_result["confidence"]
+
     try:
         if models._loaded["priority"]:
             pri_result = await asyncio.to_thread(
                 models.predict_priority,
                 text=req.text, subject=req.subject,
-                category=cat_result["category"], metadata=req.metadata)
+                category=cat_result["category"], metadata=priority_metadata)
         else:
             fb = _rule_based_classify(req.text)
             pri_result = {"priority": fb["priority"], "confidence": fb["confidence"],
@@ -1311,7 +1316,10 @@ async def _classify_combined_impl(req: ClassifyRequest) -> CombinedResponse:
     except Exception:
         pass
 
-    overall_confidence = min(cat_result["confidence"], pri_result["confidence"])
+    # Use category confidence for the top-level badge — it answers
+    # "how sure is the AI about the category?"  Priority confidence
+    # is still exposed separately in priority_confidence.
+    overall_confidence = cat_result["confidence"]
     low_conf = cat_result.get("low_confidence", False) or pri_result.get("low_confidence", False)
 
     # Inline explain – parallel, best-effort, 80 ms hard cap each
