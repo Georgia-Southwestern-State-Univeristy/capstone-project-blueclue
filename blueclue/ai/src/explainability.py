@@ -374,9 +374,23 @@ class ExplainabilityEngine:
         Explain a linear model (LogisticRegression, Ridge, etc.) by computing
         contribution = coef[class_idx, i] × feature_value[i].
 
-        This is identical to SHAP with a zero-vector background but avoids the
-        stale-background pitfall of a lazily-initialised LinearExplainer.
+        Strips internal feature-name prefixes (``has_term_``, ``has_``) so that
+        users see the underlying word rather than the boolean flag name.
+        Metadata features (``word_count``, ``is_*``, ``category_*``, etc.) are
+        aggregated into the cleaned name or suppressed from the display list.
         """
+        # Structural/metadata feature names that are not meaningful to end-users
+        _META_EXACT: frozenset = frozenset([
+            "word_count", "text_len", "text_length", "sentence_count",
+            "avg_word_length", "business_hours", "hour_of_day", "day_of_week",
+            "exclamation", "question", "ai_confidence", "user_tickets",
+            "priority_override", "reopen_count", "technician_workload",
+            "comment_count",
+        ])
+        _META_PREFIXES: tuple = (
+            "is_", "category_", "urgency_", "meta_",
+        )
+
         coef = np.asarray(self.model.coef_)  # (n_classes, n_features) or (1, n_features)
 
         # Flatten sparse feature matrices to dense
@@ -399,16 +413,33 @@ class ExplainabilityEngine:
         # Contribution = coefficient × feature value
         contributions = w * feat_arr
 
+        # Aggregate contributions by display name:
+        # has_term_X / has_X → X  (sum with any raw TF-IDF entry for that word)
+        aggregated: Dict[str, float] = {}
+        for name, score in zip(feature_names, contributions):
+            if name.startswith("has_term_"):
+                clean = name[len("has_term_"):]
+            elif name.startswith("has_"):
+                clean = name[len("has_"):]
+            else:
+                clean = name
+            aggregated[clean] = aggregated.get(clean, 0.0) + float(score)
+
         scored = sorted(
-            zip(feature_names, contributions),
-            key=lambda x: float(abs(x[1])),
+            aggregated.items(),
+            key=lambda x: abs(x[1]),
             reverse=True,
         )
 
         meaningful = [
             (name, score)
             for name, score in scored
-            if abs(score) > 1e-4 and re.match(r"^[a-z][a-z_ ]{1,}$", name)
+            if (
+                abs(score) > 1e-4
+                and name not in _META_EXACT
+                and not any(name.startswith(p) for p in _META_PREFIXES)
+                and re.match(r"^[a-z][a-z_ ]{1,}$", name)
+            )
         ]
 
         top_features = meaningful[:top_n] if meaningful else scored[:top_n]
