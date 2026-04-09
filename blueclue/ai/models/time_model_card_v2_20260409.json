@@ -1,0 +1,30 @@
+{
+  "model_name": "Ridge Regression",
+  "model_key": "ridge",
+  "version": "v2_20260409",
+  "task": "resolution_time_prediction",
+  "training_date": "2026-04-09T11:29:11.113841",
+  "training_samples": 5890,
+  "test_samples": 375,
+  "n_features": 528,
+  "uses_log_transform": true,
+  "outlier_percentile": 95,
+  "metrics": {
+    "rmse_hours": 51.14882986269254,
+    "mae_hours": 36.21059661389572,
+    "median_ae_hours": 21.218153229211733,
+    "r2_score": 0.3779828013427605,
+    "within_4h_pct": 13.066666666666665,
+    "within_8h_pct": 22.666666666666664
+  },
+  "inference_time_ms": 0.02244710922241211,
+  "hyperparameters": {},
+  "random_seed": 42,
+  "notes": [
+    "Trained on 5890 resolved tickets",
+    "Uses log-transformed target for skewed distribution",
+    "Outliers >95th percentile removed from training",
+    "v2 feature set adds: technician_workload, day_of_week",
+    "Baseline (v1) MAE: 33.997h, RMSE: 47.796h, R2: 0.388"
+  ]
+}
