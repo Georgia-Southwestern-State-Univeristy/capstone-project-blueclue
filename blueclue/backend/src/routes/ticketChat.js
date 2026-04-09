@@ -278,14 +278,18 @@ router.post('/:ticketId/chat/:chatId/messages', authenticateToken, async (req, r
             emitEventToUser(io, recipientId, 'ticket_chat_message', { chatId, message: msgPayload });
             emitEventToUser(io, req.user.id, 'ticket_chat_message', { chatId, message: msgPayload });
 
-            // Also create a notification for the recipient
-            await Notification.create({
-                user_id: recipientId,
-                type: 'ticket_chat_message',
-                message: `New chat message on ticket #${chat.ticket_id}: ${chat.subject}`,
-                ticket_id: chat.ticket_id,
-                metadata: { chat_id: chatId }
-            });
+            // Create a notification for the recipient (non-blocking — don't fail the message send)
+            try {
+                await Notification.create({
+                    user_id: recipientId,
+                    type: 'ticket_chat_message',
+                    message: `New chat message on ticket #${chat.ticket_id}: ${chat.subject}`,
+                    ticket_id: chat.ticket_id,
+                    metadata: { chat_id: chatId }
+                });
+            } catch (notifErr) {
+                console.error('Failed to create chat message notification:', notifErr.message);
+            }
         }
 
         res.status(201).json({ status: 'success', data: msgPayload });
