@@ -286,7 +286,10 @@ class ModelManager:
     def load_category_model(self):
         try:
             model_path = os.path.join(MODELS_DIR, "category_classifier_latest.pkl")
-            extractor_path = os.path.join(FEATURES_DIR, "feature_extractor.pkl")
+            # Prefer extractor in models/ (committed, deployed); fall back to data/features/
+            extractor_path = os.path.join(MODELS_DIR, "category_feature_extractor_latest.pkl")
+            if not os.path.exists(extractor_path):
+                extractor_path = os.path.join(FEATURES_DIR, "feature_extractor.pkl")
 
             if not os.path.exists(model_path):
                 logger.warning("Category model not found at %s", model_path)
@@ -697,7 +700,12 @@ class ExplainabilityManager:
     def init(self, model_manager: "ModelManager"):
         try:
             from src.explainability import ExplainabilityEngine
-            if model_manager._loaded.get("category"):
+        except ImportError as exc:
+            logger.warning("Explainability engine unavailable: %s", exc)
+            return
+
+        if model_manager._loaded.get("category"):
+            try:
                 self._engines["category"] = ExplainabilityEngine(
                     model_manager.category_model,
                     model_manager.category_extractor,
@@ -705,7 +713,11 @@ class ExplainabilityManager:
                     confidence_threshold=CONFIDENCE_THRESHOLD,
                 )
                 logger.info("Category explainability engine ready")
-            if model_manager._loaded.get("priority"):
+            except Exception as exc:
+                logger.error("Failed to init category explainability engine: %s", exc, exc_info=True)
+
+        if model_manager._loaded.get("priority"):
+            try:
                 self._engines["priority"] = ExplainabilityEngine(
                     model_manager.priority_model,
                     model_manager.priority_extractor,
@@ -713,10 +725,8 @@ class ExplainabilityManager:
                     confidence_threshold=CONFIDENCE_THRESHOLD,
                 )
                 logger.info("Priority explainability engine ready")
-        except ImportError as exc:
-            logger.warning("Explainability engine unavailable: %s", exc)
-        except Exception as exc:
-            logger.error("Failed to init explainability engines: %s", exc, exc_info=True)
+            except Exception as exc:
+                logger.error("Failed to init priority explainability engine: %s", exc, exc_info=True)
 
     def explain(self, model_type: str, text: str, subject: str = "",
                 prediction: str = "", confidence: float = 0.0) -> Optional[Dict]:
