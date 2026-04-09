@@ -75,7 +75,8 @@ class FeatureExtractor:
                  max_features: int = 5000,
                  ngram_range: Tuple[int, int] = (1, 2),
                  min_df: int = 2,
-                 max_df: float = 0.95):
+                 max_df: float = 0.95,
+                 use_temporal_features: bool = True):
         """
         Initialize the feature extractor.
         
@@ -84,11 +85,15 @@ class FeatureExtractor:
             ngram_range: Range of n-grams to extract (min, max)
             min_df: Minimum document frequency for terms
             max_df: Maximum document frequency (as proportion)
+            use_temporal_features: If False, exclude time-of-day/day-of-week
+                features.  Set to False for category models where submission
+                time has no semantic relationship to the ticket type.
         """
         self.max_features = max_features
         self.ngram_range = ngram_range
         self.min_df = min_df
         self.max_df = max_df
+        self.use_temporal_features = use_temporal_features
         
         # Will be initialized on fit
         self.tfidf_vectorizer = None
@@ -193,7 +198,15 @@ class FeatureExtractor:
         return features
     
     def _extract_time_features(self, created_at: str) -> Dict[str, Any]:
-        """Extract time-based features from creation timestamp."""
+        """Extract time-based features from creation timestamp.
+        
+        Returns an empty dict when ``use_temporal_features=False`` so that
+        time-of-day noise is excluded from models where it is not meaningful
+        (e.g. category classification).
+        """
+        if not self.use_temporal_features:
+            return {}
+
         features = {
             'hour_of_day': 12,
             'day_of_week': 0,
@@ -492,7 +505,8 @@ class FeatureExtractor:
             'text_length_std': self.text_length_std,
             'word_count_mean': self.word_count_mean,
             'word_count_std': self.word_count_std,
-            'is_fitted': self.is_fitted
+            'is_fitted': self.is_fitted,
+            'use_temporal_features': self.use_temporal_features,
         }
         
         with open(filepath, 'wb') as f:
@@ -510,7 +524,8 @@ class FeatureExtractor:
             max_features=state['max_features'],
             ngram_range=state['ngram_range'],
             min_df=state['min_df'],
-            max_df=state['max_df']
+            max_df=state['max_df'],
+            use_temporal_features=state.get('use_temporal_features', True),  # backward compat
         )
         extractor.tfidf_vectorizer = state['tfidf_vectorizer']
         extractor.feature_names = state['feature_names']

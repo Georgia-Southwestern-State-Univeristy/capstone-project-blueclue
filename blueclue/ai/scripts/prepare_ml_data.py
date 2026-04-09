@@ -222,7 +222,8 @@ def run_pipeline(args):
         max_features=3000,
         ngram_range=(1, 2),
         min_df=2,
-        max_df=0.95
+        max_df=0.95,
+        use_temporal_features=False,  # Time-of-day features add noise to category classification
     )
     
     # Fit on training data only
