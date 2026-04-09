@@ -27,7 +27,8 @@ import {
     clearCache,
     getTicketsByFilter,
     getTicketTrend,
-    getTicketStatusBreakdown
+    getTicketStatusBreakdown,
+    getUserTickets
 } from '../controllers/analyticsController.js';
 import { getTemplateAnalytics } from '../controllers/templateController.js';
 import { authenticateToken } from '../middleware/auth.js';
@@ -241,6 +242,13 @@ router.get('/ticket-trend', getTicketTrend);
  * @access  Staff (technicians, management, admin)
  */
 router.get('/ticket-status-breakdown', getTicketStatusBreakdown);
+
+/**
+ * @route   GET /api/analytics/user-tickets/:userId
+ * @desc    Get recent tickets for a specific user (drill-down from Top Requesters)
+ * @access  Management, Admin
+ */
+router.get('/user-tickets/:userId', getUserTickets);
 
 /**
  * @route   GET /api/analytics/template-usage

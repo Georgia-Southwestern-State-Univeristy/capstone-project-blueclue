@@ -34,12 +34,14 @@ const fmtHours = (h) => {
 }
 
 /* ── Component ── */
-export default function TopRequestersWidget({ onUserClick }) {
+export default function TopRequestersWidget({ onUserClick, onTicketClick }) {
   const [requesters, setRequesters] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [timeRange, setTimeRange] = useState('30d')
   const [expandedUser, setExpandedUser] = useState(null) // user_id or null
+  const [userTickets, setUserTickets] = useState([])
+  const [ticketsLoading, setTicketsLoading] = useState(false)
 
   /* ── Fetch ── */
   const fetchData = useCallback(async () => {
@@ -77,9 +79,30 @@ export default function TopRequestersWidget({ onUserClick }) {
   const handleRowClick = (user) => {
     if (expandedUser === user.user_id) {
       setExpandedUser(null)
+      setUserTickets([])
     } else {
       setExpandedUser(user.user_id)
       if (onUserClick) onUserClick(user)
+    }
+  }
+
+  /* ── Fetch ticket history for a user ── */
+  const fetchUserTickets = async (userId) => {
+    try {
+      setTicketsLoading(true)
+      const token = localStorage.getItem('blueclue_token')
+      const res = await fetch(
+        `${API_BASE_URL}/analytics/user-tickets/${userId}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json()
+      setUserTickets(json.data || [])
+    } catch (err) {
+      console.error('Failed to fetch user tickets:', err)
+      setUserTickets([])
+    } finally {
+      setTicketsLoading(false)
     }
   }
 
@@ -228,7 +251,15 @@ export default function TopRequestersWidget({ onUserClick }) {
                   <div className="flex items-center justify-between pt-1">
                     <span className="text-gray-500">{user.email}</span>
                     <button
-                      onClick={(e) => { e.stopPropagation(); if (onUserClick) onUserClick(user) }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (userTickets.length > 0 && expandedUser === user.user_id) {
+                          setUserTickets([])
+                        } else {
+                          fetchUserTickets(user.user_id)
+                        }
+                        if (onUserClick) onUserClick(user)
+                      }}
                       className="flex items-center gap-1 text-blue-400 hover:text-blue-300 font-medium transition-colors"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -237,9 +268,56 @@ export default function TopRequestersWidget({ onUserClick }) {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                           d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                       </svg>
-                      View Ticket History
+                      {userTickets.length > 0 ? 'Hide Tickets' : 'View Ticket History'}
                     </button>
                   </div>
+
+                  {/* Ticket history list */}
+                  {ticketsLoading && (
+                    <div className="flex items-center justify-center py-3">
+                      <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                      <span className="ml-2 text-gray-400 text-xs">Loading tickets…</span>
+                    </div>
+                  )}
+                  {!ticketsLoading && userTickets.length > 0 && (
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                      {userTickets.map((ticket) => {
+                        const statusColors = {
+                          open: 'text-blue-400',
+                          'in-progress': 'text-yellow-400',
+                          resolved: 'text-green-400',
+                          closed: 'text-gray-400',
+                          cancelled: 'text-red-400',
+                          pending: 'text-orange-400',
+                        }
+                        return (
+                          <div
+                            key={ticket.id}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (onTicketClick) onTicketClick(ticket.id)
+                            }}
+                            className={`flex items-center justify-between p-2 bg-gray-900/50 rounded border border-gray-700/50 text-xs ${onTicketClick ? 'cursor-pointer hover:bg-gray-700/50 hover:border-gray-600' : ''} transition-colors`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <span className="text-gray-500 font-mono flex-shrink-0">
+                                {ticket.ticket_number || `#${ticket.id}`}
+                              </span>
+                              <span className="text-white truncate">{ticket.subject}</span>
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0 ml-2">
+                              <span className={`capitalize ${statusColors[ticket.status] || 'text-gray-400'}`}>
+                                {ticket.status}
+                              </span>
+                              <span className="text-gray-500">
+                                {new Date(ticket.created_at).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
