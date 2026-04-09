@@ -4,6 +4,7 @@
 -- Add notification type for ticket chat requests
 ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'ticket_chat_request';
 ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'ticket_chat_accepted';
+ALTER TYPE notification_type ADD VALUE IF NOT EXISTS 'ticket_chat_message';
 
 -- Ticket chat sessions
 CREATE TABLE IF NOT EXISTS ticket_chats (
