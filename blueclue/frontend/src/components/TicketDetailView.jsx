@@ -109,6 +109,7 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
   // ─── Similar tickets state ───────────────────────────────────
   const [similarTickets, setSimilarTickets] = useState([])
   const [similarLoading, setSimilarLoading] = useState(false)
+  const [drilldownTicketId, setDrilldownTicketId] = useState(null)
 
   // ─── KB article links state ──────────────────────────────────
   const [ticketKBLinks, setTicketKBLinks] = useState([])
@@ -2356,13 +2357,17 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
                             {similarTickets.map(similar => (
                               <div
                                 key={similar.id}
-                                className="bg-gray-900 rounded-lg border border-gray-800 px-3 py-3 space-y-2"
+                                className="bg-gray-900 rounded-lg border border-gray-800 px-3 py-3 space-y-2 cursor-pointer hover:border-blue-600/60 hover:bg-gray-800/60 transition-colors group"
+                                onClick={() => setDrilldownTicketId(similar.id)}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => e.key === 'Enter' && setDrilldownTicketId(similar.id)}
                               >
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <span className="text-gray-500 text-xs font-mono">{similar.ticket_number}</span>
-                                      <span className="text-gray-200 text-sm font-medium truncate">{similar.subject}</span>
+                                      <span className="text-gray-200 text-sm font-medium truncate group-hover:text-blue-300 transition-colors">{similar.subject}</span>
                                     </div>
                                     <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
                                       <span className="capitalize">{(similar.category || '').replace(/_/g, ' ')}</span>
@@ -2374,9 +2379,14 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
                                       )}
                                     </div>
                                   </div>
-                                  <span className="flex-shrink-0 text-xs px-2 py-0.5 rounded bg-green-900/30 text-green-400 border border-green-700/50 capitalize">
-                                    {similar.status}
-                                  </span>
+                                  <div className="flex items-center gap-2 flex-shrink-0">
+                                    <span className="text-xs px-2 py-0.5 rounded bg-green-900/30 text-green-400 border border-green-700/50 capitalize">
+                                      {similar.status}
+                                    </span>
+                                    <svg className="w-3.5 h-3.5 text-gray-600 group-hover:text-blue-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                  </div>
                                 </div>
 
                                 {/* KB articles from the similar ticket */}
@@ -2531,6 +2541,16 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
             </div>
           </div>
         </div>
+      )}
+
+      {/* Drilldown: open a similar resolved ticket in a stacked view */}
+      {drilldownTicketId && (
+        <TicketDetailView
+          ticketId={drilldownTicketId}
+          isOpen={true}
+          onClose={() => setDrilldownTicketId(null)}
+          onTicketUpdated={onTicketUpdated}
+        />
       )}
 
       {/* Resolve with KB Articles Modal */}
