@@ -279,19 +279,28 @@ export const predictResolutionTime = async (text, subject = null, category = nul
     const cached = predictionCache.get(cacheKey, 'time');
     if (cached) return cached;
 
-    if (!circuitBreaker.canRequest()) {
+    const fallback = () => {
         const fallbackHours = { critical: 4, high: 8, medium: 24, low: 48 };
         return { estimated_hours: fallbackHours[priority] || 24, model_version: 'fallback' };
+    };
+
+    if (!circuitBreaker.canRequest()) {
+        return fallback();
     }
 
-    const data = await fetchWithRetry(`${AI_SERVICE_URL}/predict/resolution_time`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, subject, category, priority }),
-    });
+    try {
+        const data = await fetchWithRetry(`${AI_SERVICE_URL}/predict/resolution_time`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, subject, category, priority }),
+        });
 
-    predictionCache.set(cacheKey, 'time', data);
-    return data;
+        predictionCache.set(cacheKey, 'time', data);
+        return data;
+    } catch (err) {
+        console.warn('[aiService] predictResolutionTime – AI service unavailable, using fallback:', err.message);
+        return fallback();
+    }
 };
 
 /**

@@ -115,8 +115,11 @@ router.get('/:ticketId/chat', authenticateToken, async (req, res) => {
             return res.json({ status: 'success', data: null });
         }
 
-        // Only participants can view
-        if (chat.client_id !== req.user.id && chat.tech_id !== req.user.id) {
+        // Only participants (or staff with elevated roles) can view
+        const canView = chat.client_id === req.user.id
+            || chat.tech_id === req.user.id
+            || ['management', 'admin', 'senior_technician'].includes(req.user.role);
+        if (!canView) {
             return res.status(403).json({ status: 'error', message: 'Access denied' });
         }
 
