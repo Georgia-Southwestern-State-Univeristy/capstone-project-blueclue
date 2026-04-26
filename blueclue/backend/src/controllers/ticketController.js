@@ -2356,3 +2356,170 @@ export const overrideCategory = async (req, res) => {
     });
 };
 
+// ============================================================================
+// KNOWLEDGE BASE ARTICLE LINKS
+// ============================================================================
+
+/**
+ * Get KB articles linked to a ticket
+ * GET /api/tickets/:id/kb-links
+ */
+export const getTicketKBLinks = async (req, res) => {
+    const { id } = req.params;
+    if (isNaN(id)) throw new BadRequestError('Invalid ticket ID');
+
+    const ticket = await Ticket.getById(parseInt(id));
+    if (!ticket) throw new NotFoundError('Ticket not found');
+
+    // Customers may only fetch links on their own tickets
+    if (req.user?.role === 'customer' && ticket.customer_id !== req.user.id) {
+        throw new ForbiddenError('Access denied');
+    }
+
+    const result = await pool.query(
+        `SELECT tka.id, tka.article_id, tka.is_resolution_article, tka.linked_at,
+                ka.title, ka.slug, ka.category, ka.excerpt, ka.is_published,
+                u.first_name || ' ' || u.last_name AS linked_by_name
+         FROM ticket_kb_articles tka
+         JOIN knowledge_articles ka ON tka.article_id = ka.id
+         LEFT JOIN users u ON tka.linked_by = u.id
+         WHERE tka.ticket_id = $1 AND ka.deleted_at IS NULL
+         ORDER BY tka.is_resolution_article DESC, tka.linked_at ASC`,
+        [parseInt(id)]
+    );
+
+    res.json({ status: 'success', data: result.rows });
+};
+
+/**
+ * Link one or more KB articles to a ticket
+ * POST /api/tickets/:id/kb-links
+ * Body: { article_ids: number[], is_resolution_article?: boolean }
+ */
+export const addTicketKBLinks = async (req, res) => {
+    const { id } = req.params;
+    const { article_ids, is_resolution_article = false } = req.body;
+
+    if (isNaN(id)) throw new BadRequestError('Invalid ticket ID');
+    if (!Array.isArray(article_ids) || article_ids.length === 0) {
+        throw new BadRequestError('article_ids must be a non-empty array');
+    }
+    if (article_ids.length > 10) {
+        throw new BadRequestError('Cannot link more than 10 articles at once');
+    }
+
+    const ticket = await Ticket.getById(parseInt(id));
+    if (!ticket) throw new NotFoundError('Ticket not found');
+
+    if (!req.user || (!isTechnician(req.user.role) && req.user.role !== 'admin')) {
+        throw new ForbiddenError('Only technicians and management can link KB articles');
+    }
+
+    // Verify all article IDs exist and are published
+    const articleCheck = await pool.query(
+        `SELECT id FROM knowledge_articles WHERE id = ANY($1::int[]) AND deleted_at IS NULL`,
+        [article_ids]
+    );
+    if (articleCheck.rows.length !== article_ids.length) {
+        throw new BadRequestError('One or more article IDs are invalid or deleted');
+    }
+
+    // Upsert links (ignore duplicates)
+    const inserted = [];
+    for (const articleId of article_ids) {
+        const row = await pool.query(
+            `INSERT INTO ticket_kb_articles (ticket_id, article_id, linked_by, is_resolution_article)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (ticket_id, article_id) DO UPDATE
+               SET is_resolution_article = GREATEST(ticket_kb_articles.is_resolution_article, EXCLUDED.is_resolution_article),
+                   linked_at = ticket_kb_articles.linked_at
+             RETURNING *`,
+            [parseInt(id), articleId, req.user.id, is_resolution_article]
+        );
+        inserted.push(row.rows[0]);
+    }
+
+    res.status(201).json({ status: 'success', message: 'Articles linked successfully', data: inserted });
+};
+
+/**
+ * Remove a KB article link from a ticket
+ * DELETE /api/tickets/:id/kb-links/:articleId
+ */
+export const removeTicketKBLink = async (req, res) => {
+    const { id, articleId } = req.params;
+    if (isNaN(id) || isNaN(articleId)) throw new BadRequestError('Invalid ID');
+
+    if (!req.user || (!isTechnician(req.user.role) && req.user.role !== 'admin')) {
+        throw new ForbiddenError('Only technicians and management can remove KB article links');
+    }
+
+    const result = await pool.query(
+        `DELETE FROM ticket_kb_articles WHERE ticket_id = $1 AND article_id = $2 RETURNING id`,
+        [parseInt(id), parseInt(articleId)]
+    );
+
+    if (result.rows.length === 0) {
+        throw new NotFoundError('Article link not found');
+    }
+
+    res.json({ status: 'success', message: 'Article link removed' });
+};
+
+/**
+ * Find similar resolved/closed tickets based on full-text search
+ * GET /api/tickets/:id/similar
+ */
+export const getSimilarTickets = async (req, res) => {
+    const { id } = req.params;
+    const limit = Math.min(parseInt(req.query.limit) || 5, 10);
+
+    if (isNaN(id)) throw new BadRequestError('Invalid ticket ID');
+
+    const ticket = await Ticket.getById(parseInt(id));
+    if (!ticket) throw new NotFoundError('Ticket not found');
+
+    if (!req.user) throw new ForbiddenError('Authentication required');
+
+    // Build search query from ticket subject and description
+    const searchText = `${ticket.subject} ${ticket.description || ''}`.trim();
+    if (!searchText) return res.json({ status: 'success', data: [] });
+
+    // Use PostgreSQL full-text search to find resolved/closed tickets with similar content
+    const result = await pool.query(
+        `SELECT
+            t.id, t.ticket_number, t.subject, t.category, t.status,
+            t.resolved_at,
+            c.first_name || ' ' || c.last_name AS customer_name,
+            ts_rank(
+                to_tsvector('english', t.subject || ' ' || COALESCE(t.description, '')),
+                plainto_tsquery('english', $1)
+            ) AS relevance,
+            COALESCE(
+                (
+                    SELECT json_agg(json_build_object(
+                        'id',       ka.id,
+                        'title',    ka.title,
+                        'slug',     ka.slug,
+                        'excerpt',  ka.excerpt
+                    ) ORDER BY tka.is_resolution_article DESC, tka.linked_at ASC)
+                    FROM ticket_kb_articles tka
+                    JOIN knowledge_articles ka ON tka.article_id = ka.id
+                    WHERE tka.ticket_id = t.id AND ka.deleted_at IS NULL AND ka.is_published = true
+                ), '[]'::json
+            ) AS kb_articles
+         FROM tickets t
+         JOIN users c ON t.customer_id = c.id
+         WHERE t.status IN ('resolved', 'closed')
+           AND t.id != $2
+           AND t.deleted_at IS NULL
+           AND to_tsvector('english', t.subject || ' ' || COALESCE(t.description, ''))
+               @@ plainto_tsquery('english', $1)
+         ORDER BY relevance DESC
+         LIMIT $3`,
+        [searchText, parseInt(id), limit]
+    );
+
+    res.json({ status: 'success', data: result.rows });
+};
+

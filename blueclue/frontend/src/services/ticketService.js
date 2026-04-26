@@ -760,6 +760,84 @@ export const sendTicketChatMessage = async (ticketId, chatId, message) => {
   return await handleResponse(response, 'Failed to send message');
 };
 
+// ── Knowledge Base Article Links ─────────────────────────────────────────────
+
+/**
+ * Get KB articles linked to a ticket
+ * @param {number|string} ticketId
+ * @returns {Promise<Object>} { status, data: [] }
+ */
+export const getTicketKBLinks = async (ticketId) => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/kb-links`, {
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to fetch KB links');
+  } catch (error) {
+    console.error('Get ticket KB links error:', error);
+    throw new Error(getUserFriendlyMessage(error, 'Failed to load linked articles.'));
+  }
+};
+
+/**
+ * Link KB articles to a ticket
+ * @param {number|string} ticketId
+ * @param {number[]} articleIds
+ * @param {boolean} isResolutionArticle - true when linking during resolution
+ * @returns {Promise<Object>}
+ */
+export const addTicketKBLinks = async (ticketId, articleIds, isResolutionArticle = false) => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/kb-links`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ article_ids: articleIds, is_resolution_article: isResolutionArticle }),
+    });
+    return await handleResponse(response, 'Failed to link KB articles');
+  } catch (error) {
+    console.error('Add ticket KB links error:', error);
+    throw new Error(getUserFriendlyMessage(error, 'Failed to link articles. Please try again.'));
+  }
+};
+
+/**
+ * Remove a KB article link from a ticket
+ * @param {number|string} ticketId
+ * @param {number|string} articleId
+ * @returns {Promise<Object>}
+ */
+export const removeTicketKBLink = async (ticketId, articleId) => {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE_URL}/tickets/${ticketId}/kb-links/${articleId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response, 'Failed to remove KB link');
+  } catch (error) {
+    console.error('Remove ticket KB link error:', error);
+    throw new Error(getUserFriendlyMessage(error, 'Failed to remove article link. Please try again.'));
+  }
+};
+
+/**
+ * Find similar resolved/closed tickets based on full-text similarity
+ * @param {number|string} ticketId - The current ticket ID (excluded from results)
+ * @param {number} limit - Max results (default 5)
+ * @returns {Promise<Object>} { status, data: [] }
+ */
+export const getSimilarTickets = async (ticketId, limit = 5) => {
+  try {
+    const response = await fetchWithTimeout(
+      `${API_BASE_URL}/tickets/${ticketId}/similar?limit=${limit}`,
+      { headers: getAuthHeaders() }
+    );
+    return await handleResponse(response, 'Failed to fetch similar tickets');
+  } catch (error) {
+    console.error('Get similar tickets error:', error);
+    throw new Error(getUserFriendlyMessage(error, 'Failed to load similar tickets.'));
+  }
+};
+
 export default {
   createTicket,
   getAllTickets,
@@ -796,4 +874,8 @@ export default {
   closeTicketChat,
   getTicketChatMessages,
   sendTicketChatMessage,
+  getTicketKBLinks,
+  addTicketKBLinks,
+  removeTicketKBLink,
+  getSimilarTickets,
 };

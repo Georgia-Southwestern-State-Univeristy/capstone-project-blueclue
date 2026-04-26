@@ -18,7 +18,11 @@ import {
     getTicketHistory,
     cancelTicket,
     reopenTicket,
-    overrideCategory
+    overrideCategory,
+    getTicketKBLinks,
+    addTicketKBLinks,
+    removeTicketKBLink,
+    getSimilarTickets
 } from '../controllers/ticketController.js';
 import {
     addCollaborator,
@@ -257,6 +261,34 @@ router.delete('/:id', authenticateToken, checkPrivilege('CAN_DELETE_TICKETS'), d
  * @access  Private (technician, senior_technician, management)
  */
 router.patch('/:id/override-category', authenticateToken, overrideCategory);
+
+/**
+ * @route   GET /api/tickets/:id/similar
+ * @desc    Find similar resolved/closed tickets using full-text search
+ * @access  Private (authenticated staff)
+ */
+router.get('/:id/similar', authenticateToken, getSimilarTickets);
+
+/**
+ * @route   GET /api/tickets/:id/kb-links
+ * @desc    Get KB articles linked to a ticket
+ * @access  Private (authenticated users — customers see only their own ticket)
+ */
+router.get('/:id/kb-links', authenticateToken, getTicketKBLinks);
+
+/**
+ * @route   POST /api/tickets/:id/kb-links
+ * @desc    Link KB articles to a ticket (e.g. when resolving)
+ * @access  Private (technicians and management)
+ */
+router.post('/:id/kb-links', authenticateToken, addTicketKBLinks);
+
+/**
+ * @route   DELETE /api/tickets/:id/kb-links/:articleId
+ * @desc    Remove a KB article link from a ticket
+ * @access  Private (technicians and management)
+ */
+router.delete('/:id/kb-links/:articleId', authenticateToken, removeTicketKBLink);
 
 /**
  * @route   PATCH /api/tickets/:id/restore
