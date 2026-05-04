@@ -1,0 +1,37 @@
+{
+  "model_name": "Logistic Regression",
+  "model_key": "logistic",
+  "version": "v1_20260408",
+  "task": "priority_classification",
+  "training_date": "2026-04-08T19:18:48.889376",
+  "training_samples": 2298,
+  "test_samples": 500,
+  "priorities": [
+    "low",
+    "medium",
+    "high",
+    "critical"
+  ],
+  "n_features": 2021,
+  "metrics": {
+    "accuracy": 0.764,
+    "f1_macro": 0.6931750752854473,
+    "f1_weighted": 0.7527329206169066,
+    "precision_macro": 0.7496814191058796,
+    "recall_macro": 0.6814987393595682,
+    "false_high_rate": 0.0857,
+    "false_high_count": 27,
+    "false_high_denominator": 315
+  },
+  "inference_time_ms": 0.05656003952026367,
+  "hyperparameters": {
+    "C": 1.0,
+    "class_weight": null
+  },
+  "random_seed": 42,
+  "notes": [
+    "Trained on 2298 samples",
+    "Handles imbalanced priority classes",
+    "Model type: Logistic Regression"
+  ]
+}

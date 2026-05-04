@@ -98,8 +98,8 @@ Browser
 
 | Service | Language / Framework | Responsibility |
 |---|---|---|
-| **Frontend** | React 18 + Vite + Tailwind | All UI: ticket forms, dashboards, chat widget, admin panels |
-| **Backend** | Node.js 20 + Express | REST API, auth, business logic, Socket.IO, email queue, cron jobs |
+| **Frontend** | React 19 + Vite + Tailwind | All UI: ticket forms, dashboards, chat widget, admin panels |
+| **Backend** | Node.js 20 + Express 5 | REST API, auth, business logic, Socket.IO, email queue, cron jobs |
 | **ML Service** | Python 3.12 + FastAPI | Ticket classification, SHAP explanations, resolution-time prediction |
 | **Database** | PostgreSQL 14+ | All persistent data; pgvector extension for KB embeddings |
 
@@ -164,10 +164,23 @@ cd blueclue/database
 
 The script:
 1. Drops and recreates the `blueclue` database
-2. Applies `schema.sql` (tables, ENUMs, indexes, triggers, pgvector extension)
-3. Runs `auth_setup.sql` (roles, RLS policies)
-4. Seeds three default technician accounts (`tnewc`, `cmcgo`, `jwill`) with password `admin123`
-5. Loads `sample_data.sql` (categories, KB articles, demo customers)
+2. Applies `schema.sql` (tables, ENUMs, indexes, triggers)
+3. Applies `auth_setup.sql` (RBAC system, refresh tokens table, 7 staff accounts — all with password `admin123`, force-change on first login)
+4. Applies all feature migrations (themes, pgvector/RAG, chat, attachments, ML monitoring, etc.)
+5. Loads `seed.sql` (sample customer accounts with password `BlueClue2026!`)
+6. Prompts to optionally reset the admin password and create a `manager@blueclue.com` account
+
+Accounts created by `auth_setup.sql`:
+
+| Username | Email | Role |
+|---|---|---|
+| `tnewc` | tnewc@blueclue.com | technician |
+| `cmcgo` | cmcgo@blueclue.com | technician |
+| `jwill` | jwill@blueclue.com | technician |
+| `mjohnson` | mjohnson@blueclue.com | senior_technician |
+| `ebrown` | ebrown@blueclue.com | senior_technician |
+| `jdoe` | jdoe@blueclue.com | management |
+| `ssmith` | ssmith@blueclue.com | management |
 
 **Verify:**
 ```bash
@@ -481,11 +494,14 @@ For a full step-by-step walkthrough see [`blueclue/docs/setup/RAILWAY_DEPLOYMENT
 
 Default credentials for testing:
 
-| Role | Username / Email | Password |
-|---|---|---|
-| Technician | `tnewc`, `cmcgo`, `jwill` | `admin123` |
-| Customer | `customer@example.com` | `password123` |
-| Guest | — | No login required |
+| Role | Email | Password | Notes |
+|---|---|---|---|
+| Technician | `tnewc@blueclue.com`, `cmcgo@blueclue.com`, `jwill@blueclue.com` | `admin123` | Must change password on first login |
+| Senior Technician | `mjohnson@blueclue.com`, `ebrown@blueclue.com` | `admin123` | Must change password on first login |
+| Management | `jdoe@blueclue.com`, `ssmith@blueclue.com` | `admin123` | Must change password on first login |
+| Customer (sample) | `mike.chen@startupxyz.io`, `emily.rodriguez@freelance.net` | `BlueClue2026!` | From seed.sql |
+| Admin | `admin@blueclue.com` | `BlueClue2026!` | Only if you chose yes at the SETUP.ps1 admin-reset prompt |
+| Guest | — | No login required | — |
 
 ---
 
@@ -694,4 +710,4 @@ Ensure `FRONTEND_URL` in `backend/.env` exactly matches the browser origin (incl
 
 **Repository:** [Georgia-Southwestern-State-Univeristy/capstone-project-blueclue](https://github.com/Georgia-Southwestern-State-Univeristy/capstone-project-blueclue)
 
-**Last updated:** April 3, 2026
+**Last updated:** May 3, 2026

@@ -1448,6 +1448,12 @@ export const getTicketsByFilter = async (req, res) => {
             paramIndex++;
         }
         
+        if (req.query.customerId) {
+            filters += ` AND t.customer_id = $${paramIndex}`;
+            params.push(parseInt(req.query.customerId));
+            paramIndex++;
+        }
+        
         if (slaBreach === 'true') {
             filters += ` AND ((t.response_due_at IS NOT NULL AND t.first_response_at > t.response_due_at) 
                 OR (t.resolution_due_at IS NOT NULL AND t.resolved_at > t.resolution_due_at)
@@ -1570,6 +1576,37 @@ export const getTicketTrend = async (req, res) => {
     range,
     bucket,
   });
+};
+
+/**
+ * GET /api/analytics/user-tickets/:userId
+ * Returns recent tickets for a specific user (for drill-down from Top Requesters widget)
+ */
+export const getUserTickets = async (req, res) => {
+  const userId = parseInt(req.params.userId);
+  if (!userId || isNaN(userId)) {
+    return res.status(400).json({ status: 'error', message: 'Invalid user ID' });
+  }
+
+  const result = await pool.query(`
+    SELECT
+      t.id,
+      t.ticket_number,
+      t.subject,
+      t.category,
+      t.priority,
+      t.status,
+      t.created_at,
+      t.resolved_at,
+      CONCAT(a.first_name, ' ', a.last_name) AS assigned_to_name
+    FROM tickets t
+    LEFT JOIN users a ON t.assigned_to = a.id
+    WHERE t.customer_id = $1 AND t.deleted_at IS NULL
+    ORDER BY t.created_at DESC
+    LIMIT 25
+  `, [userId]);
+
+  res.json({ status: 'success', data: result.rows });
 };
 
 /**

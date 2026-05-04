@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BlueClue — Machine Learning Overview</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      background: #f4f6f9; color: #1e2533;
+      padding: 40px 32px 60px;
+      min-height: 100vh;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      max-width: 960px; margin: 0 auto 48px;
+      background: #fff; border-radius: 18px;
+      border: 2px solid #e0e6f0;
+      padding: 48px 56px;
+      display: flex; align-items: center; gap: 48px;
+      box-shadow: 0 4px 24px rgba(74,144,217,.08);
+    }
+    .hero-text { flex: 1; }
+    .hero-eyebrow {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; color: #4a90d9; margin-bottom: 12px;
+    }
+    .hero-title {
+      font-size: 2.4rem; font-weight: 900; line-height: 1.15;
+      color: #1e2533; margin-bottom: 16px; letter-spacing: -1px;
+    }
+    .hero-title span { color: #4a90d9; }
+    .hero-sub {
+      font-size: 0.88rem; color: #6b7a99; line-height: 1.7; max-width: 480px;
+    }
+    .hero-badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+    .badge {
+      border-radius: 20px; padding: 5px 14px; font-size: 0.65rem;
+      font-weight: 700; letter-spacing: 0.4px;
+    }
+    .badge.purple { background: #ecdff8; color: #6c3483; border: 1px solid #9b59b6; }
+    .badge.orange { background: #fdecd5; color: #a04000; border: 1px solid #e67e22; }
+    .badge.amber  { background: #fef5d5; color: #7d6608; border: 1px solid #d4ac0d; }
+    .badge.green  { background: #d5f5e3; color: #1a6b3a; border: 1px solid #27ae60; }
+    .badge.pink   { background: #fddde6; color: #a0233f; border: 1px solid #e74c6f; }
+    .badge.blue   { background: #daeeff; color: #1a5fa8; border: 1px solid #4a90d9; }
+    .badge.teal   { background: #d0f0ea; color: #0e6655; border: 1px solid #17a589; }
+
+    .hero-visual {
+      flex-shrink: 0; width: 220px; height: 220px;
+      background: linear-gradient(135deg, #ecdff8 0%, #daeeff 50%, #d5f5e3 100%);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      border: 3px solid #e0e6f0; position: relative; overflow: hidden;
+    }
+    .hero-visual-inner {
+      text-align: center;
+    }
+    .hero-visual-label {
+      font-size: 0.7rem; font-weight: 800; color: #1a5fa8;
+      text-transform: uppercase; letter-spacing: 1.5px; line-height: 1.5;
+    }
+    .hero-visual-num {
+      font-size: 3.2rem; font-weight: 900; color: #9b59b6;
+      line-height: 1; display: block; margin: 4px 0;
+    }
+    .hero-visual-sub {
+      font-size: 0.62rem; color: #6c3483; font-weight: 700; letter-spacing: 1px;
+    }
+
+    /* ── Section title ── */
+    .sec-title {
+      max-width: 960px; margin: 0 auto 18px;
+      font-size: 0.68rem; font-weight: 800; letter-spacing: 2px;
+      text-transform: uppercase; color: #6b7a99;
+      padding-left: 4px; border-left: 3px solid #9b59b6; padding-left: 10px;
+    }
+
+    /* ── Card grid ── */
+    .grid { max-width: 960px; margin: 0 auto 40px; display: grid; gap: 16px; }
+    .g3 { grid-template-columns: repeat(3, 1fr); }
+    .g4 { grid-template-columns: repeat(4, 1fr); }
+    .g2 { grid-template-columns: repeat(2, 1fr); }
+
+    .card {
+      background: #fff; border-radius: 14px; overflow: hidden;
+      border: 2px solid #e0e6f0;
+      box-shadow: 0 2px 10px rgba(0,0,0,.04);
+    }
+    .card-hd {
+      padding: 10px 16px; font-size: 0.7rem; font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+    .card-bd { padding: 14px 16px; }
+
+    /* Card colour themes */
+    .card.purple { border-color: #9b59b6; }
+    .card.purple .card-hd { background: #e0cdf5; color: #6c3483; border-bottom: 1px solid #d0b8ef; }
+
+    .card.orange { border-color: #e67e22; }
+    .card.orange .card-hd { background: #fad9b0; color: #a04000; border-bottom: 1px solid #f5c690; }
+
+    .card.amber { border-color: #d4ac0d; }
+    .card.amber .card-hd { background: #f9e79f; color: #7d6608; border-bottom: 1px solid #e8d07a; }
+
+    .card.green { border-color: #27ae60; }
+    .card.green .card-hd { background: #b8eacb; color: #1a6b3a; border-bottom: 1px solid #a0d8b5; }
+
+    .card.pink { border-color: #e74c6f; }
+    .card.pink .card-hd { background: #fac8d5; color: #a0233f; border-bottom: 1px solid #f5b0c5; }
+
+    .card.blue { border-color: #4a90d9; }
+    .card.blue .card-hd { background: #c2e0f8; color: #1a5fa8; border-bottom: 1px solid #a8d0ef; }
+
+    /* Row item inside card */
+    .row-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 8px 0; border-bottom: 1px solid #f0f2f6;
+    }
+    .row-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .ri-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      flex-shrink: 0; margin-top: 4px;
+    }
+    .ri-body .ri-n { font-size: 0.68rem; font-weight: 700; color: #1e2533; }
+    .ri-body .ri-d { font-size: 0.6rem; color: #6b7a99; margin-top: 2px; line-height: 1.5; }
+
+    .purple .ri-dot { background: #9b59b6; }
+    .orange .ri-dot { background: #e67e22; }
+    .amber  .ri-dot { background: #d4ac0d; }
+    .green  .ri-dot { background: #27ae60; }
+    .pink   .ri-dot { background: #e74c6f; }
+    .blue   .ri-dot { background: #4a90d9; }
+
+    /* Metric stat box */
+    .stat-grid {
+      max-width: 960px; margin: 0 auto 40px;
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;
+    }
+    .stat {
+      background: #fff; border-radius: 14px; padding: 20px 16px;
+      text-align: center; border: 2px solid #e0e6f0;
+      box-shadow: 0 2px 10px rgba(0,0,0,.04);
+    }
+    .stat .sv { font-size: 2rem; font-weight: 900; line-height: 1; margin-bottom: 6px; }
+    .stat .sl { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #6b7a99; }
+    .stat .sd { font-size: 0.58rem; color: #a0aab8; margin-top: 4px; line-height: 1.4; }
+
+    .stat.purple { border-color: #9b59b6; }
+    .stat.purple .sv { color: #6c3483; }
+    .stat.orange { border-color: #e67e22; }
+    .stat.orange .sv { color: #a04000; }
+    .stat.amber  { border-color: #d4ac0d; }
+    .stat.amber  .sv { color: #7d6608; }
+    .stat.green  { border-color: #27ae60; }
+    .stat.green  .sv { color: #1a6b3a; }
+    .stat.blue   { border-color: #4a90d9; }
+    .stat.blue   .sv { color: #1a5fa8; }
+
+    /* Pipeline flow strip */
+    .pipeline {
+      max-width: 960px; margin: 0 auto 40px;
+      display: flex; align-items: stretch; gap: 0;
+    }
+    .pipe-step {
+      flex: 1; background: #fff; border: 2px solid #e0e6f0;
+      border-radius: 12px; padding: 18px 16px; text-align: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,.04); position: relative;
+    }
+    .pipe-step:not(:last-child)::after {
+      content: '▶'; position: absolute; right: -14px; top: 50%;
+      transform: translateY(-50%); font-size: 0.8rem; color: #6b7a99;
+      z-index: 2; background: #f4f6f9; padding: 0 3px;
+    }
+    .pipe-step + .pipe-step { margin-left: 12px; }
+    .pipe-step .ps-num {
+      display: inline-block; width: 24px; height: 24px; border-radius: 50%;
+      font-size: 0.65rem; font-weight: 800; line-height: 24px;
+      margin-bottom: 8px;
+    }
+    .pipe-step .ps-n { font-size: 0.7rem; font-weight: 800; color: #1e2533; margin-bottom: 5px; }
+    .pipe-step .ps-d { font-size: 0.58rem; color: #6b7a99; line-height: 1.5; }
+
+    .pipe-step.purple { border-color: #9b59b6; }
+    .pipe-step.purple .ps-num { background: #e0cdf5; color: #6c3483; }
+    .pipe-step.orange { border-color: #e67e22; }
+    .pipe-step.orange .ps-num { background: #fad9b0; color: #a04000; }
+    .pipe-step.amber  { border-color: #d4ac0d; }
+    .pipe-step.amber  .ps-num { background: #f9e79f; color: #7d6608; }
+    .pipe-step.green  { border-color: #27ae60; }
+    .pipe-step.green  .ps-num { background: #b8eacb; color: #1a6b3a; }
+    .pipe-step.pink   { border-color: #e74c6f; }
+    .pipe-step.pink   .ps-num { background: #fac8d5; color: #a0233f; }
+
+    /* Footer note */
+    .footnote {
+      max-width: 960px; margin: 0 auto;
+      text-align: center; font-size: 0.62rem; color: #a0aab8;
+      border-top: 1px solid #e0e6f0; padding-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ══ HERO ══════════════════════════════════════════════════ -->
+  <div class="hero">
+    <div class="hero-text">
+      <div class="hero-eyebrow">BlueClue · Machine Learning Component</div>
+      <h1 class="hero-title">Automated Ticket<br><span>Classification</span></h1>
+      <p class="hero-sub">
+        BlueClue's ML service automatically classifies incoming IT support tickets
+        by category, determines priority, and predicts estimated resolution time —
+        reducing manual triage effort and improving response consistency.
+      </p>
+      <div class="hero-badge-row">
+        <span class="badge purple">scikit-learn</span>
+        <span class="badge orange">TF-IDF</span>
+        <span class="badge green">FastAPI</span>
+        <span class="badge amber">Random Forest</span>
+        <span class="badge pink">SVM</span>
+        <span class="badge blue">Python 3.11</span>
+        <span class="badge teal">spaCy NLP</span>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="hero-visual-inner">
+        <div class="hero-visual-label">Ticket<br>Categories</div>
+        <span class="hero-visual-num">8</span>
+        <div class="hero-visual-sub">ML Models · v3</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ KEY METRICS ══════════════════════════════════════════ -->
+  <div class="sec-title">Key Metrics</div>
+  <div class="stat-grid">
+    <div class="stat purple">
+      <div class="sv">8</div>
+      <div class="sl">Categories</div>
+      <div class="sd">Hardware · Software · Network · Access · Email · Database · Security · General</div>
+    </div>
+    <div class="stat orange">
+      <div class="sv">5k</div>
+      <div class="sl">TF-IDF Features</div>
+      <div class="sd">1–2 gram range · min_df 2 · max_df 0.95</div>
+    </div>
+    <div class="stat amber">
+      <div class="sv">0.60</div>
+      <div class="sl">Conf. Threshold</div>
+      <div class="sd">ML result used above 0.60 · keyword fallback below</div>
+    </div>
+    <div class="stat green">
+      <div class="sv">3</div>
+      <div class="sl">Trained Models</div>
+      <div class="sd">Category · Priority · Resolution Time</div>
+    </div>
+    <div class="stat blue">
+      <div class="sv">1h</div>
+      <div class="sl">Cache TTL</div>
+      <div class="sd">LRU cache · 1 024 entries · SHA-256 key</div>
+    </div>
+  </div>
+
+  <!-- ══ PIPELINE FLOW ════════════════════════════════════════ -->
+  <div class="sec-title">Classification Pipeline</div>
+  <div class="pipeline">
+    <div class="pipe-step purple">
+      <div class="ps-num">1</div>
+      <div class="ps-n">Receive Ticket</div>
+      <div class="ps-d">POST /classify from backend<br>subject + description text</div>
+    </div>
+    <div class="pipe-step orange">
+      <div class="ps-num">2</div>
+      <div class="ps-n">Preprocess</div>
+      <div class="ps-d">Tokenise · lowercase<br>lemmatise via spaCy<br>stop-word removal</div>
+    </div>
+    <div class="pipe-step orange">
+      <div class="ps-num">3</div>
+      <div class="ps-n">Extract Features</div>
+      <div class="ps-d">TF-IDF vectorise<br>urgency signals<br>metadata features</div>
+    </div>
+    <div class="pipe-step purple">
+      <div class="ps-num">4</div>
+      <div class="ps-n">Ensemble Classify</div>
+      <div class="ps-d">ML model + keyword rules<br>confidence-gated decision</div>
+    </div>
+    <div class="pipe-step pink">
+      <div class="ps-num">5</div>
+      <div class="ps-n">Return Result</div>
+      <div class="ps-d">category · priority<br>confidence · estimated_hours</div>
+    </div>
+  </div>
+
+  <!-- ══ COMPONENT CARDS ══════════════════════════════════════ -->
+  <div class="sec-title">Core Components</div>
+  <div class="grid g3">
+
+    <div class="card purple">
+      <div class="card-hd">Classification Models · src/</div>
+      <div class="card-bd">
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body">
+            <div class="ri-n">TicketClassifier</div>
+            <div class="ri-d">Keyword + spaCy NLP · weighted rule engine · always runs as baseline</div>
+          </div>
+        </div>
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body">
+            <div class="ri-n">MLCategoryClassifier</div>
+            <div class="ri-d">sklearn pipeline · Random Forest or SVM · softmax confidence scores</div>
+          </div>
+        </div>
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body">
+            <div class="ri-n">Priority Model</div>
+            <div class="ri-d">Multi-class: Low / Medium / High / Critical</div>
+          </div>
+        </div>
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body">
+            <div class="ri-n">Resolution Time Regressor</div>
+            <div class="ri-d">RF / GBT / Ridge / SVR · outputs estimated hours</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card orange">
+      <div class="card-hd">Feature Engineering · ml/</div>
+      <div class="card-bd">
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body">
+            <div class="ri-n">Preprocessor</div>
+            <div class="ri-d">Tokenise · lowercase · stop-words · spaCy lemmatise</div>
+          </div>
+        </div>
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body">
+            <div class="ri-n">TF-IDF Vectoriser</div>
+            <div class="ri-d">5 000 features · 1–2 grams · fitted on training corpus</div>
+          </div>
+        </div>
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body">
+            <div class="ri-n">Urgency Signals</div>
+            <div class="ri-d">Keyword flags: "urgent", "down", "crash", "critical"</div>
+          </div>
+        </div>
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body">
+            <div class="ri-n">Metadata Features</div>
+            <div class="ri-d">Ticket length · caps ratio · punctuation density · IT-term count</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card green">
+      <div class="card-hd">Model Operations · src/</div>
+      <div class="card-bd">
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body">
+            <div class="ri-n">ModelRegistry</div>
+            <div class="ri-d">Versioned .pkl loads · hot-reload without restart · model_card JSON</div>
+          </div>
+        </div>
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body">
+            <div class="ri-n">DriftDetector</div>
+            <div class="ri-d">KS-test / PSI vs training distribution · alerts on drift</div>
+          </div>
+        </div>
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body">
+            <div class="ri-n">Explainability (SHAP)</div>
+            <div class="ri-d">Per-prediction feature importance · human-readable reasoning</div>
+          </div>
+        </div>
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body">
+            <div class="ri-n">LRU Cache</div>
+            <div class="ri-d">1 024 entries · TTL 1 h · SHA-256 key · skips re-classification</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══ MODEL ARTEFACTS + TRAINING ══════════════════════════ -->
+  <div class="grid g2">
+
+    <div class="card amber">
+      <div class="card-hd">Model Artefacts · models/</div>
+      <div class="card-bd">
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body"><div class="ri-n">category_model.pkl</div><div class="ri-d">8-class category classifier · v3 · Random Forest or SVM</div></div>
+        </div>
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body"><div class="ri-n">priority_model.pkl</div><div class="ri-d">4-class priority pipeline · RandomForest / LogisticRegression</div></div>
+        </div>
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body"><div class="ri-n">time_model.pkl</div><div class="ri-d">Resolution-time regressor · GBT / Ridge / SVR / RF</div></div>
+        </div>
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body"><div class="ri-n">feature_extractor.pkl</div><div class="ri-d">Fitted TF-IDF vectoriser + scalers · shared across all models</div></div>
+        </div>
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body"><div class="ri-n">model_card_v*.json</div><div class="ri-d">Accuracy · F1 · RMSE per version · model registry metadata</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card pink">
+      <div class="card-hd">Offline Training Pipeline · ml/ + scripts/</div>
+      <div class="card-bd">
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body"><div class="ri-n">1. Data Ingestion</div><div class="ri-d">DataLoader · raw CSV / DB tickets · EDA · DataExporter</div></div>
+        </div>
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body"><div class="ri-n">2. Augmentation</div><div class="ri-d">SyntheticDataGenerator · minority-class oversampling · paraphrase variants</div></div>
+        </div>
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body"><div class="ri-n">3. Splitting</div><div class="ri-d">Stratified 70/15/15 train / val / test · reproducible seed · class-balanced</div></div>
+        </div>
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body"><div class="ri-n">4. Training &amp; Tuning</div><div class="ri-d">train_category_model.py · train_priority_model.py · GridSearchCV</div></div>
+        </div>
+        <div class="row-item">
+          <div class="ri-dot"></div>
+          <div class="ri-body"><div class="ri-n">5. Evaluation</div><div class="ri-d">accuracy · precision · recall · F1 · confusion matrix · RMSE</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footnote">
+    BlueClue Machine Learning Component &nbsp;·&nbsp; FastAPI Port 5000 &nbsp;·&nbsp; scikit-learn · spaCy · Python 3.11 &nbsp;·&nbsp; v3 Models
+  </div>
+
+</body>
+</html>

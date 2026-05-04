@@ -279,19 +279,28 @@ export const predictResolutionTime = async (text, subject = null, category = nul
     const cached = predictionCache.get(cacheKey, 'time');
     if (cached) return cached;
 
-    if (!circuitBreaker.canRequest()) {
+    const fallback = () => {
         const fallbackHours = { critical: 4, high: 8, medium: 24, low: 48 };
         return { estimated_hours: fallbackHours[priority] || 24, model_version: 'fallback' };
+    };
+
+    if (!circuitBreaker.canRequest()) {
+        return fallback();
     }
 
-    const data = await fetchWithRetry(`${AI_SERVICE_URL}/predict/resolution_time`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, subject, category, priority }),
-    });
+    try {
+        const data = await fetchWithRetry(`${AI_SERVICE_URL}/predict/resolution_time`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, subject, category, priority }),
+        });
 
-    predictionCache.set(cacheKey, 'time', data);
-    return data;
+        predictionCache.set(cacheKey, 'time', data);
+        return data;
+    } catch (err) {
+        console.warn('[aiService] predictResolutionTime – AI service unavailable, using fallback:', err.message);
+        return fallback();
+    }
 };
 
 /**
@@ -375,8 +384,8 @@ export const classifyTicketWithFallback = async (text, fallbackValues = {}) => {
             fallbackUsed: classification.fallback_used || false,
             modelVersions: classification.model_versions || {},
             lowConfidence: classification.low_confidence || false,
-            category_keywords: [],   // ML models don't use keyword matching
-            priority_keywords: [],
+            category_keywords: (classification.category_top_features || []).map(f => f.feature).filter(Boolean),
+            priority_keywords: (classification.priority_top_features || []).map(f => f.feature).filter(Boolean),
         };
     } catch (error) {
         console.warn('[aiService] ML classification failed, using fallback:', error.message);

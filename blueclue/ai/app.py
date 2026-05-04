@@ -44,6 +44,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(BASE_DIR, "src"))
 sys.path.insert(0, BASE_DIR)
 
+# Keyword-based classifier (lower-priority fallback when ML confidence is low)
+try:
+    from src.classifier import TicketClassifier as _TicketClassifier
+except ImportError:
+    _TicketClassifier = None
+
 # --------------------------------------------------------------------------- #
 # Logging
 # --------------------------------------------------------------------------- #
@@ -280,7 +286,10 @@ class ModelManager:
     def load_category_model(self):
         try:
             model_path = os.path.join(MODELS_DIR, "category_classifier_latest.pkl")
-            extractor_path = os.path.join(FEATURES_DIR, "feature_extractor.pkl")
+            # Prefer extractor in models/ (committed, deployed); fall back to data/features/
+            extractor_path = os.path.join(MODELS_DIR, "category_feature_extractor_latest.pkl")
+            if not os.path.exists(extractor_path):
+                extractor_path = os.path.join(FEATURES_DIR, "feature_extractor.pkl")
 
             if not os.path.exists(model_path):
                 logger.warning("Category model not found at %s", model_path)
@@ -596,6 +605,13 @@ models = ModelManager()
 cache = TTLCache(max_size=CACHE_MAX_SIZE, ttl_seconds=CACHE_TTL_SECONDS)
 START_TIME = time.time()
 
+# Shared keyword-rule classifier used as a low-confidence safety net
+try:
+    keyword_classifier = _TicketClassifier(use_spacy=False) if _TicketClassifier else None
+except Exception as _kc_err:
+    logger.warning("TicketClassifier init failed (hybrid fallback disabled): %s", _kc_err)
+    keyword_classifier = None
+
 
 # --------------------------------------------------------------------------- #
 # Metrics collector
@@ -684,7 +700,12 @@ class ExplainabilityManager:
     def init(self, model_manager: "ModelManager"):
         try:
             from src.explainability import ExplainabilityEngine
-            if model_manager._loaded.get("category"):
+        except ImportError as exc:
+            logger.warning("Explainability engine unavailable: %s", exc)
+            return
+
+        if model_manager._loaded.get("category"):
+            try:
                 self._engines["category"] = ExplainabilityEngine(
                     model_manager.category_model,
                     model_manager.category_extractor,
@@ -692,7 +713,11 @@ class ExplainabilityManager:
                     confidence_threshold=CONFIDENCE_THRESHOLD,
                 )
                 logger.info("Category explainability engine ready")
-            if model_manager._loaded.get("priority"):
+            except Exception as exc:
+                logger.error("Failed to init category explainability engine: %s", exc, exc_info=True)
+
+        if model_manager._loaded.get("priority"):
+            try:
                 self._engines["priority"] = ExplainabilityEngine(
                     model_manager.priority_model,
                     model_manager.priority_extractor,
@@ -700,10 +725,8 @@ class ExplainabilityManager:
                     confidence_threshold=CONFIDENCE_THRESHOLD,
                 )
                 logger.info("Priority explainability engine ready")
-        except ImportError as exc:
-            logger.warning("Explainability engine unavailable: %s", exc)
-        except Exception as exc:
-            logger.error("Failed to init explainability engines: %s", exc, exc_info=True)
+            except Exception as exc:
+                logger.error("Failed to init priority explainability engine: %s", exc, exc_info=True)
 
     def explain(self, model_type: str, text: str, subject: str = "",
                 prediction: str = "", confidence: float = 0.0) -> Optional[Dict]:
@@ -1222,13 +1245,49 @@ async def _classify_combined_impl(req: ClassifyRequest) -> CombinedResponse:
         fallback_used = True
     model_versions["category"] = cat_result["model_version"]
 
+    # --- Category confidence hybrid: if ML is uncertain, let the keyword
+    #     classifier override when it has a stronger signal.
+    # Use explicit threshold comparison rather than the low_confidence flag so
+    # the behaviour is environment-independent (Railway may have a different
+    # CONFIDENCE_THRESHOLD env var than docker-compose).
+    if (
+        keyword_classifier is not None
+        and cat_result["confidence"] < CONFIDENCE_THRESHOLD
+    ):
+        try:
+            kw_result = keyword_classifier.classify(
+                req.text, subject=req.subject
+            )
+            kw_cat_conf = float(kw_result.get("confidence", 0))
+            ml_cat_conf = float(cat_result["confidence"])
+            # Keyword wins when its score beats the ML model's probability AND
+            # the keyword classifier did NOT fall back to "other" as a vague guess.
+            if kw_cat_conf >= ml_cat_conf and not kw_result.get("fallback_used", True):
+                logger.debug(
+                    "Keyword hybrid: cat '%s'@%.2f overrides ML '%s'@%.2f",
+                    kw_result["category"], kw_cat_conf,
+                    cat_result["category"], ml_cat_conf,
+                )
+                cat_result["category"]    = kw_result["category"]
+                cat_result["confidence"]  = kw_cat_conf
+                cat_result["low_confidence"] = kw_cat_conf < CONFIDENCE_THRESHOLD
+                cat_result["model_version"]  = "keyword-hybrid"
+                fallback_used = True
+        except Exception as _kw_exc:
+            logger.debug("Keyword hybrid failed (non-fatal): %s", _kw_exc)
+
     # --- Priority ---
+    # Forward the category model's confidence so the priority model sees the
+    # same ai_confidence it was trained on (instead of the 0.5 default).
+    priority_metadata = dict(req.metadata or {})
+    priority_metadata["ai_confidence"] = cat_result["confidence"]
+
     try:
         if models._loaded["priority"]:
             pri_result = await asyncio.to_thread(
                 models.predict_priority,
                 text=req.text, subject=req.subject,
-                category=cat_result["category"], metadata=req.metadata)
+                category=cat_result["category"], metadata=priority_metadata)
         else:
             fb = _rule_based_classify(req.text)
             pri_result = {"priority": fb["priority"], "confidence": fb["confidence"],
@@ -1257,7 +1316,10 @@ async def _classify_combined_impl(req: ClassifyRequest) -> CombinedResponse:
     except Exception:
         pass
 
-    overall_confidence = min(cat_result["confidence"], pri_result["confidence"])
+    # Use category confidence for the top-level badge — it answers
+    # "how sure is the AI about the category?"  Priority confidence
+    # is still exposed separately in priority_confidence.
+    overall_confidence = cat_result["confidence"]
     low_conf = cat_result.get("low_confidence", False) or pri_result.get("low_confidence", False)
 
     # Inline explain – parallel, best-effort, 80 ms hard cap each

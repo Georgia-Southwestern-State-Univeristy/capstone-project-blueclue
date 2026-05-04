@@ -252,6 +252,50 @@ export default function useDashboardLayout(dashboardKey, defaultLayouts, version
     })
     // Add layout items for all breakpoints
     setLayouts(prev => {
+      // If displaced layouts are provided from the drag-and-drop phantom preview,
+      // use them directly — items are already positioned to match what the user saw
+      if (dropPosition?.displacedLayouts) {
+        const PHANTOM = '__drop_phantom__'
+        const next = {}
+        for (const bp of Object.keys(defaultLayouts)) {
+          const displaced = dropPosition.displacedLayouts[bp]
+          if (!displaced) { next[bp] = prev[bp] || []; continue }
+          next[bp] = displaced
+            .map(item => {
+              if (item.i === PHANTOM) {
+                // Replace phantom placeholder with the real widget
+                const defaultItem = defaultLayouts[bp]?.find(d => d.i === key)
+                const reg = getWidget(key)
+                return {
+                  i: key,
+                  x: item.x,
+                  y: item.y,
+                  w: item.w,
+                  h: item.h,
+                  minW: defaultItem?.minW ?? reg?.size?.minW,
+                  minH: defaultItem?.minH ?? reg?.size?.minH,
+                  maxW: defaultItem?.maxW ?? reg?.size?.maxW,
+                  maxH: defaultItem?.maxH ?? reg?.size?.maxH,
+                }
+              }
+              // Preserve constraints from previous state or defaults
+              const existing = (prev[bp] || []).find(e => e.i === item.i) ||
+                               defaultLayouts[bp]?.find(d => d.i === item.i)
+              return {
+                ...item,
+                minW: item.minW ?? existing?.minW,
+                minH: item.minH ?? existing?.minH,
+                maxW: item.maxW ?? existing?.maxW,
+                maxH: item.maxH ?? existing?.maxH,
+              }
+            })
+            .filter(item => item.i !== '__dropping-elem__')
+        }
+        try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* ignore */ }
+        return next
+      }
+
+      // Fallback: programmatic addWidget (e.g., from gallery button click)
       const next = {}
       for (const bp of Object.keys(defaultLayouts)) {
         // Remove any placeholder items from previous operations

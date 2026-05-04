@@ -346,7 +346,12 @@ class ExplainabilityEngine:
         features = self.feature_extractor.transform([ticket])
         feature_names = self._get_feature_names(features)
 
-        if self._use_shap and self._shap_available:
+        if hasattr(self.model, "coef_"):
+            # Linear model: use coefficient × feature_value directly (no stale-background risk)
+            return self._linear_coef_explanation(
+                features, feature_names, prediction, confidence, top_n
+            )
+        elif self._use_shap and self._shap_available:
             return self._shap_explanation(
                 features, feature_names, prediction, confidence, top_n
             )
@@ -356,6 +361,99 @@ class ExplainabilityEngine:
             )
         else:
             return self._keyword_fallback(text, prediction, confidence)
+
+    def _linear_coef_explanation(
+        self,
+        features,
+        feature_names: List[str],
+        prediction: str,
+        confidence: float,
+        top_n: int,
+    ) -> ExplanationResult:
+        """
+        Explain a linear model (LogisticRegression, Ridge, etc.) by computing
+        contribution = coef[class_idx, i] × feature_value[i].
+
+        Strips internal feature-name prefixes (``has_term_``, ``has_``) so that
+        users see the underlying word rather than the boolean flag name.
+        Metadata features (``word_count``, ``is_*``, ``category_*``, etc.) are
+        aggregated into the cleaned name or suppressed from the display list.
+        """
+        # Structural/metadata feature names that are not meaningful to end-users
+        _META_EXACT: frozenset = frozenset([
+            "word_count", "text_len", "text_length", "sentence_count",
+            "avg_word_length", "business_hours", "hour_of_day", "day_of_week",
+            "exclamation", "question", "ai_confidence", "user_tickets",
+            "priority_override", "reopen_count", "technician_workload",
+            "comment_count",
+        ])
+        _META_PREFIXES: tuple = (
+            "is_", "category_", "urgency_", "meta_",
+        )
+
+        coef = np.asarray(self.model.coef_)  # (n_classes, n_features) or (1, n_features)
+
+        # Flatten sparse feature matrices to dense
+        if hasattr(features, "toarray"):
+            feat_arr = features.toarray().flatten()
+        else:
+            feat_arr = np.asarray(features).flatten()
+
+        # Pick the row of coefficients for the predicted class
+        if coef.ndim == 2 and coef.shape[0] > 1:
+            classes = list(self.model.classes_) if hasattr(self.model, "classes_") else []
+            try:
+                class_idx = classes.index(prediction)
+            except (ValueError, IndexError):
+                class_idx = 0
+            w = coef[class_idx]
+        else:
+            w = coef.flatten()
+
+        # Contribution = coefficient × feature value
+        contributions = w * feat_arr
+
+        # Aggregate contributions by display name:
+        # has_term_X / has_X → X  (sum with any raw TF-IDF entry for that word)
+        aggregated: Dict[str, float] = {}
+        for name, score in zip(feature_names, contributions):
+            if name.startswith("has_term_"):
+                clean = name[len("has_term_"):]
+            elif name.startswith("has_"):
+                clean = name[len("has_"):]
+            else:
+                clean = name
+            aggregated[clean] = aggregated.get(clean, 0.0) + float(score)
+
+        scored = sorted(
+            aggregated.items(),
+            key=lambda x: abs(x[1]),
+            reverse=True,
+        )
+
+        meaningful = [
+            (name, score)
+            for name, score in scored
+            if (
+                abs(score) > 1e-4
+                and name not in _META_EXACT
+                and not any(name.startswith(p) for p in _META_PREFIXES)
+                and re.match(r"^[a-z][a-z_ ]{1,}$", name)
+            )
+        ]
+
+        top_features = meaningful[:top_n] if meaningful else scored[:top_n]
+        all_scores = {name: float(score) for name, score in scored[:50]}
+
+        return ExplanationResult(
+            prediction=prediction,
+            confidence=confidence,
+            top_features=[(n, float(s)) for n, s in top_features],
+            all_feature_scores=all_scores,
+            method="coef",
+            low_confidence=confidence < self.confidence_threshold,
+            confidence_threshold=self.confidence_threshold,
+        )
 
     def _shap_explanation(
         self,

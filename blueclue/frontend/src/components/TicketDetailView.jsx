@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { getTicketById, updateTicketStatus, updateTicket, deleteTicket, getTechnicians, assignSingleTicket, reassignTicket, cancelTicket, reopenTicket, overrideTicketCategory, requestTicketChat, initiateTicketChat, getTicketChat, predictTicketResolutionTime } from '../services/ticketService'
+import { getTicketById, updateTicketStatus, updateTicket, deleteTicket, getTechnicians, assignSingleTicket, reassignTicket, cancelTicket, reopenTicket, overrideTicketCategory, requestTicketChat, initiateTicketChat, getTicketChat, predictTicketResolutionTime, getTicketKBLinks, addTicketKBLinks, removeTicketKBLink, getSimilarTickets } from '../services/ticketService'
 import { getUserRole, getUser, getUserId } from '../services/authService'
 import TicketActivityLog from './TicketActivityLog'
 import CancelTicketModal from './CancelTicketModal'
@@ -106,6 +106,24 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
   const [ticketChat, setTicketChat] = useState(null)
   const [chatRequesting, setChatRequesting] = useState(false)
 
+  // ─── Similar tickets state ───────────────────────────────────
+  const [similarTickets, setSimilarTickets] = useState([])
+  const [similarLoading, setSimilarLoading] = useState(false)
+  const [drilldownTicketId, setDrilldownTicketId] = useState(null)
+
+  // ─── KB article links state ──────────────────────────────────
+  const [ticketKBLinks, setTicketKBLinks] = useState([])
+  const [kbLinksLoading, setKbLinksLoading] = useState(false)
+
+  // ─── "Resolve with KB" modal state ──────────────────────────
+  const [showResolveKBModal, setShowResolveKBModal] = useState(false)
+  const [resolveKBSearch, setResolveKBSearch] = useState('')
+  const [resolveKBResults, setResolveKBResults] = useState([])
+  const [resolveKBSelected, setResolveKBSelected] = useState([])
+  const [resolveKBSearching, setResolveKBSearching] = useState(false)
+  const [resolveKBSaving, setResolveKBSaving] = useState(false)
+  const [pendingResolveStatus, setPendingResolveStatus] = useState(null)
+
   const modalRef = useRef(null)
   const assignRef = useRef(null)
   const statusDropdownRef = useRef(null)
@@ -178,6 +196,22 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
           .catch(() => setTimePrediction(null))
           .finally(() => setTimePredictionLoading(false))
       }
+
+      // Fetch similar resolved tickets (staff only, non-blocking)
+      if (['technician', 'senior_technician', 'management', 'admin'].includes(getUserRole())) {
+        setSimilarLoading(true)
+        getSimilarTickets(ticketId)
+          .then(res => setSimilarTickets(res.data || []))
+          .catch(() => setSimilarTickets([]))
+          .finally(() => setSimilarLoading(false))
+      }
+
+      // Fetch KB article links (non-blocking)
+      setKbLinksLoading(true)
+      getTicketKBLinks(ticketId)
+        .then(res => setTicketKBLinks(res.data || []))
+        .catch(() => setTicketKBLinks([]))
+        .finally(() => setKbLinksLoading(false))
     } catch (err) {
       if (!cached) setError(err.message || 'Failed to load ticket')
     } finally {
@@ -196,11 +230,12 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
 
   useEffect(() => {
     if (isOpen && ticketId) {
-      // Skip resets when restoring from minimize — keep all form state intact
-      if (wasMinimized.current && preserveState) {
+      // Skip resets when restoring the SAME ticket from minimize — keep all form state intact
+      if (wasMinimized.current && preserveState && ticket && ticket.id === ticketId) {
         wasMinimized.current = false
         return
       }
+      wasMinimized.current = false
       setActiveTab('details')
       setStatusError(null)
       setStatusSuccess(null)
@@ -254,6 +289,23 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
   // ─── Status update ───────────────────────────────────────────────
   const handleStatusChange = async (newStatus) => {
     if (!ticket || statusUpdating) return
+
+    // For staff resolving a ticket, show the KB article link modal first
+    if (newStatus === 'resolved' && canSeeInternals) {
+      setPendingResolveStatus(newStatus)
+      setResolveKBSelected([])
+      setResolveKBSearch('')
+      setResolveKBResults([])
+      setShowResolveKBModal(true)
+      setShowStatusDropdown(false)
+      return
+    }
+
+    await _applyStatusChange(newStatus)
+  }
+
+  // Internal: actually apply the status change
+  const _applyStatusChange = async (newStatus) => {
     setStatusUpdating(true)
     setStatusError(null)
     setStatusSuccess(null)
@@ -269,6 +321,68 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
       setStatusError(err.message || 'Failed to update status')
     } finally {
       setStatusUpdating(false)
+    }
+  }
+
+  // ─── Resolve + KB Modal handlers ────────────────────────────────
+  const searchKBArticlesForResolve = async (query) => {
+    if (!query.trim()) { setResolveKBResults([]); return }
+    setResolveKBSearching(true)
+    try {
+      const token = localStorage.getItem('blueclue_token')
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/knowledge-base/articles?search=${encodeURIComponent(query)}&published=true&limit=10`,
+        { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
+      )
+      const data = await res.json()
+      setResolveKBResults(data.articles || [])
+    } catch { setResolveKBResults([]) }
+    finally { setResolveKBSearching(false) }
+  }
+
+  const toggleResolveKBArticle = (article) => {
+    setResolveKBSelected(prev =>
+      prev.find(a => a.id === article.id)
+        ? prev.filter(a => a.id !== article.id)
+        : [...prev, article]
+    )
+  }
+
+  const confirmResolveWithKB = async () => {
+    if (!pendingResolveStatus) return
+    setResolveKBSaving(true)
+    try {
+      // 1. Update ticket status
+      await updateTicketStatus(ticket.id, pendingResolveStatus)
+      setTicket((prev) => ({ ...prev, status: pendingResolveStatus }))
+      updateCache(ticket.id, { status: pendingResolveStatus })
+
+      // 2. Link selected KB articles (if any)
+      if (resolveKBSelected.length > 0) {
+        await addTicketKBLinks(ticket.id, resolveKBSelected.map(a => a.id), true)
+        // Refresh KB links
+        getTicketKBLinks(ticket.id).then(res => setTicketKBLinks(res.data || [])).catch(() => {})
+      }
+
+      setStatusSuccess(`Status updated to ${formatStatus(pendingResolveStatus)}`)
+      setTimeout(() => setStatusSuccess(null), 3000)
+      if (onTicketUpdated) onTicketUpdated(ticket.id, { status: pendingResolveStatus })
+    } catch (err) {
+      setStatusError(err.message || 'Failed to update status')
+    } finally {
+      setResolveKBSaving(false)
+      setShowResolveKBModal(false)
+      setPendingResolveStatus(null)
+    }
+  }
+
+  const handleRemoveKBLink = async (articleId) => {
+    try {
+      await removeTicketKBLink(ticket.id, articleId)
+      setTicketKBLinks(prev => prev.filter(l => l.article_id !== articleId))
+    } catch (err) {
+      setStatusError(err.message || 'Failed to remove article link')
+      setTimeout(() => setStatusError(null), 3000)
     }
   }
 
@@ -2145,6 +2259,164 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
                         )}
                       </div>
                     )}
+
+                    {/* ── Linked KB Articles ──────────────────────────────── */}
+                    {(ticketKBLinks.length > 0 || (canSeeInternals && !kbLinksLoading)) && (
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-gray-500 text-xs font-medium uppercase tracking-wider">
+                            Related Knowledge Base Articles
+                          </label>
+                          {canSeeInternals && (
+                            <button
+                              onClick={() => {
+                                setPendingResolveStatus(null)
+                                setResolveKBSelected([])
+                                setResolveKBSearch('')
+                                setResolveKBResults([])
+                                setShowResolveKBModal(true)
+                              }}
+                              className="text-xs text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
+                              Link article
+                            </button>
+                          )}
+                        </div>
+                        {kbLinksLoading ? (
+                          <p className="text-gray-600 text-xs">Loading articles…</p>
+                        ) : ticketKBLinks.length === 0 ? (
+                          <p className="text-gray-600 text-xs italic">No KB articles linked yet.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {ticketKBLinks.map(link => (
+                              <div
+                                key={link.id}
+                                className="flex items-start justify-between gap-3 bg-gray-900 rounded-lg border border-gray-800 px-3 py-2.5 group"
+                              >
+                                <div className="flex items-start gap-2.5 min-w-0">
+                                  <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                  <div className="min-w-0">
+                                    <a
+                                      href={`/knowledge-base/${link.slug || link.article_id}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-400 hover:text-blue-300 text-sm font-medium hover:underline"
+                                    >
+                                      {link.title}
+                                    </a>
+                                    {link.excerpt && (
+                                      <p className="text-gray-500 text-xs mt-0.5 line-clamp-2">{link.excerpt}</p>
+                                    )}
+                                    <div className="flex items-center gap-2 mt-1">
+                                      {link.is_resolution_article && (
+                                        <span className="text-green-400 text-xs bg-green-900/30 border border-green-700/50 px-1.5 py-0.5 rounded">
+                                          Used in resolution
+                                        </span>
+                                      )}
+                                      {link.category && (
+                                        <span className="text-gray-600 text-xs capitalize">
+                                          {link.category.replace(/_/g, ' ')}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                {canSeeInternals && (
+                                  <button
+                                    onClick={() => handleRemoveKBLink(link.article_id)}
+                                    className="text-gray-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+                                    title="Remove link"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── Similar Resolved Tickets ────────────────────────── */}
+                    {canSeeInternals && (similarLoading || similarTickets.length > 0) && (
+                      <div>
+                        <label className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2 block">
+                          Similar Resolved Tickets
+                        </label>
+                        {similarLoading ? (
+                          <p className="text-gray-600 text-xs">Searching for similar tickets…</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {similarTickets.map(similar => (
+                              <div
+                                key={similar.id}
+                                className="bg-gray-900 rounded-lg border border-gray-800 px-3 py-3 space-y-2 cursor-pointer hover:border-blue-600/60 hover:bg-gray-800/60 transition-colors group"
+                                onClick={() => setDrilldownTicketId(similar.id)}
+                                role="button"
+                                tabIndex={0}
+                                onKeyDown={(e) => e.key === 'Enter' && setDrilldownTicketId(similar.id)}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-gray-500 text-xs font-mono">{similar.ticket_number}</span>
+                                      <span className="text-gray-200 text-sm font-medium truncate group-hover:text-blue-300 transition-colors">{similar.subject}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                                      <span className="capitalize">{(similar.category || '').replace(/_/g, ' ')}</span>
+                                      {similar.resolved_at && (
+                                        <>
+                                          <span>&middot;</span>
+                                          <span>Resolved {_fmtTimeAgo(similar.resolved_at)}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 flex-shrink-0">
+                                    <span className="text-xs px-2 py-0.5 rounded bg-green-900/30 text-green-400 border border-green-700/50 capitalize">
+                                      {similar.status}
+                                    </span>
+                                    <svg className="w-3.5 h-3.5 text-gray-600 group-hover:text-blue-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                    </svg>
+                                  </div>
+                                </div>
+
+                                {/* KB articles from the similar ticket */}
+                                {Array.isArray(similar.kb_articles) && similar.kb_articles.length > 0 && (
+                                  <div className="pt-1 border-t border-gray-800">
+                                    <p className="text-gray-600 text-xs mb-1.5">How it was solved:</p>
+                                    <div className="space-y-1">
+                                      {similar.kb_articles.map(art => (
+                                        <a
+                                          key={art.id}
+                                          href={`/knowledge-base/${art.slug || art.id}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="flex items-center gap-2 text-blue-400 hover:text-blue-300 text-xs hover:underline"
+                                        >
+                                          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                          </svg>
+                                          {art.title}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -2265,6 +2537,170 @@ function TicketDetailView({ ticketId, isOpen, onClose, onTicketUpdated, onMinimi
                 className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
               >
                 {deleteLoading ? 'Deleting...' : 'Delete Ticket'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Drilldown: open a similar resolved ticket in a stacked view */}
+      {drilldownTicketId && (
+        <TicketDetailView
+          ticketId={drilldownTicketId}
+          isOpen={true}
+          onClose={() => setDrilldownTicketId(null)}
+          onTicketUpdated={onTicketUpdated}
+        />
+      )}
+
+      {/* Resolve with KB Articles Modal */}
+      {showResolveKBModal && canSeeInternals && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowResolveKBModal(false) }}
+        >
+          <div className="w-full max-w-lg bg-gray-900 border border-gray-700 rounded-xl shadow-2xl flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-start justify-between p-5 border-b border-gray-800">
+              <div>
+                <h3 className="text-white font-semibold text-base">Linking KB Articles</h3>
+                <p className="text-gray-400 text-sm mt-0.5">
+                  Optionally link knowledge base articles that helped resolve this ticket.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowResolveKBModal(false)}
+                className="text-gray-500 hover:text-gray-300 transition-colors ml-4 flex-shrink-0"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Search */}
+            <div className="p-4 border-b border-gray-800">
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  value={resolveKBSearch}
+                  onChange={(e) => {
+                    setResolveKBSearch(e.target.value)
+                    searchKBArticlesForResolve(e.target.value)
+                  }}
+                  placeholder="Search knowledge base articles…"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-3 py-2.5 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
+                  autoFocus
+                />
+                {resolveKBSearching && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Results + Selected */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Selected articles */}
+              {resolveKBSelected.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Selected</p>
+                  <div className="space-y-1.5">
+                    {resolveKBSelected.map(art => (
+                      <div
+                        key={art.id}
+                        className="flex items-center justify-between gap-2 bg-blue-900/20 border border-blue-700/50 rounded-lg px-3 py-2"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span className="text-blue-200 text-sm truncate">{art.title}</span>
+                        </div>
+                        <button
+                          onClick={() => toggleResolveKBArticle(art)}
+                          className="text-blue-400 hover:text-red-400 transition-colors flex-shrink-0"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Search results */}
+              {resolveKBResults.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Results</p>
+                  <div className="space-y-1.5">
+                    {resolveKBResults
+                      .filter(art => !resolveKBSelected.some(s => s.id === art.id))
+                      .map(art => (
+                        <button
+                          key={art.id}
+                          onClick={() => toggleResolveKBArticle(art)}
+                          className="w-full flex items-start gap-2.5 bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-blue-600 rounded-lg px-3 py-2.5 text-left transition-colors"
+                        >
+                          <svg className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <div className="min-w-0">
+                            <p className="text-gray-200 text-sm font-medium">{art.title}</p>
+                            {art.excerpt && (
+                              <p className="text-gray-500 text-xs mt-0.5 line-clamp-2">{art.excerpt}</p>
+                            )}
+                            {art.category && (
+                              <p className="text-gray-600 text-xs mt-1 capitalize">{art.category.replace(/_/g, ' ')}</p>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {resolveKBSearch.length > 1 && !resolveKBSearching && resolveKBResults.filter(a => !resolveKBSelected.some(s => s.id === a.id)).length === 0 && resolveKBSelected.length === 0 && (
+                <p className="text-gray-600 text-sm text-center py-4">No articles found for "{resolveKBSearch}"</p>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between gap-3 p-4 border-t border-gray-800">
+              <button
+                onClick={() => {
+                  setShowResolveKBModal(false)
+                  _applyStatusChange(pendingResolveStatus)
+                }}
+                disabled={resolveKBSaving}
+                className="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm font-medium border border-gray-700 transition-colors disabled:opacity-50"
+              >
+                Skip &amp; Resolve
+              </button>
+              <button
+                onClick={confirmResolveWithKB}
+                disabled={resolveKBSaving}
+                className="px-5 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {resolveKBSaving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Saving…
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    {resolveKBSelected.length > 0 ? `Mark Resolved & Link ${resolveKBSelected.length} Article${resolveKBSelected.length !== 1 ? 's' : ''}` : 'Mark as Resolved'}
+                  </>
+                )}
               </button>
             </div>
           </div>

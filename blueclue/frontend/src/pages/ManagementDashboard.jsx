@@ -156,7 +156,7 @@ function ManagementWidgetGrid({
       overdue: <OverdueTicketsWidget onTicketClick={(ticket) => handleTicketClick(ticket.id)} />,
       escalations: <EscalationsWidget onView={(ticket) => handleTicketClick(ticket.id)} />,
       todaysActions: <TodaysActionsWidget onAction={(item) => handleTicketClick(item.id || item.ticket_id)} />,
-      topRequesters: <TopRequestersWidget />,
+      topRequesters: <TopRequestersWidget onTicketClick={(ticketId) => handleTicketClick(ticketId)} />,
       techPerformance: <TechPerformanceWidget />,
       deletedTickets: <DeletedTicketsWidget onTicketClick={(ticket) => handleTicketClick(ticket.id)} />,
       pendingRequests: <PendingRequestsWidget ref={pendingRequestsRef} onTicketClick={(ticketId) => handleTicketClick(ticketId)} />,

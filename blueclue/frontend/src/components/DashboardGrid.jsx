@@ -183,6 +183,7 @@ export default function DashboardGrid({
   const [phantomItem, setPhantomItem] = useState(null) // { x, y, w, h }
   const phantomItemRef = useRef(null) // mirror for use in native event listeners
   const lastGridPosRef = useRef(null)
+  const layoutsWithPhantomRef = useRef(null) // displaced layout snapshot for use in onDrop
 
   // Track which widget is "selected" (clicked in edit mode) for keyboard shortcuts
   const [selectedWidget, setSelectedWidget] = useState(null)
@@ -294,8 +295,9 @@ export default function DashboardGrid({
     setIsDraggingExternal(true)
   }, [])
 
-  // Keep phantomItemRef in sync so native listeners always read the latest value
+  // Keep refs in sync so native listeners always read the latest values
   useEffect(() => { phantomItemRef.current = phantomItem }, [phantomItem])
+  useEffect(() => { layoutsWithPhantomRef.current = layoutsWithPhantom }, [layoutsWithPhantom])
 
   // Native drag event listeners – always attached when in edit mode.
   // Uses capture phase so events fire before RGL can intercept them.
@@ -358,11 +360,15 @@ export default function DashboardGrid({
       draggingKeyRef.current = null
       const pos = phantomItemRef.current
 
+      // Capture the displaced layout before clearing the phantom —
+      // this is the exact layout the user saw during the preview
+      const displacedLayouts = pos ? layoutsWithPhantomRef.current : null
+
       setPhantomItem(null)
       setIsDraggingExternal(false)
 
       if (widgetKey && onAddWidget && pos) {
-        onAddWidget(widgetKey, { x: pos.x, y: pos.y })
+        onAddWidget(widgetKey, { x: pos.x, y: pos.y, displacedLayouts })
       }
     }
 

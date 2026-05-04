@@ -1,19 +1,19 @@
 # BlueClue Ticket Data - Exploratory Data Analysis Report
 
-**Generated:** 2026-02-27T15:48:05.083226
+**Generated:** 2026-04-09T12:33:21.833880
 
 ## 1. Dataset Overview
 
-- **Total Records:** 1921
+- **Total Records:** 987
 - **Unique Categories:** 8
 - **Unique Priorities:** 4
-- **Date Range:** 2025-02-27T11:48:58.562192 to 2026-02-27T14:59:58.515935
-- **Records with Resolution:** 1524
-- **AI Classified Records:** 1619
+- **Date Range:** 2025-04-09T02:32:17.325287 to 2026-04-09T12:02:17.315820
+- **Records with Resolution:** 799
+- **AI Classified Records:** 838
 
 ## 2. Key Insights
 
-- ✓ Good dataset size (1921 records) for initial ML training.
+- ✓ Good dataset size (987 records) for initial ML training.
 - ⚠ Category classes are imbalanced (ratio: 3.3:1). Consider oversampling or weighted training.
 - ✓ Data quality score is good (100.0/100).
 
@@ -24,48 +24,48 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| software | 392 | 20.41% |
-| network | 345 | 17.96% |
-| hardware | 291 | 15.15% |
-| login | 278 | 14.47% |
-| other | 194 | 10.1% |
-| billing | 154 | 8.02% |
-| account | 147 | 7.65% |
-| feature_request | 120 | 6.25% |
+| software | 196 | 19.86% |
+| network | 179 | 18.14% |
+| login | 149 | 15.1% |
+| hardware | 147 | 14.89% |
+| other | 96 | 9.73% |
+| account | 80 | 8.11% |
+| billing | 80 | 8.11% |
+| feature_request | 60 | 6.08% |
 
 ![Category Distribution](visualizations/category_distribution.png)
 
 ## 4. Priority Distribution
 
-- **Critical Tickets:** 6.45%
-- **High Priority (Critical + High):** 31.86%
+- **Critical Tickets:** 14.08%
+- **High Priority (Critical + High):** 37.49%
 
 | Priority | Count | Percentage |
 |----------|-------|------------|
-| low | 714 | 37.17% |
-| medium | 595 | 30.97% |
-| high | 488 | 25.4% |
-| critical | 124 | 6.45% |
+| low | 342 | 34.65% |
+| medium | 275 | 27.86% |
+| high | 231 | 23.4% |
+| critical | 139 | 14.08% |
 
 ![Priority Distribution](visualizations/priority_distribution.png)
 
 ## 5. Text Analysis
 
 ### Description Statistics
-- **Average Length:** 152.3 characters
-- **Average Word Count:** 26.03 words
-- **Min/Max Length:** 40 / 320
+- **Average Length:** 166.69 characters
+- **Average Word Count:** 28.29 words
+- **Min/Max Length:** 40 / 313
 - **Empty Descriptions:** 0
 
 ![Text Length Distribution](visualizations/text_length_distribution.png)
 
 ## 6. Temporal Patterns
 
-- **Business Hours Tickets:** 39.35%
-- **After Hours Tickets:** 60.65%
-- **Weekday vs Weekend:** 72.83% / 27.17%
-- **Peak Hour:** 14:00
-- **Peak Day:** Monday
+- **Business Hours Tickets:** 37.49%
+- **After Hours Tickets:** 62.51%
+- **Weekday vs Weekend:** 72.95% / 27.05%
+- **Peak Hour:** 8:00
+- **Peak Day:** Tuesday
 
 ![Temporal Patterns](visualizations/temporal_patterns.png)
 
@@ -79,12 +79,12 @@
 - Missing Descriptions: 0
 - Missing Subjects: 0
 - Short Descriptions (<20 chars): 0
-- Potential Duplicates: 1043
+- Potential Duplicates: 450
 - Invalid Categories: 0
 - Invalid Priorities: 0
 
 ### Summary
-- Potential duplicates detected: 1043 (54.3%)
+- Potential duplicates detected: 450 (45.6%)
 
 ## 8. Recommendations for ML Training
 
